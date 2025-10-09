@@ -9,7 +9,7 @@ function AdminDashboard() {
   useEffect(() => {
     axios.get(`${API}/admin/affiliates`).then(r => setAffiliates(r.data)).catch(()=>{});
     axios.get(`${API}/admin/partners`).then(r => setPartners(r.data)).catch(()=>{});
-  }, []);
+  }, [API]);
 
   return (
     <section style={{ padding: 16, background: "#0f1724", borderRadius: 8 }}>
