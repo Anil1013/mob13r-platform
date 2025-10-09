@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: mob13r-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: "npm install"
+    startCommand: "node server.js"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mob13r-db
+          property: connectionString
+
+  - type: static
+    name: mob13r-frontend
+    rootDir: frontend
+    buildCommand: "npm install && npm run build"
+    staticPublishPath: build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: "https://mob13r-backend.onrender.com/api"
+
+databases:
+  - name: mob13r-db
+    plan: free

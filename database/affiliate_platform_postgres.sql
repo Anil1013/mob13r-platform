@@ -1,0 +1,89 @@
+-- PostgreSQL schema for affiliate platform
+
+CREATE DATABASE affiliate_platform;
+
+\c affiliate_platform
+
+CREATE TABLE IF NOT EXISTS Partner (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  api_base VARCHAR(255),
+  status VARCHAR(50) DEFAULT 'active',
+  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS Offer (
+  id SERIAL PRIMARY KEY,
+  offer_id VARCHAR(50) UNIQUE,
+  name VARCHAR(255),
+  geo VARCHAR(10),
+  carrier VARCHAR(50),
+  partner_cpa NUMERIC(10,2),
+  ref_url VARCHAR(255),
+  request_url VARCHAR(255),
+  verify_url VARCHAR(255),
+  status VARCHAR(50) DEFAULT 'active',
+  "PartnerId" INTEGER REFERENCES Partner(id) ON DELETE SET NULL,
+  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS Affiliate (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255),
+  email VARCHAR(255) UNIQUE,
+  password VARCHAR(255),
+  role VARCHAR(50) DEFAULT 'affiliate',
+  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS AffiliateOffer (
+  id SERIAL PRIMARY KEY,
+  "AffiliateId" INTEGER REFERENCES Affiliate(id) ON DELETE CASCADE,
+  "OfferId" INTEGER REFERENCES Offer(id) ON DELETE CASCADE,
+  affiliate_cpa NUMERIC(10,2),
+  pass_percent INTEGER,
+  status VARCHAR(50) DEFAULT 'active',
+  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS Click (
+  id SERIAL PRIMARY KEY,
+  ip VARCHAR(50),
+  geo VARCHAR(10),
+  carrier VARCHAR(50),
+  user_agent TEXT,
+  "OfferId" INTEGER REFERENCES Offer(id) ON DELETE CASCADE,
+  "AffiliateId" INTEGER REFERENCES Affiliate(id) ON DELETE SET NULL,
+  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS Conversion (
+  id SERIAL PRIMARY KEY,
+  msisdn VARCHAR(50),
+  status VARCHAR(50),
+  partner_response JSONB,
+  "OfferId" INTEGER REFERENCES Offer(id) ON DELETE CASCADE,
+  "AffiliateId" INTEGER REFERENCES Affiliate(id) ON DELETE SET NULL,
+  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS Cap (
+  id SERIAL PRIMARY KEY,
+  level_type VARCHAR(50),
+  level_id VARCHAR(50),
+  geo VARCHAR(10),
+  carrier VARCHAR(50),
+  cap_type VARCHAR(50),
+  cap_value INTEGER,
+  cap_period VARCHAR(50),
+  current_value INTEGER DEFAULT 0,
+  status VARCHAR(50) DEFAULT 'active',
+  "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
