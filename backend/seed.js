@@ -1,61 +1,37 @@
 import { initModels, sequelize } from "./models.js";
-import bcrypt from "bcrypt";
-
-const { Partner, Offer, Affiliate, AffiliateOffer } = sequelize.models;
 
 export default async function seed() {
-  // ensure models exist
-  await initModels();
+  const { Partner, Offer, Affiliate } = initModels(); // ✅ Initialize models here
 
-  // Partners
+  console.log("🌱 Seeding default data...");
+
   await Partner.findOrCreate({
-    where: { name: "Velti" },
-    defaults: { api_base: "https://grandprizehero.com/api" },
-  });
-  await Partner.findOrCreate({
-    where: { name: "Kimia" },
-    defaults: { api_base: "https://api.kimia.com" },
+    where: { name: "Default Partner" },
+    defaults: { api_base: "https://example.com/api", status: "active" },
   });
 
-  // Offer
-  const [offer] = await Offer.findOrCreate({
-    where: { offer_id: "OFFR-123ABC" },
+  await Offer.findOrCreate({
+    where: { offer_id: "001" },
     defaults: {
-      name: "Grand Prize Hero",
-      geo: "IQ",
-      carrier: "Asiacell",
-      partner_cpa: 0.8,
-      ref_url: "collectcent_api",
-      request_url: "https://grandprizehero.com/api/requestPinInApp",
-      verify_url: "https://grandprizehero.com/api/verifyPinInApp",
+      name: "Test Offer",
+      geo: "OM",
+      carrier: "Omantel",
+      partner_cpa: 1.5,
+      ref_url: "https://redirect.link",
+      request_url: "https://offer.api/send",
+      verify_url: "https://offer.api/verify",
+      status: "active",
     },
   });
 
-  // Default affiliate (demo)
-  const [aff] = await Affiliate.findOrCreate({
-    where: { email: "traffic@demo.com" },
-    defaults: { name: "Traffic Company", password: await bcrypt.hash("pass", 10) },
-  });
-
-  // AffiliateOffer mapping
-  await AffiliateOffer.findOrCreate({
-    where: { AffiliateId: aff.id, OfferId: offer.id },
-    defaults: { affiliate_cpa: 0.6, pass_percent: 85 },
-  });
-
-  // Default admin user — from your input
-  const adminEmail = "ruhil.13r@gmail.com";
-  const adminPasswordPlain = "Anil@1234";
-  const adminHash = await bcrypt.hash(adminPasswordPlain, 10);
-
   await Affiliate.findOrCreate({
-    where: { email: adminEmail },
+    where: { email: "test@affiliate.com" },
     defaults: {
-      name: "Mob13r Admin",
-      password: adminHash,
+      name: "Demo Affiliate",
+      password: "password123",
       role: "admin",
     },
   });
 
-  console.log("✅ Seeding complete (default admin created).");
+  console.log("✅ Seed data added successfully");
 }
