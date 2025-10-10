@@ -1,0 +1,63 @@
+services:
+  # ✅ Backend (Node.js + Express + PostgreSQL)
+  - type: web
+    name: mob13r-api
+    env: node
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DB_DIALECT
+        value: postgres
+      - key: DB_HOST
+        fromDatabase:
+          name: mob13r-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: mob13r-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: mob13r-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: mob13r-db
+          property: user
+      - key: DB_PASS
+        fromDatabase:
+          name: mob13r-db
+          property: password
+      - key: JWT_SECRET
+        value: mob13r_secret_key
+      - key: ADMIN_EMAIL
+        value: ruhil.13r@gmail.com
+      - key: ADMIN_PASSWORD
+        value: Anil@1234
+      - key: FRONTEND_URL
+        value: https://mob13r-frontend.onrender.com
+
+  # ✅ Frontend (React App)
+  - type: web
+    name: mob13r-frontend
+    env: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://mob13r-api.onrender.com/api
+      - key: REACT_APP_APP_NAME
+        value: Mob13r.api
+      - key: REACT_APP_THEME
+        value: dark
+
+databases:
+  # ✅ PostgreSQL Database
+  - name: mob13r-db
