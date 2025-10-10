@@ -1,8 +1,10 @@
 import express from "express";
-import { sequelize } from "../models.js";
+import { sequelize, initModels } from "../models.js";
 
 const router = express.Router();
-const { Partner, Offer, Affiliate } = sequelize.models;
+
+// ✅ Ensure models are initialized
+const { Partner, Offer, Affiliate } = initModels();
 
 // ✅ Fetch all partners
 router.get("/partners", async (req, res) => {
@@ -26,7 +28,7 @@ router.get("/affiliates", async (req, res) => {
   }
 });
 
-// ✅ Fetch all offers
+// ✅ Fetch all offers (with partner info)
 router.get("/offers", async (req, res) => {
   try {
     const offers = await Offer.findAll({ include: [Partner] });
