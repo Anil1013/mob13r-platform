@@ -37,7 +37,6 @@ services:
     name: mob13r-dashboard
     env: static
     plan: free
-    region: singapore
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: build
