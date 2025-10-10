@@ -1,14 +1,40 @@
 import express from "express";
-const router = express.Router();
+import { sequelize } from "../models.js";
 
-// Get all affiliates (placeholder)
-router.get("/affiliates", (req, res) => {
-  res.json({ message: "Admin affiliates route working" });
+const router = express.Router();
+const { Partner, Offer, Affiliate } = sequelize.models;
+
+// ✅ Fetch all partners
+router.get("/partners", async (req, res) => {
+  try {
+    const partners = await Partner.findAll();
+    res.json(partners);
+  } catch (error) {
+    console.error("Error fetching partners:", error);
+    res.status(500).json({ error: "Failed to fetch partners" });
+  }
 });
 
-// Get all partners (placeholder)
-router.get("/partners", (req, res) => {
-  res.json({ message: "Admin partners route working" });
+// ✅ Fetch all affiliates
+router.get("/affiliates", async (req, res) => {
+  try {
+    const affiliates = await Affiliate.findAll();
+    res.json(affiliates);
+  } catch (error) {
+    console.error("Error fetching affiliates:", error);
+    res.status(500).json({ error: "Failed to fetch affiliates" });
+  }
+});
+
+// ✅ Fetch all offers
+router.get("/offers", async (req, res) => {
+  try {
+    const offers = await Offer.findAll({ include: [Partner] });
+    res.json(offers);
+  } catch (error) {
+    console.error("Error fetching offers:", error);
+    res.status(500).json({ error: "Failed to fetch offers" });
+  }
 });
 
 export default router;
