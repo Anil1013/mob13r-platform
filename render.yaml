@@ -3,7 +3,6 @@ services:
   - type: web
     name: mob13r-api
     env: node
-    plan: free
     region: singapore
     rootDir: backend
     buildCommand: npm install
