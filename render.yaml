@@ -4,6 +4,7 @@ services:
     name: mob13r-api
     env: node
     plan: free
+    region: singapore
     rootDir: backend
     buildCommand: npm install
     startCommand: node server.js
@@ -58,6 +59,16 @@ services:
       - key: REACT_APP_THEME
         value: dark
 
- # ✅ POSTGRES DATABASE (Automatically created by Render)
+  # 🔁 AUTO-RESTART (Every 24 hours)
+  - type: cron
+    name: mob13r-auto-restart
+    env: node
+    schedule: "0 0 * * *" # Every day at midnight UTC
+    startCommand: >
+      curl -X POST https://api.render.com/v1/services/srv-d3k27fvdiees738s76ng/deploys
+      -H "Accept: application/json"
+      -H "Authorization: Bearer rnd_sGq3UQqympDO69BbbueyJB59PwbD"
+
+# ✅ POSTGRES DATABASE (Auto-created and linked)
 databases:
   - name: mob13r-db
