@@ -4,7 +4,6 @@ services:
     name: mob13r-api
     env: node
     plan: free
-    region: singapore
     rootDir: backend
     buildCommand: npm install
     startCommand: node server.js
@@ -48,7 +47,6 @@ services:
     name: mob13r-frontend
     env: static
     plan: free
-    region: singapore
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: build
@@ -60,18 +58,6 @@ services:
       - key: REACT_APP_THEME
         value: dark
 
-  # 🔁 AUTO-RESTART (CRON JOB every 24h)
-  - type: cron
-    name: mob13r-auto-restart
-    env: node
-    plan: free
-    schedule: "0 0 * * *" # Every day at midnight UTC
-    buildCommand: ""
-    startCommand: >
-      curl -X POST https://api.render.com/v1/services/srv-d3k27fvdiees738s76ng/deploys
-      -H "Accept: application/json"
-      -H "Authorization: Bearer rnd_sGq3UQqympDO69BbbueyJB59PwbD"
-
-# ✅ POSTGRES DATABASE (Automatically created by Render)
+ # ✅ POSTGRES DATABASE (Automatically created by Render)
 databases:
   - name: mob13r-db
