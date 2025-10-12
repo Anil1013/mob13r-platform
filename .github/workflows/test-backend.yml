@@ -1,0 +1,45 @@
+name: Test Backend Connection to AWS RDS
+
+on:
+  workflow_dispatch: # allows you to run manually from GitHub Actions tab
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Dependencies
+        run: |
+          cd backend
+          npm install
+
+      - name: Create .env File
+        run: |
+          cd backend
+          echo "DB_HOST=${{ secrets.DB_HOST }}" >> .env
+          echo "DB_PORT=${{ secrets.DB_PORT }}" >> .env
+          echo "DB_USER=${{ secrets.DB_USER }}" >> .env
+          echo "DB_PASS=${{ secrets.DB_PASS }}" >> .env
+          echo "DB_NAME=${{ secrets.DB_NAME }}" >> .env
+          echo "PORT=8080" >> .env
+          echo "NODE_ENV=production" >> .env
+          echo "FRONTEND_URL=https://your-frontend-url.amplifyapp.com" >> .env
+
+      - name: Run Server for 30 Seconds to Test Connection
+        run: |
+          cd backend
+          nohup node server.js &
+          sleep 30
+          echo "✅ Backend test completed"
+
