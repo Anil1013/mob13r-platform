@@ -46,7 +46,7 @@ jobs:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           application_name: "mob13r-backend"
-          environment_name: "mob13r-backend-env"
+          environment_name: "Mob13r-backend-env-1"
           region: "ap-south-1"
           version_label: "build-${{ github.run_number }}"
           deployment_package: "backend.zip"
