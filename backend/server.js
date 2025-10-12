@@ -9,20 +9,38 @@ import seed from "./seed.js";
 dotenv.config();
 const app = express();
 
-// allow frontend domain
+// ✅ AWS health check route (important for "Green" health)
+app.get("/", (req, res) => {
+  res.send("✅ Mob13r Backend is Live and Connected to AWS RDS!");
+});
+
+// ✅ Allow frontend + local dev
 const frontendOrigin = process.env.FRONTEND_URL || "http://localhost:3000";
 app.use(cors({ origin: [frontendOrigin, "http://localhost:3000"] }));
 
 app.use(bodyParser.json());
 app.use("/api", routes);
 
-const PORT = process.env.PORT || 4000;
-initModels();
+const PORT = process.env.PORT || 8080; // ✅ use AWS default port 8080
 
-sequelize.sync({ alter: true }).then(async () => {
-  console.log("✅ DB synced successfully");
-  await seed();
-  app.listen(PORT, () =>
-    console.log(`🚀 Backend running at http://localhost:${PORT}`)
-  );
-});
+// ✅ Initialize models and database
+(async () => {
+  try {
+    initModels();
+
+    await sequelize.authenticate();
+    console.log("✅ Database connection established.");
+
+    await sequelize.sync({ alter: true });
+    console.log("✅ DB synced successfully");
+
+    await seed();
+
+    app.listen(PORT, () =>
+      console.log(`🚀 Backend running on port ${PORT}`)
+    );
+  } catch (error) {
+    console.error("❌ Startup Error:", error);
+    process.exit(1);
+  }
+})();
