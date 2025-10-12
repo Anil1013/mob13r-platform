@@ -2,7 +2,7 @@ import { Sequelize, DataTypes } from "sequelize";
 import dotenv from "dotenv";
 dotenv.config();
 
-// ✅ AWS RDS connection setup using individual environment variables
+// ✅ AWS RDS connection setup with SSL enabled
 export const sequelize = new Sequelize(
   process.env.DB_NAME,
   process.env.DB_USER,
@@ -13,7 +13,10 @@ export const sequelize = new Sequelize(
     dialect: "postgres",
     logging: false,
     dialectOptions: {
-      ssl: false, // RDS typically handles SSL internally
+      ssl: {
+        require: true,
+        rejectUnauthorized: false, // ✅ must be false for AWS-managed SSL
+      },
     },
   }
 );
