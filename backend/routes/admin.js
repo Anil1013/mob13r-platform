@@ -91,4 +91,16 @@ router.delete("/offers/:id", async (req, res) => {
   }
 });
 
+import seed from "../seed.js";
+
+router.get("/seed", async (req, res) => {
+  try {
+    await seed();
+    res.json({ message: "✅ Database seeded successfully!" });
+  } catch (err) {
+    console.error("Error in seeding:", err);
+    res.status(500).json({ error: "Failed to seed database" });
+  }
+});
+
 export default router;
