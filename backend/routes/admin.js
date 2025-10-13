@@ -1,17 +1,15 @@
 import express from "express";
 import { sequelize, initModels } from "../models.js";
+import seed from "../seed.js";
 
 const router = express.Router();
-
-// Before sending affiliates, remove password fields
-const affiliates = await Affiliate.findAll({
-  attributes: { exclude: ['password'] },
-});
 
 // ✅ Initialize models
 const { Partner, Offer, Affiliate } = initModels();
 
-// ✅ Fetch all partners
+/**
+ * 🟢 Fetch all partners
+ */
 router.get("/partners", async (req, res) => {
   try {
     const partners = await Partner.findAll();
@@ -22,10 +20,14 @@ router.get("/partners", async (req, res) => {
   }
 });
 
-// ✅ Fetch all affiliates
+/**
+ * 🟢 Fetch all affiliates (password hidden)
+ */
 router.get("/affiliates", async (req, res) => {
   try {
-    const affiliates = await Affiliate.findAll();
+    const affiliates = await Affiliate.findAll({
+      attributes: { exclude: ["password"] },
+    });
     res.json(affiliates);
   } catch (error) {
     console.error("Error fetching affiliates:", error);
@@ -33,7 +35,9 @@ router.get("/affiliates", async (req, res) => {
   }
 });
 
-// ✅ Fetch all offers (with partner info)
+/**
+ * 🟢 Fetch all offers (with partner info)
+ */
 router.get("/offers", async (req, res) => {
   try {
     const offers = await Offer.findAll({ include: [Partner] });
@@ -44,7 +48,9 @@ router.get("/offers", async (req, res) => {
   }
 });
 
-// ✅ Create a new offer
+/**
+ * 🟢 Create a new offer
+ */
 router.post("/offers", async (req, res) => {
   try {
     const {
@@ -81,7 +87,9 @@ router.post("/offers", async (req, res) => {
   }
 });
 
-// ✅ Delete an offer by ID
+/**
+ * 🟢 Delete an offer by ID
+ */
 router.delete("/offers/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -96,8 +104,9 @@ router.delete("/offers/:id", async (req, res) => {
   }
 });
 
-import seed from "../seed.js";
-
+/**
+ * 🟢 Trigger DB seeding manually
+ */
 router.get("/seed", async (req, res) => {
   try {
     await seed();
