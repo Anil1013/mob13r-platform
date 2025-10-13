@@ -7,6 +7,11 @@ frontend:
         - npm install
     build:
       commands:
+        # Inject environment variables into .env file for React
+        - echo "REACT_APP_API_URL=$REACT_APP_API_URL" >> .env
+        - echo "REACT_APP_APP_NAME=$REACT_APP_APP_NAME" >> .env
+        - echo "REACT_APP_THEME=$REACT_APP_THEME" >> .env
+        # Build the React app
         - npm run build
   artifacts:
     baseDirectory: frontend/build
