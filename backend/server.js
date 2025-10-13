@@ -14,20 +14,37 @@ app.get("/", (req, res) => {
   res.send("✅ Mob13r Backend is Live and Connected to AWS RDS!");
 });
 
-// ✅ Allow frontend + local dev
-const frontendOrigin = process.env.FRONTEND_URL || "http://localhost:3000";
-app.use(cors({ origin: [frontendOrigin, "http://localhost:3000"] }));
+// ✅ Allow specific frontend domains
+const allowedOrigins = [
+  "https://dashboard.mob13r.com", // Amplify frontend (LIVE)
+  "http://localhost:3000",         // Local dev
+];
+
+// ✅ Use dynamic CORS check
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true); // allow Postman, server calls
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg = `CORS blocked: The CORS policy does not allow access from origin ${origin}`;
+        console.warn(msg);
+        return callback(new Error(msg), false);
+      }
+      return callback(null, true);
+    },
+    credentials: true,
+  })
+);
 
 app.use(bodyParser.json());
 app.use("/api", routes);
 
-const PORT = process.env.PORT || 8080; // ✅ use AWS default port 8080
+const PORT = process.env.PORT || 8080; // ✅ AWS default port
 
 // ✅ Initialize models and database
 (async () => {
   try {
     initModels();
-
     await sequelize.authenticate();
     console.log("✅ Database connection established.");
 
