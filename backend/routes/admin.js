@@ -3,7 +3,7 @@ import { sequelize, initModels } from "../models.js";
 
 const router = express.Router();
 
-// ✅ Ensure models are initialized
+// ✅ Initialize models
 const { Partner, Offer, Affiliate } = initModels();
 
 // ✅ Fetch all partners
@@ -36,6 +36,58 @@ router.get("/offers", async (req, res) => {
   } catch (error) {
     console.error("Error fetching offers:", error);
     res.status(500).json({ error: "Failed to fetch offers" });
+  }
+});
+
+// ✅ Create a new offer
+router.post("/offers", async (req, res) => {
+  try {
+    const {
+      name,
+      geo,
+      carrier,
+      partner_id,
+      partner_cpa,
+      ref_url,
+      request_url,
+      verify_url,
+    } = req.body;
+
+    if (!name || !partner_id) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const newOffer = await Offer.create({
+      name,
+      geo,
+      carrier,
+      PartnerId: partner_id,
+      partner_cpa,
+      ref_url,
+      request_url,
+      verify_url,
+      status: "active",
+    });
+
+    res.status(201).json(newOffer);
+  } catch (error) {
+    console.error("Error creating offer:", error);
+    res.status(500).json({ error: "Failed to create offer" });
+  }
+});
+
+// ✅ Delete an offer by ID
+router.delete("/offers/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await Offer.destroy({ where: { id } });
+    if (!deleted) {
+      return res.status(404).json({ error: "Offer not found" });
+    }
+    res.json({ message: "Offer deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting offer:", error);
+    res.status(500).json({ error: "Failed to delete offer" });
   }
 });
 
