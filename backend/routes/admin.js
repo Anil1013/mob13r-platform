@@ -3,6 +3,11 @@ import { sequelize, initModels } from "../models.js";
 
 const router = express.Router();
 
+// Before sending affiliates, remove password fields
+const affiliates = await Affiliate.findAll({
+  attributes: { exclude: ['password'] },
+});
+
 // ✅ Initialize models
 const { Partner, Offer, Affiliate } = initModels();
 
