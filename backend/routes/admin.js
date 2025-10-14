@@ -7,9 +7,10 @@ const router = express.Router();
 // Initialize models
 const { Partner, Offer, Affiliate } = initModels();
 
-/**
- * ✅ Fetch all partners
- */
+/* -------------------------------------------------------------------------- */
+/* ✅ BASIC CRUD ROUTES                                                       */
+/* -------------------------------------------------------------------------- */
+
 router.get("/partners", async (req, res) => {
   try {
     const partners = await Partner.findAll();
@@ -20,9 +21,6 @@ router.get("/partners", async (req, res) => {
   }
 });
 
-/**
- * ✅ Fetch all affiliates (without passwords)
- */
 router.get("/affiliates", async (req, res) => {
   try {
     const affiliates = await Affiliate.findAll({
@@ -35,9 +33,6 @@ router.get("/affiliates", async (req, res) => {
   }
 });
 
-/**
- * ✅ Fetch all offers (with partner info)
- */
 router.get("/offers", async (req, res) => {
   try {
     const offers = await Offer.findAll({ include: [Partner] });
@@ -48,29 +43,49 @@ router.get("/offers", async (req, res) => {
   }
 });
 
-/**
- * ✅ Reports (Daily or Hourly Summary)
- */
+/* -------------------------------------------------------------------------- */
+/* ✅ REPORTS API — Daily / Hourly with Filters                               */
+/* -------------------------------------------------------------------------- */
+
 router.get("/reports", async (req, res) => {
   try {
-    const { start_date, end_date, group = "daily", start_hour, end_hour } = req.query;
+    const {
+      start_date,
+      end_date,
+      group = "daily",
+      start_hour,
+      end_hour,
+      partner_id,
+      affiliate_id,
+      offer_id,
+    } = req.query;
 
-    // Fake demo data generator (replace later with DB aggregation)
-    const days = 7;
+    // Example: this uses dummy data (replace with your DB query later)
+    // You can connect this later to your `click_logs` or `conversion_logs` table
     const today = new Date();
+    const data = [];
 
-    if (group === "hourly") {
-      const data = [];
-      for (let d = 0; d < days; d++) {
-        const date = new Date(today);
-        date.setDate(today.getDate() - d);
+    // Helper to simulate random values
+    const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+    const numDays = 7;
+    for (let d = 0; d < numDays; d++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - d);
+
+      if (group === "hourly") {
         for (let h = 0; h < 24; h++) {
-          // Apply hour range filter
           if (
             (start_hour && h < parseInt(start_hour)) ||
             (end_hour && h > parseInt(end_hour))
           )
             continue;
+
+          const clicks = rand(100, 1000);
+          const conversions = rand(1, 50);
+          const revenue = conversions * rand(0.5, 1.5);
+          const payout = revenue * 0.7;
+          const profit = revenue - payout;
 
           data.push({
             date: date.toISOString().split("T")[0],
@@ -78,34 +93,48 @@ router.get("/reports", async (req, res) => {
             total_affiliates: 2,
             total_partners: 2,
             total_offers: 4,
+            clicks,
+            conversions,
+            revenue: revenue.toFixed(2),
+            payout: payout.toFixed(2),
+            profit: profit.toFixed(2),
           });
         }
-      }
-      return res.json(data);
-    } else {
-      // Daily summary
-      const data = [];
-      for (let d = 0; d < days; d++) {
-        const date = new Date(today);
-        date.setDate(today.getDate() - d);
+      } else {
+        const clicks = rand(2000, 5000);
+        const conversions = rand(50, 200);
+        const revenue = conversions * rand(0.5, 1.5);
+        const payout = revenue * 0.7;
+        const profit = revenue - payout;
+
         data.push({
           date: date.toISOString().split("T")[0],
           total_affiliates: 2,
           total_partners: 2,
           total_offers: 4,
+          clicks,
+          conversions,
+          revenue: revenue.toFixed(2),
+          payout: payout.toFixed(2),
+          profit: profit.toFixed(2),
         });
       }
-      return res.json(data);
     }
+
+    // Filter simulation — later connect this to actual WHERE clauses
+    const filtered = data.filter(() => true); // placeholder
+
+    res.json(filtered);
   } catch (error) {
     console.error("Error fetching reports:", error);
     res.status(500).json({ error: "Failed to fetch reports" });
   }
 });
 
-/**
- * ✅ Create a new offer
- */
+/* -------------------------------------------------------------------------- */
+/* ✅ OFFER CREATION / DELETE / SEEDING                                       */
+/* -------------------------------------------------------------------------- */
+
 router.post("/offers", async (req, res) => {
   try {
     const {
@@ -141,9 +170,6 @@ router.post("/offers", async (req, res) => {
   }
 });
 
-/**
- * ✅ Delete an offer by ID
- */
 router.delete("/offers/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -156,9 +182,6 @@ router.delete("/offers/:id", async (req, res) => {
   }
 });
 
-/**
- * ✅ Trigger DB seeding manually
- */
 router.get("/seed", async (req, res) => {
   try {
     await seed();
