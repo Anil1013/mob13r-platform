@@ -5,7 +5,7 @@ import seed from "../seed.js";
 const router = express.Router();
 
 // ✅ Initialize models
-const { Partner, Offer, Affiliate } = initModels();
+const { Partner, Offer, Affiliate, Track } = initModels();
 
 /**
  * 🟢 Fetch all partners
@@ -59,6 +59,7 @@ router.post("/offers", async (req, res) => {
       carrier,
       partner_id,
       partner_cpa,
+      affiliate_cpa,
       ref_url,
       request_url,
       verify_url,
@@ -74,6 +75,7 @@ router.post("/offers", async (req, res) => {
       carrier,
       PartnerId: partner_id,
       partner_cpa,
+      affiliate_cpa,
       ref_url,
       request_url,
       verify_url,
@@ -114,6 +116,65 @@ router.get("/seed", async (req, res) => {
   } catch (err) {
     console.error("Error in seeding:", err);
     res.status(500).json({ error: "Failed to seed database" });
+  }
+});
+
+/**
+ * 📊 Reports API — Partner + Affiliate + Offer + Track Data
+ * Filters: date range, partner_id, affiliate_id, offer_id, status
+ */
+router.get("/reports", async (req, res) => {
+  try {
+    const { start_date, end_date, partner_id, affiliate_id, offer_id, status } = req.query;
+
+    const where = {};
+    if (start_date && end_date) {
+      where.date = { [sequelize.Op.between]: [start_date, end_date] };
+    }
+    if (partner_id) where.PartnerId = partner_id;
+    if (affiliate_id) where.AffiliateId = affiliate_id;
+    if (offer_id) where.OfferId = offer_id;
+
+    const reportData = await Track.findAll({
+      where,
+      include: [
+        { model: Partner, attributes: ["id", "name", "country"] },
+        { model: Offer, attributes: ["id", "name", "geo", "carrier", "partner_cpa", "affiliate_cpa", "status"] },
+        { model: Affiliate, attributes: ["id", "name", "email"] },
+      ],
+      attributes: [
+        "date",
+        [sequelize.fn("SUM", sequelize.col("clicks")), "clicks"],
+        [sequelize.fn("SUM", sequelize.col("conversions")), "conversions"],
+      ],
+      group: ["Track.date", "Partner.id", "Affiliate.id", "Offer.id"],
+      raw: true,
+      nest: true,
+    });
+
+    const reports = reportData.map((item) => {
+      const revenue = item.conversions * item.Offer.partner_cpa;
+      const payout = item.conversions * item.Offer.affiliate_cpa;
+      return {
+        date: item.date,
+        partner: item.Partner.name,
+        affiliate: item.Affiliate.name,
+        offer: item.Offer.name,
+        clicks: item.clicks,
+        conversions: item.conversions,
+        partner_cpa: item.Offer.partner_cpa,
+        affiliate_cpa: item.Offer.affiliate_cpa,
+        revenue,
+        payout,
+        profit: revenue - payout,
+        status: item.Offer.status,
+      };
+    });
+
+    res.json(reports);
+  } catch (error) {
+    console.error("Error generating reports:", error);
+    res.status(500).json({ error: "Failed to generate reports" });
   }
 });
 
