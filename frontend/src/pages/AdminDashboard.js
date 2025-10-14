@@ -206,7 +206,6 @@ export default function AdminDashboard() {
       <p style={{ color: "#94a3b8", marginBottom: "20px" }}>
         Combined overview of Affiliates, Partners, and Offers.
       </p>
-
       <div style={styles.tableWrapper}>
         <table style={styles.table}>
           <thead>
@@ -237,9 +236,12 @@ export default function AdminDashboard() {
     </div>
   );
 
-  // ====== SECTIONS ======
-  // (keep your existing AffiliatesSection, PartnersSection, OffersSection as they are)
+  // ====== BASIC PLACEHOLDERS to avoid syntax errors ======
+  const AffiliatesSection = () => <div></div>;
+  const PartnersSection = () => <div></div>;
+  const OffersSection = () => <div></div>;
 
+  // ====== MAIN RENDER ======
   return (
     <div style={styles.container}>
       <ToastContainer position="top-right" theme="dark" />
@@ -298,69 +300,6 @@ const styles = {
   activeTab: { color: "#4cc9f0", borderBottom: "2px solid #4cc9f0" },
   section: { padding: 40 },
   heading: { fontSize: "1.3rem", color: "#4cc9f0", marginBottom: 10 },
-  form: {
-    display: "grid",
-    gap: 10,
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    background: "#0e162b",
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 15,
-  },
-  addBtn: {
-    gridColumn: "span 2",
-    background: "#4cc9f0",
-    border: "none",
-    padding: 10,
-    borderRadius: 6,
-    cursor: "pointer",
-    color: "#0b1221",
-    fontWeight: "bold",
-  },
-  editBtn: {
-    background: "#2563eb",
-    border: "none",
-    color: "#fff",
-    padding: "6px 10px",
-    marginRight: 6,
-    borderRadius: 4,
-    cursor: "pointer",
-  },
-  saveBtn: {
-    background: "#16a34a",
-    border: "none",
-    color: "#fff",
-    padding: "6px 10px",
-    marginRight: 6,
-    borderRadius: 4,
-    cursor: "pointer",
-  },
-  cancelBtn: {
-    background: "#6b7280",
-    border: "none",
-    color: "#fff",
-    padding: "6px 10px",
-    marginRight: 6,
-    borderRadius: 4,
-    cursor: "pointer",
-  },
-  deleteBtn: {
-    background: "#ef4444",
-    border: "none",
-    color: "#fff",
-    padding: "6px 10px",
-    borderRadius: 4,
-    cursor: "pointer",
-  },
-  searchBox: {
-    background: "#111b34",
-    color: "#fff",
-    border: "1px solid #4cc9f0",
-    borderRadius: 6,
-    padding: "8px 12px",
-    marginBottom: 10,
-    width: 260,
-  },
   tableWrapper: {
     overflowX: "auto",
     background: "#0e162b",
