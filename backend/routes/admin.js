@@ -4,11 +4,11 @@ import seed from "../seed.js";
 
 const router = express.Router();
 
-// ✅ Initialize models
-const { Partner, Offer, Affiliate, Track } = initModels();
+// Initialize models
+const { Partner, Offer, Affiliate } = initModels();
 
 /**
- * 🟢 Fetch all partners
+ * ✅ Fetch all partners
  */
 router.get("/partners", async (req, res) => {
   try {
@@ -21,7 +21,7 @@ router.get("/partners", async (req, res) => {
 });
 
 /**
- * 🟢 Fetch all affiliates (password hidden)
+ * ✅ Fetch all affiliates (without passwords)
  */
 router.get("/affiliates", async (req, res) => {
   try {
@@ -36,7 +36,7 @@ router.get("/affiliates", async (req, res) => {
 });
 
 /**
- * 🟢 Fetch all offers (with partner info)
+ * ✅ Fetch all offers (with partner info)
  */
 router.get("/offers", async (req, res) => {
   try {
@@ -49,7 +49,62 @@ router.get("/offers", async (req, res) => {
 });
 
 /**
- * 🟢 Create a new offer
+ * ✅ Reports (Daily or Hourly Summary)
+ */
+router.get("/reports", async (req, res) => {
+  try {
+    const { start_date, end_date, group = "daily", start_hour, end_hour } = req.query;
+
+    // Fake demo data generator (replace later with DB aggregation)
+    const days = 7;
+    const today = new Date();
+
+    if (group === "hourly") {
+      const data = [];
+      for (let d = 0; d < days; d++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - d);
+        for (let h = 0; h < 24; h++) {
+          // Apply hour range filter
+          if (
+            (start_hour && h < parseInt(start_hour)) ||
+            (end_hour && h > parseInt(end_hour))
+          )
+            continue;
+
+          data.push({
+            date: date.toISOString().split("T")[0],
+            hour: h,
+            total_affiliates: 2,
+            total_partners: 2,
+            total_offers: 4,
+          });
+        }
+      }
+      return res.json(data);
+    } else {
+      // Daily summary
+      const data = [];
+      for (let d = 0; d < days; d++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - d);
+        data.push({
+          date: date.toISOString().split("T")[0],
+          total_affiliates: 2,
+          total_partners: 2,
+          total_offers: 4,
+        });
+      }
+      return res.json(data);
+    }
+  } catch (error) {
+    console.error("Error fetching reports:", error);
+    res.status(500).json({ error: "Failed to fetch reports" });
+  }
+});
+
+/**
+ * ✅ Create a new offer
  */
 router.post("/offers", async (req, res) => {
   try {
@@ -59,15 +114,13 @@ router.post("/offers", async (req, res) => {
       carrier,
       partner_id,
       partner_cpa,
-      affiliate_cpa,
       ref_url,
       request_url,
       verify_url,
     } = req.body;
 
-    if (!name || !partner_id) {
+    if (!name || !partner_id)
       return res.status(400).json({ error: "Missing required fields" });
-    }
 
     const newOffer = await Offer.create({
       name,
@@ -75,7 +128,6 @@ router.post("/offers", async (req, res) => {
       carrier,
       PartnerId: partner_id,
       partner_cpa,
-      affiliate_cpa,
       ref_url,
       request_url,
       verify_url,
@@ -90,15 +142,13 @@ router.post("/offers", async (req, res) => {
 });
 
 /**
- * 🟢 Delete an offer by ID
+ * ✅ Delete an offer by ID
  */
 router.delete("/offers/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const deleted = await Offer.destroy({ where: { id } });
-    if (!deleted) {
-      return res.status(404).json({ error: "Offer not found" });
-    }
+    if (!deleted) return res.status(404).json({ error: "Offer not found" });
     res.json({ message: "Offer deleted successfully" });
   } catch (error) {
     console.error("Error deleting offer:", error);
@@ -107,7 +157,7 @@ router.delete("/offers/:id", async (req, res) => {
 });
 
 /**
- * 🟢 Trigger DB seeding manually
+ * ✅ Trigger DB seeding manually
  */
 router.get("/seed", async (req, res) => {
   try {
@@ -116,65 +166,6 @@ router.get("/seed", async (req, res) => {
   } catch (err) {
     console.error("Error in seeding:", err);
     res.status(500).json({ error: "Failed to seed database" });
-  }
-});
-
-/**
- * 📊 Reports API — Partner + Affiliate + Offer + Track Data
- * Filters: date range, partner_id, affiliate_id, offer_id, status
- */
-router.get("/reports", async (req, res) => {
-  try {
-    const { start_date, end_date, partner_id, affiliate_id, offer_id, status } = req.query;
-
-    const where = {};
-    if (start_date && end_date) {
-      where.date = { [sequelize.Op.between]: [start_date, end_date] };
-    }
-    if (partner_id) where.PartnerId = partner_id;
-    if (affiliate_id) where.AffiliateId = affiliate_id;
-    if (offer_id) where.OfferId = offer_id;
-
-    const reportData = await Track.findAll({
-      where,
-      include: [
-        { model: Partner, attributes: ["id", "name", "country"] },
-        { model: Offer, attributes: ["id", "name", "geo", "carrier", "partner_cpa", "affiliate_cpa", "status"] },
-        { model: Affiliate, attributes: ["id", "name", "email"] },
-      ],
-      attributes: [
-        "date",
-        [sequelize.fn("SUM", sequelize.col("clicks")), "clicks"],
-        [sequelize.fn("SUM", sequelize.col("conversions")), "conversions"],
-      ],
-      group: ["Track.date", "Partner.id", "Affiliate.id", "Offer.id"],
-      raw: true,
-      nest: true,
-    });
-
-    const reports = reportData.map((item) => {
-      const revenue = item.conversions * item.Offer.partner_cpa;
-      const payout = item.conversions * item.Offer.affiliate_cpa;
-      return {
-        date: item.date,
-        partner: item.Partner.name,
-        affiliate: item.Affiliate.name,
-        offer: item.Offer.name,
-        clicks: item.clicks,
-        conversions: item.conversions,
-        partner_cpa: item.Offer.partner_cpa,
-        affiliate_cpa: item.Offer.affiliate_cpa,
-        revenue,
-        payout,
-        profit: revenue - payout,
-        status: item.Offer.status,
-      };
-    });
-
-    res.json(reports);
-  } catch (error) {
-    console.error("Error generating reports:", error);
-    res.status(500).json({ error: "Failed to generate reports" });
   }
 });
 
