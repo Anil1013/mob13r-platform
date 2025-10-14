@@ -115,27 +115,28 @@ export default function AdminDashboard() {
     <div style={styles.container}>
       <ToastContainer position="top-right" theme="dark" />
       <nav style={styles.navbar}>
-        <h1 style={styles.title}>Mob13r Admin Dashboard</h1>
-        <div style={styles.navLinks}>
-          {["reports", "affiliates", "partners", "offers"].map((tab) => (
-            <button
-              key={tab}
-              style={{
-                ...styles.navButton,
-                ...(activeTab === tab ? styles.activeTab : {}),
-              }}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
-        </div>
-      </nav>
+  <h1 style={styles.title}>Mob13r Admin Dashboard</h1>
+  <div style={styles.navLinks}>
+    {["reports", "affiliates", "partners", "offers"].map((tab) => (
+      <button
+        key={tab}
+        style={{
+          ...styles.navButton,
+          ...(activeTab === tab ? styles.activeTab : {}),
+        }}
+        onClick={() => setActiveTab(tab)}
+      >
+        {tab.charAt(0).toUpperCase() + tab.slice(1)}
+      </button>
+    ))}
+  </div>
+</nav>
 
-      {activeTab === "reports" && <ReportsSection />}
-      {activeTab === "affiliates" && <AffiliatesSection />}
-      {activeTab === "partners" && <PartnersSection />}
-      {activeTab === "offers" && <OffersSection />}
+{activeTab === "reports" && <ReportsSection />}
+{activeTab === "affiliates" && <AffiliatesSection />}
+{activeTab === "partners" && <PartnersSection />}
+{activeTab === "offers" && <OffersSection />}
+
 
       <footer style={styles.footer}>
         <p>© 2025 Mob13r Platform — all rights reserved</p>
