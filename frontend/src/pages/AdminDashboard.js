@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { ToastContainer, toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
 
 const API_URL = process.env.REACT_APP_API_URL || "https://backend.mob13r.com/api";
 
@@ -10,194 +8,239 @@ export default function AdminDashboard() {
   const [affiliates, setAffiliates] = useState([]);
   const [partners, setPartners] = useState([]);
   const [offers, setOffers] = useState([]);
-  const [loading, setLoading] = useState(true);
 
+  // Load data for dropdowns
   useEffect(() => {
     (async () => {
       try {
-        const [affRes, partRes, offRes] = await Promise.all([
+        const [a, p, o] = await Promise.all([
           axios.get(`${API_URL}/admin/affiliates`),
           axios.get(`${API_URL}/admin/partners`),
           axios.get(`${API_URL}/admin/offers`),
         ]);
-        setAffiliates(affRes.data || []);
-        setPartners(partRes.data || []);
-        setOffers(offRes.data || []);
-      } catch (e) {
-        console.error(e);
-        toast.error("Failed to load dashboard data");
-      } finally {
-        setLoading(false);
+        setAffiliates(a.data);
+        setPartners(p.data);
+        setOffers(o.data);
+      } catch (err) {
+        console.error("Failed to load initial data:", err);
       }
     })();
   }, []);
 
-  if (loading)
-    return (
-      <div style={styles.loadingContainer}>
-        <div className="loader"></div>
-        <p style={{ color: "#94a3b8", marginTop: 10 }}>Loading Mob13r Dashboard…</p>
-        <style>{`
-          .loader {
-            border: 6px solid #1e293b;
-            border-top: 6px solid #4cc9f0;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 1s linear infinite;
-          }
-          @keyframes spin {
-            0% { transform: rotate(0); }
-            100% { transform: rotate(360deg); }
-          }
-        `}</style>
-      </div>
-    );
+  return (
+    <div style={styles.container}>
+      <h1 style={styles.title}>Mob13r Admin Dashboard</h1>
 
-  const ReportsSection = () => (
+      {/* Navbar */}
+      <nav style={styles.navbar}>
+        {["reports", "affiliates", "partners", "offers"].map((tab) => (
+          <button
+            key={tab}
+            style={{
+              ...styles.navButton,
+              ...(activeTab === tab ? styles.activeTab : {}),
+            }}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
+        ))}
+      </nav>
+
+      {/* Reports Tab */}
+      {activeTab === "reports" && <ReportsSection />}
+
+      <footer style={styles.footer}>
+        © 2025 Mob13r Platform — All rights reserved
+      </footer>
+    </div>
+  );
+}
+
+/* ----------------- REPORTS SECTION ------------------ */
+const ReportsSection = () => {
+  const [reports, setReports] = useState([]);
+  const [hourly, setHourly] = useState(false);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [startHour, setStartHour] = useState("");
+  const [endHour, setEndHour] = useState("");
+
+  const fetchReports = async () => {
+    try {
+      let url = `${API_URL}/admin/reports?group=${hourly ? "hourly" : "daily"}`;
+      if (startDate) url += `&start_date=${startDate}`;
+      if (endDate) url += `&end_date=${endDate}`;
+      if (hourly && startHour && endHour)
+        url += `&start_hour=${startHour}&end_hour=${endHour}`;
+
+      const { data } = await axios.get(url);
+      setReports(data);
+    } catch (err) {
+      console.error("Error fetching reports:", err);
+    }
+  };
+
+  return (
     <div style={styles.section}>
-      <h2 style={styles.heading}>📊 Day-wise Reports</h2>
-      <p style={{ color: "#94a3b8", marginBottom: "20px" }}>
-        Combined overview of Affiliates, Partners, and Offers.
-      </p>
+      <h2 style={styles.heading}>
+        {hourly ? "Hourly Reports" : "Day-wise Reports"}
+      </h2>
+
+      {/* Filters */}
+      <div style={styles.filterBox}>
+        <input
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+          style={styles.filterInput}
+        />
+        <input
+          type="date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+          style={styles.filterInput}
+        />
+
+        <label style={{ color: "#4cc9f0" }}>
+          <input
+            type="checkbox"
+            checked={hourly}
+            onChange={() => setHourly(!hourly)}
+          />{" "}
+          Hourly View
+        </label>
+
+        {hourly && (
+          <>
+            <select
+              value={startHour}
+              onChange={(e) => setStartHour(e.target.value)}
+              style={styles.filterInput}
+            >
+              <option value="">Start Hour</option>
+              {[...Array(24).keys()].map((h) => (
+                <option key={h} value={h}>
+                  {h}:00
+                </option>
+              ))}
+            </select>
+            <select
+              value={endHour}
+              onChange={(e) => setEndHour(e.target.value)}
+              style={styles.filterInput}
+            >
+              <option value="">End Hour</option>
+              {[...Array(24).keys()].map((h) => (
+                <option key={h} value={h}>
+                  {h}:00
+                </option>
+              ))}
+            </select>
+          </>
+        )}
+
+        <button onClick={fetchReports} style={styles.loadBtn}>
+          Load
+        </button>
+      </div>
+
+      {/* Table */}
       <div style={styles.tableWrapper}>
         <table style={styles.table}>
           <thead>
             <tr>
               <th>Date</th>
+              {hourly && <th>Hour</th>}
               <th>Total Affiliates</th>
               <th>Total Partners</th>
               <th>Total Offers</th>
             </tr>
           </thead>
           <tbody>
-            {[...Array(7)].map((_, i) => {
-              const date = new Date();
-              date.setDate(date.getDate() - i);
-              const formatted = date.toISOString().split("T")[0];
-              return (
-                <tr key={i}>
-                  <td>{formatted}</td>
-                  <td>{affiliates.length}</td>
-                  <td>{partners.length}</td>
-                  <td>{offers.length}</td>
-                </tr>
-              );
-            })}
+            {reports.map((r, i) => (
+              <tr key={i}>
+                <td>{r.date}</td>
+                {hourly && <td>{r.hour}:00</td>}
+                <td>{r.total_affiliates}</td>
+                <td>{r.total_partners}</td>
+                <td>{r.total_offers}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
     </div>
   );
+};
 
-  const AffiliatesSection = () => (
-    <div style={styles.section}>
-      <h2 style={styles.heading}>👥 Affiliates</h2>
-      <p style={{ color: "#94a3b8" }}>Affiliate management tools will appear here.</p>
-    </div>
-  );
-
-  const PartnersSection = () => (
-    <div style={styles.section}>
-      <h2 style={styles.heading}>🤝 Partners</h2>
-      <p style={{ color: "#94a3b8" }}>Partner management tools will appear here.</p>
-    </div>
-  );
-
-  const OffersSection = () => (
-    <div style={styles.section}>
-      <h2 style={styles.heading}>🎯 Offers</h2>
-      <p style={{ color: "#94a3b8" }}>Offer management tools will appear here.</p>
-    </div>
-  );
-
-  return (
-    <div style={styles.container}>
-      <ToastContainer position="top-right" theme="dark" />
-      <nav style={styles.navbar}>
-  <h1 style={styles.title}>Mob13r Admin Dashboard</h1>
-  <div style={styles.navLinks}>
-    {["reports", "affiliates", "partners", "offers"].map((tab) => (
-      <button
-        key={tab}
-        style={{
-          ...styles.navButton,
-          ...(activeTab === tab ? styles.activeTab : {}),
-        }}
-        onClick={() => setActiveTab(tab)}
-      >
-        {tab.charAt(0).toUpperCase() + tab.slice(1)}
-      </button>
-    ))}
-  </div>
-</nav>
-
-{activeTab === "reports" && <ReportsSection />}
-{activeTab === "affiliates" && <AffiliatesSection />}
-{activeTab === "partners" && <PartnersSection />}
-{activeTab === "offers" && <OffersSection />}
-
-
-      <footer style={styles.footer}>
-        <p>© 2025 Mob13r Platform — all rights reserved</p>
-      </footer>
-    </div>
-  );
-}
-
+/* ----------------- STYLES ------------------ */
 const styles = {
   container: {
     backgroundColor: "#0b1221",
     color: "#e6eef8",
     minHeight: "100vh",
     fontFamily: "system-ui, sans-serif",
+    padding: 30,
   },
+  title: { fontSize: "1.8rem", color: "#4cc9f0", marginBottom: 20 },
   navbar: {
-    background: "#111b34",
-    padding: "20px 40px",
     display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
+    gap: 20,
+    marginBottom: 20,
     borderBottom: "1px solid #1e2a47",
+    paddingBottom: 10,
   },
-  title: { fontSize: "1.5rem", color: "#4cc9f0" },
-  navLinks: { display: "flex", gap: 25 },
   navButton: {
-    background: "transparent",
+    background: "none",
     border: "none",
     color: "#94a3b8",
-    fontSize: "1rem",
     cursor: "pointer",
-    padding: "6px 12px",
+    fontSize: "1rem",
   },
   activeTab: { color: "#4cc9f0", borderBottom: "2px solid #4cc9f0" },
-  section: { padding: 40 },
+  section: { background: "#0e162b", padding: 20, borderRadius: 8 },
   heading: { fontSize: "1.3rem", color: "#4cc9f0", marginBottom: 10 },
+  filterBox: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    background: "#111b34",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  filterInput: {
+    background: "#0b1221",
+    color: "#fff",
+    border: "1px solid #4cc9f0",
+    padding: "6px 10px",
+    borderRadius: 6,
+  },
+  loadBtn: {
+    background: "#4cc9f0",
+    color: "#0b1221",
+    border: "none",
+    padding: "8px 14px",
+    borderRadius: 6,
+    cursor: "pointer",
+    fontWeight: "bold",
+  },
   tableWrapper: {
     overflowX: "auto",
-    background: "#0e162b",
+    background: "#0b1221",
     borderRadius: 8,
-    padding: 10,
   },
   table: {
     width: "100%",
     borderCollapse: "collapse",
-    color: "#cbd5e1",
   },
   footer: {
-    textAlign: "center",
-    borderTop: "1px solid #1e2a47",
-    paddingTop: 15,
-    color: "#64748b",
-    fontSize: ".85rem",
     marginTop: 40,
-  },
-  loadingContainer: {
-    background: "#0b1221",
-    height: "100vh",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
+    borderTop: "1px solid #1e2a47",
+    textAlign: "center",
+    paddingTop: 10,
+    fontSize: "0.9rem",
+    color: "#64748b",
   },
 };
