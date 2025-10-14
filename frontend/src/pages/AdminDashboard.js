@@ -12,6 +12,8 @@ export default function AdminDashboard() {
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+
+  // For adding new offer
   const [newOffer, setNewOffer] = useState({
     name: "",
     geo: "",
@@ -23,6 +25,10 @@ export default function AdminDashboard() {
     verify_url: "",
   });
 
+  // Inline editing states
+  const [editId, setEditId] = useState(null);
+  const [editData, setEditData] = useState({});
+
   // ✅ Fetch data using axios
   useEffect(() => {
     const fetchData = async () => {
@@ -32,28 +38,26 @@ export default function AdminDashboard() {
           axios.get(`${API_URL}/admin/partners`),
           axios.get(`${API_URL}/admin/offers`),
         ]);
-
         setAffiliates(affRes.data);
         setPartners(partRes.data);
         setOffers(offRes.data);
       } catch (error) {
-        console.error("❌ Error loading admin data:", error);
-        toast.error("Failed to load dashboard data");
+        console.error("Error loading admin data:", error);
+        toast.error("❌ Failed to load dashboard data");
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, []);
 
-  // ✅ Handle input change
+  // ✅ Handle form change for new offer
   const handleChange = (e) => {
     const { name, value } = e.target;
     setNewOffer({ ...newOffer, [name]: value });
   };
 
-  // ✅ Create new offer
+  // ✅ Add new offer
   const handleAddOffer = async (e) => {
     e.preventDefault();
     try {
@@ -71,8 +75,7 @@ export default function AdminDashboard() {
       });
       toast.success("✅ Offer added successfully!");
     } catch (error) {
-      console.error(error);
-      toast.error("❌ Failed to create offer");
+      toast.error("❌ Failed to add offer");
     }
   };
 
@@ -83,9 +86,34 @@ export default function AdminDashboard() {
       await axios.delete(`${API_URL}/admin/offers/${id}`);
       setOffers(offers.filter((o) => o.id !== id));
       toast.info("🗑 Offer deleted");
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast.error("❌ Failed to delete offer");
+    }
+  };
+
+  // ✅ Enter edit mode
+  const handleEdit = (offer) => {
+    setEditId(offer.id);
+    setEditData({ ...offer });
+  };
+
+  // ✅ Handle edit input change
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditData({ ...editData, [name]: value });
+  };
+
+  // ✅ Save edited offer
+  const handleSave = async (id) => {
+    try {
+      const res = await axios.patch(`${API_URL}/admin/offers/${id}`, editData);
+      setOffers(
+        offers.map((o) => (o.id === id ? res.data : o))
+      );
+      setEditId(null);
+      toast.success("✅ Offer updated successfully!");
+    } catch (error) {
+      toast.error("❌ Failed to update offer");
     }
   };
 
@@ -107,15 +135,12 @@ export default function AdminDashboard() {
             height: 60px;
             animation: spin 1s linear infinite;
           }
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
+          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         `}</style>
       </div>
     );
 
-  // ✅ Dynamic section rendering
+  // ✅ Content Renderer
   const renderContent = () => {
     switch (activeTab) {
       case "affiliates":
@@ -123,11 +148,10 @@ export default function AdminDashboard() {
           <div style={styles.section}>
             <h2 style={styles.heading}>Affiliates</h2>
             <input
-              type="text"
+              style={styles.searchBox}
               placeholder="Search affiliates..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={styles.searchBox}
             />
             <div style={styles.tableWrapper}>
               <table style={styles.table}>
@@ -187,9 +211,11 @@ export default function AdminDashboard() {
         return (
           <div style={styles.section}>
             <h2 style={styles.heading}>Offers Management</h2>
+
+            {/* Add Offer Form */}
             <form onSubmit={handleAddOffer} style={styles.form}>
               <input name="name" placeholder="Offer Name" value={newOffer.name} onChange={handleChange} required />
-              <input name="geo" placeholder="Geo (e.g. OM)" value={newOffer.geo} onChange={handleChange} />
+              <input name="geo" placeholder="Geo" value={newOffer.geo} onChange={handleChange} />
               <input name="carrier" placeholder="Carrier" value={newOffer.carrier} onChange={handleChange} />
               <select name="partner_id" value={newOffer.partner_id} onChange={handleChange} required>
                 <option value="">Select Partner</option>
@@ -197,13 +223,14 @@ export default function AdminDashboard() {
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
-              <input name="partner_cpa" placeholder="Partner CPA" value={newOffer.partner_cpa} onChange={handleChange} />
+              <input name="partner_cpa" placeholder="CPA" value={newOffer.partner_cpa} onChange={handleChange} />
               <input name="ref_url" placeholder="Ref URL" value={newOffer.ref_url} onChange={handleChange} />
               <input name="request_url" placeholder="Request URL" value={newOffer.request_url} onChange={handleChange} />
               <input name="verify_url" placeholder="Verify URL" value={newOffer.verify_url} onChange={handleChange} />
-              <button type="submit" style={styles.addBtn}>➕ Add Offer</button>
+              <button type="submit" style={styles.addBtn}>+ Add Offer</button>
             </form>
 
+            {/* Editable Offers Table */}
             <div style={styles.tableWrapper}>
               <table style={styles.table}>
                 <thead>
@@ -215,22 +242,48 @@ export default function AdminDashboard() {
                     <th>Partner</th>
                     <th>CPA</th>
                     <th>Status</th>
-                    <th>Action</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {offers.map((o) => (
                     <tr key={o.id}>
                       <td>{o.id}</td>
-                      <td>{o.name}</td>
-                      <td>{o.geo}</td>
-                      <td>{o.carrier}</td>
-                      <td>{o.Partner?.name}</td>
-                      <td>{o.partner_cpa}</td>
-                      <td>{o.status}</td>
-                      <td>
-                        <button onClick={() => handleDeleteOffer(o.id)} style={styles.deleteBtn}>🗑 Delete</button>
-                      </td>
+
+                      {/* Editable columns */}
+                      {editId === o.id ? (
+                        <>
+                          <td><input name="name" value={editData.name} onChange={handleEditChange} /></td>
+                          <td><input name="geo" value={editData.geo} onChange={handleEditChange} /></td>
+                          <td><input name="carrier" value={editData.carrier} onChange={handleEditChange} /></td>
+                          <td>
+                            <select name="partner_id" value={editData.partner_id} onChange={handleEditChange}>
+                              {partners.map((p) => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td><input name="partner_cpa" value={editData.partner_cpa} onChange={handleEditChange} /></td>
+                          <td><input name="status" value={editData.status} onChange={handleEditChange} /></td>
+                          <td>
+                            <button onClick={() => handleSave(o.id)} style={styles.saveBtn}>💾 Save</button>
+                            <button onClick={() => setEditId(null)} style={styles.cancelBtn}>✖ Cancel</button>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td>{o.name}</td>
+                          <td>{o.geo}</td>
+                          <td>{o.carrier}</td>
+                          <td>{o.Partner?.name}</td>
+                          <td>{o.partner_cpa}</td>
+                          <td>{o.status}</td>
+                          <td>
+                            <button onClick={() => handleEdit(o)} style={styles.editBtn}>✏ Edit</button>
+                            <button onClick={() => handleDeleteOffer(o.id)} style={styles.deleteBtn}>🗑</button>
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -238,7 +291,6 @@ export default function AdminDashboard() {
             </div>
           </div>
         );
-
       default:
         return null;
     }
@@ -250,24 +302,15 @@ export default function AdminDashboard() {
       <nav style={styles.navbar}>
         <h1 style={styles.title}>Mob13r Admin Dashboard</h1>
         <div style={styles.navLinks}>
-          <button
-            style={{ ...styles.navButton, ...(activeTab === "affiliates" ? styles.activeTab : {}) }}
-            onClick={() => setActiveTab("affiliates")}
-          >
-            Affiliates
-          </button>
-          <button
-            style={{ ...styles.navButton, ...(activeTab === "partners" ? styles.activeTab : {}) }}
-            onClick={() => setActiveTab("partners")}
-          >
-            Partners
-          </button>
-          <button
-            style={{ ...styles.navButton, ...(activeTab === "offers" ? styles.activeTab : {}) }}
-            onClick={() => setActiveTab("offers")}
-          >
-            Offers Management
-          </button>
+          {["affiliates", "partners", "offers"].map((tab) => (
+            <button
+              key={tab}
+              style={{ ...styles.navButton, ...(activeTab === tab ? styles.activeTab : {}) }}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
         </div>
       </nav>
 
@@ -281,19 +324,13 @@ export default function AdminDashboard() {
 }
 
 const styles = {
-  container: {
-    backgroundColor: "#0b1221",
-    color: "#e6eef8",
-    minHeight: "100vh",
-    fontFamily: "system-ui, sans-serif",
-  },
+  container: { backgroundColor: "#0b1221", color: "#e6eef8", minHeight: "100vh" },
   navbar: {
     background: "#111b34",
     padding: "20px 40px",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    borderBottom: "1px solid #1e2a47",
   },
   title: { fontSize: "1.5rem", color: "#4cc9f0" },
   navLinks: { display: "flex", gap: "25px" },
@@ -303,22 +340,17 @@ const styles = {
     color: "#94a3b8",
     fontSize: "1rem",
     cursor: "pointer",
-    padding: "6px 12px",
   },
-  activeTab: {
-    color: "#4cc9f0",
-    borderBottom: "2px solid #4cc9f0",
-  },
+  activeTab: { color: "#4cc9f0", borderBottom: "2px solid #4cc9f0" },
   section: { padding: "40px" },
-  heading: { fontSize: "1.3rem", color: "#4cc9f0", marginBottom: 10 },
+  heading: { color: "#4cc9f0", fontSize: "1.3rem", marginBottom: 10 },
   searchBox: {
     background: "#111b34",
     color: "#fff",
     border: "1px solid #4cc9f0",
+    padding: "8px",
     borderRadius: "6px",
-    padding: "8px 12px",
     marginBottom: "10px",
-    width: "250px",
   },
   form: {
     display: "grid",
@@ -329,49 +361,13 @@ const styles = {
     borderRadius: "8px",
     marginBottom: "15px",
   },
-  addBtn: {
-    gridColumn: "span 2",
-    background: "#4cc9f0",
-    border: "none",
-    padding: "10px",
-    borderRadius: "6px",
-    cursor: "pointer",
-    color: "#0b1221",
-    fontWeight: "bold",
-  },
-  deleteBtn: {
-    background: "#ef4444",
-    border: "none",
-    padding: "6px 10px",
-    borderRadius: "4px",
-    color: "#fff",
-    cursor: "pointer",
-  },
-  tableWrapper: {
-    overflowX: "auto",
-    backgroundColor: "#0e162b",
-    borderRadius: "8px",
-    padding: "10px",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    color: "#cbd5e1",
-  },
-  footer: {
-    textAlign: "center",
-    borderTop: "1px solid #1e2a47",
-    paddingTop: "15px",
-    color: "#64748b",
-    fontSize: "0.85rem",
-    marginTop: "50px",
-  },
-  loadingContainer: {
-    background: "#0b1221",
-    height: "100vh",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  addBtn: { gridColumn: "span 2", background: "#4cc9f0", padding: "10px", border: "none", borderRadius: "6px" },
+  editBtn: { background: "#2563eb", border: "none", color: "#fff", padding: "5px 10px", marginRight: "5px" },
+  saveBtn: { background: "#16a34a", border: "none", color: "#fff", padding: "5px 10px", marginRight: "5px" },
+  cancelBtn: { background: "#6b7280", border: "none", color: "#fff", padding: "5px 10px", marginRight: "5px" },
+  deleteBtn: { background: "#ef4444", border: "none", color: "#fff", padding: "5px 10px" },
+  tableWrapper: { overflowX: "auto", background: "#0e162b", padding: "10px", borderRadius: "8px" },
+  table: { width: "100%", color: "#cbd5e1", borderCollapse: "collapse" },
+  footer: { textAlign: "center", padding: "15px", borderTop: "1px solid #1e2a47", color: "#64748b" },
+  loadingContainer: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh" },
 };
