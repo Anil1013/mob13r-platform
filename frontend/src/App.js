@@ -1,19 +1,25 @@
 import React from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import AdminDashboard from "./pages/AdminDashboard";
 import AffiliateDashboard from "./pages/AffiliateDashboard";
 import PartnerDashboard from "./pages/PartnerDashboard";
-import Header from "./components/Header";
 
 function App() {
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", background: "#0b1221", color: "#e6eef8", minHeight: "100vh", padding: 20 }}>
-      <Header />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 20 }}>
-        <AdminDashboard />
-        <AffiliateDashboard />
-        <PartnerDashboard />
-      </div>
-    </div>
+    <Router>
+      <Routes>
+        {/* Default redirect */}
+        <Route path="/" element={<Navigate to="/admin" />} />
+
+        {/* Individual routes */}
+        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/affiliate" element={<AffiliateDashboard />} />
+        <Route path="/partner" element={<PartnerDashboard />} />
+
+        {/* Fallback for unknown URLs */}
+        <Route path="*" element={<h2 style={{ color: "white", textAlign: "center", marginTop: "40px" }}>404 — Page Not Found</h2>} />
+      </Routes>
+    </Router>
   );
 }
 
