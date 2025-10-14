@@ -1,16 +1,12 @@
 import express from "express";
 import { sequelize, initModels } from "../models.js";
-import seed from "../seed.js";
 
 const router = express.Router();
-
-// Initialize models
 const { Partner, Offer, Affiliate } = initModels();
 
-/* -------------------------------------------------------------------------- */
-/* ✅ BASIC CRUD ROUTES                                                       */
-/* -------------------------------------------------------------------------- */
-
+/**
+ * ✅ Get all partners
+ */
 router.get("/partners", async (req, res) => {
   try {
     const partners = await Partner.findAll();
@@ -21,6 +17,9 @@ router.get("/partners", async (req, res) => {
   }
 });
 
+/**
+ * ✅ Get all affiliates (hide password)
+ */
 router.get("/affiliates", async (req, res) => {
   try {
     const affiliates = await Affiliate.findAll({
@@ -33,6 +32,9 @@ router.get("/affiliates", async (req, res) => {
   }
 });
 
+/**
+ * ✅ Get all offers (with partner info)
+ */
 router.get("/offers", async (req, res) => {
   try {
     const offers = await Offer.findAll({ include: [Partner] });
@@ -43,113 +45,97 @@ router.get("/offers", async (req, res) => {
   }
 });
 
-/* -------------------------------------------------------------------------- */
-/* ✅ REPORTS API — Daily / Hourly with Filters                               */
-/* -------------------------------------------------------------------------- */
-
+/**
+ * ✅ Reports Endpoint
+ * Supports:
+ *  - fromDate / toDate filters
+ *  - hourly=true (for hourly breakdown)
+ *  - partners=1,2,3 (filter by multiple partner IDs)
+ */
 router.get("/reports", async (req, res) => {
   try {
-    const {
-      start_date,
-      end_date,
-      group = "daily",
-      start_hour,
-      end_hour,
-      partner_id,
-      affiliate_id,
-      offer_id,
-    } = req.query;
+    const { fromDate, toDate, hourly, partners } = req.query;
 
-    // Example: this uses dummy data (replace with your DB query later)
-    // You can connect this later to your `click_logs` or `conversion_logs` table
-    const today = new Date();
-    const data = [];
+    // Build where conditions
+    const whereClause = {};
+    if (fromDate && toDate) {
+      whereClause.date = { [sequelize.Op.between]: [fromDate, toDate] };
+    }
 
-    // Helper to simulate random values
-    const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-
-    const numDays = 7;
-    for (let d = 0; d < numDays; d++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() - d);
-
-      if (group === "hourly") {
-        for (let h = 0; h < 24; h++) {
-          if (
-            (start_hour && h < parseInt(start_hour)) ||
-            (end_hour && h > parseInt(end_hour))
-          )
-            continue;
-
-          const clicks = rand(100, 1000);
-          const conversions = rand(1, 50);
-          const revenue = conversions * rand(0.5, 1.5);
-          const payout = revenue * 0.7;
-          const profit = revenue - payout;
-
-          data.push({
-            date: date.toISOString().split("T")[0],
-            hour: h,
-            total_affiliates: 2,
-            total_partners: 2,
-            total_offers: 4,
-            clicks,
-            conversions,
-            revenue: revenue.toFixed(2),
-            payout: payout.toFixed(2),
-            profit: profit.toFixed(2),
-          });
-        }
-      } else {
-        const clicks = rand(2000, 5000);
-        const conversions = rand(50, 200);
-        const revenue = conversions * rand(0.5, 1.5);
-        const payout = revenue * 0.7;
-        const profit = revenue - payout;
-
-        data.push({
-          date: date.toISOString().split("T")[0],
-          total_affiliates: 2,
-          total_partners: 2,
-          total_offers: 4,
-          clicks,
-          conversions,
-          revenue: revenue.toFixed(2),
-          payout: payout.toFixed(2),
-          profit: profit.toFixed(2),
-        });
+    if (partners) {
+      const partnerArray = partners.split(",").filter((id) => id);
+      if (partnerArray.length > 0) {
+        whereClause.partner_id = partnerArray;
       }
     }
 
-    // Filter simulation — later connect this to actual WHERE clauses
-    const filtered = data.filter(() => true); // placeholder
+    // Mock Data (You can replace this with your real analytics table)
+    const mockData = generateMockReport({
+      fromDate,
+      toDate,
+      hourly,
+      partners: partners ? partners.split(",") : [],
+    });
 
-    res.json(filtered);
+    res.json(mockData);
   } catch (error) {
     console.error("Error fetching reports:", error);
     res.status(500).json({ error: "Failed to fetch reports" });
   }
 });
 
-/* -------------------------------------------------------------------------- */
-/* ✅ OFFER CREATION / DELETE / SEEDING                                       */
-/* -------------------------------------------------------------------------- */
+/**
+ * 🧠 Mock function — Replace this later with your analytics data query
+ */
+function generateMockReport({ fromDate, toDate, hourly, partners }) {
+  const results = [];
+  const start = fromDate ? new Date(fromDate) : new Date("2025-10-01");
+  const end = toDate ? new Date(toDate) : new Date("2025-10-14");
 
+  const hoursOrDays = hourly ? 24 : Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+
+  const partnerIds = partners.length > 0 ? partners : ["1", "2", "3"];
+
+  for (let pid of partnerIds) {
+    for (let i = 0; i < hoursOrDays; i++) {
+      const date = new Date(start);
+      if (hourly) date.setHours(i);
+      else date.setDate(start.getDate() + i);
+
+      const clicks = Math.floor(Math.random() * 1000 + 100);
+      const conversions = Math.floor(clicks * 0.2);
+      const revenue = conversions * 1.5;
+      const payout = conversions * 1.0;
+      const profit = revenue - payout;
+
+      results.push({
+        date: hourly ? `${date.getHours()}:00` : date.toISOString().split("T")[0],
+        partner_id: pid,
+        partner_name: `Partner ${pid}`,
+        clicks,
+        conversions,
+        revenue,
+        payout,
+        profit,
+        [`partner_${pid}_conversions`]: conversions,
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * ✅ Create Offer
+ */
 router.post("/offers", async (req, res) => {
   try {
-    const {
-      name,
-      geo,
-      carrier,
-      partner_id,
-      partner_cpa,
-      ref_url,
-      request_url,
-      verify_url,
-    } = req.body;
+    const { name, geo, carrier, partner_id, partner_cpa, ref_url, request_url, verify_url } =
+      req.body;
 
-    if (!name || !partner_id)
+    if (!name || !partner_id) {
       return res.status(400).json({ error: "Missing required fields" });
+    }
 
     const newOffer = await Offer.create({
       name,
@@ -170,25 +156,20 @@ router.post("/offers", async (req, res) => {
   }
 });
 
+/**
+ * ✅ Delete Offer
+ */
 router.delete("/offers/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const deleted = await Offer.destroy({ where: { id } });
-    if (!deleted) return res.status(404).json({ error: "Offer not found" });
+    if (!deleted) {
+      return res.status(404).json({ error: "Offer not found" });
+    }
     res.json({ message: "Offer deleted successfully" });
   } catch (error) {
     console.error("Error deleting offer:", error);
     res.status(500).json({ error: "Failed to delete offer" });
-  }
-});
-
-router.get("/seed", async (req, res) => {
-  try {
-    await seed();
-    res.json({ message: "✅ Database seeded successfully!" });
-  } catch (err) {
-    console.error("Error in seeding:", err);
-    res.status(500).json({ error: "Failed to seed database" });
   }
 });
 
