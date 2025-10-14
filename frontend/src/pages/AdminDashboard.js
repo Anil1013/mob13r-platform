@@ -54,7 +54,6 @@ export default function AdminDashboard() {
       </div>
     );
 
-  // ===== Reports Section =====
   const ReportsSection = () => (
     <div style={styles.section}>
       <h2 style={styles.heading}>📊 Day-wise Reports</h2>
@@ -91,7 +90,6 @@ export default function AdminDashboard() {
     </div>
   );
 
-  // ===== Placeholder Sections (for now) =====
   const AffiliatesSection = () => (
     <div style={styles.section}>
       <h2 style={styles.heading}>👥 Affiliates</h2>
@@ -113,7 +111,6 @@ export default function AdminDashboard() {
     </div>
   );
 
-  // ===== Main Return =====
   return (
     <div style={styles.container}>
       <ToastContainer position="top-right" theme="dark" />
@@ -147,7 +144,6 @@ export default function AdminDashboard() {
   );
 }
 
-// ===== Styles =====
 const styles = {
   container: {
     backgroundColor: "#0b1221",
