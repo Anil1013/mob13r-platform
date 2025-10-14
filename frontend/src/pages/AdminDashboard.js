@@ -1,101 +1,135 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import { jsPDF } from "jspdf";
+import "jspdf-autotable";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 const API_URL = process.env.REACT_APP_API_URL || "https://backend.mob13r.com/api";
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("reports");
+  const [reports, setReports] = useState([]);
   const [partners, setPartners] = useState([]);
-  const [affiliates, setAffiliates] = useState([]);
-  const [offers, setOffers] = useState([]);
+  const [selectedPartners, setSelectedPartners] = useState([]);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [hourly, setHourly] = useState(false);
+  const [chartType, setChartType] = useState("line");
 
+  // ✅ Fetch partners list for filter
   useEffect(() => {
-    (async () => {
-      const [p, a, o] = await Promise.all([
-        axios.get(`${API_URL}/admin/partners`),
-        axios.get(`${API_URL}/admin/affiliates`),
-        axios.get(`${API_URL}/admin/offers`),
-      ]);
-      setPartners(p.data);
-      setAffiliates(a.data);
-      setOffers(o.data);
-    })();
+    const fetchPartners = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/admin/partners`);
+        setPartners(res.data || []);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchPartners();
   }, []);
 
-  return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>Mob13r Admin Dashboard</h1>
+  // ✅ Fetch reports (with optional partner filter)
+  useEffect(() => {
+    const fetchReports = async () => {
+      try {
+        const { data } = await axios.get(`${API_URL}/admin/reports`, {
+          params: {
+            fromDate,
+            toDate,
+            hourly,
+            partners: selectedPartners.join(","),
+          },
+        });
+        setReports(data);
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load reports");
+      }
+    };
 
-      <nav style={styles.navbar}>
-        {["reports", "affiliates", "partners", "offers"].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            style={{
-              ...styles.navButton,
-              ...(activeTab === tab ? styles.activeTab : {}),
-            }}
-          >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
-      </nav>
+    fetchReports();
+    const interval = setInterval(fetchReports, 600000); // 10 min auto-refresh
+    return () => clearInterval(interval);
+  }, [fromDate, toDate, hourly, selectedPartners]);
 
-      {activeTab === "reports" && (
-        <ReportsSection
-          partners={partners}
-          affiliates={affiliates}
-          offers={offers}
-        />
-      )}
-    </div>
-  );
-}
+  // ✅ Export CSV
+  const exportCSV = () => {
+    const csv = [
+      ["Date", "Partner", "Clicks", "Conversions", "Revenue", "Payout", "Profit"],
+      ...reports.map((r) => [
+        r.date,
+        r.partner_name || "All Partners",
+        r.clicks,
+        r.conversions,
+        `$${r.revenue.toFixed(2)}`,
+        `$${r.payout.toFixed(2)}`,
+        `$${r.profit.toFixed(2)}`,
+      ]),
+    ]
+      .map((row) => row.join(","))
+      .join("\n");
 
-/* ---------------- REPORTS SECTION ---------------- */
-
-const ReportsSection = ({ partners, affiliates, offers }) => {
-  const [filters, setFilters] = useState({
-    start_date: "",
-    end_date: "",
-    start_hour: "",
-    end_hour: "",
-    partner_id: "",
-    affiliate_id: "",
-    offer_id: "",
-    group: "daily",
-  });
-  const [reports, setReports] = useState([]);
-
-  const fetchReports = async () => {
-    const params = new URLSearchParams(filters).toString();
-    const { data } = await axios.get(`${API_URL}/admin/reports?${params}`);
-    setReports(data);
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Mob13r_Report.csv";
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
-  return (
+  // ✅ Export PDF
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.text("Mob13r Platform - Reports", 14, 10);
+    doc.autoTable({
+      startY: 20,
+      head: [["Date", "Partner", "Clicks", "Conversions", "Revenue", "Payout", "Profit"]],
+      body: reports.map((r) => [
+        r.date,
+        r.partner_name || "All",
+        r.clicks,
+        r.conversions,
+        `$${r.revenue.toFixed(2)}`,
+        `$${r.payout.toFixed(2)}`,
+        `$${r.profit.toFixed(2)}`,
+      ]),
+    });
+    doc.save("Mob13r_Report.pdf");
+  };
+
+  // ✅ Reports Section
+  const ReportsSection = () => (
     <div style={styles.section}>
-      <h2 style={styles.heading}>📊 Reports</h2>
+      <h2 style={styles.heading}>📊 Reports & Partner Comparison</h2>
 
-      {/* FILTERS */}
-      <div style={styles.filterBox}>
-        <input
-          type="date"
-          value={filters.start_date}
-          onChange={(e) => setFilters({ ...filters, start_date: e.target.value })}
-          style={styles.filterInput}
-        />
-        <input
-          type="date"
-          value={filters.end_date}
-          onChange={(e) => setFilters({ ...filters, end_date: e.target.value })}
-          style={styles.filterInput}
-        />
+      {/* Filters */}
+      <div style={{ marginBottom: "20px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+        <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
 
+        {/* Partner Multi-select */}
         <select
-          value={filters.partner_id}
-          onChange={(e) => setFilters({ ...filters, partner_id: e.target.value })}
-          style={styles.filterInput}
+          multiple
+          value={selectedPartners}
+          onChange={(e) =>
+            setSelectedPartners(Array.from(e.target.selectedOptions, (opt) => opt.value))
+          }
+          style={styles.multiSelect}
         >
           <option value="">All Partners</option>
           {partners.map((p) => (
@@ -105,93 +139,94 @@ const ReportsSection = ({ partners, affiliates, offers }) => {
           ))}
         </select>
 
-        <select
-          value={filters.affiliate_id}
-          onChange={(e) =>
-            setFilters({ ...filters, affiliate_id: e.target.value })
-          }
-          style={styles.filterInput}
-        >
-          <option value="">All Affiliates</option>
-          {affiliates.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={filters.offer_id}
-          onChange={(e) => setFilters({ ...filters, offer_id: e.target.value })}
-          style={styles.filterInput}
-        >
-          <option value="">All Offers</option>
-          {offers.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.name}
-            </option>
-          ))}
-        </select>
-
-        <label style={{ color: "#4cc9f0" }}>
+        <label style={{ color: "#94a3b8" }}>
           <input
             type="checkbox"
-            checked={filters.group === "hourly"}
-            onChange={(e) =>
-              setFilters({
-                ...filters,
-                group: e.target.checked ? "hourly" : "daily",
-              })
-            }
-          />{" "}
+            checked={hourly}
+            onChange={() => setHourly(!hourly)}
+            style={{ marginRight: "5px" }}
+          />
           Hourly View
         </label>
 
-        {filters.group === "hourly" && (
-          <>
-            <select
-              value={filters.start_hour}
-              onChange={(e) =>
-                setFilters({ ...filters, start_hour: e.target.value })
-              }
-              style={styles.filterInput}
-            >
-              <option value="">Start Hour</option>
-              {[...Array(24).keys()].map((h) => (
-                <option key={h} value={h}>
-                  {h}:00
-                </option>
-              ))}
-            </select>
-            <select
-              value={filters.end_hour}
-              onChange={(e) =>
-                setFilters({ ...filters, end_hour: e.target.value })
-              }
-              style={styles.filterInput}
-            >
-              <option value="">End Hour</option>
-              {[...Array(24).keys()].map((h) => (
-                <option key={h} value={h}>
-                  {h}:00
-                </option>
-              ))}
-            </select>
-          </>
-        )}
+        <button style={styles.loadBtn} onClick={() => window.location.reload()}>
+          Refresh
+        </button>
+        <button style={styles.exportBtn} onClick={exportCSV}>
+          Export CSV
+        </button>
+        <button style={styles.exportBtn} onClick={exportPDF}>
+          Export PDF
+        </button>
 
-        <button onClick={fetchReports} style={styles.loadBtn}>
-          Load
+        {/* Chart toggle */}
+        <button
+          style={{
+            ...styles.exportBtn,
+            background: chartType === "bar" ? "#22d3ee" : "#1e293b",
+            color: chartType === "bar" ? "#0b1221" : "#4cc9f0",
+          }}
+          onClick={() => setChartType(chartType === "line" ? "bar" : "line")}
+        >
+          Switch to {chartType === "line" ? "Bar" : "Line"} Chart
         </button>
       </div>
 
-      {/* TABLE */}
+      {/* Chart */}
+      <div style={{ width: "100%", height: 340, marginBottom: 30 }}>
+        <ResponsiveContainer>
+          {chartType === "line" ? (
+            <LineChart data={reports}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis dataKey="date" stroke="#94a3b8" />
+              <YAxis stroke="#94a3b8" />
+              <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155" }} />
+              <Legend />
+              {selectedPartners.length > 0
+                ? selectedPartners.map((pid, i) => (
+                    <Line
+                      key={pid}
+                      type="monotone"
+                      dataKey={`partner_${pid}_conversions`}
+                      stroke={["#4cc9f0", "#84cc16", "#22d3ee", "#facc15", "#ef4444"][i % 5]}
+                      strokeWidth={2}
+                      name={`Partner ${pid}`}
+                    />
+                  ))
+                : [
+                    <Line
+                      key="default"
+                      type="monotone"
+                      dataKey="conversions"
+                      stroke="#22d3ee"
+                      strokeWidth={2}
+                      name="All Partners"
+                    />,
+                  ]}
+            </LineChart>
+          ) : (
+            <BarChart data={reports}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis dataKey="date" stroke="#94a3b8" />
+              <YAxis stroke="#94a3b8" />
+              <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155" }} />
+              <Legend />
+              <Bar dataKey="clicks" fill="#4cc9f0" />
+              <Bar dataKey="conversions" fill="#22d3ee" />
+              <Bar dataKey="revenue" fill="#84cc16" />
+              <Bar dataKey="profit" fill="#facc15" />
+            </BarChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+
+      {/* Table */}
       <div style={styles.tableWrapper}>
         <table style={styles.table}>
           <thead>
             <tr>
               <th>Date</th>
-              {filters.group === "hourly" && <th>Hour</th>}
+              <th>Partner</th>
               <th>Clicks</th>
               <th>Conversions</th>
               <th>Revenue</th>
@@ -203,12 +238,12 @@ const ReportsSection = ({ partners, affiliates, offers }) => {
             {reports.map((r, i) => (
               <tr key={i}>
                 <td>{r.date}</td>
-                {filters.group === "hourly" && <td>{r.hour}:00</td>}
+                <td>{r.partner_name || "All"}</td>
                 <td>{r.clicks}</td>
-                <td>{r.conversions}</td>
-                <td>${r.revenue}</td>
-                <td>${r.payout}</td>
-                <td style={{ color: "#4cc9f0" }}>${r.profit}</td>
+                <td style={{ color: "#4cc9f0", fontWeight: "bold" }}>{r.conversions}</td>
+                <td>${r.revenue.toFixed(2)}</td>
+                <td>${r.payout.toFixed(2)}</td>
+                <td style={{ color: "#22d3ee" }}>${r.profit.toFixed(2)}</td>
               </tr>
             ))}
           </tbody>
@@ -216,20 +251,102 @@ const ReportsSection = ({ partners, affiliates, offers }) => {
       </div>
     </div>
   );
-};
 
-/* ---------------- STYLES ---------------- */
+  return (
+    <div style={styles.container}>
+      <ToastContainer position="top-right" theme="dark" />
+      <nav style={styles.navbar}>
+        <h1 style={styles.title}>Mob13r Admin Dashboard</h1>
+        <div style={styles.navLinks}>
+          {["reports", "affiliates", "partners", "offers"].map((tab) => (
+            <button
+              key={tab}
+              style={{ ...styles.navButton, ...(activeTab === tab ? styles.activeTab : {}) }}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {activeTab === "reports" && <ReportsSection />}
+
+      <footer style={styles.footer}>
+        <p>© 2025 Mob13r Platform — All rights reserved</p>
+      </footer>
+    </div>
+  );
+}
+
+// ================= STYLES =================
 const styles = {
-  container: { background: "#0b1221", color: "#e6eef8", minHeight: "100vh", padding: 30 },
-  title: { color: "#4cc9f0", fontSize: "1.8rem", marginBottom: 20 },
-  navbar: { display: "flex", gap: 20, marginBottom: 20, borderBottom: "1px solid #1e2a47" },
-  navButton: { background: "none", border: "none", color: "#94a3b8", fontSize: "1rem", cursor: "pointer" },
+  container: {
+    backgroundColor: "#0b1221",
+    color: "#e6eef8",
+    minHeight: "100vh",
+    fontFamily: "system-ui, sans-serif",
+  },
+  navbar: {
+    background: "#111b34",
+    padding: "20px 40px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderBottom: "1px solid #1e2a47",
+  },
+  title: { fontSize: "1.5rem", color: "#4cc9f0" },
+  navLinks: { display: "flex", gap: 25 },
+  navButton: {
+    background: "transparent",
+    border: "none",
+    color: "#94a3b8",
+    fontSize: "1rem",
+    cursor: "pointer",
+    padding: "6px 12px",
+  },
   activeTab: { color: "#4cc9f0", borderBottom: "2px solid #4cc9f0" },
-  section: { background: "#0e162b", padding: 20, borderRadius: 8 },
-  heading: { color: "#4cc9f0", fontSize: "1.2rem", marginBottom: 10 },
-  filterBox: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20, background: "#111b34", padding: 10, borderRadius: 8 },
-  filterInput: { background: "#0b1221", color: "#fff", border: "1px solid #4cc9f0", padding: "6px 10px", borderRadius: 6 },
-  loadBtn: { background: "#4cc9f0", color: "#0b1221", border: "none", padding: "8px 14px", borderRadius: 6, cursor: "pointer", fontWeight: "bold" },
-  tableWrapper: { overflowX: "auto", background: "#0b1221", borderRadius: 8 },
-  table: { width: "100%", borderCollapse: "collapse", color: "#fff" },
+  section: { padding: 40 },
+  heading: { fontSize: "1.3rem", color: "#4cc9f0", marginBottom: 10 },
+  loadBtn: {
+    background: "#4cc9f0",
+    border: "none",
+    padding: "8px 16px",
+    borderRadius: "6px",
+    cursor: "pointer",
+    color: "#0b1221",
+    fontWeight: "bold",
+  },
+  exportBtn: {
+    background: "#1e293b",
+    border: "1px solid #4cc9f0",
+    color: "#4cc9f0",
+    padding: "8px 14px",
+    borderRadius: "6px",
+    cursor: "pointer",
+  },
+  multiSelect: {
+    background: "#1e293b",
+    border: "1px solid #4cc9f0",
+    color: "#e2e8f0",
+    borderRadius: "6px",
+    padding: "6px",
+    minWidth: "160px",
+    height: "80px",
+  },
+  tableWrapper: {
+    overflowX: "auto",
+    background: "#0e162b",
+    borderRadius: 8,
+    padding: 10,
+  },
+  table: { width: "100%", borderCollapse: "collapse", color: "#cbd5e1" },
+  footer: {
+    textAlign: "center",
+    borderTop: "1px solid #1e2a47",
+    paddingTop: 15,
+    color: "#64748b",
+    fontSize: ".85rem",
+    marginTop: 40,
+  },
 };
