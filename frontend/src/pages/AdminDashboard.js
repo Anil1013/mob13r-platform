@@ -171,56 +171,11 @@ export default function AdminDashboard() {
           Switch to {chartType === "line" ? "Bar" : "Line"} Chart
         </button>
       </div>
+<div className="mt-6 mb-4 border-b border-gray-700 pb-2">
+  <h2 className="text-xl font-semibold text-cyan-400">Reports</h2>
+</div>
 
-      {/* Chart */}
-      <div style={{ width: "100%", height: 340, marginBottom: 30 }}>
-        <ResponsiveContainer>
-          {chartType === "line" ? (
-            <LineChart data={reports}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="date" stroke="#94a3b8" />
-              <YAxis stroke="#94a3b8" />
-              <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155" }} />
-              <Legend />
-              {selectedPartners.length > 0
-                ? selectedPartners.map((pid, i) => (
-                    <Line
-                      key={pid}
-                      type="monotone"
-                      dataKey={`partner_${pid}_conversions`}
-                      stroke={["#4cc9f0", "#84cc16", "#22d3ee", "#facc15", "#ef4444"][i % 5]}
-                      strokeWidth={2}
-                      name={`Partner ${pid}`}
-                    />
-                  ))
-                : [
-                    <Line
-                      key="default"
-                      type="monotone"
-                      dataKey="conversions"
-                      stroke="#22d3ee"
-                      strokeWidth={2}
-                      name="All Partners"
-                    />,
-                  ]}
-            </LineChart>
-          ) : (
-            <BarChart data={reports}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="date" stroke="#94a3b8" />
-              <YAxis stroke="#94a3b8" />
-              <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155" }} />
-              <Legend />
-              <Bar dataKey="clicks" fill="#4cc9f0" />
-              <Bar dataKey="conversions" fill="#22d3ee" />
-              <Bar dataKey="revenue" fill="#84cc16" />
-              <Bar dataKey="profit" fill="#facc15" />
-            </BarChart>
-          )}
-        </ResponsiveContainer>
-      </div>
-
-      {/* Table */}
+     {/* Table */}
       <div style={styles.tableWrapper}>
         <table style={styles.table}>
           <thead>
