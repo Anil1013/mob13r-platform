@@ -17,31 +17,52 @@ const AdminDashboard = () => {
     affiliate: "All Affiliates",
     offer: "All Offers",
   });
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const fetchData = async () => {
+  // ✅ Fetch all data
+  const fetchData = async (showLoader = true, resetFilters = false) => {
     try {
+      if (showLoader) setLoading(true);
+
       const [r, p, a, o] = await Promise.all([
         axios.get(`${process.env.REACT_APP_API_URL}/admin/reports`),
         axios.get(`${process.env.REACT_APP_API_URL}/admin/partners`),
         axios.get(`${process.env.REACT_APP_API_URL}/admin/affiliates`),
         axios.get(`${process.env.REACT_APP_API_URL}/admin/offers`),
       ]);
+
       setReports(r.data);
       setPartners(p.data);
       setAffiliates(a.data);
       setOffers(o.data);
+
+      // ✅ Reset filters if requested
+      if (resetFilters) {
+        setFilters({
+          startDate: "",
+          endDate: "",
+          partner: "All Partners",
+          affiliate: "All Affiliates",
+          offer: "All Offers",
+        });
+      }
+
+      setLastUpdated(new Date().toLocaleString());
     } catch (err) {
       console.error("Error fetching data:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchData(false);
     const interval = setInterval(fetchData, 10 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // ✅ Filter logic
+  // ✅ Apply filters
   const filteredReports = reports.filter((r) => {
     const matchPartner = filters.partner === "All Partners" || r.partner === filters.partner;
     const matchAffiliate = filters.affiliate === "All Affiliates" || r.affiliate === filters.affiliate;
@@ -62,7 +83,7 @@ const AdminDashboard = () => {
     { clicks: 0, conversions: 0, revenue: 0, payout: 0, profit: 0 }
   );
 
-  // ✅ Export Functions
+  // ✅ Export options
   const exportCSV = () => {
     const headers = ["Date", "Partner", "Affiliate", "Offer", "Clicks", "Conversions", "Revenue", "Payout", "Profit"];
     const csvRows = [headers.join(","), ...filteredReports.map((r) =>
@@ -103,32 +124,72 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-[#0b1221] text-gray-100 p-6">
-      <h1 className="text-3xl font-bold text-cyan-400 mb-6 text-center">📊 Mob13r Admin Dashboard</h1>
+      <h1 className="text-3xl font-bold text-cyan-400 mb-6 text-center">
+        📊 Mob13r Admin Dashboard
+      </h1>
 
-      {/* Filters */}
+      {/* Filters Section */}
       <div className="bg-[#121a2b] p-5 rounded-2xl shadow-lg mb-8">
         <div className="flex flex-wrap gap-4 justify-center items-center mb-6">
-          <input type="date" className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600" onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} />
-          <input type="date" className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600" onChange={(e) => setFilters({ ...filters, endDate: e.target.value })} />
-          <select className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600" onChange={(e) => setFilters({ ...filters, partner: e.target.value })}>
+          <input type="date" className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600" value={filters.startDate} onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} />
+          <input type="date" className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600" value={filters.endDate} onChange={(e) => setFilters({ ...filters, endDate: e.target.value })} />
+          <select className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600" value={filters.partner} onChange={(e) => setFilters({ ...filters, partner: e.target.value })}>
             <option>All Partners</option>
             {partners.map((p) => <option key={p}>{p}</option>)}
           </select>
-          <select className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600" onChange={(e) => setFilters({ ...filters, affiliate: e.target.value })}>
+          <select className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600" value={filters.affiliate} onChange={(e) => setFilters({ ...filters, affiliate: e.target.value })}>
             <option>All Affiliates</option>
             {affiliates.map((a) => <option key={a}>{a}</option>)}
           </select>
-          <select className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600" onChange={(e) => setFilters({ ...filters, offer: e.target.value })}>
+          <select className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600" value={filters.offer} onChange={(e) => setFilters({ ...filters, offer: e.target.value })}>
             <option>All Offers</option>
             {offers.map((o) => <option key={o}>{o}</option>)}
           </select>
         </div>
 
         {/* Export Buttons */}
-        <div className="flex justify-center gap-4">
+        <div className="flex justify-center gap-4 mb-3">
           <button onClick={exportCSV} className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg font-semibold">Export CSV</button>
           <button onClick={exportExcel} className="bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded-lg font-semibold">Export Excel</button>
           <button onClick={exportPDF} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-semibold">Export PDF</button>
+        </div>
+
+        {/* ✅ Last Updated + Refresh */}
+        <div className="flex justify-center items-center gap-4 text-gray-400 text-sm mt-3">
+          <span>
+            ⏱️ Last Updated: <span className="text-cyan-400">{lastUpdated || "Loading..."}</span>
+          </span>
+          <button
+            onClick={() => fetchData(true, true)} // ✅ also resets filters
+            disabled={loading}
+            className={`flex items-center gap-2 px-3 py-1 rounded-md text-white font-medium transition-all ${
+              loading ? "bg-gray-600 cursor-not-allowed" : "bg-cyan-600 hover:bg-cyan-500"
+            }`}
+          >
+            {loading && (
+              <svg
+                className="animate-spin h-4 w-4 text-white"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                ></path>
+              </svg>
+            )}
+            {loading ? "Refreshing..." : "🔄 Refresh Now"}
+          </button>
         </div>
       </div>
 
@@ -165,7 +226,6 @@ const AdminDashboard = () => {
                     <td className="p-3 text-cyan-400 font-semibold">${r.profit}</td>
                   </tr>
                 ))}
-                {/* Totals Row */}
                 <tr className="bg-[#0f172a] font-semibold text-cyan-300 border-t-2 border-cyan-700">
                   <td colSpan="4" className="p-3 text-right">TOTAL:</td>
                   <td className="p-3">{totals.clicks}</td>
