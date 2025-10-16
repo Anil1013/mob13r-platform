@@ -2,9 +2,7 @@ import express from "express";
 
 const router = express.Router();
 
-// ===============================
 // ✅ Reports API
-// ===============================
 router.get("/reports", async (req, res) => {
   try {
     const reports = [
@@ -20,33 +18,24 @@ router.get("/reports", async (req, res) => {
   }
 });
 
-// ===============================
 // ✅ Partners API
-// ===============================
 router.get("/partners", async (req, res) => {
   const partners = ["Partner 1", "Partner 2", "Partner 3", "Partner 4"];
   res.json(partners);
 });
 
-// ===============================
 // ✅ Affiliates API
-// ===============================
 router.get("/affiliates", async (req, res) => {
   const affiliates = ["Affiliate A", "Affiliate B", "Affiliate C", "Affiliate D"];
   res.json(affiliates);
 });
 
-// ===============================
 // ✅ Offers API
-// ===============================
 router.get("/offers", async (req, res) => {
   const offers = ["Offer Alpha", "Offer Beta", "Offer Gamma", "Offer Delta"];
   res.json(offers);
 });
 
-// Default route
-router.get("/", (req, res) => {
-  res.send("✅ Admin API is live");
-});
+router.get("/", (req, res) => res.send("✅ Admin API live"));
 
 export default router;
