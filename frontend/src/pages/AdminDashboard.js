@@ -18,7 +18,6 @@ const AdminDashboard = () => {
     offer: "All Offers",
   });
 
-  // ✅ Fetch all data
   const fetchData = async () => {
     try {
       const [r, p, a, o] = await Promise.all([
@@ -38,11 +37,11 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 10 * 60 * 1000); // 10 min auto-refresh
+    const interval = setInterval(fetchData, 10 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // ✅ Filtered data
+  // ✅ Filter logic
   const filteredReports = reports.filter((r) => {
     const matchPartner = filters.partner === "All Partners" || r.partner === filters.partner;
     const matchAffiliate = filters.affiliate === "All Affiliates" || r.affiliate === filters.affiliate;
@@ -50,7 +49,20 @@ const AdminDashboard = () => {
     return matchPartner && matchAffiliate && matchOffer;
   });
 
-  // ✅ Export CSV
+  // ✅ Totals
+  const totals = filteredReports.reduce(
+    (acc, r) => {
+      acc.clicks += r.clicks || 0;
+      acc.conversions += r.conversions || 0;
+      acc.revenue += r.revenue || 0;
+      acc.payout += r.payout || 0;
+      acc.profit += r.profit || 0;
+      return acc;
+    },
+    { clicks: 0, conversions: 0, revenue: 0, payout: 0, profit: 0 }
+  );
+
+  // ✅ Export Functions
   const exportCSV = () => {
     const headers = ["Date", "Partner", "Affiliate", "Offer", "Clicks", "Conversions", "Revenue", "Payout", "Profit"];
     const csvRows = [headers.join(","), ...filteredReports.map((r) =>
@@ -60,7 +72,6 @@ const AdminDashboard = () => {
     saveAs(blob, "reports.csv");
   };
 
-  // ✅ Export Excel
   const exportExcel = () => {
     const ws = XLSX.utils.json_to_sheet(filteredReports);
     const wb = XLSX.utils.book_new();
@@ -68,7 +79,6 @@ const AdminDashboard = () => {
     XLSX.writeFile(wb, "reports.xlsx");
   };
 
-  // ✅ Export PDF
   const exportPDF = () => {
     const doc = new jsPDF();
     doc.text("Mob13r Reports", 14, 16);
@@ -93,9 +103,7 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-[#0b1221] text-gray-100 p-6">
-      <h1 className="text-3xl font-bold text-cyan-400 mb-6 text-center">
-        📊 Mob13r Admin Dashboard
-      </h1>
+      <h1 className="text-3xl font-bold text-cyan-400 mb-6 text-center">📊 Mob13r Admin Dashboard</h1>
 
       {/* Filters */}
       <div className="bg-[#121a2b] p-5 rounded-2xl shadow-lg mb-8">
@@ -124,7 +132,7 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Reports Table */}
       <div className="bg-[#121a2b] p-6 rounded-2xl shadow-xl overflow-x-auto">
         <h2 className="text-2xl font-semibold text-cyan-400 mb-4 text-center">Reports</h2>
         <table className="w-full border-collapse text-center">
@@ -143,19 +151,30 @@ const AdminDashboard = () => {
           </thead>
           <tbody>
             {filteredReports.length > 0 ? (
-              filteredReports.map((r, i) => (
-                <tr key={i} className="border-b border-gray-800 hover:bg-[#1a2337] transition-all duration-150">
-                  <td className="p-3">{r.date}</td>
-                  <td className="p-3">{r.partner}</td>
-                  <td className="p-3">{r.affiliate}</td>
-                  <td className="p-3">{r.offer}</td>
-                  <td className="p-3">{r.clicks}</td>
-                  <td className="p-3 text-cyan-400 font-semibold">{r.conversions}</td>
-                  <td className="p-3">${r.revenue}</td>
-                  <td className="p-3">${r.payout}</td>
-                  <td className="p-3 text-cyan-400 font-semibold">${r.profit}</td>
+              <>
+                {filteredReports.map((r, i) => (
+                  <tr key={i} className="border-b border-gray-800 hover:bg-[#1a2337] transition-all duration-150">
+                    <td className="p-3">{r.date}</td>
+                    <td className="p-3">{r.partner}</td>
+                    <td className="p-3">{r.affiliate}</td>
+                    <td className="p-3">{r.offer}</td>
+                    <td className="p-3">{r.clicks}</td>
+                    <td className="p-3 text-cyan-400 font-semibold">{r.conversions}</td>
+                    <td className="p-3">${r.revenue}</td>
+                    <td className="p-3">${r.payout}</td>
+                    <td className="p-3 text-cyan-400 font-semibold">${r.profit}</td>
+                  </tr>
+                ))}
+                {/* Totals Row */}
+                <tr className="bg-[#0f172a] font-semibold text-cyan-300 border-t-2 border-cyan-700">
+                  <td colSpan="4" className="p-3 text-right">TOTAL:</td>
+                  <td className="p-3">{totals.clicks}</td>
+                  <td className="p-3">{totals.conversions}</td>
+                  <td className="p-3">${totals.revenue.toFixed(2)}</td>
+                  <td className="p-3">${totals.payout.toFixed(2)}</td>
+                  <td className="p-3">${totals.profit.toFixed(2)}</td>
                 </tr>
-              ))
+              </>
             ) : (
               <tr>
                 <td colSpan="9" className="p-6 text-gray-400 text-center">No reports available.</td>
