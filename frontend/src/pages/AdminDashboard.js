@@ -1,229 +1,266 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { saveAs } from "file-saver";
 
-// ✅ Small utility for animated counter
-const useCountUp = (value, duration = 1000) => {
-  const [display, setDisplay] = useState(0);
-  useEffect(() => {
-    let start = 0;
-    const end = parseFloat(value) || 0;
-    if (start === end) return;
-    const increment = (end - start) / (duration / 16);
-    const timer = setInterval(() => {
-      start += increment;
-      if (start >= end) {
-        start = end;
-        clearInterval(timer);
-      }
-      setDisplay(Number(start.toFixed(value % 1 === 0 ? 0 : 2)));
-    }, 16);
-    return () => clearInterval(timer);
-  }, [value, duration]);
-  return display;
-};
-
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState("reports");
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [reports, setReports] = useState([]);
+  const [filteredReports, setFilteredReports] = useState([]);
+  const [filters, setFilters] = useState({
+    startDate: "",
+    endDate: "",
+    partner: "All Partners",
+    affiliate: "All Affiliates",
+    offer: "All Offers",
+  });
+  const [sortConfig, setSortConfig] = useState({ key: "", direction: "asc" });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [countdown, setCountdown] = useState(600); // 10 min = 600 seconds
+  const itemsPerPage = 10;
   const API_URL = process.env.REACT_APP_API_URL;
+  const timerRef = useRef(null);
 
-  useEffect(() => {
-    fetchData(activeTab);
-    const interval = setInterval(() => fetchData(activeTab), 10 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [activeTab]);
-
-  // ✅ Fetch data from backend
-  const fetchData = async (type) => {
+  // ✅ Fetch Reports
+  const fetchReports = async () => {
     try {
-      setLoading(true);
-      const res = await axios.get(`${API_URL}/admin/${type}`);
-      setData(res.data);
+      const response = await axios.get(`${API_URL}/admin/reports`);
+      setReports(response.data);
+      setFilteredReports(response.data);
+      setCountdown(600); // reset countdown
     } catch (err) {
-      console.error("Error fetching data:", err);
-      setData([]);
-    } finally {
-      setLoading(false);
+      console.error("Error fetching reports:", err);
     }
   };
 
+  useEffect(() => {
+    fetchReports();
+    timerRef.current = setInterval(fetchReports, 10 * 60 * 1000);
+    return () => clearInterval(timerRef.current);
+  }, []);
+
+  // ✅ Countdown Timer
+  useEffect(() => {
+    const countdownTimer = setInterval(() => {
+      setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(countdownTimer);
+  }, []);
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
+  // ✅ Filters
+  const applyFilters = () => {
+    let data = [...reports];
+    if (filters.startDate)
+      data = data.filter((r) => new Date(r.date) >= new Date(filters.startDate));
+    if (filters.endDate)
+      data = data.filter((r) => new Date(r.date) <= new Date(filters.endDate));
+    if (filters.partner !== "All Partners")
+      data = data.filter((r) => r.partner === filters.partner);
+    if (filters.affiliate !== "All Affiliates")
+      data = data.filter((r) => r.affiliate === filters.affiliate);
+    if (filters.offer !== "All Offers")
+      data = data.filter((r) => r.offer === filters.offer);
+
+    setFilteredReports(data);
+    setCurrentPage(1);
+  };
+
+  // ✅ Sorting
+  const sortData = (key) => {
+    let direction = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc") direction = "desc";
+    const sorted = [...filteredReports].sort((a, b) => {
+      if (a[key] < b[key]) return direction === "asc" ? -1 : 1;
+      if (a[key] > b[key]) return direction === "asc" ? 1 : -1;
+      return 0;
+    });
+    setFilteredReports(sorted);
+    setSortConfig({ key, direction });
+  };
+
+  // ✅ Pagination
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedReports = filteredReports.slice(startIndex, startIndex + itemsPerPage);
+  const totalPages = Math.ceil(filteredReports.length / itemsPerPage);
+
   // ✅ Export CSV
   const exportCSV = () => {
-    if (!data.length) return;
-    const headers = Object.keys(data[0]);
+    const headers = ["Date", "Partner", "Clicks", "Conversions", "Revenue", "Payout", "Profit"];
     const csvRows = [
       headers.join(","),
-      ...data.map((row) => headers.map((h) => row[h]).join(",")),
+      ...filteredReports.map((r) =>
+        [r.date, r.partner, r.clicks, r.conversions, `$${r.revenue}`, `$${r.payout}`, `$${r.profit}`].join(",")
+      ),
     ];
     const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
-    saveAs(blob, `${activeTab}.csv`);
+    saveAs(blob, "reports.csv");
   };
 
   // ✅ Export PDF
   const exportPDF = () => {
-    if (!data.length) return;
     const doc = new jsPDF();
-    doc.text(`${activeTab.toUpperCase()} Data`, 14, 16);
+    doc.text("Mob13r Reports Summary", 14, 16);
     autoTable(doc, {
-      startY: 20,
-      head: [Object.keys(data[0])],
-      body: data.map((row) => Object.values(row)),
+      startY: 22,
+      head: [["Date", "Partner", "Clicks", "Conversions", "Revenue", "Payout", "Profit"]],
+      body: filteredReports.map((r) => [
+        r.date,
+        r.partner,
+        r.clicks,
+        r.conversions,
+        `$${r.revenue}`,
+        `$${r.payout}`,
+        `$${r.profit}`,
+      ]),
       styles: { halign: "center" },
     });
-    doc.save(`${activeTab}.pdf`);
+    doc.save("reports.pdf");
   };
 
-  // ✅ Calculate totals (Reports only)
-  const totals = activeTab === "reports" && data.length
-    ? {
-        clicks: data.reduce((sum, r) => sum + (r.clicks || 0), 0),
-        conversions: data.reduce((sum, r) => sum + (r.conversions || 0), 0),
-        revenue: data.reduce((sum, r) => sum + (r.revenue || 0), 0),
-        profit: data.reduce((sum, r) => sum + (r.profit || 0), 0),
-      }
-    : null;
-
-  // ✅ Calculate previous day comparison (trends)
-  const getTrend = (field) => {
-    if (data.length < 2) return 0;
-    const today = data[0][field] || 0;
-    const yesterday = data[1][field] || 0;
-    if (yesterday === 0) return 0;
-    return (((today - yesterday) / yesterday) * 100).toFixed(1);
-  };
-
-  const trends = {
-    clicks: getTrend("clicks"),
-    conversions: getTrend("conversions"),
-    revenue: getTrend("revenue"),
-    profit: getTrend("profit"),
-  };
-
-  // ✅ Animated values
-  const animatedClicks = useCountUp(totals?.clicks || 0);
-  const animatedConversions = useCountUp(totals?.conversions || 0);
-  const animatedRevenue = useCountUp(totals?.revenue || 0);
-  const animatedProfit = useCountUp(totals?.profit || 0);
-
-  const tabs = [
-    { key: "reports", label: "Reports" },
-    { key: "partners", label: "Partners" },
-    { key: "affiliates", label: "Affiliates" },
-    { key: "offers", label: "Offers" },
-  ];
-
-  const renderTrend = (value) => {
-    if (value === 0) return <span className="text-gray-400 text-sm">—</span>;
-    const color = value > 0 ? "text-green-400" : "text-red-400";
-    const symbol = value > 0 ? "▲" : "▼";
-    return (
-      <span className={`${color} text-sm font-medium`}>
-        {symbol} {Math.abs(value)}%
-      </span>
-    );
-  };
+  // ✅ Stats
+  const totalClicks = filteredReports.reduce((sum, r) => sum + r.clicks, 0);
+  const totalConversions = filteredReports.reduce((sum, r) => sum + r.conversions, 0);
+  const totalRevenue = filteredReports.reduce((sum, r) => sum + r.revenue, 0);
+  const totalProfit = filteredReports.reduce((sum, r) => sum + r.profit, 0);
 
   return (
     <div className="min-h-screen bg-[#0b1221] text-gray-100 p-6">
-      <h1 className="text-3xl font-bold text-cyan-400 mb-6 text-center">
+      <h1 className="text-3xl font-bold text-cyan-400 mb-2 text-center">
         ⚙️ Mob13r Admin Dashboard
       </h1>
 
-      {/* 🔹 Tabs */}
-      <div className="flex justify-center gap-4 mb-8 flex-wrap">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-5 py-2 rounded-xl font-semibold transition-all duration-200 ${
-              activeTab === tab.key
-                ? "bg-cyan-600 text-white"
-                : "bg-[#1a2337] hover:bg-[#202c46] text-gray-300"
-            }`}
-          >
-            {tab.label}
+      {/* ✅ Live Refresh Countdown */}
+      <p className="text-center text-sm text-gray-400 mb-6">
+        🔄 Auto-refresh in <span className="text-cyan-400 font-semibold">{formatTime(countdown)}</span>
+      </p>
+
+      {/* ================= Filters Section ================= */}
+      <div className="bg-[#121a2b] p-5 rounded-2xl shadow-lg mb-8">
+        <div className="flex flex-wrap gap-4 justify-center items-center mb-6">
+          <input type="date" className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
+            onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} />
+          <input type="date" className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
+            onChange={(e) => setFilters({ ...filters, endDate: e.target.value })} />
+          <select className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
+            onChange={(e) => setFilters({ ...filters, partner: e.target.value })}>
+            <option>All Partners</option>
+            <option>Partner 1</option>
+            <option>Partner 2</option>
+            <option>Partner 3</option>
+          </select>
+          <select className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
+            onChange={(e) => setFilters({ ...filters, affiliate: e.target.value })}>
+            <option>All Affiliates</option>
+            <option>Affiliate 1</option>
+            <option>Affiliate 2</option>
+          </select>
+          <select className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
+            onChange={(e) => setFilters({ ...filters, offer: e.target.value })}>
+            <option>All Offers</option>
+            <option>Offer A</option>
+            <option>Offer B</option>
+          </select>
+          <button onClick={applyFilters}
+            className="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded-lg font-semibold text-white">
+            Apply
           </button>
-        ))}
-      </div>
-
-      {/* 🌟 Summary Cards (Reports only) */}
-      {activeTab === "reports" && totals && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 text-center">
-          {[
-            { label: "Total Clicks", value: animatedClicks, trend: trends.clicks, color: "text-cyan-400" },
-            { label: "Conversions", value: animatedConversions, trend: trends.conversions, color: "text-cyan-400" },
-            { label: "Revenue ($)", value: animatedRevenue, trend: trends.revenue, color: "text-green-400" },
-            { label: "Profit ($)", value: animatedProfit, trend: trends.profit, color: "text-yellow-400" },
-          ].map((card, idx) => (
-            <div
-              key={idx}
-              className="bg-[#121a2b] p-5 rounded-xl shadow-lg hover:shadow-cyan-700 transition-all"
-            >
-              <h3 className="text-lg text-gray-300">{card.label}</h3>
-              <p className={`text-3xl font-bold ${card.color}`}>{card.value}</p>
-              <div className="mt-1">{renderTrend(card.trend)}</div>
-            </div>
-          ))}
         </div>
-      )}
 
-      {/* 🔹 Export Buttons */}
-      <div className="flex justify-center gap-4 mb-6">
-        <button
-          onClick={exportCSV}
-          className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg font-semibold"
-        >
-          Export CSV
-        </button>
-        <button
-          onClick={exportPDF}
-          className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-semibold"
-        >
-          Export PDF
-        </button>
+        <div className="flex justify-center gap-4">
+          <button onClick={exportCSV}
+            className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg font-semibold">
+            Export CSV
+          </button>
+          <button onClick={exportPDF}
+            className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-semibold">
+            Export PDF
+          </button>
+        </div>
       </div>
 
-      {/* 🔹 Data Table */}
-      <div className="bg-[#121a2b] p-6 rounded-2xl shadow-xl overflow-x-auto">
-        <h2 className="text-2xl font-semibold text-cyan-400 mb-4 text-center">
-          {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Data
-        </h2>
+      {/* ================= Summary Stats ================= */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 text-center">
+        <div className="bg-[#121a2b] p-6 rounded-2xl shadow-lg">
+          <h3 className="text-cyan-400 text-lg font-semibold">Total Clicks</h3>
+          <p className="text-3xl font-bold mt-2">{totalClicks}</p>
+        </div>
+        <div className="bg-[#121a2b] p-6 rounded-2xl shadow-lg">
+          <h3 className="text-cyan-400 text-lg font-semibold">Conversions</h3>
+          <p className="text-3xl font-bold mt-2">{totalConversions}</p>
+        </div>
+        <div className="bg-[#121a2b] p-6 rounded-2xl shadow-lg">
+          <h3 className="text-cyan-400 text-lg font-semibold">Revenue ($)</h3>
+          <p className="text-3xl font-bold mt-2">${totalRevenue}</p>
+        </div>
+        <div className="bg-[#121a2b] p-6 rounded-2xl shadow-lg">
+          <h3 className="text-cyan-400 text-lg font-semibold">Profit ($)</h3>
+          <p className="text-3xl font-bold mt-2">${totalProfit}</p>
+        </div>
+      </div>
 
-        {loading ? (
-          <p className="text-center text-gray-400">Loading...</p>
-        ) : data.length > 0 ? (
-          <table className="w-full border-collapse text-center">
-            <thead>
-              <tr className="border-b border-gray-700 text-cyan-300">
-                {Object.keys(data[0]).map((header) => (
-                  <th key={header} className="p-3 capitalize">
-                    {header.replace(/_/g, " ")}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((row, i) => (
-                <tr
-                  key={i}
-                  className="border-b border-gray-800 hover:bg-[#1a2337] transition-all duration-150"
-                >
-                  {Object.values(row).map((val, j) => (
-                    <td key={j} className="p-3 text-center">
-                      {val}
-                    </td>
-                  ))}
-                </tr>
+      {/* ================= Reports Table ================= */}
+      <div className="bg-[#121a2b] p-6 rounded-2xl shadow-xl overflow-x-auto">
+        <h2 className="text-2xl font-semibold text-cyan-400 mb-4 text-center">Reports Data</h2>
+        <table className="w-full border-collapse text-center">
+          <thead>
+            <tr className="border-b border-gray-700 text-cyan-300">
+              {["date", "partner", "clicks", "conversions", "revenue", "payout", "profit"].map((key) => (
+                <th key={key} className="p-3 cursor-pointer hover:text-white" onClick={() => sortData(key)}>
+                  {key.charAt(0).toUpperCase() + key.slice(1)}{" "}
+                  {sortConfig.key === key ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
+                </th>
               ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="text-center text-gray-400">No data available.</p>
-        )}
+            </tr>
+          </thead>
+          <tbody>
+            {paginatedReports.length > 0 ? (
+              paginatedReports.map((r, i) => (
+                <tr key={i} className="border-b border-gray-800 hover:bg-[#1a2337] transition-all">
+                  <td className="p-3">{r.date}</td>
+                  <td className="p-3">{r.partner}</td>
+                  <td className="p-3">{r.clicks}</td>
+                  <td className="p-3 text-cyan-400 font-semibold">{r.conversions}</td>
+                  <td className="p-3">${r.revenue}</td>
+                  <td className="p-3">${r.payout}</td>
+                  <td className="p-3 text-cyan-400 font-semibold">${r.profit}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="7" className="p-6 text-gray-400 text-center">
+                  No reports available.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        {/* Pagination */}
+        <div className="flex justify-center items-center gap-4 mt-6">
+          <button
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((p) => p - 1)}
+            className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="text-gray-400">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage((p) => p + 1)}
+            className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
       </div>
     </div>
   );
