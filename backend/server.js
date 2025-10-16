@@ -14,6 +14,11 @@ app.get("/", (req, res) => {
   res.send("✅ Mob13r Backend is Live and Connected to AWS RDS!");
 });
 
+// ✅ AWS Health Check Route (important for EB Green health)
+app.get("/api/health", (req, res) => {
+  res.status(200).json({ status: "healthy", message: "Backend is up and running 🚀" });
+});
+
 // ✅ Enable CORS for Amplify + Local Dev + API Tools
 const allowedOrigins = [
   "https://dashboard.mob13r.com", // Amplify frontend
