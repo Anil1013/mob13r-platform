@@ -1,47 +1,34 @@
-name: Deploy Full Mob13r Platform (Backend + Frontend)
+name: 🚀 Deploy Mob13r Platform (Backend + Frontend)
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:  # Allows manual trigger from Actions tab
+  workflow_dispatch:  # allows manual trigger from GitHub Actions tab
 
 jobs:
   deploy:
-    name: 🚀 Deploy Mob13r Backend + Frontend
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout Repository
-      - name: 🧾 Checkout repository
+      # 1️⃣ Checkout the repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node.js
-      - name: 🧰 Setup Node.js
+      # 2️⃣ Set up Node.js 18 (matches your Elastic Beanstalk + React build)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # 3️⃣ Install and Build Frontend (React)
-      - name: 🧱 Build Frontend (React)
-        run: |
-          cd frontend
-          npm install
-          echo "REACT_APP_API_URL=${{ secrets.REACT_APP_API_URL }}" >> .env
-          echo "REACT_APP_APP_NAME=Mob13r" >> .env
-          echo "REACT_APP_THEME=dark" >> .env
-          npm run build
-          cd ..
-
-      # 4️⃣ Install Backend Dependencies
+      # 3️⃣ Install and package backend
       - name: 📦 Install Backend Dependencies
         run: |
           cd backend
           npm install
-          cd ..
 
-      # 5️⃣ Create Backend .env file from GitHub Secrets
-      - name: ⚙️ Create Backend .env
+      # 4️⃣ Create backend .env file dynamically from GitHub Secrets
+      - name: 🔐 Create Backend .env
         run: |
           cd backend
           echo "DB_HOST=${{ secrets.DB_HOST }}" >> .env
@@ -51,14 +38,14 @@ jobs:
           echo "DB_NAME=${{ secrets.DB_NAME }}" >> .env
           echo "PORT=8080" >> .env
           echo "NODE_ENV=production" >> .env
-          echo "CORS_ORIGIN=https://dashboard.mob13r.com" >> .env
 
-      # 6️⃣ Package Backend + Built Frontend for EB
-      - name: 🗜️ Package Backend + Frontend
+      # 5️⃣ Zip backend for AWS Elastic Beanstalk
+      - name: 📦 Package Backend
         run: |
-          zip -r deploy.zip backend frontend/build Procfile package.json >/dev/null
+          cd backend
+          zip -r ../backend.zip .
 
-      # 7️⃣ Deploy Backend to AWS Elastic Beanstalk
+      # 6️⃣ Deploy backend to Elastic Beanstalk
       - name: 🚀 Deploy Backend to AWS Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
         with:
@@ -68,15 +55,22 @@ jobs:
           environment_name: "Mob13r-backend-env-1"
           region: "ap-south-1"
           version_label: "build-${{ github.run_number }}"
-          deployment_package: "deploy.zip"
+          deployment_package: "backend.zip"
 
-      # 8️⃣ Deploy Frontend to AWS Amplify
+      # 7️⃣ Install and build frontend (React)
+      - name: 🧱 Build Frontend (React)
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
+      # 8️⃣ Deploy frontend to AWS Amplify
       - name: 🌐 Deploy Frontend to AWS Amplify
         uses: ambientlight/amplify-cli-action@v2
         with:
           amplify_command: publish
-          amplify_env: main
-          amplify_app_id: ${{ secrets.AMPLIFY_APP_ID }}
+          amplify_env: main               # ✅ confirmed from Amplify
+          amplify_app_id: ${{ secrets.AMPLIFY_APP_ID }}  # e.g. d2ujj546i3rguh
           amplify_branch: main
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
