@@ -4,13 +4,33 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { saveAs } from "file-saver";
 
+// ✅ Small utility for animated counter
+const useCountUp = (value, duration = 1000) => {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    let start = 0;
+    const end = parseFloat(value) || 0;
+    if (start === end) return;
+    const increment = (end - start) / (duration / 16);
+    const timer = setInterval(() => {
+      start += increment;
+      if (start >= end) {
+        start = end;
+        clearInterval(timer);
+      }
+      setDisplay(Number(start.toFixed(value % 1 === 0 ? 0 : 2)));
+    }, 16);
+    return () => clearInterval(timer);
+  }, [value, duration]);
+  return display;
+};
+
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("reports");
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const API_URL = process.env.REACT_APP_API_URL;
 
-  // ✅ Auto-refresh every 10 minutes
   useEffect(() => {
     fetchData(activeTab);
     const interval = setInterval(() => fetchData(activeTab), 10 * 60 * 1000);
@@ -31,7 +51,7 @@ const AdminDashboard = () => {
     }
   };
 
-  // ✅ Export as CSV
+  // ✅ Export CSV
   const exportCSV = () => {
     if (!data.length) return;
     const headers = Object.keys(data[0]);
@@ -43,7 +63,7 @@ const AdminDashboard = () => {
     saveAs(blob, `${activeTab}.csv`);
   };
 
-  // ✅ Export as PDF
+  // ✅ Export PDF
   const exportPDF = () => {
     if (!data.length) return;
     const doc = new jsPDF();
@@ -57,7 +77,38 @@ const AdminDashboard = () => {
     doc.save(`${activeTab}.pdf`);
   };
 
-  // ✅ Tab Titles
+  // ✅ Calculate totals (Reports only)
+  const totals = activeTab === "reports" && data.length
+    ? {
+        clicks: data.reduce((sum, r) => sum + (r.clicks || 0), 0),
+        conversions: data.reduce((sum, r) => sum + (r.conversions || 0), 0),
+        revenue: data.reduce((sum, r) => sum + (r.revenue || 0), 0),
+        profit: data.reduce((sum, r) => sum + (r.profit || 0), 0),
+      }
+    : null;
+
+  // ✅ Calculate previous day comparison (trends)
+  const getTrend = (field) => {
+    if (data.length < 2) return 0;
+    const today = data[0][field] || 0;
+    const yesterday = data[1][field] || 0;
+    if (yesterday === 0) return 0;
+    return (((today - yesterday) / yesterday) * 100).toFixed(1);
+  };
+
+  const trends = {
+    clicks: getTrend("clicks"),
+    conversions: getTrend("conversions"),
+    revenue: getTrend("revenue"),
+    profit: getTrend("profit"),
+  };
+
+  // ✅ Animated values
+  const animatedClicks = useCountUp(totals?.clicks || 0);
+  const animatedConversions = useCountUp(totals?.conversions || 0);
+  const animatedRevenue = useCountUp(totals?.revenue || 0);
+  const animatedProfit = useCountUp(totals?.profit || 0);
+
   const tabs = [
     { key: "reports", label: "Reports" },
     { key: "partners", label: "Partners" },
@@ -65,13 +116,24 @@ const AdminDashboard = () => {
     { key: "offers", label: "Offers" },
   ];
 
+  const renderTrend = (value) => {
+    if (value === 0) return <span className="text-gray-400 text-sm">—</span>;
+    const color = value > 0 ? "text-green-400" : "text-red-400";
+    const symbol = value > 0 ? "▲" : "▼";
+    return (
+      <span className={`${color} text-sm font-medium`}>
+        {symbol} {Math.abs(value)}%
+      </span>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-[#0b1221] text-gray-100 p-6">
       <h1 className="text-3xl font-bold text-cyan-400 mb-6 text-center">
         ⚙️ Mob13r Admin Dashboard
       </h1>
 
-      {/* 🔹 Tabs Navigation */}
+      {/* 🔹 Tabs */}
       <div className="flex justify-center gap-4 mb-8 flex-wrap">
         {tabs.map((tab) => (
           <button
@@ -87,6 +149,27 @@ const AdminDashboard = () => {
           </button>
         ))}
       </div>
+
+      {/* 🌟 Summary Cards (Reports only) */}
+      {activeTab === "reports" && totals && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 text-center">
+          {[
+            { label: "Total Clicks", value: animatedClicks, trend: trends.clicks, color: "text-cyan-400" },
+            { label: "Conversions", value: animatedConversions, trend: trends.conversions, color: "text-cyan-400" },
+            { label: "Revenue ($)", value: animatedRevenue, trend: trends.revenue, color: "text-green-400" },
+            { label: "Profit ($)", value: animatedProfit, trend: trends.profit, color: "text-yellow-400" },
+          ].map((card, idx) => (
+            <div
+              key={idx}
+              className="bg-[#121a2b] p-5 rounded-xl shadow-lg hover:shadow-cyan-700 transition-all"
+            >
+              <h3 className="text-lg text-gray-300">{card.label}</h3>
+              <p className={`text-3xl font-bold ${card.color}`}>{card.value}</p>
+              <div className="mt-1">{renderTrend(card.trend)}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* 🔹 Export Buttons */}
       <div className="flex justify-center gap-4 mb-6">
