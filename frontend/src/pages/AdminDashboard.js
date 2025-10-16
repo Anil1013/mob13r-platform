@@ -6,9 +6,9 @@ import { saveAs } from "file-saver";
 
 const AdminDashboard = () => {
   const [reports, setReports] = useState([]);
-  const [partners, setPartners] = useState(["SEL Telecom", "Mob13r", "Tapflow"]);
-  const [affiliates, setAffiliates] = useState(["Affiliate 1", "Affiliate 2", "Affiliate 3"]);
-  const [offers, setOffers] = useState(["Offer A", "Offer B", "Offer C"]);
+  const [partners, setPartners] = useState([]);
+  const [affiliates, setAffiliates] = useState([]);
+  const [offers, setOffers] = useState([]);
   const [filters, setFilters] = useState({
     startDate: "",
     endDate: "",
@@ -16,22 +16,40 @@ const AdminDashboard = () => {
     affiliate: "All Affiliates",
     offer: "All Offers",
   });
-  const [hourlyView, setHourlyView] = useState(false);
 
-  // ✅ Fetch report data
+  const API_BASE = process.env.REACT_APP_API_URL;
+
+  // ✅ Fetch reports
   const fetchReports = async () => {
     try {
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/admin/reports`);
-      setReports(response.data);
+      const res = await axios.get(`${API_BASE}/api/admin/reports`);
+      setReports(res.data);
     } catch (error) {
       console.error("Error fetching reports:", error);
     }
   };
 
-  // ✅ Auto-refresh every 10 minutes
+  // ✅ Fetch dropdown data
+  const fetchDropdownData = async () => {
+    try {
+      const [partnersRes, affiliatesRes, offersRes] = await Promise.all([
+        axios.get(`${API_BASE}/api/admin/partners`),
+        axios.get(`${API_BASE}/api/admin/affiliates`),
+        axios.get(`${API_BASE}/api/admin/offers`),
+      ]);
+      setPartners(partnersRes.data.map((p) => p.name || p.partner_name));
+      setAffiliates(affiliatesRes.data.map((a) => a.name || a.affiliate_name));
+      setOffers(offersRes.data.map((o) => o.name || o.offer_name));
+    } catch (error) {
+      console.error("Error fetching dropdown data:", error);
+    }
+  };
+
+  // ✅ Initial + auto refresh every 10 min
   useEffect(() => {
     fetchReports();
-    const interval = setInterval(fetchReports, 10 * 60 * 1000);
+    fetchDropdownData();
+    const interval = setInterval(fetchReports, process.env.REACT_APP_REFRESH_INTERVAL || 600000);
     return () => clearInterval(interval);
   }, []);
 
@@ -45,15 +63,15 @@ const AdminDashboard = () => {
       ),
     ];
     const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
-    saveAs(blob, "reports.csv");
+    saveAs(blob, "Mob13r_Reports.csv");
   };
 
   // ✅ Export PDF
   const exportPDF = () => {
     const doc = new jsPDF();
-    doc.text("Reports Summary", 14, 16);
+    doc.text("Mob13r Reports Summary", 14, 16);
     autoTable(doc, {
-      startY: 20,
+      startY: 22,
       head: [["Date", "Partner", "Clicks", "Conversions", "Revenue", "Payout", "Profit"]],
       body: reports.map((r) => [
         r.date,
@@ -66,13 +84,13 @@ const AdminDashboard = () => {
       ]),
       styles: { halign: "center" },
     });
-    doc.save("reports.pdf");
+    doc.save("Mob13r_Reports.pdf");
   };
 
   return (
     <div className="min-h-screen bg-[#0b1221] text-gray-100 p-6">
-      <h1 className="text-3xl font-bold text-cyan-400 mb-6 text-center">
-        Mob13r Admin Dashboard
+      <h1 className="text-3xl font-bold text-cyan-400 mb-8 text-center">
+        📊 Mob13r Admin Dashboard
       </h1>
 
       {/* ================= Filters Section ================= */}
@@ -89,44 +107,38 @@ const AdminDashboard = () => {
             onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
           />
 
+          {/* Partner Dropdown */}
           <select
             className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
             onChange={(e) => setFilters({ ...filters, partner: e.target.value })}
           >
             <option>All Partners</option>
-            {partners.map((p) => (
-              <option key={p}>{p}</option>
+            {partners.map((p, i) => (
+              <option key={i}>{p}</option>
             ))}
           </select>
 
+          {/* Affiliate Dropdown */}
           <select
             className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
             onChange={(e) => setFilters({ ...filters, affiliate: e.target.value })}
           >
             <option>All Affiliates</option>
-            {affiliates.map((a) => (
-              <option key={a}>{a}</option>
+            {affiliates.map((a, i) => (
+              <option key={i}>{a}</option>
             ))}
           </select>
 
+          {/* Offer Dropdown */}
           <select
             className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
             onChange={(e) => setFilters({ ...filters, offer: e.target.value })}
           >
             <option>All Offers</option>
-            {offers.map((o) => (
-              <option key={o}>{o}</option>
+            {offers.map((o, i) => (
+              <option key={i}>{o}</option>
             ))}
           </select>
-
-          <label className="text-gray-300 flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={hourlyView}
-              onChange={() => setHourlyView(!hourlyView)}
-            />
-            Hourly View
-          </label>
 
           <button
             onClick={fetchReports}
@@ -156,7 +168,7 @@ const AdminDashboard = () => {
       {/* ================= Reports Table ================= */}
       <div className="bg-[#121a2b] p-6 rounded-2xl shadow-xl overflow-x-auto">
         <h2 className="text-2xl font-semibold text-cyan-400 mb-4 text-center">
-          Reports
+          Reports Summary
         </h2>
         <table className="w-full border-collapse text-center">
           <thead>
@@ -180,14 +192,10 @@ const AdminDashboard = () => {
                   <td className="p-3">{r.date}</td>
                   <td className="p-3">{r.partner}</td>
                   <td className="p-3">{r.clicks}</td>
-                  <td className="p-3 text-cyan-400 font-semibold">
-                    {r.conversions}
-                  </td>
+                  <td className="p-3 text-cyan-400 font-semibold">{r.conversions}</td>
                   <td className="p-3">${r.revenue}</td>
                   <td className="p-3">${r.payout}</td>
-                  <td className="p-3 text-cyan-400 font-semibold">
-                    ${r.profit}
-                  </td>
+                  <td className="p-3 text-cyan-400 font-semibold">${r.profit}</td>
                 </tr>
               ))
             ) : (
