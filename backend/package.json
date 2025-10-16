@@ -2,6 +2,7 @@
   "name": "mob13r-backend",
   "version": "1.0.0",
   "description": "Backend server for Mob13r affiliate and admin platform",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -20,7 +21,8 @@
     "nodemon": "^3.1.4"
   },
   "engines": {
-    "node": ">=18.x"
+    "node": "22.x",
+    "npm": "10.x"
   },
   "author": "Anil Kumar",
   "license": "MIT"
