@@ -4,71 +4,76 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: 🧩 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: ⚙️ Install AWS CLI
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y unzip
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          sudo ./aws/install
-          aws --version
+      # ---------------------------
+      # 🔧 Setup Node for frontend
+      # ---------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
 
-      - name: 🌐 Deploy Frontend to AWS Amplify
-        run: |
-          echo "🚀 Starting Amplify Frontend Build + Deploy"
-          aws amplify start-job \
-            --app-id d2ujj546i3rguh \
-            --branch-name main \
-            --job-type RELEASE \
-            --region ap-south-1
+      # ---------------------------
+      # 📦 FRONTEND BUILD (React)
+      # ---------------------------
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build Frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: ⚡ Deploy Frontend to AWS Amplify
+        uses: webfactory/amplify-cli-action@v3
+        with:
+          amplify_command: publish
+          amplify_env: prod
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ap-south-1
 
-      - name: ⚙️ Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: 📦 Install Dependencies
+      # ---------------------------
+      # ⚙️ BACKEND DEPLOY (EB)
+      # ---------------------------
+      - name: Install AWS CLI
         run: |
-          cd backend
-          npm install
+          sudo apt-get update -y
+          sudo apt-get install -y zip unzip awscli
 
-      - name: 🔐 Create .env file from GitHub Secrets
+      - name: Prepare Backend Package
+        working-directory: backend
         run: |
-          cd backend
-          echo "DB_HOST=${{ secrets.DB_HOST }}" >> .env
-          echo "DB_PORT=${{ secrets.DB_PORT }}" >> .env
-          echo "DB_USER=${{ secrets.DB_USER }}" >> .env
-          echo "DB_PASS=${{ secrets.DB_PASS }}" >> .env
-          echo "DB_NAME=${{ secrets.DB_NAME }}" >> .env
-          echo "PORT=8080" >> .env
-          echo "NODE_ENV=production" >> .env
+          echo "Zipping backend folder excluding node_modules..."
+          zip -r ../backend.zip . -x "node_modules/*"
 
-      - name: 🗜️ Zip Backend for Deployment
+      - name: 🔍 Debug: Check Files Before Upload
         run: |
-          cd backend
-          zip -r ../backend.zip .
+          echo "---- LISTING REPO ROOT ----"
+          ls -al
+          echo "---- LISTING BACKEND FOLDER ----"
+          ls -al backend || echo "No backend folder found!"
+          echo "---- CHECKING ZIP ----"
+          ls -al backend.zip || echo "backend.zip NOT FOUND!"
 
-      - name: 🚀 Deploy Backend to Elastic Beanstalk
+      - name: 🚀 Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          application_name: "Mob13r-Backend"
-          environment_name: "Mob13r-backend-env-1"
-          region: "ap-south-1"
-          version_label: "build-${{ github.run_number }}"
-          deployment_package: "backend.zip"
+          application_name: Mob13r-Backend
+          environment_name: Mob13r-backend-env-1
+          region: ap-south-1
+          version_label: build-${{ github.run_number }}
+          deployment_package: backend.zip
+
+      - name: ✅ Deployment Status
+        run: echo "🎉 Deployment completed successfully!"
