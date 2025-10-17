@@ -248,4 +248,41 @@
   cursor: pointer;
   font-weight: bold;
 }
+/* 🔹 Navbar */
+.top-navbar {
+  width: 100%;
+  background: linear-gradient(90deg, #001f3f, #0a192f);
+  border-bottom: 2px solid #00e6a8;
+  padding: 10px 20px;
+  margin-bottom: 15px;
+}
+
+.nav-placeholder {
+  color: #00e6a8;
+  font-weight: 600;
+  font-size: 16px;
+  text-align: center;
+}
+
+/* 🔹 Header section */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.dashboard-header h2 {
+  color: #00e6a8;
+  font-weight: 700;
+}
+
+.auto-refresh {
+  background-color: #001f3f;
+  color: #00e6a8;
+  padding: 6px 12px;
+  border: 1px solid #00e6a8;
+  border-radius: 6px;
+  font-weight: 600;
+}
 
