@@ -19,6 +19,7 @@ const AdminDashboard = () => {
 
   const [timeLeft, setTimeLeft] = useState(600); // 10 minutes = 600 seconds
 
+  // Auto-refresh timer + data fetch
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 600000); // every 10 min auto refresh
@@ -52,14 +53,24 @@ const AdminDashboard = () => {
     setFilters({ ...filters, [name]: value });
   };
 
+  // ✅ Export CSV/Excel
   const exportCSV = () => {
+    if (!reports.length) {
+      alert("No data to export!");
+      return;
+    }
     const ws = XLSX.utils.json_to_sheet(reports);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Reports");
-    XLSX.writeFile(wb, "Mob13r_Report.csv");
+    XLSX.writeFile(wb, "Mob13r_Report.xlsx");
   };
 
+  // ✅ Export PDF
   const exportPDF = () => {
+    if (!reports.length) {
+      alert("No data to export!");
+      return;
+    }
     const doc = new jsPDF();
     doc.autoTable({
       html: "#reportsTable",
@@ -70,6 +81,7 @@ const AdminDashboard = () => {
     doc.save("Mob13r_Report.pdf");
   };
 
+  // ✅ Totals calculation
   const totals = reports.reduce(
     (acc, r) => ({
       clicks: acc.clicks + (r.clicks || 0),
@@ -87,7 +99,10 @@ const AdminDashboard = () => {
       <div className="header">
         <h2 className="title">Mob13r Admin Dashboard</h2>
         <div className="refresh-timer">
-          🔄 Auto-refresh in: <span>{formatTime(timeLeft)}</span>
+          🔄 Auto-refresh in:{" "}
+          <span style={{ color: timeLeft <= 30 ? "red" : "#00ffc8" }}>
+            {formatTime(timeLeft)}
+          </span>
         </div>
       </div>
 
@@ -115,6 +130,7 @@ const AdminDashboard = () => {
           <option>Prizes</option>
           <option>Playnew</option>
         </select>
+
         <button className="apply-btn" onClick={fetchData}>
           Apply / Refresh
         </button>
