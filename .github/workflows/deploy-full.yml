@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v4
 
       # ---------------------------
-      # ⚙️ FRONTEND BUILD
+      # ⚙️ FRONTEND BUILD (React)
       # ---------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -32,20 +32,23 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: Deploy frontend to Amplify
-        uses: webfactory/amplify-cli-action@v3
-        with:
-          amplify_command: publish
-          amplify_env: prod
+      # ---------------------------
+      # 🚀 DEPLOY FRONTEND TO AMPLIFY
+      # ---------------------------
+      - name: Install AWS Amplify CLI
+        run: npm install -g @aws-amplify/cli
+
+      - name: Publish frontend to AWS Amplify
+        run: |
+          amplify publish --yes
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ap-south-1
 
       # ---------------------------
-      # ⚙️ BACKEND DEPLOY
+      # ⚙️ BACKEND DEPLOY (Elastic Beanstalk)
       # ---------------------------
-
       - name: Check AWS CLI version
         run: |
           echo "✅ Using preinstalled AWS CLI"
