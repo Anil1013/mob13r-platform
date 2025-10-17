@@ -1,3 +1,31 @@
+name: 🚀 Unified Auto Deploy (Frontend + Backend)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ---------------------------
+      # 🧾 Checkout Repository
+      # ---------------------------
+      - name: 🧾 Checkout Repository
+        uses: actions/checkout@v4
+
+      # ---------------------------
+      # 🔐 Configure AWS credentials
+      # ---------------------------
+      - name: 🔐 Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
       # ---------------------------
       # FRONTEND (Amplify)
       # ---------------------------
@@ -18,3 +46,36 @@
           JOB_JSON=$(aws amplify start-job --app-id "$APP_ID" --branch-name "$BRANCH" --job-type RELEASE)
           echo "$JOB_JSON"
           echo "✅ Amplify job started successfully."
+
+      # ---------------------------
+      # BACKEND (Elastic Beanstalk)
+      # ---------------------------
+      - name: 🧰 Check AWS CLI
+        run: aws --version
+
+      - name: 📦 Package backend
+        working-directory: backend
+        run: |
+          echo "Creating backend.zip (excluding node_modules, .env)…"
+          zip -r ../backend.zip . \
+            -x "node_modules/*" ".env" ".git/*" "aws/*" "awscliv2.zip"
+
+      - name: 🔎 Verify package
+        run: ls -lh backend.zip
+
+      - name: 🚀 Deploy to Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v21
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          application_name: Mob13r-Backend
+          environment_name: Mob13r-backend-env-1
+          region: ap-south-1
+          version_label: build-${{ github.run_number }}
+          deployment_package: backend.zip
+
+      # ---------------------------
+      # ✅ DONE
+      # ---------------------------
+      - name: ✅ Deployment Complete
+        run: echo "🎉 Frontend (Amplify) + Backend (EB) deployment completed successfully!"
