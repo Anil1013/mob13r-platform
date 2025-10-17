@@ -1,14 +1,18 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
-import "jspdf-autotable";
-import "./AdminDashboard.css";
+import { saveAs } from "file-saver";
+import "../styles/AdminDashboard.css"; // keep your table styling here
 
 const API_URL = process.env.REACT_APP_API_URL || "https://backend.mob13r.com/api";
 
-const AdminDashboard = () => {
+export default function AdminDashboard() {
   const [reports, setReports] = useState([]);
+  const [partners, setPartners] = useState([]);
+  const [affiliates, setAffiliates] = useState([]);
+  const [offers, setOffers] = useState([]);
   const [filters, setFilters] = useState({
     startDate: "",
     endDate: "",
@@ -17,128 +21,172 @@ const AdminDashboard = () => {
     offer: "All",
   });
 
-  const [timeLeft, setTimeLeft] = useState(600); // 10 minutes = 600 seconds
-
-  // Auto-refresh timer + data fetch
+  // ✅ Fetch data on mount
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 600000); // every 10 min auto refresh
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 600));
-    }, 1000);
-    return () => {
-      clearInterval(interval);
-      clearInterval(timer);
-    };
   }, []);
 
-  const formatTime = (seconds) => {
-    const m = String(Math.floor(seconds / 60)).padStart(2, "0");
-    const s = String(seconds % 60).padStart(2, "0");
-    return `${m}:${s}`;
-  };
+  // 🔹 Normalize keys to prevent blank cells
+  const normalizeData = (data) =>
+    data.map((item) => ({
+      date: item.date || "—",
+      partnerServiceId: item.partnerServiceId || item.partner_service_id || "—",
+      publisherCampaignId: item.publisherCampaignId || item.publisher_campaign_id || "—",
+      partner: item.partner || "—",
+      affiliate: item.affiliate || "—",
+      geo: item.geo || "—",
+      carrier: item.carrier || "—",
+      serviceName: item.serviceName || item.service_name || "—",
+      clicks: item.clicks ?? 0,
+      partnerConversions:
+        item.partnerConversions ?? item.partner_conversions ?? 0,
+      affiliateConversions:
+        item.affiliateConversions ?? item.affiliate_conversions ?? 0,
+      revenue: item.revenue ?? 0,
+      cost: item.cost ?? item.cost_to_affiliate ?? 0,
+      profit: item.profit ?? 0,
+    }));
 
   const fetchData = async () => {
     try {
-      const { data } = await axios.get(`${API_URL}/admin/reports`);
-      setReports(data);
-      setTimeLeft(600);
-    } catch (error) {
-      console.error("Error fetching data:", error);
+      const res = await axios.get(`${API_URL}/admin/reports`);
+      setReports(normalizeData(res.data || []));
+    } catch (err) {
+      console.error("Error fetching reports:", err);
     }
   };
 
+  // 📅 Handle filter change
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    setFilters({ ...filters, [name]: value });
+    setFilters((prev) => ({ ...prev, [name]: value }));
   };
 
-  // ✅ Export CSV/Excel
-  const exportCSV = () => {
-    if (!reports.length) {
-      alert("No data to export!");
-      return;
+  // ⚙️ Apply filters
+  const filteredReports = reports.filter((r) => {
+    const matchPartner =
+      filters.partner === "All" || r.partner === filters.partner;
+    const matchAffiliate =
+      filters.affiliate === "All" || r.affiliate === filters.affiliate;
+    const matchOffer = filters.offer === "All" || r.serviceName === filters.offer;
+    return matchPartner && matchAffiliate && matchOffer;
+  });
+
+  // 📊 Totals row
+  const totals = filteredReports.reduce(
+    (acc, curr) => {
+      acc.clicks += Number(curr.clicks) || 0;
+      acc.partnerConversions += Number(curr.partnerConversions) || 0;
+      acc.affiliateConversions += Number(curr.affiliateConversions) || 0;
+      acc.revenue += Number(curr.revenue) || 0;
+      acc.cost += Number(curr.cost) || 0;
+      acc.profit += Number(curr.profit) || 0;
+      return acc;
+    },
+    {
+      clicks: 0,
+      partnerConversions: 0,
+      affiliateConversions: 0,
+      revenue: 0,
+      cost: 0,
+      profit: 0,
     }
-    const ws = XLSX.utils.json_to_sheet(reports);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Reports");
-    XLSX.writeFile(wb, "Mob13r_Report.xlsx");
-  };
-
-  // ✅ Export PDF
-  const exportPDF = () => {
-    if (!reports.length) {
-      alert("No data to export!");
-      return;
-    }
-    const doc = new jsPDF();
-    doc.autoTable({
-      html: "#reportsTable",
-      styles: { halign: "center", fontSize: 8 },
-      headStyles: { fillColor: [22, 160, 133], textColor: 255, fontStyle: "bold" },
-      footStyles: { fillColor: [22, 160, 133], textColor: 255, fontStyle: "bold" },
-    });
-    doc.save("Mob13r_Report.pdf");
-  };
-
-  // ✅ Totals calculation
-  const totals = reports.reduce(
-    (acc, r) => ({
-      clicks: acc.clicks + (r.clicks || 0),
-      partnerConversions: acc.partnerConversions + (r.partnerConversions || 0),
-      affiliateConversions: acc.affiliateConversions + (r.affiliateConversions || 0),
-      revenue: acc.revenue + (r.revenue || 0),
-      cost: acc.cost + (r.cost || 0),
-      profit: acc.profit + (r.profit || 0),
-    }),
-    { clicks: 0, partnerConversions: 0, affiliateConversions: 0, revenue: 0, cost: 0, profit: 0 }
   );
 
-  return (
-    <div className="dashboard">
-      <div className="header">
-        <h2 className="title">Mob13r Admin Dashboard</h2>
-        <div className="refresh-timer">
-          🔄 Auto-refresh in:{" "}
-          <span style={{ color: timeLeft <= 30 ? "red" : "#00ffc8" }}>
-            {formatTime(timeLeft)}
-          </span>
-        </div>
-      </div>
+  // 📤 Export to Excel
+  const exportExcel = () => {
+    const filename = `Mob13r_Report_${new Date().toISOString().split("T")[0]}.xlsx`;
+    const ws = XLSX.utils.json_to_sheet(filteredReports);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Reports");
+    const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    saveAs(new Blob([excelBuffer]), filename);
+  };
 
+  // 📄 Export to PDF
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.text("Mob13r Admin Report", 14, 12);
+    autoTable(doc, {
+      startY: 18,
+      head: [
+        [
+          "Date",
+          "Partner service Id",
+          "Publisher campaign ID",
+          "Partner",
+          "Affiliate",
+          "Geo",
+          "Carrier",
+          "Partner’s service name",
+          "Clicks",
+          "Partner conversions",
+          "Affiliate conversions",
+          "Revenue($)",
+          "Cost to affiliate($)",
+          "Profit($)",
+        ],
+      ],
+      body: filteredReports.map((r) => [
+        r.date,
+        r.partnerServiceId,
+        r.publisherCampaignId,
+        r.partner,
+        r.affiliate,
+        r.geo,
+        r.carrier,
+        r.serviceName,
+        r.clicks,
+        r.partnerConversions,
+        r.affiliateConversions,
+        `$${r.revenue.toFixed(2)}`,
+        `$${r.cost.toFixed(2)}`,
+        `$${r.profit.toFixed(2)}`,
+      ]),
+    });
+    doc.save(`Mob13r_Report_${new Date().toISOString().split("T")[0]}.pdf`);
+  };
+
+  return (
+    <div className="admin-dashboard">
+      <h2>Mob13r Admin Dashboard</h2>
       <div className="filters">
-        <input type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} />
-        <input type="date" name="endDate" value={filters.endDate} onChange={handleFilterChange} />
+        <input
+          type="date"
+          name="startDate"
+          value={filters.startDate}
+          onChange={handleFilterChange}
+        />
+        <input
+          type="date"
+          name="endDate"
+          value={filters.endDate}
+          onChange={handleFilterChange}
+        />
         <select name="partner" onChange={handleFilterChange}>
           <option>All Partners</option>
-          <option>Partner 1</option>
-          <option>Partner 2</option>
-          <option>Partner 3</option>
-          <option>Partner 4</option>
+          {partners.map((p, i) => (
+            <option key={i}>{p}</option>
+          ))}
         </select>
         <select name="affiliate" onChange={handleFilterChange}>
           <option>All Affiliates</option>
-          <option>Affiliate 1</option>
-          <option>Affiliate 2</option>
-          <option>Affiliate 3</option>
-          <option>Affiliate 4</option>
+          {affiliates.map((a, i) => (
+            <option key={i}>{a}</option>
+          ))}
         </select>
         <select name="offer" onChange={handleFilterChange}>
           <option>All Offers</option>
-          <option>Game 1</option>
-          <option>BALADNA</option>
-          <option>Prizes</option>
-          <option>Playnew</option>
+          {offers.map((o, i) => (
+            <option key={i}>{o}</option>
+          ))}
         </select>
-
-        <button className="apply-btn" onClick={fetchData}>
-          Apply / Refresh
-        </button>
-        <button onClick={exportCSV}>Export CSV</button>
+        <button onClick={fetchData}>Apply / Refresh</button>
+        <button onClick={exportExcel}>Export CSV</button>
         <button onClick={exportPDF}>Export PDF</button>
       </div>
 
-      <table id="reportsTable" className="report-table">
+      <table className="report-table">
         <thead>
           <tr>
             <th>Date</th>
@@ -158,7 +206,7 @@ const AdminDashboard = () => {
           </tr>
         </thead>
         <tbody>
-          {reports.map((r, i) => (
+          {filteredReports.map((r, i) => (
             <tr key={i}>
               <td>{r.date}</td>
               <td>{r.partnerServiceId}</td>
@@ -171,9 +219,9 @@ const AdminDashboard = () => {
               <td>{r.clicks}</td>
               <td>{r.partnerConversions}</td>
               <td>{r.affiliateConversions}</td>
-              <td>${r.revenue}</td>
-              <td>${r.cost}</td>
-              <td>${r.profit}</td>
+              <td>${r.revenue?.toFixed(2) || "—"}</td>
+              <td>${r.cost?.toFixed(2) || "—"}</td>
+              <td>${r.profit?.toFixed(2) || "—"}</td>
             </tr>
           ))}
           <tr className="total-row">
@@ -189,6 +237,4 @@ const AdminDashboard = () => {
       </table>
     </div>
   );
-};
-
-export default AdminDashboard;
+}
