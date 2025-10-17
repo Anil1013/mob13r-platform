@@ -1,9 +1,9 @@
-name: 🚀 Auto Deploy Backend to AWS Elastic Beanstalk
+name: 🚀 Auto Deploy Frontend (Amplify) + Backend (Elastic Beanstalk)
 
 on:
   push:
     branches:
-      - main   # ✅ Trigger on push to main
+      - main
   workflow_dispatch:
 
 jobs:
@@ -11,23 +11,45 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🧩 Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
-      - name: 📦 Install dependencies
+      # ---------- FRONTEND ----------
+      - name: Install AWS CLI
         run: |
-          cd backend
-          npm install
+          sudo apt-get update -y
+          sudo apt-get install -y unzip
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+          aws --version
 
-      - name: 🔐 Create .env file from GitHub Secrets
+      - name: Deploy Frontend to Amplify
         run: |
-          cd backend
-          echo "DB_HOST=${{ secrets.DB_HOST }}" >> .env
+          echo "Deploying frontend to Amplify..."
+          aws amplify start-job \
+            --app-id ${{ secrets.AMPLIFY_APP_ID }} \
+            --branch-name main \
+            --job-type RELEASE \
+            --region ${{ secrets.AWS_REGION }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      # ---------- BACKEND ----------
+      - name: Install Backend Dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Create .env File
+        working-directory: ./backend
+        run: |
+          echo "DB_HOST=${{ secrets.DB_HOST }}" > .env
           echo "DB_PORT=${{ secrets.DB_PORT }}" >> .env
           echo "DB_USER=${{ secrets.DB_USER }}" >> .env
           echo "DB_PASS=${{ secrets.DB_PASS }}" >> .env
@@ -35,12 +57,12 @@ jobs:
           echo "PORT=8080" >> .env
           echo "NODE_ENV=production" >> .env
 
-      - name: 🗜️ Zip backend for deployment
+      - name: Zip Backend for EB
         run: |
           cd backend
-          zip -r ../backend.zip .
+          zip -r ../backend.zip . -x "node_modules/*"
 
-      - name: 🚀 Deploy to Elastic Beanstalk
+      - name: Upload to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
