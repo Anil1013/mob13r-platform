@@ -1,271 +1,275 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import * as XLSX from "xlsx";
 import "../styles/AdminDashboard.css";
 
-const API_URL = process.env.REACT_APP_API_URL || "https://backend.mob13r.com/api";
-
-export default function AdminDashboard() {
-  const [reports, setReports] = useState([]);
-  const [partners, setPartners] = useState([]);
-  const [affiliates, setAffiliates] = useState([]);
-  const [offers, setOffers] = useState([]);
+const AdminDashboard = () => {
+  const [reportData, setReportData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
   const [filters, setFilters] = useState({
+    partner: "",
+    affiliate: "",
     startDate: "",
     endDate: "",
-    partner: "All",
-    affiliate: "All",
-    offer: "All",
   });
 
-  // Column visibility control
-  const [visibleCols, setVisibleCols] = useState(() => {
-    const saved = localStorage.getItem("visibleCols");
-    return (
-      JSON.parse(saved) || {
-        partnerServiceId: true,
-        publisherCampaignId: true,
-        partner: true,
-        affiliate: true,
-        geo: true,
-        carrier: true,
-        serviceName: true,
-        clicks: true,
-        partnerConversions: true,
-        affiliateConversions: true,
-        revenue: true,
-        cost: true,
-        profit: true,
-      }
-    );
+  const [visibleColumns, setVisibleColumns] = useState({
+    partner_id: true,
+    affiliate_id: true,
+    partner: true,
+    affiliate: true,
+    geo: true,
+    carrier: true,
+    clicks: true,
+    conversions: true,
+    revenue: true,
   });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const [timer, setTimer] = useState(600); // 600s = 10 minutes
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
-    localStorage.setItem("visibleCols", JSON.stringify(visibleCols));
-  }, [visibleCols]);
-
-  const toggleColumn = (col) =>
-    setVisibleCols((prev) => ({ ...prev, [col]: !prev[col] }));
-
-  const normalizeData = (data) =>
-    data.map((item) => ({
-      date: item.date || "—",
-      partnerServiceId: item.partnerServiceId || item.partner_service_id || "—",
-      publisherCampaignId: item.publisherCampaignId || item.publisher_campaign_id || "—",
-      partner: item.partner || "—",
-      affiliate: item.affiliate || "—",
-      geo: item.geo || "—",
-      carrier: item.carrier || "—",
-      serviceName: item.serviceName || item.service_name || "—",
-      clicks: item.clicks ?? 0,
-      partnerConversions: item.partnerConversions ?? item.partner_conversions ?? 0,
-      affiliateConversions: item.affiliateConversions ?? item.affiliate_conversions ?? 0,
-      revenue: item.revenue ?? 0,
-      cost: item.cost ?? item.cost_to_affiliate ?? 0,
-      profit: item.profit ?? 0,
-    }));
-
+  // 🔁 Fetch report data from backend
   const fetchData = async () => {
     try {
-      const res = await axios.get(`${API_URL}/admin/reports`);
-      setReports(normalizeData(res.data || []));
-    } catch (err) {
-      console.error("Error fetching reports:", err);
+      const response = await axios.get(
+        `${process.env.REACT_APP_API_URL}/admin/reports`
+      );
+      setReportData(response.data);
+      setFilteredData(response.data);
+    } catch (error) {
+      console.error("Error fetching reports:", error);
     }
   };
 
-  const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    setFilters((prev) => ({ ...prev, [name]: value }));
+  // 🔁 Auto-refresh timer logic
+  useEffect(() => {
+    fetchData(); // initial load
+
+    const interval = setInterval(() => {
+      setTimer((prev) => {
+        if (prev <= 1) {
+          fetchData();
+          return 600; // reset timer
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60)
+      .toString()
+      .padStart(2, "0");
+    const s = (seconds % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
   };
 
-  const filteredReports = reports.filter((r) => {
-    const matchPartner =
-      filters.partner === "All" || r.partner === filters.partner;
-    const matchAffiliate =
-      filters.affiliate === "All" || r.affiliate === filters.affiliate;
-    const matchOffer =
-      filters.offer === "All" || r.serviceName === filters.offer;
-    return matchPartner && matchAffiliate && matchOffer;
-  });
+  // 🧠 Apply Filters
+  const applyFilters = () => {
+    let filtered = reportData;
 
-  const totals = filteredReports.reduce(
-    (acc, curr) => {
-      acc.clicks += Number(curr.clicks) || 0;
-      acc.partnerConversions += Number(curr.partnerConversions) || 0;
-      acc.affiliateConversions += Number(curr.affiliateConversions) || 0;
-      acc.revenue += Number(curr.revenue) || 0;
-      acc.cost += Number(curr.cost) || 0;
-      acc.profit += Number(curr.profit) || 0;
-      return acc;
-    },
-    {
-      clicks: 0,
-      partnerConversions: 0,
-      affiliateConversions: 0,
-      revenue: 0,
-      cost: 0,
-      profit: 0,
-    }
-  );
+    if (filters.partner)
+      filtered = filtered.filter(
+        (row) =>
+          row.partner?.toLowerCase().includes(filters.partner.toLowerCase())
+      );
 
-  const exportExcel = () => {
-    const filename = `Mob13r_Report_${new Date()
-      .toISOString()
-      .split("T")[0]}.xlsx`;
-    const ws = XLSX.utils.json_to_sheet(filteredReports);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Reports");
-    const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    saveAs(new Blob([excelBuffer]), filename);
+    if (filters.affiliate)
+      filtered = filtered.filter(
+        (row) =>
+          row.affiliate?.toLowerCase().includes(filters.affiliate.toLowerCase())
+      );
+
+    if (filters.startDate)
+      filtered = filtered.filter(
+        (row) => new Date(row.date) >= new Date(filters.startDate)
+      );
+
+    if (filters.endDate)
+      filtered = filtered.filter(
+        (row) => new Date(row.date) <= new Date(filters.endDate)
+      );
+
+    setFilteredData(filtered);
   };
 
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.text("Mob13r Admin Report", 14, 12);
-    autoTable(doc, {
-      startY: 18,
-      head: [
-        [
-          "Date",
-          ...(visibleCols.partnerServiceId ? ["Partner service Id"] : []),
-          ...(visibleCols.publisherCampaignId ? ["Publisher campaign ID"] : []),
-          ...(visibleCols.partner ? ["Partner"] : []),
-          ...(visibleCols.affiliate ? ["Affiliate"] : []),
-          ...(visibleCols.geo ? ["Geo"] : []),
-          ...(visibleCols.carrier ? ["Carrier"] : []),
-          ...(visibleCols.serviceName ? ["Partner’s service name"] : []),
-          ...(visibleCols.clicks ? ["Clicks"] : []),
-          ...(visibleCols.partnerConversions ? ["Partner conversions"] : []),
-          ...(visibleCols.affiliateConversions ? ["Affiliate conversions"] : []),
-          ...(visibleCols.revenue ? ["Revenue($)"] : []),
-          ...(visibleCols.cost ? ["Cost to affiliate($)"] : []),
-          ...(visibleCols.profit ? ["Profit($)"] : []),
-        ],
-      ],
-      body: filteredReports.map((r) => [
-        r.date,
-        ...(visibleCols.partnerServiceId ? [r.partnerServiceId] : []),
-        ...(visibleCols.publisherCampaignId ? [r.publisherCampaignId] : []),
-        ...(visibleCols.partner ? [r.partner] : []),
-        ...(visibleCols.affiliate ? [r.affiliate] : []),
-        ...(visibleCols.geo ? [r.geo] : []),
-        ...(visibleCols.carrier ? [r.carrier] : []),
-        ...(visibleCols.serviceName ? [r.serviceName] : []),
-        ...(visibleCols.clicks ? [r.clicks] : []),
-        ...(visibleCols.partnerConversions ? [r.partnerConversions] : []),
-        ...(visibleCols.affiliateConversions ? [r.affiliateConversions] : []),
-        ...(visibleCols.revenue ? [`$${r.revenue.toFixed(2)}`] : []),
-        ...(visibleCols.cost ? [`$${r.cost.toFixed(2)}`] : []),
-        ...(visibleCols.profit ? [`$${r.profit.toFixed(2)}`] : []),
-      ]),
+  // 🧮 Totals row
+  const totals = useMemo(() => {
+    const totalClicks = filteredData.reduce(
+      (sum, row) => sum + (parseInt(row.clicks) || 0),
+      0
+    );
+    const totalConversions = filteredData.reduce(
+      (sum, row) => sum + (parseInt(row.conversions) || 0),
+      0
+    );
+    const totalRevenue = filteredData.reduce(
+      (sum, row) => sum + (parseFloat(row.revenue) || 0),
+      0
+    );
+
+    return { totalClicks, totalConversions, totalRevenue };
+  }, [filteredData]);
+
+  // 📦 Export as CSV
+  const exportToCSV = () => {
+    const headers = Object.keys(visibleColumns).filter(
+      (col) => visibleColumns[col]
+    );
+
+    const csvRows = [
+      headers.join(","),
+      ...filteredData.map((row) =>
+        headers.map((col) => JSON.stringify(row[col] || "")).join(",")
+      ),
+    ];
+
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+    saveAs(blob, "mob13r_report.csv");
+  };
+
+  // 📘 Export as Excel
+  const exportToExcel = () => {
+    const visibleData = filteredData.map((row) => {
+      const filteredRow = {};
+      for (const key in visibleColumns) {
+        if (visibleColumns[key]) filteredRow[key] = row[key];
+      }
+      return filteredRow;
     });
-    doc.save(`Mob13r_Report_${new Date().toISOString().split("T")[0]}.pdf`);
+    const worksheet = XLSX.utils.json_to_sheet(visibleData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Report");
+    XLSX.writeFile(workbook, "mob13r_report.xlsx");
+  };
+
+  // 🔍 Toggle visible columns
+  const toggleColumn = (key) => {
+    setVisibleColumns((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
   };
 
   return (
     <div className="admin-dashboard">
-      <h2>Mob13r Admin Dashboard</h2>
+      <h2>📊 Mob13r Performance Dashboard</h2>
 
       <div className="filters">
-        <input type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} />
-        <input type="date" name="endDate" value={filters.endDate} onChange={handleFilterChange} />
-        <select name="partner" onChange={handleFilterChange}>
-          <option>All Partners</option>
-          {partners.map((p, i) => (
-            <option key={i}>{p}</option>
-          ))}
-        </select>
-        <select name="affiliate" onChange={handleFilterChange}>
-          <option>All Affiliates</option>
-          {affiliates.map((a, i) => (
-            <option key={i}>{a}</option>
-          ))}
-        </select>
-        <select name="offer" onChange={handleFilterChange}>
-          <option>All Offers</option>
-          {offers.map((o, i) => (
-            <option key={i}>{o}</option>
-          ))}
-        </select>
-        <button onClick={fetchData}>Apply / Refresh</button>
-        <button onClick={exportExcel}>Export CSV</button>
-        <button onClick={exportPDF}>Export PDF</button>
+        {/* Auto Refresh Timer */}
+        <div className="auto-refresh">
+          <span className="icon">⏱️</span> Auto-refresh in {formatTime(timer)}
+        </div>
 
-        {/* 🔽 Column Visibility Filter */}
+        {/* Partner Filter */}
+        <select
+          value={filters.partner}
+          onChange={(e) =>
+            setFilters({ ...filters, partner: e.target.value })
+          }
+        >
+          <option value="">All Partners</option>
+          {[...new Set(reportData.map((r) => r.partner))].map((partner, i) => (
+            <option key={i} value={partner}>
+              {partner}
+            </option>
+          ))}
+        </select>
+
+        {/* Affiliate Filter */}
+        <select
+          value={filters.affiliate}
+          onChange={(e) =>
+            setFilters({ ...filters, affiliate: e.target.value })
+          }
+        >
+          <option value="">All Affiliates</option>
+          {[...new Set(reportData.map((r) => r.affiliate))].map(
+            (affiliate, i) => (
+              <option key={i} value={affiliate}>
+                {affiliate}
+              </option>
+            )
+          )}
+        </select>
+
+        {/* Date Range */}
+        <input
+          type="date"
+          value={filters.startDate}
+          onChange={(e) =>
+            setFilters({ ...filters, startDate: e.target.value })
+          }
+        />
+        <input
+          type="date"
+          value={filters.endDate}
+          onChange={(e) =>
+            setFilters({ ...filters, endDate: e.target.value })
+          }
+        />
+
+        <button onClick={applyFilters}>Apply Filters</button>
+        <button onClick={fetchData}>🔄 Refresh</button>
+
+        {/* Show/Hide Columns */}
         <div className="column-toggle">
-          <span>Show / Hide Columns</span>
+          <span>👁️ Columns</span>
           <div className="column-dropdown">
-            {Object.keys(visibleCols).map((col) => (
-              <label key={col}>
+            {Object.keys(visibleColumns).map((key) => (
+              <label key={key}>
                 <input
                   type="checkbox"
-                  checked={visibleCols[col]}
-                  onChange={() => toggleColumn(col)}
+                  checked={visibleColumns[key]}
+                  onChange={() => toggleColumn(key)}
                 />
-                {col.replace(/([A-Z])/g, " $1")}
+                {key.replace("_", " ").toUpperCase()}
               </label>
             ))}
           </div>
         </div>
+
+        <button onClick={exportToCSV}>📄 Export CSV</button>
+        <button onClick={exportToExcel}>📘 Export Excel</button>
       </div>
 
       <table className="report-table">
         <thead>
           <tr>
-            <th>Date</th>
-            {visibleCols.partnerServiceId && <th>Partner service Id</th>}
-            {visibleCols.publisherCampaignId && <th>Publisher campaign ID</th>}
-            {visibleCols.partner && <th>Partner</th>}
-            {visibleCols.affiliate && <th>Affiliate</th>}
-            {visibleCols.geo && <th>Geo</th>}
-            {visibleCols.carrier && <th>Carrier</th>}
-            {visibleCols.serviceName && <th>Partner’s service name</th>}
-            {visibleCols.clicks && <th>Clicks</th>}
-            {visibleCols.partnerConversions && <th>Partner conversions</th>}
-            {visibleCols.affiliateConversions && <th>Affiliate conversions</th>}
-            {visibleCols.revenue && <th>Revenue($)</th>}
-            {visibleCols.cost && <th>Cost to affiliate($)</th>}
-            {visibleCols.profit && <th>Profit($)</th>}
+            {Object.keys(visibleColumns).map(
+              (key) =>
+                visibleColumns[key] && (
+                  <th key={key}>{key.replace("_", " ").toUpperCase()}</th>
+                )
+            )}
           </tr>
         </thead>
         <tbody>
-          {filteredReports.map((r, i) => (
-            <tr key={i}>
-              <td>{r.date}</td>
-              {visibleCols.partnerServiceId && <td>{r.partnerServiceId}</td>}
-              {visibleCols.publisherCampaignId && <td>{r.publisherCampaignId}</td>}
-              {visibleCols.partner && <td>{r.partner}</td>}
-              {visibleCols.affiliate && <td>{r.affiliate}</td>}
-              {visibleCols.geo && <td>{r.geo}</td>}
-              {visibleCols.carrier && <td>{r.carrier}</td>}
-              {visibleCols.serviceName && <td>{r.serviceName}</td>}
-              {visibleCols.clicks && <td>{r.clicks}</td>}
-              {visibleCols.partnerConversions && <td>{r.partnerConversions}</td>}
-              {visibleCols.affiliateConversions && <td>{r.affiliateConversions}</td>}
-              {visibleCols.revenue && <td>${r.revenue?.toFixed(2) || "—"}</td>}
-              {visibleCols.cost && <td>${r.cost?.toFixed(2) || "—"}</td>}
-              {visibleCols.profit && <td>${r.profit?.toFixed(2) || "—"}</td>}
+          {filteredData.map((row, index) => (
+            <tr key={index}>
+              {Object.keys(visibleColumns).map(
+                (key) =>
+                  visibleColumns[key] && <td key={key}>{row[key]}</td>
+              )}
             </tr>
           ))}
           <tr className="total-row">
-            <td colSpan="8">Total</td>
-            <td>{totals.clicks}</td>
-            <td>{totals.partnerConversions}</td>
-            <td>{totals.affiliateConversions}</td>
-            <td>${totals.revenue.toFixed(1)}</td>
-            <td>${totals.cost.toFixed(1)}</td>
-            <td>${totals.profit.toFixed(1)}</td>
+            <td colSpan={Object.keys(visibleColumns).length - 3}>
+              Total
+            </td>
+            {visibleColumns.clicks && <td>{totals.totalClicks}</td>}
+            {visibleColumns.conversions && <td>{totals.totalConversions}</td>}
+            {visibleColumns.revenue && (
+              <td>${totals.totalRevenue.toFixed(2)}</td>
+            )}
           </tr>
         </tbody>
       </table>
     </div>
   );
-}
+};
+
+export default AdminDashboard;
