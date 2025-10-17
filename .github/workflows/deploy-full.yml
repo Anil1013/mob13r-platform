@@ -1,4 +1,4 @@
-name: 🚀 Smart Auto Deploy Frontend (Amplify) + Backend (Elastic Beanstalk)
+name: 🚀 Unified Auto Deploy (Frontend + Backend)
 
 on:
   push:
@@ -6,42 +6,27 @@ on:
       - main
 
 jobs:
-  detect_changes:
+  deploy:
     runs-on: ubuntu-latest
-    outputs:
-      frontend_changed: ${{ steps.filter.outputs.frontend }}
-      backend_changed: ${{ steps.filter.outputs.backend }}
 
     steps:
-      - name: 🧾 Checkout Repository
+      # ---------------------------
+      # 🧾 Checkout Repository
+      # ---------------------------
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🕵️ Detect which folders changed
-        id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            frontend:
-              - 'frontend/**'
-            backend:
-              - 'backend/**'
-
-  # ---------------------------
-  # ⚙️ FRONTEND DEPLOY (Amplify)
-  # ---------------------------
-  frontend:
-    needs: detect_changes
-    if: needs.detect_changes.outputs.frontend_changed == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: 🧾 Checkout Repository
-        uses: actions/checkout@v4
-
+      # ---------------------------
+      # ⚙️ Setup Node.js
+      # ---------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
+      # ---------------------------
+      # 🧱 FRONTEND (React + Amplify)
+      # ---------------------------
       - name: Install Frontend Dependencies
         working-directory: frontend
         run: npm ci
@@ -50,42 +35,34 @@ jobs:
         working-directory: frontend
         run: CI=false npm run build
 
-      - name: Install AWS Amplify CLI
+      - name: Install Amplify CLI
         run: npm install -g @aws-amplify/cli
 
-      - name: 🚀 Publish Frontend to AWS Amplify
+      - name: 🚀 Deploy Frontend to AWS Amplify
         run: amplify publish --yes
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ap-south-1
 
-  # ---------------------------
-  # ⚙️ BACKEND DEPLOY (Elastic Beanstalk)
-  # ---------------------------
-  backend:
-    needs: detect_changes
-    if: needs.detect_changes.outputs.backend_changed == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: 🧾 Checkout Repository
-        uses: actions/checkout@v4
-
+      # ---------------------------
+      # ⚙️ BACKEND (Elastic Beanstalk)
+      # ---------------------------
       - name: Check AWS CLI version
         run: aws --version
 
-      - name: Prepare Backend Zip for Deployment
+      - name: Prepare Backend Zip
         working-directory: backend
         run: |
-          echo "Zipping backend excluding node_modules..."
+          echo "Creating backend.zip for Elastic Beanstalk..."
           zip -r ../backend.zip . -x "node_modules/*"
 
-      - name: Verify Backend Zip Exists
+      - name: Verify Backend Package
         run: |
           ls -lh backend.zip || echo "❌ backend.zip not found!"
-          ls -lh backend
+          echo "✅ Backend package ready for deploy"
 
-      - name: 🚀 Deploy to Elastic Beanstalk
+      - name: 🚀 Deploy Backend to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -96,13 +73,8 @@ jobs:
           version_label: build-${{ github.run_number }}
           deployment_package: backend.zip
 
-  # ---------------------------
-  # ✅ Summary
-  # ---------------------------
-  summary:
-    runs-on: ubuntu-latest
-    needs: [frontend, backend]
-    if: always()
-    steps:
-      - name: ✅ Deployment Summary
-        run: echo "🎉 Auto Deploy Completed Successfully!"
+      # ---------------------------
+      # ✅ DONE
+      # ---------------------------
+      - name: ✅ Deployment Complete
+        run: echo "🎉 Frontend and Backend deployed together successfully!"
