@@ -2,68 +2,71 @@ name: 🚀 Unified Auto Deploy (Frontend + Backend)
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # ---------------------------
-      # 🧾 Checkout Repository
-      # ---------------------------
-      - name: Checkout Repository
+      # 1) Checkout
+      - name: 🧾 Checkout
         uses: actions/checkout@v4
 
-      # ---------------------------
-      # ⚙️ Setup Node.js
-      # ---------------------------
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      # 2) AWS credentials for CLI
+      - name: 🔐 Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          node-version: 18
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
 
       # ---------------------------
-      # 🧱 FRONTEND (React + Amplify)
+      # FRONTEND: Trigger Amplify Hosting build for your connected repo
       # ---------------------------
-      - name: Install Frontend Dependencies
-        working-directory: frontend
-        run: npm ci
+      - name: 🚀 Trigger Amplify Hosting build
+        run: |
+          APP_ID="d2ujj546i3rguh"
+          BRANCH="main"
+          echo "Starting Amplify job for $APP_ID ($BRANCH)…"
+          JOB_JSON=$(aws amplify start-job --app-id "$APP_ID" --branch-name "$BRANCH" --job-type RELEASE)
+          echo "$JOB_JSON"
+          echo "AMPLIFY_JOB_ID=$(echo "$JOB_JSON" | jq -r '.jobSummary.jobId // .job.jobId')" >> $GITHUB_ENV || true
 
-      - name: Build Frontend (ignore ESLint warnings)
-        working-directory: frontend
-        run: CI=false npm run build
-
-      - name: 🚀 Deploy Frontend to AWS Amplify
-        uses: aws-actions/amplify-console-deploy@v2
-        with:
-          app-id: d2ujj546i3rguh
-          branch-name: main
-          frontend: build
-          region: ap-south-1
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      # (Optional) wait for Amplify to finish — uncomment to block until done
+      # - name: ⏳ Wait for Amplify job to finish (optional)
+      #   run: |
+      #     APP_ID="d2ujj546i3rguh"
+      #     BRANCH="main"
+      #     JOB_ID="${AMPLIFY_JOB_ID}"
+      #     echo "Waiting for Amplify job: $JOB_ID"
+      #     for i in {1..60}; do
+      #       STATUS=$(aws amplify get-job --app-id "$APP_ID" --branch-name "$BRANCH" --job-id "$JOB_ID" \
+      #         | jq -r '.job.summary.status // .jobSummary.status')
+      #       echo "Amplify status: $STATUS"
+      #       if [ "$STATUS" = "SUCCEED" ]; then exit 0; fi
+      #       if [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CANCELLED" ]; then exit 1; fi
+      #       sleep 20
+      #     done
+      #     echo "Timed out waiting for Amplify job"; exit 1
 
       # ---------------------------
-      # ⚙️ BACKEND (Elastic Beanstalk)
+      # BACKEND: Deploy to Elastic Beanstalk
       # ---------------------------
-      - name: Check AWS CLI version
+      - name: 🧰 Check AWS CLI
         run: aws --version
 
-      - name: Prepare Backend Zip
+      - name: 📦 Package backend
         working-directory: backend
         run: |
-          echo "Creating backend.zip for Elastic Beanstalk..."
-          zip -r ../backend.zip . -x "node_modules/*"
+          echo "Creating backend.zip (excluding node_modules, .env)…"
+          zip -r ../backend.zip . \
+            -x "node_modules/*" ".env" ".git/*" "aws/*" "awscliv2.zip"
 
-      - name: Verify Backend Package
-        run: |
-          ls -lh backend.zip || echo "❌ backend.zip not found!"
-          echo "✅ Backend package ready for deploy"
+      - name: 🔎 Verify package
+        run: ls -lh backend.zip
 
-      - name: 🚀 Deploy Backend to Elastic Beanstalk
+      - name: 🚀 Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -74,8 +77,5 @@ jobs:
           version_label: build-${{ github.run_number }}
           deployment_package: backend.zip
 
-      # ---------------------------
-      # ✅ DONE
-      # ---------------------------
-      - name: ✅ Deployment Complete
-        run: echo "🎉 Frontend (Amplify) + Backend (Elastic Beanstalk) deployed together successfully!"
+      - name: ✅ Done
+        run: echo "Frontend (Amplify) + Backend (EB) deployment kicked off successfully."
