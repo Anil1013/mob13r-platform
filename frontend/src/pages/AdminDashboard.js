@@ -57,68 +57,126 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     fetchData(false);
-    const interval = setInterval(fetchData, 10 * 60 * 1000); // auto refresh every 10 mins
+    const interval = setInterval(fetchData, 10 * 60 * 1000); // every 10 min
     return () => clearInterval(interval);
   }, []);
 
-  // ✅ Apply filters
+  // ✅ Filter logic
   const filteredReports = reports.filter((r) => {
-    const matchPartner = filters.partner === "All Partners" || r.partner === filters.partner;
-    const matchAffiliate = filters.affiliate === "All Affiliates" || r.affiliate === filters.affiliate;
-    const matchOffer = filters.offer === "All Offers" || r.offer === filters.offer;
-    return matchPartner && matchAffiliate && matchOffer;
+    const matchPartner =
+      filters.partner === "All Partners" || r.partner === filters.partner;
+    const matchAffiliate =
+      filters.affiliate === "All Affiliates" || r.affiliate === filters.affiliate;
+    const matchOffer =
+      filters.offer === "All Offers" || r.offer === filters.offer;
+
+    const matchStartDate =
+      !filters.startDate || new Date(r.date) >= new Date(filters.startDate);
+    const matchEndDate =
+      !filters.endDate || new Date(r.date) <= new Date(filters.endDate);
+
+    return matchPartner && matchAffiliate && matchOffer && matchStartDate && matchEndDate;
   });
 
   // ✅ Calculate totals
   const totals = filteredReports.reduce(
     (acc, r) => {
       acc.clicks += r.clicks || 0;
-      acc.conversions += r.conversions || 0;
+      acc.partnerConversions += r.partner_conversions || 0;
+      acc.affiliateConversions += r.affiliate_conversions || 0;
       acc.revenue += r.revenue || 0;
-      acc.payout += r.payout || 0;
+      acc.cost += r.cost_to_affiliate || 0;
       acc.profit += r.profit || 0;
       return acc;
     },
-    { clicks: 0, conversions: 0, revenue: 0, payout: 0, profit: 0 }
+    { clicks: 0, partnerConversions: 0, affiliateConversions: 0, revenue: 0, cost: 0, profit: 0 }
   );
 
-  // ✅ Export handlers
+  // ✅ Export CSV
   const exportCSV = () => {
-    const headers = ["Date", "Partner", "Affiliate", "Offer", "Clicks", "Conversions", "Revenue", "Payout", "Profit"];
+    const headers = [
+      "Date",
+      "Partner Service ID",
+      "Publisher Campaign ID",
+      "Partner",
+      "Affiliate",
+      "Geo",
+      "Carrier",
+      "Partner Service Name",
+      "Clicks",
+      "Partner Conversions",
+      "Affiliate Conversions",
+      "Revenue($)",
+      "Cost to Affiliate($)",
+      "Profit($)",
+    ];
+
     const csvRows = [headers.join(","), ...filteredReports.map((r) =>
-      [r.date, r.partner, r.affiliate, r.offer, r.clicks, r.conversions, `$${r.revenue}`, `$${r.payout}`, `$${r.profit}`].join(",")
-    )];
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
-    saveAs(blob, "reports.csv");
-  };
-
-  const exportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(filteredReports);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Reports");
-    XLSX.writeFile(wb, "reports.xlsx");
-  };
-
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.text("Mob13r Reports", 14, 16);
-    autoTable(doc, {
-      startY: 22,
-      head: [["Date", "Partner", "Affiliate", "Offer", "Clicks", "Conversions", "Revenue", "Payout", "Profit"]],
-      body: filteredReports.map((r) => [
+      [
         r.date,
+        r.partner_service_id,
+        r.publisher_campaign_id,
         r.partner,
         r.affiliate,
-        r.offer,
+        r.geo,
+        r.carrier,
+        r.partner_service_name,
         r.clicks,
-        r.conversions,
-        `$${r.revenue}`,
-        `$${r.payout}`,
-        `$${r.profit}`,
+        r.partner_conversions,
+        r.affiliate_conversions,
+        r.revenue,
+        r.cost_to_affiliate,
+        r.profit,
+      ].join(",")
+    )];
+
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    saveAs(blob, "Mob13r_Reports.csv");
+  };
+
+  // ✅ Export PDF
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.text("Mob13r Full Reports", 14, 16);
+    autoTable(doc, {
+      startY: 22,
+      head: [
+        [
+          "Date",
+          "Partner Service ID",
+          "Publisher Campaign ID",
+          "Partner",
+          "Affiliate",
+          "Geo",
+          "Carrier",
+          "Service Name",
+          "Clicks",
+          "P. Conv",
+          "A. Conv",
+          "Revenue($)",
+          "Cost($)",
+          "Profit($)",
+        ],
+      ],
+      body: filteredReports.map((r) => [
+        r.date,
+        r.partner_service_id,
+        r.publisher_campaign_id,
+        r.partner,
+        r.affiliate,
+        r.geo,
+        r.carrier,
+        r.partner_service_name,
+        r.clicks,
+        r.partner_conversions,
+        r.affiliate_conversions,
+        r.revenue,
+        r.cost_to_affiliate,
+        r.profit,
       ]),
-      styles: { halign: "center" },
+      styles: { fontSize: 8, halign: "center" },
     });
-    doc.save("reports.pdf");
+    doc.save("Mob13r_Reports.pdf");
   };
 
   return (
@@ -127,9 +185,9 @@ const AdminDashboard = () => {
         📊 Mob13r Admin Dashboard
       </h1>
 
-      {/* Filter Bar */}
+      {/* 🔹 Filters */}
       <div className="bg-[#121a2b] p-5 rounded-2xl shadow-lg mb-8">
-        <div className="flex flex-wrap gap-4 justify-center items-center mb-6">
+        <div className="flex flex-wrap gap-4 justify-center items-center mb-5">
           <input
             type="date"
             className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
@@ -143,7 +201,7 @@ const AdminDashboard = () => {
             onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
           />
 
-          {/* Partners */}
+          {/* Partner */}
           <select
             className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
             value={filters.partner}
@@ -157,7 +215,7 @@ const AdminDashboard = () => {
             ))}
           </select>
 
-          {/* Affiliates */}
+          {/* Affiliate */}
           <select
             className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
             value={filters.affiliate}
@@ -171,7 +229,7 @@ const AdminDashboard = () => {
             ))}
           </select>
 
-          {/* Offers */}
+          {/* Offer */}
           <select
             className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
             value={filters.offer}
@@ -184,98 +242,89 @@ const AdminDashboard = () => {
               </option>
             ))}
           </select>
+
+          <button
+            onClick={() => fetchData(true, true)}
+            className="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded-lg text-white font-semibold"
+          >
+            Apply / Refresh
+          </button>
         </div>
 
         {/* Export Buttons */}
-        <div className="flex justify-center gap-4 mb-3">
-          <button onClick={exportCSV} className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg font-semibold">
+        <div className="flex justify-center gap-4">
+          <button
+            onClick={exportCSV}
+            className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg font-semibold"
+          >
             Export CSV
           </button>
-          <button onClick={exportExcel} className="bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded-lg font-semibold">
-            Export Excel
-          </button>
-          <button onClick={exportPDF} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-semibold">
-            Export PDF
-          </button>
-        </div>
-
-        {/* Last Updated + Refresh */}
-        <div className="flex justify-center items-center gap-4 text-gray-400 text-sm mt-3">
-          <span>
-            ⏱️ Last Updated: <span className="text-cyan-400">{lastUpdated || "Loading..."}</span>
-          </span>
           <button
-            onClick={() => fetchData(true, true)} // resets filters on refresh
-            disabled={loading}
-            className={`flex items-center gap-2 px-3 py-1 rounded-md text-white font-medium transition-all ${
-              loading ? "bg-gray-600 cursor-not-allowed" : "bg-cyan-600 hover:bg-cyan-500"
-            }`}
+            onClick={exportPDF}
+            className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-semibold"
           >
-            {loading && (
-              <svg
-                className="animate-spin h-4 w-4 text-white"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                ></path>
-              </svg>
-            )}
-            {loading ? "Refreshing..." : "🔄 Refresh Now"}
+            Export PDF
           </button>
         </div>
       </div>
 
-      {/* Reports Table */}
+      {/* 🔹 Reports Table */}
       <div className="bg-[#121a2b] p-6 rounded-2xl shadow-xl overflow-x-auto">
-        <h2 className="text-2xl font-semibold text-cyan-400 mb-4 text-center">Reports</h2>
-        <table className="w-full border-collapse text-center">
+        <table className="w-full border-collapse text-center text-sm">
           <thead>
-            <tr className="border-b border-gray-700 text-cyan-300">
-              <th className="p-3">Date</th>
-              <th className="p-3">Partner</th>
-              <th className="p-3">Affiliate</th>
-              <th className="p-3">Offer</th>
-              <th className="p-3">Clicks</th>
-              <th className="p-3">Conversions</th>
-              <th className="p-3">Revenue</th>
-              <th className="p-3">Payout</th>
-              <th className="p-3">Profit</th>
+            <tr className="bg-[#1a2135] text-cyan-300 border-b border-cyan-700">
+              <th>Date</th>
+              <th>Partner service Id</th>
+              <th>Publisher campaign ID</th>
+              <th>Partner</th>
+              <th>Affiliate</th>
+              <th>Geo</th>
+              <th>Carrier</th>
+              <th>Partner’s service name</th>
+              <th>Clicks</th>
+              <th>Partner conversions</th>
+              <th>Affiliate conversions</th>
+              <th>Revenue($)</th>
+              <th>Cost to affiliate($)</th>
+              <th>Profit($)</th>
             </tr>
           </thead>
           <tbody>
             {filteredReports.length > 0 ? (
               <>
                 {filteredReports.map((r, i) => (
-                  <tr key={i} className="border-b border-gray-800 hover:bg-[#1a2337] transition-all duration-150">
-                    <td className="p-3">{r.date}</td>
-                    <td className="p-3">{r.partner}</td>
-                    <td className="p-3">{r.affiliate}</td>
-                    <td className="p-3">{r.offer}</td>
-                    <td className="p-3">{r.clicks}</td>
-                    <td className="p-3 text-cyan-400 font-semibold">{r.conversions}</td>
-                    <td className="p-3">${r.revenue}</td>
-                    <td className="p-3">${r.payout}</td>
-                    <td className="p-3 text-cyan-400 font-semibold">${r.profit}</td>
+                  <tr key={i} className="border-b border-gray-800 hover:bg-[#1a2337]">
+                    <td>{r.date}</td>
+                    <td>{r.partner_service_id}</td>
+                    <td>{r.publisher_campaign_id}</td>
+                    <td>{r.partner}</td>
+                    <td>{r.affiliate}</td>
+                    <td>{r.geo}</td>
+                    <td>{r.carrier}</td>
+                    <td>{r.partner_service_name}</td>
+                    <td>{r.clicks}</td>
+                    <td>{r.partner_conversions}</td>
+                    <td>{r.affiliate_conversions}</td>
+                    <td>${r.revenue}</td>
+                    <td>${r.cost_to_affiliate}</td>
+                    <td>${r.profit}</td>
                   </tr>
                 ))}
-                <tr className="bg-[#0f172a] font-semibold text-cyan-300 border-t-2 border-cyan-700">
-                  <td colSpan="4" className="p-3 text-right">TOTAL:</td>
-                  <td className="p-3">{totals.clicks}</td>
-                  <td className="p-3">{totals.conversions}</td>
-                  <td className="p-3">${totals.revenue.toFixed(2)}</td>
-                  <td className="p-3">${totals.payout.toFixed(2)}</td>
-                  <td className="p-3">${totals.profit.toFixed(2)}</td>
+                <tr className="bg-green-700 text-white font-semibold">
+                  <td colSpan="8">Total</td>
+                  <td>{totals.clicks}</td>
+                  <td>{totals.partnerConversions}</td>
+                  <td>{totals.affiliateConversions}</td>
+                  <td>${totals.revenue.toFixed(1)}</td>
+                  <td>${totals.cost.toFixed(1)}</td>
+                  <td>${totals.profit.toFixed(1)}</td>
                 </tr>
               </>
             ) : (
               <tr>
-                <td colSpan="9" className="p-6 text-gray-400 text-center">No reports available.</td>
+                <td colSpan="14" className="text-gray-400 py-6">
+                  No report data found.
+                </td>
               </tr>
             )}
           </tbody>
