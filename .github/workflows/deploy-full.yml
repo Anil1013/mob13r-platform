@@ -9,11 +9,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: 🧾 Checkout Repository
         uses: actions/checkout@v4
 
       # ---------------------------
-      # 🔧 Setup Node for frontend
+      # ⚙️ Setup Node.js for Frontend
       # ---------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -42,12 +42,11 @@ jobs:
           AWS_REGION: ap-south-1
 
       # ---------------------------
-      # ⚙️ BACKEND DEPLOY (EB)
+      # ⚙️ BACKEND DEPLOY (Elastic Beanstalk)
       # ---------------------------
-      - name: Install AWS CLI
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y zip unzip awscli
+
+      - name: 🔍 Verify AWS CLI (preinstalled)
+        run: aws --version
 
       - name: Prepare Backend Package
         working-directory: backend
@@ -55,7 +54,7 @@ jobs:
           echo "Zipping backend folder excluding node_modules..."
           zip -r ../backend.zip . -x "node_modules/*"
 
-      - name: 🔍 Debug: Check Files Before Upload
+      - name: 🔎 Debug Files Before Upload
         run: |
           echo "---- LISTING REPO ROOT ----"
           ls -al
@@ -75,5 +74,5 @@ jobs:
           version_label: build-${{ github.run_number }}
           deployment_package: backend.zip
 
-      - name: ✅ Deployment Status
-        run: echo "🎉 Deployment completed successfully!"
+      - name: ✅ Deployment Complete
+        run: echo "🎉 Frontend + Backend deployed successfully!"
