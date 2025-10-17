@@ -1,11 +1,10 @@
-/* ========== Admin Dashboard Table Styling ========== */
+/* ========== Admin Dashboard Styling ========== */
 
 .admin-dashboard {
   font-family: "Poppins", sans-serif;
   background-color: #0d1b2a;
   color: #fff;
   padding: 20px;
-  text-align: center;
 }
 
 .admin-dashboard h2 {
@@ -13,13 +12,15 @@
   text-align: center;
   margin-bottom: 20px;
   font-weight: 700;
+  letter-spacing: 1px;
 }
 
-/* Filters */
+/* ---------- Filters + Timer ---------- */
 .filters {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
   gap: 10px;
   margin-bottom: 15px;
 }
@@ -47,13 +48,31 @@
   background-color: #0077b6;
 }
 
-/* Dropdown for Show/Hide Columns */
+/* Auto Refresh Timer */
+.auto-refresh {
+  background-color: #001f3f;
+  color: #00e6a8;
+  font-weight: bold;
+  padding: 6px 12px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-right: 10px;
+  border: 1px solid #00e6a8;
+}
+
+.auto-refresh .icon {
+  color: #00e6a8;
+  font-size: 16px;
+}
+
+/* ---------- Show/Hide Columns Dropdown ---------- */
 .column-toggle {
   position: relative;
   display: inline-block;
-  margin-left: 15px;
   cursor: pointer;
-  font-size: 14px;
 }
 
 .column-toggle span {
@@ -67,7 +86,7 @@
 .column-dropdown {
   display: none;
   position: absolute;
-  top: 30px;
+  top: 35px;
   right: 0;
   background-color: #1b263b;
   border: 1px solid #415a77;
@@ -94,7 +113,7 @@
   margin-right: 6px;
 }
 
-/* Table Styling */
+/* ---------- Table Styling ---------- */
 .report-table {
   width: 100%;
   border-collapse: collapse;
@@ -114,6 +133,7 @@
   background-color: #778da9;
   font-weight: bold;
   color: #000;
+  text-transform: capitalize;
 }
 
 .report-table td {
@@ -130,7 +150,7 @@
   border-top: 2px solid #00e6a8;
 }
 
-/* Scrollable table on small screens */
+/* ---------- Scrollable Table for Small Screens ---------- */
 @media (max-width: 1024px) {
   .report-table {
     display: block;
@@ -139,7 +159,6 @@
   }
 }
 
-/* Hide scrollbar (optional aesthetic improvement) */
 .report-table::-webkit-scrollbar {
   height: 8px;
 }
