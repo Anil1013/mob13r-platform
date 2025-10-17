@@ -17,14 +17,31 @@ const AdminDashboard = () => {
     offer: "All",
   });
 
+  const [timeLeft, setTimeLeft] = useState(600); // 10 minutes = 600 seconds
+
   useEffect(() => {
     fetchData();
+    const interval = setInterval(fetchData, 600000); // every 10 min auto refresh
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 600));
+    }, 1000);
+    return () => {
+      clearInterval(interval);
+      clearInterval(timer);
+    };
   }, []);
+
+  const formatTime = (seconds) => {
+    const m = String(Math.floor(seconds / 60)).padStart(2, "0");
+    const s = String(seconds % 60).padStart(2, "0");
+    return `${m}:${s}`;
+  };
 
   const fetchData = async () => {
     try {
       const { data } = await axios.get(`${API_URL}/admin/reports`);
       setReports(data);
+      setTimeLeft(600);
     } catch (error) {
       console.error("Error fetching data:", error);
     }
@@ -67,7 +84,12 @@ const AdminDashboard = () => {
 
   return (
     <div className="dashboard">
-      <h2 className="title">Mob13r Admin Dashboard</h2>
+      <div className="header">
+        <h2 className="title">Mob13r Admin Dashboard</h2>
+        <div className="refresh-timer">
+          🔄 Auto-refresh in: <span>{formatTime(timeLeft)}</span>
+        </div>
+      </div>
 
       <div className="filters">
         <input type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} />
