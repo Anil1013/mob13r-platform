@@ -1,0 +1,149 @@
+/* ========== Admin Dashboard Table Styling ========== */
+
+.admin-dashboard {
+  font-family: "Poppins", sans-serif;
+  background-color: #0d1b2a;
+  color: #fff;
+  padding: 20px;
+  text-align: center;
+}
+
+.admin-dashboard h2 {
+  color: #00e6a8;
+  text-align: center;
+  margin-bottom: 20px;
+  font-weight: 700;
+}
+
+/* Filters */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.filters select,
+.filters input[type="date"],
+.filters button {
+  background-color: #1b263b;
+  color: #fff;
+  border: 1px solid #415a77;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.filters button {
+  background-color: #00a8e8;
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  transition: all 0.2s ease-in-out;
+}
+
+.filters button:hover {
+  background-color: #0077b6;
+}
+
+/* Dropdown for Show/Hide Columns */
+.column-toggle {
+  position: relative;
+  display: inline-block;
+  margin-left: 15px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.column-toggle span {
+  background-color: #00e6a8;
+  color: #000;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+
+.column-dropdown {
+  display: none;
+  position: absolute;
+  top: 30px;
+  right: 0;
+  background-color: #1b263b;
+  border: 1px solid #415a77;
+  border-radius: 6px;
+  padding: 10px;
+  text-align: left;
+  z-index: 10;
+  width: 200px;
+}
+
+.column-toggle:hover .column-dropdown {
+  display: block;
+}
+
+.column-dropdown label {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+  color: #e0e1dd;
+  font-size: 13px;
+}
+
+.column-dropdown input[type="checkbox"] {
+  margin-right: 6px;
+}
+
+/* Table Styling */
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #1b263b;
+  color: #fff;
+}
+
+.report-table th,
+.report-table td {
+  border: 1px solid #415a77;
+  padding: 8px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.report-table th {
+  background-color: #778da9;
+  font-weight: bold;
+  color: #000;
+}
+
+.report-table td {
+  color: #e0e1dd;
+}
+
+.total-row {
+  background-color: #00b050;
+  font-weight: bold;
+  color: #fff;
+}
+
+.total-row td {
+  border-top: 2px solid #00e6a8;
+}
+
+/* Scrollable table on small screens */
+@media (max-width: 1024px) {
+  .report-table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}
+
+/* Hide scrollbar (optional aesthetic improvement) */
+.report-table::-webkit-scrollbar {
+  height: 8px;
+}
+.report-table::-webkit-scrollbar-thumb {
+  background-color: #00e6a8;
+  border-radius: 10px;
+}
