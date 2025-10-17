@@ -8,30 +8,31 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: 🧾 Checkout Repository
+      # ---------------------------
+      # 🧾 Checkout code
+      # ---------------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       # ---------------------------
-      # ⚙️ Setup Node.js for Frontend
+      # ⚙️ FRONTEND BUILD
       # ---------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # ---------------------------
-      # 📦 FRONTEND BUILD (React)
-      # ---------------------------
-      - name: Install Frontend Dependencies
+      - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
 
-      - name: Build Frontend
+      - name: Build frontend
         working-directory: frontend
         run: npm run build
 
-      - name: ⚡ Deploy Frontend to AWS Amplify
+      - name: Deploy frontend to Amplify
         uses: webfactory/amplify-cli-action@v3
         with:
           amplify_command: publish
@@ -42,28 +43,26 @@ jobs:
           AWS_REGION: ap-south-1
 
       # ---------------------------
-      # ⚙️ BACKEND DEPLOY (Elastic Beanstalk)
+      # ⚙️ BACKEND DEPLOY
       # ---------------------------
 
-      - name: 🔍 Verify AWS CLI (preinstalled)
-        run: aws --version
+      - name: Check AWS CLI version
+        run: |
+          echo "✅ Using preinstalled AWS CLI"
+          aws --version
 
-      - name: Prepare Backend Package
+      - name: Prepare backend zip for deployment
         working-directory: backend
         run: |
-          echo "Zipping backend folder excluding node_modules..."
+          echo "Zipping backend excluding node_modules..."
           zip -r ../backend.zip . -x "node_modules/*"
 
-      - name: 🔎 Debug Files Before Upload
+      - name: Verify backend.zip exists
         run: |
-          echo "---- LISTING REPO ROOT ----"
-          ls -al
-          echo "---- LISTING BACKEND FOLDER ----"
-          ls -al backend || echo "No backend folder found!"
-          echo "---- CHECKING ZIP ----"
-          ls -al backend.zip || echo "backend.zip NOT FOUND!"
+          ls -lh backend.zip || echo "❌ backend.zip not found!"
+          ls -lh backend
 
-      - name: 🚀 Deploy to Elastic Beanstalk
+      - name: Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -74,5 +73,5 @@ jobs:
           version_label: build-${{ github.run_number }}
           deployment_package: backend.zip
 
-      - name: ✅ Deployment Complete
+      - name: ✅ All deployments complete
         run: echo "🎉 Frontend + Backend deployed successfully!"
