@@ -20,7 +20,7 @@ const AdminDashboard = () => {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // ✅ Fetch all data
+  // ✅ Fetch all API data
   const fetchData = async (showLoader = true, resetFilters = false) => {
     try {
       if (showLoader) setLoading(true);
@@ -37,7 +37,6 @@ const AdminDashboard = () => {
       setAffiliates(a.data);
       setOffers(o.data);
 
-      // ✅ Reset filters if requested
       if (resetFilters) {
         setFilters({
           startDate: "",
@@ -58,7 +57,7 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     fetchData(false);
-    const interval = setInterval(fetchData, 10 * 60 * 1000);
+    const interval = setInterval(fetchData, 10 * 60 * 1000); // auto refresh every 10 mins
     return () => clearInterval(interval);
   }, []);
 
@@ -70,7 +69,7 @@ const AdminDashboard = () => {
     return matchPartner && matchAffiliate && matchOffer;
   });
 
-  // ✅ Totals
+  // ✅ Calculate totals
   const totals = filteredReports.reduce(
     (acc, r) => {
       acc.clicks += r.clicks || 0;
@@ -83,7 +82,7 @@ const AdminDashboard = () => {
     { clicks: 0, conversions: 0, revenue: 0, payout: 0, profit: 0 }
   );
 
-  // ✅ Export options
+  // ✅ Export handlers
   const exportCSV = () => {
     const headers = ["Date", "Partner", "Affiliate", "Offer", "Clicks", "Conversions", "Revenue", "Payout", "Profit"];
     const csvRows = [headers.join(","), ...filteredReports.map((r) =>
@@ -128,39 +127,85 @@ const AdminDashboard = () => {
         📊 Mob13r Admin Dashboard
       </h1>
 
-      {/* Filters Section */}
+      {/* Filter Bar */}
       <div className="bg-[#121a2b] p-5 rounded-2xl shadow-lg mb-8">
         <div className="flex flex-wrap gap-4 justify-center items-center mb-6">
-          <input type="date" className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600" value={filters.startDate} onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} />
-          <input type="date" className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600" value={filters.endDate} onChange={(e) => setFilters({ ...filters, endDate: e.target.value })} />
-          <select className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600" value={filters.partner} onChange={(e) => setFilters({ ...filters, partner: e.target.value })}>
+          <input
+            type="date"
+            className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
+            value={filters.startDate}
+            onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+          />
+          <input
+            type="date"
+            className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
+            value={filters.endDate}
+            onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+          />
+
+          {/* Partners */}
+          <select
+            className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
+            value={filters.partner}
+            onChange={(e) => setFilters({ ...filters, partner: e.target.value })}
+          >
             <option>All Partners</option>
-            {partners.map((p) => <option key={p}>{p}</option>)}
+            {partners.map((p) => (
+              <option key={p.id} value={p.name}>
+                {p.name} {p.country ? `(${p.country})` : ""}
+              </option>
+            ))}
           </select>
-          <select className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600" value={filters.affiliate} onChange={(e) => setFilters({ ...filters, affiliate: e.target.value })}>
+
+          {/* Affiliates */}
+          <select
+            className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
+            value={filters.affiliate}
+            onChange={(e) => setFilters({ ...filters, affiliate: e.target.value })}
+          >
             <option>All Affiliates</option>
-            {affiliates.map((a) => <option key={a}>{a}</option>)}
+            {affiliates.map((a) => (
+              <option key={a.id} value={a.name}>
+                {a.name} {a.region ? `(${a.region})` : ""}
+              </option>
+            ))}
           </select>
-          <select className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600" value={filters.offer} onChange={(e) => setFilters({ ...filters, offer: e.target.value })}>
+
+          {/* Offers */}
+          <select
+            className="bg-[#0e1624] text-gray-200 px-3 py-2 rounded-lg border border-gray-600"
+            value={filters.offer}
+            onChange={(e) => setFilters({ ...filters, offer: e.target.value })}
+          >
             <option>All Offers</option>
-            {offers.map((o) => <option key={o}>{o}</option>)}
+            {offers.map((o) => (
+              <option key={o.id} value={o.name}>
+                {o.name} {o.operator ? `(${o.operator})` : ""}
+              </option>
+            ))}
           </select>
         </div>
 
         {/* Export Buttons */}
         <div className="flex justify-center gap-4 mb-3">
-          <button onClick={exportCSV} className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg font-semibold">Export CSV</button>
-          <button onClick={exportExcel} className="bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded-lg font-semibold">Export Excel</button>
-          <button onClick={exportPDF} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-semibold">Export PDF</button>
+          <button onClick={exportCSV} className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg font-semibold">
+            Export CSV
+          </button>
+          <button onClick={exportExcel} className="bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded-lg font-semibold">
+            Export Excel
+          </button>
+          <button onClick={exportPDF} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-semibold">
+            Export PDF
+          </button>
         </div>
 
-        {/* ✅ Last Updated + Refresh */}
+        {/* Last Updated + Refresh */}
         <div className="flex justify-center items-center gap-4 text-gray-400 text-sm mt-3">
           <span>
             ⏱️ Last Updated: <span className="text-cyan-400">{lastUpdated || "Loading..."}</span>
           </span>
           <button
-            onClick={() => fetchData(true, true)} // ✅ also resets filters
+            onClick={() => fetchData(true, true)} // resets filters on refresh
             disabled={loading}
             className={`flex items-center gap-2 px-3 py-1 rounded-md text-white font-medium transition-all ${
               loading ? "bg-gray-600 cursor-not-allowed" : "bg-cyan-600 hover:bg-cyan-500"
@@ -173,14 +218,7 @@ const AdminDashboard = () => {
                 fill="none"
                 viewBox="0 0 24 24"
               >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path
                   className="opacity-75"
                   fill="currentColor"
