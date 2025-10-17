@@ -15,21 +15,25 @@ const AdminDashboard = () => {
   });
 
   const [visibleColumns, setVisibleColumns] = useState({
-    partner_id: true,
-    affiliate_id: true,
+    date: true,
+    partner_service_id: true,
+    publisher_campaign_id: true,
     partner: true,
     affiliate: true,
     geo: true,
     carrier: true,
+    partner_service_name: true,
     clicks: true,
-    conversions: true,
+    partner_conversions: true,
+    affiliate_conversions: true,
     revenue: true,
+    cost_to_affiliate: true,
+    profit: true,
   });
 
-  const [timer, setTimer] = useState(600); // 600s = 10 minutes
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [timer, setTimer] = useState(600); // 10 minutes
 
-  // 🔁 Fetch report data from backend
+  // 🔁 Fetch data
   const fetchData = async () => {
     try {
       const response = await axios.get(
@@ -42,15 +46,15 @@ const AdminDashboard = () => {
     }
   };
 
-  // 🔁 Auto-refresh timer logic
+  // 🔁 Auto-refresh logic
   useEffect(() => {
-    fetchData(); // initial load
+    fetchData();
 
     const interval = setInterval(() => {
       setTimer((prev) => {
         if (prev <= 1) {
           fetchData();
-          return 600; // reset timer
+          return 600; // reset every 10 mins
         }
         return prev - 1;
       });
@@ -67,27 +71,22 @@ const AdminDashboard = () => {
     return `${m}:${s}`;
   };
 
-  // 🧠 Apply Filters
+  // 🔍 Apply filters
   const applyFilters = () => {
     let filtered = reportData;
 
     if (filters.partner)
-      filtered = filtered.filter(
-        (row) =>
-          row.partner?.toLowerCase().includes(filters.partner.toLowerCase())
+      filtered = filtered.filter((row) =>
+        row.partner?.toLowerCase().includes(filters.partner.toLowerCase())
       );
-
     if (filters.affiliate)
-      filtered = filtered.filter(
-        (row) =>
-          row.affiliate?.toLowerCase().includes(filters.affiliate.toLowerCase())
+      filtered = filtered.filter((row) =>
+        row.affiliate?.toLowerCase().includes(filters.affiliate.toLowerCase())
       );
-
     if (filters.startDate)
       filtered = filtered.filter(
         (row) => new Date(row.date) >= new Date(filters.startDate)
       );
-
     if (filters.endDate)
       filtered = filtered.filter(
         (row) => new Date(row.date) <= new Date(filters.endDate)
@@ -96,25 +95,44 @@ const AdminDashboard = () => {
     setFilteredData(filtered);
   };
 
-  // 🧮 Totals row
+  // 📊 Totals
   const totals = useMemo(() => {
     const totalClicks = filteredData.reduce(
       (sum, row) => sum + (parseInt(row.clicks) || 0),
       0
     );
-    const totalConversions = filteredData.reduce(
-      (sum, row) => sum + (parseInt(row.conversions) || 0),
+    const totalPartnerConv = filteredData.reduce(
+      (sum, row) => sum + (parseInt(row.partner_conversions) || 0),
+      0
+    );
+    const totalAffiliateConv = filteredData.reduce(
+      (sum, row) => sum + (parseInt(row.affiliate_conversions) || 0),
       0
     );
     const totalRevenue = filteredData.reduce(
       (sum, row) => sum + (parseFloat(row.revenue) || 0),
       0
     );
+    const totalCost = filteredData.reduce(
+      (sum, row) => sum + (parseFloat(row.cost_to_affiliate) || 0),
+      0
+    );
+    const totalProfit = filteredData.reduce(
+      (sum, row) => sum + (parseFloat(row.profit) || 0),
+      0
+    );
 
-    return { totalClicks, totalConversions, totalRevenue };
+    return {
+      totalClicks,
+      totalPartnerConv,
+      totalAffiliateConv,
+      totalRevenue,
+      totalCost,
+      totalProfit,
+    };
   }, [filteredData]);
 
-  // 📦 Export as CSV
+  // 📄 Export CSV
   const exportToCSV = () => {
     const headers = Object.keys(visibleColumns).filter(
       (col) => visibleColumns[col]
@@ -131,7 +149,7 @@ const AdminDashboard = () => {
     saveAs(blob, "mob13r_report.csv");
   };
 
-  // 📘 Export as Excel
+  // 📘 Export Excel
   const exportToExcel = () => {
     const visibleData = filteredData.map((row) => {
       const filteredRow = {};
@@ -146,30 +164,24 @@ const AdminDashboard = () => {
     XLSX.writeFile(workbook, "mob13r_report.xlsx");
   };
 
-  // 🔍 Toggle visible columns
+  // 👁️ Toggle Columns
   const toggleColumn = (key) => {
-    setVisibleColumns((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
+    setVisibleColumns((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
     <div className="admin-dashboard">
-      <h2>📊 Mob13r Performance Dashboard</h2>
+      <div className="dashboard-header">
+        <div className="auto-refresh">
+          ⏱️ Auto-refresh in {formatTime(timer)}
+        </div>
+        <h2>📊 Mob13r Performance Dashboard</h2>
+      </div>
 
       <div className="filters">
-        {/* Auto Refresh Timer */}
-        <div className="auto-refresh">
-          <span className="icon">⏱️</span> Auto-refresh in {formatTime(timer)}
-        </div>
-
-        {/* Partner Filter */}
         <select
           value={filters.partner}
-          onChange={(e) =>
-            setFilters({ ...filters, partner: e.target.value })
-          }
+          onChange={(e) => setFilters({ ...filters, partner: e.target.value })}
         >
           <option value="">All Partners</option>
           {[...new Set(reportData.map((r) => r.partner))].map((partner, i) => (
@@ -179,7 +191,6 @@ const AdminDashboard = () => {
           ))}
         </select>
 
-        {/* Affiliate Filter */}
         <select
           value={filters.affiliate}
           onChange={(e) =>
@@ -196,7 +207,6 @@ const AdminDashboard = () => {
           )}
         </select>
 
-        {/* Date Range */}
         <input
           type="date"
           value={filters.startDate}
@@ -207,15 +217,12 @@ const AdminDashboard = () => {
         <input
           type="date"
           value={filters.endDate}
-          onChange={(e) =>
-            setFilters({ ...filters, endDate: e.target.value })
-          }
+          onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
         />
 
         <button onClick={applyFilters}>Apply Filters</button>
         <button onClick={fetchData}>🔄 Refresh</button>
 
-        {/* Show/Hide Columns */}
         <div className="column-toggle">
           <span>👁️ Columns</span>
           <div className="column-dropdown">
@@ -226,7 +233,7 @@ const AdminDashboard = () => {
                   checked={visibleColumns[key]}
                   onChange={() => toggleColumn(key)}
                 />
-                {key.replace("_", " ").toUpperCase()}
+                {key.replaceAll("_", " ").toUpperCase()}
               </label>
             ))}
           </div>
@@ -242,29 +249,37 @@ const AdminDashboard = () => {
             {Object.keys(visibleColumns).map(
               (key) =>
                 visibleColumns[key] && (
-                  <th key={key}>{key.replace("_", " ").toUpperCase()}</th>
+                  <th key={key}>{key.replaceAll("_", " ").toUpperCase()}</th>
                 )
             )}
           </tr>
         </thead>
         <tbody>
-          {filteredData.map((row, index) => (
-            <tr key={index}>
+          {filteredData.map((row, i) => (
+            <tr key={i}>
               {Object.keys(visibleColumns).map(
                 (key) =>
                   visibleColumns[key] && <td key={key}>{row[key]}</td>
               )}
             </tr>
           ))}
+
           <tr className="total-row">
-            <td colSpan={Object.keys(visibleColumns).length - 3}>
-              Total
-            </td>
+            <td colSpan={7}>Total</td>
             {visibleColumns.clicks && <td>{totals.totalClicks}</td>}
-            {visibleColumns.conversions && <td>{totals.totalConversions}</td>}
+            {visibleColumns.partner_conversions && (
+              <td>{totals.totalPartnerConv}</td>
+            )}
+            {visibleColumns.affiliate_conversions && (
+              <td>{totals.totalAffiliateConv}</td>
+            )}
             {visibleColumns.revenue && (
               <td>${totals.totalRevenue.toFixed(2)}</td>
             )}
+            {visibleColumns.cost_to_affiliate && (
+              <td>${totals.totalCost.toFixed(2)}</td>
+            )}
+            {visibleColumns.profit && <td>${totals.totalProfit.toFixed(2)}</td>}
           </tr>
         </tbody>
       </table>
