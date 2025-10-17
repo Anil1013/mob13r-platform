@@ -35,15 +35,16 @@ jobs:
         working-directory: frontend
         run: CI=false npm run build
 
-      - name: Install Amplify CLI
-        run: npm install -g @aws-amplify/cli
-
       - name: 🚀 Deploy Frontend to AWS Amplify
-        run: amplify publish --yes
+        uses: aws-actions/amplify-console-deploy@v2
+        with:
+          app-id: d2ujj546i3rguh
+          branch-name: main
+          frontend: build
+          region: ap-south-1
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ap-south-1
 
       # ---------------------------
       # ⚙️ BACKEND (Elastic Beanstalk)
@@ -77,4 +78,4 @@ jobs:
       # ✅ DONE
       # ---------------------------
       - name: ✅ Deployment Complete
-        run: echo "🎉 Frontend and Backend deployed together successfully!"
+        run: echo "🎉 Frontend (Amplify) + Backend (Elastic Beanstalk) deployed together successfully!"
