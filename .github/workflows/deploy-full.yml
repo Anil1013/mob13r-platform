@@ -50,20 +50,7 @@ jobs:
       # ---------------------------
       # BACKEND (Elastic Beanstalk)
       # ---------------------------
-      - name: 🧰 Check AWS CLI
-        run: aws --version
-
-      - name: 📦 Package backend
-        working-directory: backend
-        run: |
-          echo "Creating backend.zip (excluding node_modules, .env)…"
-          zip -r ../backend.zip . \
-            -x "node_modules/*" ".env" ".git/*" "aws/*" "awscliv2.zip"
-
-      - name: 🔎 Verify package
-        run: ls -lh backend.zip
-
-      - name: 🚀 Deploy to Elastic Beanstalk
+              - name: 🚀 Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -71,9 +58,9 @@ jobs:
           application_name: Mob13r-Backend
           environment_name: Mob13r-backend-env-1
           region: ap-south-1
-          version_label: build-${{ github.run_number }}
+          version_label: build-${{ github.run_number }}-${{ github.sha }}
+          use_existing_version_if_available: true
           deployment_package: backend.zip
-
       # ---------------------------
       # ✅ DONE
       # ---------------------------
