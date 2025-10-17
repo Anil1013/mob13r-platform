@@ -13,7 +13,6 @@ const AdminDashboard = () => {
     startDate: "",
     endDate: "",
   });
-
   const [visibleColumns, setVisibleColumns] = useState({
     date: true,
     partner_service_id: true,
@@ -30,10 +29,9 @@ const AdminDashboard = () => {
     cost_to_affiliate: true,
     profit: true,
   });
-
   const [timer, setTimer] = useState(600); // 10 minutes
 
-  // Fetch reports
+  // Fetch Data
   const fetchData = async () => {
     try {
       const response = await axios.get(
@@ -46,7 +44,6 @@ const AdminDashboard = () => {
     }
   };
 
-  // Auto-refresh countdown
   useEffect(() => {
     fetchData();
     const interval = setInterval(() => {
@@ -67,106 +64,109 @@ const AdminDashboard = () => {
     return `${m}:${s}`;
   };
 
-  // Filters
+  // Apply Filters
   const applyFilters = () => {
     let filtered = reportData;
     if (filters.partner)
-      filtered = filtered.filter((row) =>
-        row.partner?.toLowerCase().includes(filters.partner.toLowerCase())
+      filtered = filtered.filter((r) =>
+        r.partner?.toLowerCase().includes(filters.partner.toLowerCase())
       );
     if (filters.affiliate)
-      filtered = filtered.filter((row) =>
-        row.affiliate?.toLowerCase().includes(filters.affiliate.toLowerCase())
+      filtered = filtered.filter((r) =>
+        r.affiliate?.toLowerCase().includes(filters.affiliate.toLowerCase())
       );
     if (filters.startDate)
       filtered = filtered.filter(
-        (row) => new Date(row.date) >= new Date(filters.startDate)
+        (r) => new Date(r.date) >= new Date(filters.startDate)
       );
     if (filters.endDate)
       filtered = filtered.filter(
-        (row) => new Date(row.date) <= new Date(filters.endDate)
+        (r) => new Date(r.date) <= new Date(filters.endDate)
       );
     setFilteredData(filtered);
   };
 
-  // Totals calculation
+  // Totals
   const totals = useMemo(() => {
-    const tClicks = filteredData.reduce(
-      (sum, r) => sum + (parseInt(r.clicks) || 0),
+    const totalClicks = filteredData.reduce(
+      (s, r) => s + (parseInt(r.clicks) || 0),
       0
     );
-    const tPartnerConv = filteredData.reduce(
-      (sum, r) => sum + (parseInt(r.partner_conversions) || 0),
+    const totalPartnerConv = filteredData.reduce(
+      (s, r) => s + (parseInt(r.partner_conversions) || 0),
       0
     );
-    const tAffiliateConv = filteredData.reduce(
-      (sum, r) => sum + (parseInt(r.affiliate_conversions) || 0),
+    const totalAffiliateConv = filteredData.reduce(
+      (s, r) => s + (parseInt(r.affiliate_conversions) || 0),
       0
     );
-    const tRevenue = filteredData.reduce(
-      (sum, r) => sum + (parseFloat(r.revenue) || 0),
+    const totalRevenue = filteredData.reduce(
+      (s, r) => s + (parseFloat(r.revenue) || 0),
       0
     );
-    const tCost = filteredData.reduce(
-      (sum, r) => sum + (parseFloat(r.cost_to_affiliate) || 0),
+    const totalCost = filteredData.reduce(
+      (s, r) => s + (parseFloat(r.cost_to_affiliate) || 0),
       0
     );
-    const tProfit = filteredData.reduce(
-      (sum, r) => sum + (parseFloat(r.profit) || 0),
+    const totalProfit = filteredData.reduce(
+      (s, r) => s + (parseFloat(r.profit) || 0),
       0
     );
 
     return {
-      clicks: tClicks,
-      partnerConv: tPartnerConv,
-      affiliateConv: tAffiliateConv,
-      revenue: tRevenue,
-      cost: tCost,
-      profit: tProfit,
+      totalClicks,
+      totalPartnerConv,
+      totalAffiliateConv,
+      totalRevenue,
+      totalCost,
+      totalProfit,
     };
   }, [filteredData]);
 
-  // Export CSV/Excel
+  // Export
   const exportToCSV = () => {
-    const headers = Object.keys(visibleColumns).filter((c) => visibleColumns[c]);
-    const csv = [
+    const headers = Object.keys(visibleColumns).filter((k) => visibleColumns[k]);
+    const csvRows = [
       headers.join(","),
-      ...filteredData.map((row) =>
-        headers.map((col) => JSON.stringify(row[col] || "")).join(",")
+      ...filteredData.map((r) =>
+        headers.map((col) => JSON.stringify(r[col] || "")).join(",")
       ),
-    ].join("\n");
-    saveAs(new Blob([csv], { type: "text/csv" }), "mob13r_report.csv");
+    ];
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+    saveAs(blob, "mob13r_report.csv");
   };
 
   const exportToExcel = () => {
-    const visible = filteredData.map((row) => {
-      const out = {};
+    const visibleData = filteredData.map((r) => {
+      const obj = {};
       for (const key in visibleColumns)
-        if (visibleColumns[key]) out[key] = row[key];
-      return out;
+        if (visibleColumns[key]) obj[key] = r[key];
+      return obj;
     });
-    const sheet = XLSX.utils.json_to_sheet(visible);
+    const sheet = XLSX.utils.json_to_sheet(visibleData);
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, sheet, "Report");
     XLSX.writeFile(book, "mob13r_report.xlsx");
   };
 
+  const toggleColumn = (key) => {
+    setVisibleColumns((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   return (
     <div className="admin-dashboard">
-      {/* 🔹 Navbar Placeholder (you’ll customize next) */}
-      <div className="top-navbar">
-        <div className="nav-placeholder">
-          🧭 Navbar Placeholder — will add Partner, Affiliate, Services menu here
+      {/* Top Section */}
+      <div className="dashboard-top">
+        <div className="navbar-placeholder">
+          🧭 Navbar Area — (menu buttons will be added later)
+        </div>
+        <h2 className="dashboard-title">📊 Mob13r Performance Dashboard</h2>
+        <div className="auto-refresh-right">
+          ⏱️ Auto-refresh in {formatTime(timer)}
         </div>
       </div>
 
-      {/* 🔹 Header Row */}
-      <div className="dashboard-header">
-        <h2>📊 Mob13r Performance Dashboard</h2>
-        <div className="auto-refresh">⏱️ Auto-refresh in {formatTime(timer)}</div>
-      </div>
-
-      {/* 🔹 Filters */}
+      {/* Filters */}
       <div className="filters">
         <select
           value={filters.partner}
@@ -206,20 +206,39 @@ const AdminDashboard = () => {
           value={filters.endDate}
           onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
         />
+
         <button onClick={applyFilters}>Apply Filters</button>
         <button onClick={fetchData}>🔄 Refresh</button>
+
+        {/* Restore Hide/Unhide Columns */}
+        <div className="column-toggle">
+          <span>👁️ Columns</span>
+          <div className="column-dropdown">
+            {Object.keys(visibleColumns).map((key) => (
+              <label key={key}>
+                <input
+                  type="checkbox"
+                  checked={visibleColumns[key]}
+                  onChange={() => toggleColumn(key)}
+                />
+                {key.replaceAll("_", " ").toUpperCase()}
+              </label>
+            ))}
+          </div>
+        </div>
+
         <button onClick={exportToCSV}>📄 CSV</button>
         <button onClick={exportToExcel}>📘 Excel</button>
       </div>
 
-      {/* 🔹 Data Table */}
+      {/* Table */}
       <table className="report-table">
         <thead>
           <tr>
             {Object.keys(visibleColumns).map(
-              (k) =>
-                visibleColumns[k] && (
-                  <th key={k}>{k.replaceAll("_", " ").toUpperCase()}</th>
+              (key) =>
+                visibleColumns[key] && (
+                  <th key={key}>{key.replaceAll("_", " ").toUpperCase()}</th>
                 )
             )}
           </tr>
@@ -228,12 +247,12 @@ const AdminDashboard = () => {
           {filteredData.map((row, i) => (
             <tr key={i}>
               {Object.keys(visibleColumns).map(
-                (k) =>
-                  visibleColumns[k] && (
+                (key) =>
+                  visibleColumns[key] && (
                     <td
-                      key={k}
+                      key={key}
                       style={
-                        k === "profit"
+                        key === "profit"
                           ? {
                               color:
                                 parseFloat(row.profit) >= 0
@@ -244,37 +263,36 @@ const AdminDashboard = () => {
                           : {}
                       }
                     >
-                      {row[k]}
+                      {row[key]}
                     </td>
                   )
               )}
             </tr>
           ))}
-
-          {/* 🔹 Total Row */}
           <tr className="total-row">
             <td colSpan={7}>Total</td>
-            {visibleColumns.clicks && <td>{totals.clicks}</td>}
+            {visibleColumns.clicks && <td>{totals.totalClicks}</td>}
             {visibleColumns.partner_conversions && (
-              <td>{totals.partnerConv}</td>
+              <td>{totals.totalPartnerConv}</td>
             )}
             {visibleColumns.affiliate_conversions && (
-              <td>{totals.affiliateConv}</td>
+              <td>{totals.totalAffiliateConv}</td>
             )}
             {visibleColumns.revenue && (
-              <td>${totals.revenue.toFixed(2)}</td>
+              <td>${totals.totalRevenue.toFixed(2)}</td>
             )}
             {visibleColumns.cost_to_affiliate && (
-              <td>${totals.cost.toFixed(2)}</td>
+              <td>${totals.totalCost.toFixed(2)}</td>
             )}
             {visibleColumns.profit && (
               <td
                 style={{
-                  color: totals.profit >= 0 ? "#00ff80" : "#ff4d4d",
+                  color:
+                    totals.totalProfit >= 0 ? "#00ff80" : "#ff4d4d",
                   fontWeight: "bold",
                 }}
               >
-                ${totals.profit.toFixed(2)}
+                ${totals.totalProfit.toFixed(2)}
               </td>
             )}
           </tr>
