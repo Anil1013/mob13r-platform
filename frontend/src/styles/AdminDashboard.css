@@ -1,240 +1,118 @@
-/* 🌐 Dashboard base layout */
 .admin-dashboard {
-  background-color: #0b1622;
-  color: #ffffff;
-  font-family: "Poppins", sans-serif;
+  color: #fff;
+  font-family: "Inter", sans-serif;
+  background: #0b0b0f;
   min-height: 100vh;
-  padding: 10px 20px;
+  padding: 20px;
 }
 
-/* =========================
-   🔹 TOP SECTION LAYOUT
-   ========================= */
 .dashboard-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #0a192f;
-  border-bottom: 2px solid #00e6a8;
-  padding: 8px 16px;
-  margin-bottom: 15px;
-  border-radius: 8px;
-  position: relative;
-}
-
-/* LEFT area → Auto-refresh timer moves here */
-.auto-refresh-left {
-  position: absolute;
-  left: 20px;
-  top: 10px;
-  background: #001f3f;
-  color: #00e6a8;
-  border: 1px solid #00e6a8;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-weight: 600;
-  box-shadow: 0 0 6px rgba(0, 230, 168, 0.4);
-}
-
-/* CENTER → Title */
-.dashboard-title {
-  flex: 1;
-  text-align: center;
-  color: #00e6a8;
-  font-weight: 700;
-  font-size: 20px;
-  letter-spacing: 0.5px;
-}
-
-/* RIGHT area → Navbar (new red bordered placeholder area) */
-.navbar-area {
-  position: absolute;
-  right: 20px;
-  top: 10px;
-  display: flex;
-  gap: 10px;
-}
-
-.navbar-button {
-  background-color: #00e6a8;
-  color: #001f3f;
-  border: none;
-  border-radius: 5px;
-  padding: 6px 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: 0.3s;
-}
-
-.navbar-button:hover {
-  background-color: #00c490;
-  transform: translateY(-1px);
-}
-
-/* =========================
-   🔹 FILTER BAR
-   ========================= */
-.filters {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  background: #1a1a22;
+  padding: 12px 20px;
+  border-radius: 10px;
   margin-bottom: 20px;
-  justify-content: center;
 }
 
-.filters select,
-.filters input[type="date"] {
-  background-color: #001f3f;
-  color: #00e6a8;
-  border: 1px solid #00e6a8;
-  border-radius: 5px;
-  padding: 6px 10px;
-  outline: none;
-  cursor: pointer;
+.dashboard-title {
+  font-size: 22px;
+  font-weight: bold;
 }
 
-.filters button {
-  background-color: #00e6a8;
-  color: #001f3f;
+.auto-refresh-left {
+  font-size: 16px;
+  color: #00ffff;
+}
+
+.navbar-area button {
+  background: #262630;
   border: none;
-  border-radius: 5px;
-  padding: 6px 12px;
-  font-weight: 600;
+  color: #fff;
+  margin-left: 10px;
+  padding: 8px 14px;
+  border-radius: 8px;
   cursor: pointer;
   transition: 0.3s;
 }
-
-.filters button:hover {
-  background-color: #00c490;
-  transform: translateY(-1px);
+.navbar-area button:hover {
+  background: #00bfff;
 }
 
-/* =========================
-   🔹 COLUMN TOGGLE
-   ========================= */
-.column-toggle {
-  position: relative;
-  display: inline-block;
-  cursor: pointer;
-  background-color: #001f3f;
-  color: #00e6a8;
-  border: 1px solid #00e6a8;
+/* --- Campaign Cards --- */
+.campaign-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 15px;
+}
+
+.campaign-card {
+  background: #17171d;
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 0 6px #202030;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.type-badge {
+  background: #00bfff;
+  color: #000;
+  padding: 2px 8px;
   border-radius: 6px;
-  padding: 6px 10px;
-  font-weight: 600;
+  font-size: 12px;
 }
 
-.column-toggle:hover {
-  background-color: #003356;
+.stat {
+  margin: 4px 0;
+}
+.stat.held {
+  color: #ffcc00;
 }
 
-.column-dropdown {
-  display: none;
-  position: absolute;
-  background: #0a192f;
-  border: 1px solid #00e6a8;
-  border-radius: 8px;
-  padding: 10px;
-  z-index: 10;
-  top: 110%;
-  left: 0;
-  min-width: 200px;
-  max-height: 220px;
-  overflow-y: auto;
+.card-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
 }
 
-.column-toggle:hover .column-dropdown {
-  display: block;
+.release-btn {
+  background: #00ff80;
+  border: none;
+  color: #000;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.view-btn {
+  background: #444;
+  border: none;
+  color: #fff;
+  padding: 5px 10px;
+  border-radius: 6px;
 }
 
-.column-dropdown label {
-  display: block;
-  color: #ffffff;
-  font-size: 13px;
-  margin-bottom: 6px;
+/* --- Campaign Manager Table --- */
+.campaign-manager {
+  margin-top: 40px;
 }
 
-/* =========================
-   🔹 TABLE STYLING
-   ========================= */
-.report-table {
+.campaign-table {
   width: 100%;
   border-collapse: collapse;
-  text-align: center;
-  font-size: 14px;
-  box-shadow: 0 0 10px rgba(0, 230, 168, 0.1);
+  background: #111;
+  margin-top: 10px;
 }
 
-.report-table th {
-  background-color: #c1f0dc;
-  color: #001f3f;
-  padding: 10px;
-  border: 1px solid #007a63;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.report-table td {
-  border: 1px solid #003d3a;
+.campaign-table th,
+.campaign-table td {
+  border: 1px solid #333;
   padding: 8px;
-  background-color: #0f2238;
-}
-
-.report-table tr:nth-child(even) td {
-  background-color: #132a45;
-}
-
-/* Hover effect on rows */
-.report-table tbody tr:hover td {
-  background-color: #163350;
-}
-
-/* =========================
-   🔹 TOTAL ROW ALIGNMENT FIX
-   ========================= */
-.total-row td {
-  background-color: #00e6a8;
-  color: #001f3f;
-  font-weight: 700;
-  border-top: 3px solid #00ffcc;
-  text-align: center; /* 👈 This moves "Total" row content to center */
-}
-
-.total-row td:first-child {
-  text-align: left;
-  font-weight: 700;
-}
-
-/* Profit highlight colors */
-.report-table td:last-child {
-  font-weight: 600;
-  color: #bc544c;
-}
-
-.report-table td[style*="#00ff80"] {
-  color: #00ff80;
-}
-
-.report-table td[style*="#ff4d4d"] {
-  color: #ff4d4d;
-}
-
-/* Scroll behavior for small screens */
-@media (max-width: 1024px) {
-  .report-table {
-    display: block;
-    overflow-x: auto;
-    white-space: nowrap;
-  }
-
-  .filters {
-    flex-direction: column;
-  }
-
-  .dashboard-top {
-    flex-direction: column;
-    gap: 10px;
-  }
+  text-align: center;
 }
