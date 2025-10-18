@@ -4,24 +4,6 @@ import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
 import "../styles/AdminDashboard.css";
 
-<div className="dashboard-top">
-  {/* LEFT: Timer now */}
-  <div className="auto-refresh-left">
-    ⏱️ Auto-refresh in {formatTime(timer)}
-  </div>
-
-  {/* CENTER: Title */}
-  <h2 className="dashboard-title">📊 Mob13r Performance Dashboard</h2>
-
-  {/* RIGHT: Navbar placeholder (buttons will come later) */}
-  <div className="navbar-area">
-    <button className="navbar-button">Partners</button>
-    <button className="navbar-button">Affiliates</button>
-    <button className="navbar-button">Services</button>
-    <button className="navbar-button">Reports</button>
-  </div>
-</div>
-
 const AdminDashboard = () => {
   const [reportData, setReportData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
