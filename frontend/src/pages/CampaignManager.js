@@ -140,4 +140,5 @@ const CampaignManager = () => {
 export default CampaignManager;
 
 // Import this after file is ready
-import ConversionsModal from "../components/ConversionsModal";
+import ConversionsModal from "./ConversionsModal";
+
