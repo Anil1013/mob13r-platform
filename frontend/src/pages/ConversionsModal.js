@@ -1,154 +1,78 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import "../styles/AdminDashboard.css";
 
-const ConversionsModal = ({ campaignId, onClose }) => {
+const ConversionsModal = ({ campaign, onClose, apiUrl }) => {
   const [conversions, setConversions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedIds, setSelectedIds] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  // Fetch conversions when modal opens
-  useEffect(() => {
-    if (!campaignId) return;
-    const fetchConversions = async () => {
-      try {
-        const res = await axios.get(
-          `${process.env.REACT_APP_API_URL}/admin/campaigns/${campaignId}/conversions`
-        );
-        setConversions(res.data);
-      } catch (err) {
-        console.error("Error fetching conversions:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchConversions();
-  }, [campaignId]);
-
-  // Select/unselect conversions
-  const toggleSelect = (id) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
-
-  // Manual forward selected
-  const handleForwardSelected = async () => {
-    if (selectedIds.length === 0) return alert("No conversions selected");
-    if (
-      !window.confirm(
-        `Forward ${selectedIds.length} selected conversions to affiliate?`
-      )
-    )
-      return;
-
+  const fetchConversions = async () => {
     try {
-      await axios.post(
-        `${process.env.REACT_APP_API_URL}/admin/campaigns/${campaignId}/forward-manual`,
-        { conversion_ids: selectedIds }
-      );
-      alert("✅ Selected conversions forwarded!");
-      // Refresh list
-      const res = await axios.get(
-        `${process.env.REACT_APP_API_URL}/admin/campaigns/${campaignId}/conversions`
-      );
+      setLoading(true);
+      const res = await axios.get(`${apiUrl}/admin/campaigns/${campaign.id}/conversions`);
       setConversions(res.data);
-      setSelectedIds([]);
     } catch (err) {
-      console.error(err);
-      alert("Failed to forward selected conversions");
+      console.error("Error fetching conversions:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (!campaignId) return null;
+  const handleRelease = async (conversionId) => {
+    try {
+      await axios.post(`${apiUrl}/admin/conversions/${conversionId}/release`);
+      fetchConversions();
+    } catch (err) {
+      console.error("Error releasing conversion:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchConversions();
+  }, []);
 
   return (
     <div className="modal-overlay">
-      <div className="modal-container">
-        <div className="modal-header">
-          <h3>🧾 Conversions — Campaign #{campaignId}</h3>
-          <button onClick={onClose} className="close-btn">
-            ✖
-          </button>
-        </div>
+      <div className="modal-content">
+        <h3>
+          💹 Conversions for: <span style={{ color: "#00ffff" }}>{campaign.affiliate_name}</span>
+        </h3>
+        <button onClick={onClose} className="close-btn">✖</button>
 
         {loading ? (
-          <div className="modal-loading">Loading conversions...</div>
+          <p>Loading conversions...</p>
         ) : conversions.length === 0 ? (
-          <div className="modal-empty">No conversions found.</div>
+          <p>No conversions found.</p>
         ) : (
-          <>
-            <div className="conversion-table-wrapper">
-              <table className="conversion-table">
-                <thead>
-                  <tr>
-                    <th>
-                      <input
-                        type="checkbox"
-                        onChange={(e) =>
-                          setSelectedIds(
-                            e.target.checked
-                              ? conversions.map((c) => c.id)
-                              : []
-                          )
-                        }
-                        checked={
-                          selectedIds.length > 0 &&
-                          selectedIds.length === conversions.length
-                        }
-                      />
-                    </th>
-                    <th>ID</th>
-                    <th>Click ID</th>
-                    <th>MSISDN</th>
-                    <th>Status</th>
-                    <th>Revenue</th>
-                    <th>Forwarded</th>
-                    <th>Received At</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {conversions.map((c) => (
-                    <tr
-                      key={c.id}
-                      className={c.forwarded ? "forwarded" : "held"}
+          <table className="report-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>MSISDN</th>
+                <th>Status</th>
+                <th>Timestamp</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {conversions.map((conv) => (
+                <tr key={conv.id}>
+                  <td>{conv.id}</td>
+                  <td>{conv.msisdn}</td>
+                  <td>{conv.status}</td>
+                  <td>{new Date(conv.timestamp).toLocaleString()}</td>
+                  <td>
+                    <button
+                      onClick={() => handleRelease(conv.id)}
+                      className="navbar-button"
+                      style={{ padding: "4px 10px", fontSize: "13px" }}
                     >
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(c.id)}
-                          onChange={() => toggleSelect(c.id)}
-                        />
-                      </td>
-                      <td>{c.id}</td>
-                      <td>{c.click_id}</td>
-                      <td>{c.msisdn || "-"}</td>
-                      <td>{c.status}</td>
-                      <td>${parseFloat(c.revenue || 0).toFixed(2)}</td>
-                      <td>
-                        {c.forwarded ? (
-                          <span className="badge success">YES</span>
-                        ) : (
-                          <span className="badge held">NO</span>
-                        )}
-                      </td>
-                      <td>
-                        {new Date(c.received_at).toLocaleString("en-IN")}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {selectedIds.length > 0 && (
-              <div className="modal-actions">
-                <button onClick={handleForwardSelected} className="forward-btn">
-                  🚀 Forward Selected ({selectedIds.length})
-                </button>
-              </div>
-            )}
-          </>
+                      Release
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </div>
@@ -157,3 +81,4 @@ const ConversionsModal = ({ campaignId, onClose }) => {
 
 export default ConversionsModal;
 
+/* Add modal CSS here or in AdminDashboard.css */
