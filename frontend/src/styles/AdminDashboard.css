@@ -182,14 +182,14 @@
 }
 
 .total-row td {
-  text-align: right;
+  text-align: center;
   padding: 12px;
   font-size: 14px;
 }
 
-/* Profit always red in totals */
+/* Profit always green in totals */
 .total-row td:last-child {
-  color: #ff4d4d !important;
+  color: #347C2C !important;
 }
 
 /* ================================
