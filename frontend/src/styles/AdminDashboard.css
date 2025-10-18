@@ -199,7 +199,7 @@
   color: #001f3f;
   font-weight: 700;
   border-top: 3px solid #00ffcc;
-  text-align: right; /* 👈 This moves "Total" row content to right */
+  text-align: center; /* 👈 This moves "Total" row content to center */
 }
 
 .total-row td:first-child {
