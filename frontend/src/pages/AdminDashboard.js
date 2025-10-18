@@ -270,7 +270,7 @@ const AdminDashboard = () => {
             </tr>
           ))}
           <tr className="total-row">
-            <td colSpan={7}>Total</td>
+            <td colSpan={6}>Total</td>
             {visibleColumns.clicks && <td>{totals.totalClicks}</td>}
             {visibleColumns.partner_conversions && (
               <td>{totals.totalPartnerConv}</td>
