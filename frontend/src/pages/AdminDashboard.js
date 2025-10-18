@@ -29,11 +29,9 @@ const AdminDashboard = () => {
     cost_to_affiliate: true,
     profit: true,
   });
-  const [timer, setTimer] = useState(600); // 10 minutes countdown
+  const [timer, setTimer] = useState(600); // 10 min countdown
 
-  // ===========================
-  // 🧠 Fetch Reports
-  // ===========================
+  // Fetch data
   const fetchData = async () => {
     try {
       const response = await axios.get(
@@ -42,13 +40,11 @@ const AdminDashboard = () => {
       setReportData(response.data);
       setFilteredData(response.data);
     } catch (error) {
-      console.error("Fetch error:", error.message || error);
+      console.error("Error fetching reports:", error);
     }
   };
 
-  // ===========================
-  // ⏱ Auto Refresh + Timer
-  // ===========================
+  // Auto-refresh countdown
   useEffect(() => {
     fetchData();
     const interval = setInterval(() => {
@@ -69,9 +65,7 @@ const AdminDashboard = () => {
     return `${m}:${s}`;
   };
 
-  // ===========================
-  // 🔍 Filters
-  // ===========================
+  // Apply filters
   const applyFilters = () => {
     let filtered = reportData;
     if (filters.partner)
@@ -93,9 +87,7 @@ const AdminDashboard = () => {
     setFilteredData(filtered);
   };
 
-  // ===========================
-  // 📊 Totals (Memoized)
-  // ===========================
+  // Totals
   const totals = useMemo(() => {
     const totalClicks = filteredData.reduce(
       (s, r) => s + (parseInt(r.clicks) || 0),
@@ -121,6 +113,7 @@ const AdminDashboard = () => {
       (s, r) => s + (parseFloat(r.profit) || 0),
       0
     );
+
     return {
       totalClicks,
       totalPartnerConv,
@@ -131,9 +124,7 @@ const AdminDashboard = () => {
     };
   }, [filteredData]);
 
-  // ===========================
-  // 📤 Export Handlers
-  // ===========================
+  // Export to CSV
   const exportToCSV = () => {
     const headers = Object.keys(visibleColumns).filter((k) => visibleColumns[k]);
     const csvRows = [
@@ -146,6 +137,7 @@ const AdminDashboard = () => {
     saveAs(blob, "mob13r_report.csv");
   };
 
+  // Export to Excel
   const exportToExcel = () => {
     const visibleData = filteredData.map((r) => {
       const obj = {};
@@ -159,32 +151,26 @@ const AdminDashboard = () => {
     XLSX.writeFile(book, "mob13r_report.xlsx");
   };
 
+  // Column visibility
   const toggleColumn = (key) => {
     setVisibleColumns((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // ===========================
-  // 🖥️ Render UI
-  // ===========================
   return (
     <div className="admin-dashboard">
-      {/* ================== TOP SECTION ================== */}
+      {/* Navbar */}
       <div className="dashboard-top">
-        <div className="auto-refresh-left">
-          ⏱️ Auto-refresh in {formatTime(timer)}
+        <div className="navbar">
+          <button className="nav-btn">Partners</button>
+          <button className="nav-btn">Affiliates</button>
+          <button className="nav-btn">Services</button>
+          <button className="nav-btn">Reports</button>
         </div>
-
         <h2 className="dashboard-title">📊 Mob13r Performance Dashboard</h2>
-
-        <div className="navbar-area">
-          <button className="navbar-button">Partners</button>
-          <button className="navbar-button">Affiliates</button>
-          <button className="navbar-button">Services</button>
-          <button className="navbar-button">Reports</button>
-        </div>
+        <div className="auto-refresh">⏱️ {formatTime(timer)}</div>
       </div>
 
-      {/* ================== FILTER SECTION ================== */}
+      {/* Filters */}
       <div className="filters">
         <select
           value={filters.partner}
@@ -200,7 +186,9 @@ const AdminDashboard = () => {
 
         <select
           value={filters.affiliate}
-          onChange={(e) => setFilters({ ...filters, affiliate: e.target.value })}
+          onChange={(e) =>
+            setFilters({ ...filters, affiliate: e.target.value })
+          }
         >
           <option value="">All Affiliates</option>
           {[...new Set(reportData.map((r) => r.affiliate))].map((a, i) => (
@@ -213,7 +201,9 @@ const AdminDashboard = () => {
         <input
           type="date"
           value={filters.startDate}
-          onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+          onChange={(e) =>
+            setFilters({ ...filters, startDate: e.target.value })
+          }
         />
         <input
           type="date"
@@ -221,7 +211,7 @@ const AdminDashboard = () => {
           onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
         />
 
-        <button onClick={applyFilters}>Apply Filters</button>
+        <button onClick={applyFilters}>Apply</button>
         <button onClick={fetchData}>🔄 Refresh</button>
 
         <div className="column-toggle">
@@ -244,7 +234,7 @@ const AdminDashboard = () => {
         <button onClick={exportToExcel}>📘 Excel</button>
       </div>
 
-      {/* ================== REPORT TABLE ================== */}
+      {/* Table */}
       <table className="report-table">
         <thead>
           <tr>
@@ -282,8 +272,6 @@ const AdminDashboard = () => {
               )}
             </tr>
           ))}
-
-          {/* ================== TOTAL ROW ================== */}
           <tr className="total-row">
             <td colSpan={8}>Total</td>
             {visibleColumns.clicks && <td>{totals.totalClicks}</td>}
