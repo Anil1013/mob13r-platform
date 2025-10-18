@@ -1,258 +1,88 @@
-/* ================================
-   🧭 GENERAL DASHBOARD LAYOUT
-================================= */
 .admin-dashboard {
-  font-family: "Inter", sans-serif;
-  color: #f0f0f0;
-  background-color: #0e0e12;
+  background-color: #101010;
+  color: #f1f1f1;
   min-height: 100vh;
   padding: 20px;
-  overflow-x: auto;
+  font-family: "Poppins", sans-serif;
 }
 
-/* ================================
-   🧱 TOP HEADER AREA
-================================= */
 .dashboard-top {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  background: linear-gradient(90deg, #10131a, #151b26);
-  padding: 12px 25px;
-  border: 1px solid rgba(0, 255, 255, 0.15);
+  align-items: center;
+  background: #1a1a1a;
+  padding: 15px 25px;
   border-radius: 12px;
-  margin-bottom: 25px;
-  box-shadow: 0 2px 8px rgba(0, 255, 255, 0.08);
+  box-shadow: 0 0 15px rgba(0, 255, 200, 0.2);
+  margin-bottom: 20px;
 }
 
-/* Left side (Timer) */
-.auto-refresh-left {
-  font-size: 15px;
-  font-weight: 600;
-  color: #00ffff;
-}
-
-/* Center title */
-.dashboard-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #00ffff;
-  text-align: center;
-  flex: 1;
-}
-
-/* Right side navbar buttons */
-.navbar-area {
+.navbar {
   display: flex;
-  gap: 10px;
+  gap: 12px;
 }
 
-.navbar-button {
-  background: transparent;
-  border: 1px solid #00ffff;
-  color: #00ffff;
-  font-size: 14px;
-  font-weight: 500;
-  padding: 6px 14px;
+.nav-btn {
+  background: #00bcd4;
+  border: none;
+  padding: 8px 14px;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.25s ease;
+  color: white;
+  font-weight: 500;
+  transition: 0.3s ease;
 }
 
-.navbar-button:hover {
-  background: #00ffff20;
-  transform: translateY(-1px);
+.nav-btn:hover {
+  background: #008c9e;
 }
 
-/* ================================
-   🔍 FILTERS SECTION
-================================= */
+.auto-refresh {
+  font-size: 1rem;
+  color: #00e676;
+  font-weight: 600;
+}
+
 .filters {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  background: #141820;
-  border-radius: 10px;
-  padding: 15px;
-  border: 1px solid rgba(0, 255, 255, 0.1);
-  margin-bottom: 25px;
+  gap: 10px;
+  margin-bottom: 15px;
 }
 
 .filters select,
-.filters input[type="date"] {
-  background: #0e1015;
-  color: #fff;
-  border: 1px solid rgba(0, 255, 255, 0.2);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 14px;
-}
-
+.filters input,
 .filters button {
-  background: #00ffff15;
-  border: 1px solid #00ffff60;
-  color: #00ffff;
-  padding: 6px 14px;
+  padding: 8px 10px;
   border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: 0.3s;
+  border: 1px solid #333;
+  background: #222;
+  color: #fff;
 }
 
-.filters button:hover {
-  background: #00ffff30;
-}
-
-/* Column toggle dropdown */
-.column-toggle {
-  position: relative;
-}
-
-.column-toggle > span {
-  cursor: pointer;
-  color: #00ffff;
-  font-weight: 500;
-}
-
-.column-dropdown {
-  position: absolute;
-  top: 110%;
-  left: 0;
-  background: #1a1f2b;
-  border: 1px solid rgba(0, 255, 255, 0.2);
-  border-radius: 8px;
-  padding: 10px;
-  display: none;
-  flex-direction: column;
-  gap: 4px;
-  z-index: 100;
-}
-
-.column-toggle:hover .column-dropdown {
-  display: flex;
-}
-
-.column-dropdown label {
-  font-size: 13px;
-  color: #ddd;
-}
-
-/* ================================
-   📊 TABLE STYLING
-================================= */
 .report-table {
   width: 100%;
   border-collapse: collapse;
-  background: #141820;
+  background: #181818;
   border-radius: 10px;
   overflow: hidden;
 }
 
 .report-table th {
-  background: #00ffff20;
-  color: #00ffff;
-  font-weight: 600;
-  text-transform: uppercase;
-  font-size: 13px;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(0, 255, 255, 0.15);
-  text-align: center;
+  background: #00bcd4;
+  color: #fff;
+  padding: 10px;
 }
 
 .report-table td {
-  padding: 10px 12px;
   text-align: center;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  font-size: 13.5px;
-  color: #eaeaea;
-}
-
-.report-table tr:hover {
-  background: #1b2230;
-}
-
-/* ================================
-   📈 TOTAL ROW (RIGHT ALIGNED)
-================================= */
-.total-row {
-  background: #10141e;
-  font-weight: 700;
-  color: #fff;
+  padding: 8px;
+  border-bottom: 1px solid #333;
 }
 
 .total-row td {
-  text-align: center;
-  padding: 12px;
-  font-size: 14px;
-}
-
-/* Profit always green in totals */
-.total-row td:last-child {
-  color: #347C2C !important;
-}
-
-/* ================================
-   💻 RESPONSIVE
-================================= */
-@media (max-width: 768px) {
-  .dashboard-top {
-    flex-direction: column;
-    gap: 10px;
-  }
-  .filters {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .navbar-area {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-  .total-row td {
-    font-size: 13px;
-  }
-}
-
-/* ================================
-   🪟 MODAL STYLING
-================================= */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(15, 20, 30, 0.95);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-}
-
-.modal-content {
-  background: #141820;
-  border: 1px solid rgba(0, 255, 255, 0.2);
-  border-radius: 12px;
-  padding: 25px;
-  width: 80%;
-  max-width: 900px;
-  color: #fff;
-  position: relative;
-  box-shadow: 0 0 12px rgba(0, 255, 255, 0.15);
-}
-
-.modal-content h3 {
-  margin-top: 0;
-  margin-bottom: 15px;
-}
-
-.close-btn {
-  position: absolute;
-  right: 15px;
-  top: 12px;
-  background: none;
-  border: none;
-  color: #00ffff;
-  font-size: 18px;
-  cursor: pointer;
+  font-weight: bold;
+  color: #ff4d4d;
+  text-align: right;
+  background: #202020;
 }
