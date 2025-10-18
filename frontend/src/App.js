@@ -1,7 +1,7 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import AdminDashboard from "./pages/AdminDashboard";
-import AffiliateDashboard from "./pages/AffiliateDashboard";
+import CampaignManager from "./pages/CampaignManager";
 import PartnerDashboard from "./pages/PartnerDashboard";
 
 function App() {
@@ -13,7 +13,7 @@ function App() {
 
         {/* Individual routes */}
         <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/affiliate" element={<AffiliateDashboard />} />
+        <Route path="/affiliate" element={<CampaignManager />} />
         <Route path="/partner" element={<PartnerDashboard />} />
 
         {/* Fallback for unknown URLs */}
