@@ -4,11 +4,6 @@
 // linked partner services, and conversion control (Vas/API routes).
 // ===================================================
 
-/* eslint-disable import/first */
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-import "../styles/AdminDashboard.css";
-import ConversionsModal from "./ConversionsModal"; // ✅ Moved to top (fixes ESLint import/first)
 
 const CampaignManager = () => {
   const [campaigns, setCampaigns] = useState([]);
