@@ -3,8 +3,11 @@ import axios from "axios";
 import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
 import "../styles/AdminDashboard.css";
+import { useNavigate } from "react-router-dom"; // ✅ navigation
 
 const AdminDashboard = () => {
+  const navigate = useNavigate();
+
   const [reportData, setReportData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [filters, setFilters] = useState({
@@ -29,22 +32,25 @@ const AdminDashboard = () => {
     cost_to_affiliate: true,
     profit: true,
   });
-  const [timer, setTimer] = useState(600); // 10 min countdown
+  const [timer, setTimer] = useState(600); // 10 minutes
+  const [error, setError] = useState("");
 
-  // Fetch data
+  // Fetch Data
   const fetchData = async () => {
     try {
       const response = await axios.get(
         `${process.env.REACT_APP_API_URL}/admin/reports`
       );
-      setReportData(response.data);
-      setFilteredData(response.data);
-    } catch (error) {
-      console.error("Error fetching reports:", error);
+      setReportData(response.data || []);
+      setFilteredData(response.data || []);
+      setError("");
+    } catch (err) {
+      console.error("Error fetching reports:", err);
+      setError("⚠️ Failed to load report data. Check backend connection.");
     }
   };
 
-  // Auto-refresh countdown
+  // Auto refresh logic
   useEffect(() => {
     fetchData();
     const interval = setInterval(() => {
@@ -65,7 +71,7 @@ const AdminDashboard = () => {
     return `${m}:${s}`;
   };
 
-  // Apply filters
+  // Apply Filters
   const applyFilters = () => {
     let filtered = reportData;
     if (filters.partner)
@@ -124,7 +130,7 @@ const AdminDashboard = () => {
     };
   }, [filteredData]);
 
-  // Export to CSV
+  // Export Functions
   const exportToCSV = () => {
     const headers = Object.keys(visibleColumns).filter((k) => visibleColumns[k]);
     const csvRows = [
@@ -137,7 +143,6 @@ const AdminDashboard = () => {
     saveAs(blob, "mob13r_report.csv");
   };
 
-  // Export to Excel
   const exportToExcel = () => {
     const visibleData = filteredData.map((r) => {
       const obj = {};
@@ -151,26 +156,37 @@ const AdminDashboard = () => {
     XLSX.writeFile(book, "mob13r_report.xlsx");
   };
 
-  // Column visibility
   const toggleColumn = (key) => {
     setVisibleColumns((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
     <div className="admin-dashboard">
-      {/* Navbar */}
+      {/* ===== Top Section ===== */}
       <div className="dashboard-top">
         <div className="navbar">
-          <button className="nav-btn">Partners</button>
-          <button className="nav-btn">Affiliates</button>
-          <button className="nav-btn">Services</button>
-          <button className="nav-btn">Reports</button>
+          <button className="nav-btn" onClick={() => navigate("/dashboard")}>
+            Dashboard
+          </button>
+          <button className="nav-btn" onClick={() => navigate("/campaigns")}>
+            Campaigns
+          </button>
+          <button className="nav-btn" onClick={() => navigate("/partners")}>
+            Partners
+          </button>
+          <button className="nav-btn" onClick={() => navigate("/affiliates")}>
+            Affiliates
+          </button>
         </div>
+
         <h2 className="dashboard-title">📊 Mob13r Performance Dashboard</h2>
-        <div className="auto-refresh">⏱️ {formatTime(timer)}</div>
+
+        <div className="auto-refresh">
+          ⏱️ Auto-refresh in {formatTime(timer)}
+        </div>
       </div>
 
-      {/* Filters */}
+      {/* ===== Filters ===== */}
       <div className="filters">
         <select
           value={filters.partner}
@@ -214,6 +230,7 @@ const AdminDashboard = () => {
         <button onClick={applyFilters}>Apply</button>
         <button onClick={fetchData}>🔄 Refresh</button>
 
+        {/* Column toggle */}
         <div className="column-toggle">
           <span>👁️ Columns</span>
           <div className="column-dropdown">
@@ -234,7 +251,10 @@ const AdminDashboard = () => {
         <button onClick={exportToExcel}>📘 Excel</button>
       </div>
 
-      {/* Table */}
+      {/* ===== Error Handling ===== */}
+      {error && <p className="error-msg">{error}</p>}
+
+      {/* ===== Table ===== */}
       <table className="report-table">
         <thead>
           <tr>
@@ -272,6 +292,7 @@ const AdminDashboard = () => {
               )}
             </tr>
           ))}
+
           <tr className="total-row">
             <td colSpan={8}>Total</td>
             {visibleColumns.clicks && <td>{totals.totalClicks}</td>}
@@ -290,7 +311,7 @@ const AdminDashboard = () => {
             {visibleColumns.profit && (
               <td
                 style={{
-                  color: "#ff4d4d",
+                  color: totals.totalProfit >= 0 ? "#00ff80" : "#ff4d4d",
                   fontWeight: "bold",
                 }}
               >
