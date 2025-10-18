@@ -168,3 +168,13 @@
 .report-table.small {
   font-size: 0.85rem;
 }
+
+.error-msg {
+  color: #ff4d4d;
+  background: rgba(255, 77, 77, 0.1);
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  text-align: center;
+  font-weight: 500;
+}
