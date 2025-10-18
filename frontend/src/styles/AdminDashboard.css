@@ -1,4 +1,4 @@
-/* 🌐 Whole dashboard container */
+/* 🌐 Dashboard base layout */
 .admin-dashboard {
   background-color: #0b1622;
   color: #ffffff;
@@ -7,29 +7,36 @@
   padding: 10px 20px;
 }
 
-/* 🔹 Top section layout */
+/* =========================
+   🔹 TOP SECTION LAYOUT
+   ========================= */
 .dashboard-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   background: #0a192f;
   border-bottom: 2px solid #00e6a8;
-  padding: 10px 20px;
+  padding: 8px 16px;
   margin-bottom: 15px;
   border-radius: 8px;
+  position: relative;
 }
 
-/* Navbar Placeholder (Left side) */
-.navbar-placeholder {
-  flex: 1;
+/* LEFT area → Auto-refresh timer moves here */
+.auto-refresh-left {
+  position: absolute;
+  left: 20px;
+  top: 10px;
+  background: #001f3f;
   color: #00e6a8;
-  font-size: 15px;
-  font-weight: 500;
-  text-align: left;
-  padding-left: 5px;
+  border: 1px solid #00e6a8;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-weight: 600;
+  box-shadow: 0 0 6px rgba(0, 230, 168, 0.4);
 }
 
-/* Dashboard Title (Center) */
+/* CENTER → Title */
 .dashboard-title {
   flex: 1;
   text-align: center;
@@ -39,21 +46,34 @@
   letter-spacing: 0.5px;
 }
 
-/* Timer (Right side) */
-.auto-refresh-right {
-  flex: 1;
-  text-align: right;
-  background-color: #001f3f;
-  border: 1px solid #00e6a8;
-  padding: 6px 12px;
-  border-radius: 6px;
-  color: #00e6a8;
-  font-weight: 600;
-  display: inline-block;
-  box-shadow: 0 0 6px rgba(0, 230, 168, 0.5);
+/* RIGHT area → Navbar (new red bordered placeholder area) */
+.navbar-area {
+  position: absolute;
+  right: 20px;
+  top: 10px;
+  display: flex;
+  gap: 10px;
 }
 
-/* 🔹 Filters row */
+.navbar-button {
+  background-color: #00e6a8;
+  color: #001f3f;
+  border: none;
+  border-radius: 5px;
+  padding: 6px 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.navbar-button:hover {
+  background-color: #00c490;
+  transform: translateY(-1px);
+}
+
+/* =========================
+   🔹 FILTER BAR
+   ========================= */
 .filters {
   display: flex;
   align-items: center;
@@ -90,7 +110,9 @@
   transform: translateY(-1px);
 }
 
-/* 🔹 Column toggle dropdown */
+/* =========================
+   🔹 COLUMN TOGGLE
+   ========================= */
 .column-toggle {
   position: relative;
   display: inline-block;
@@ -133,7 +155,9 @@
   margin-bottom: 6px;
 }
 
-/* 🔹 Table styling */
+/* =========================
+   🔹 TABLE STYLING
+   ========================= */
 .report-table {
   width: 100%;
   border-collapse: collapse;
@@ -167,31 +191,36 @@
   background-color: #163350;
 }
 
-/* 🔹 Total row styling */
+/* =========================
+   🔹 TOTAL ROW ALIGNMENT FIX
+   ========================= */
 .total-row td {
   background-color: #00e6a8;
   color: #001f3f;
   font-weight: 700;
-  text-align: center;
   border-top: 3px solid #00ffcc;
+  text-align: right; /* 👈 This moves "Total" row content to right */
 }
 
-/* Profit highlight */
+.total-row td:first-child {
+  text-align: left;
+  font-weight: 700;
+}
+
+/* Profit highlight colors */
 .report-table td:last-child {
   font-weight: 600;
 }
 
-/* When profit is positive */
 .report-table td[style*="#00ff80"] {
   color: #00ff80;
 }
 
-/* When profit is negative */
 .report-table td[style*="#ff4d4d"] {
   color: #ff4d4d;
 }
 
-/* Scrollable table for smaller screens */
+/* Scroll behavior for small screens */
 @media (max-width: 1024px) {
   .report-table {
     display: block;
@@ -202,26 +231,9 @@
   .filters {
     flex-direction: column;
   }
-}
 
-/* 🔹 Smooth UI elements */
-button,
-select,
-input {
-  transition: all 0.2s ease-in-out;
-}
-
-/* 🔹 Scrollbar styling */
-::-webkit-scrollbar {
-  height: 8px;
-  width: 8px;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: #00e6a8;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-track {
-  background-color: #001f3f;
+  .dashboard-top {
+    flex-direction: column;
+    gap: 10px;
+  }
 }
