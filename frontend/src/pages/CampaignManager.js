@@ -1,136 +1,111 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import "../styles/AdminDashboard.css"; // reuse same CSS
+import "./AdminDashboard.css"; // reuse same styles
+import ConversionsModal from "./ConversionsModal"; // ✅ correct path (same folder)
 
 const CampaignManager = () => {
   const [campaigns, setCampaigns] = useState([]);
-  const [selectedCampaign, setSelectedCampaign] = useState(null);
-  const [showModal, setShowModal] = useState(false);
+  const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(false);
+  const [selectedCampaign, setSelectedCampaign] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const fetchCampaigns = async () => {
     try {
+      setLoading(true);
       const res = await axios.get(`${process.env.REACT_APP_API_URL}/admin/campaigns`);
-      setCampaigns(res.data);
+      setCampaigns(res.data || []);
+      setLoading(false);
     } catch (err) {
-      console.error("Error fetching campaigns:", err);
+      console.error("Error loading campaigns:", err.message);
+      setCampaigns([]);
+      setLoading(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const res = await axios.get(`${process.env.REACT_APP_API_URL}/admin/campaigns/stats`);
+      setStats(res.data || {});
+    } catch (err) {
+      console.error("Error loading stats:", err.message);
+      setStats({});
     }
   };
 
   useEffect(() => {
     fetchCampaigns();
+    fetchStats();
   }, []);
-
-  const openModal = (campaign) => {
-    setSelectedCampaign(campaign);
-    setShowModal(true);
-  };
-
-  const closeModal = () => {
-    setSelectedCampaign(null);
-    setShowModal(false);
-  };
-
-  const handleForwardChange = async (id, value) => {
-    setLoading(true);
-    try {
-      await axios.put(`${process.env.REACT_APP_API_URL}/admin/campaigns/${id}/forward-percentage`, {
-        forward_percentage: parseInt(value),
-      });
-      fetchCampaigns();
-    } catch (err) {
-      console.error("Error updating percentage:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="admin-dashboard">
       <div className="dashboard-top">
-        <div className="auto-refresh-left">⚙️ Campaign Management</div>
-        <h2 className="dashboard-title">🎯 Affiliate Campaigns</h2>
-        <div className="navbar-area">
-          <button className="navbar-button">Partners</button>
-          <button className="navbar-button">Affiliates</button>
-          <button className="navbar-button">Services</button>
-          <button className="navbar-button">Reports</button>
+        <div className="navbar">
+          <button className="nav-btn">Partners</button>
+          <button className="nav-btn">Affiliates</button>
+          <button className="nav-btn">Services</button>
+          <button className="nav-btn active">Campaigns</button>
         </div>
+        <h2 className="dashboard-title">🎯 Campaign Manager</h2>
       </div>
 
-      <div className="filters">
-        <button onClick={fetchCampaigns}>🔄 Refresh</button>
-        <span>Total Campaigns: {campaigns.length}</span>
+      <div className="stats-bar">
+        <div className="stat-box">Total Campaigns: {campaigns.length}</div>
+        <div className="stat-box">Active: {stats.active || 0}</div>
+        <div className="stat-box">Paused: {stats.paused || 0}</div>
+        <div className="stat-box">Held Conversions: {stats.held || 0}</div>
       </div>
 
-      <table className="report-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Affiliate Name</th>
-            <th>Type</th>
-            <th>Geo</th>
-            <th>Carrier</th>
-            <th>Forward %</th>
-            <th>Landing Page</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {campaigns.map((c) => (
-            <tr key={c.id}>
-              <td>{c.id}</td>
-              <td>{c.affiliate_name}</td>
-              <td>{c.type}</td>
-              <td>{c.geo || "-"}</td>
-              <td>{c.carrier || "-"}</td>
-              <td>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={c.forward_percentage}
-                  disabled={loading}
-                  onChange={(e) => handleForwardChange(c.id, e.target.value)}
-                  style={{
-                    width: "60px",
-                    textAlign: "center",
-                    background: "#0e1015",
-                    color: "#00ffff",
-                    border: "1px solid rgba(0,255,255,0.3)",
-                    borderRadius: "6px",
-                  }}
-                />
-              </td>
-              <td>
-                <a
-                  href={c.landing_page_url || "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ color: "#00ffff" }}
-                >
-                  {c.landing_page_url ? "View" : "Generate"}
-                </a>
-              </td>
-              <td>
-                <button
-                  onClick={() => openModal(c)}
-                  className="navbar-button"
-                  style={{ padding: "4px 10px", fontSize: "13px" }}
-                >
-                  Conversions
-                </button>
-              </td>
+      {loading ? (
+        <p>Loading campaigns...</p>
+      ) : (
+        <table className="report-table">
+          <thead>
+            <tr>
+              <th>Campaign ID</th>
+              <th>Affiliate</th>
+              <th>Partner Service(s)</th>
+              <th>Geo</th>
+              <th>Carrier</th>
+              <th>Category</th>
+              <th>Type</th>
+              <th>Hold %</th>
+              <th>Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {campaigns.map((c, i) => (
+              <tr key={i}>
+                <td>{c.id}</td>
+                <td>{c.affiliate}</td>
+                <td>{c.partner_service_ids?.join(", ")}</td>
+                <td>{c.geo || "-"}</td>
+                <td>{c.carrier || "-"}</td>
+                <td>{c.category || "VAS/API"}</td>
+                <td>{c.type || "Mixed"}</td>
+                <td>{c.hold_percentage || 0}%</td>
+                <td>
+                  <button
+                    className="nav-btn"
+                    onClick={() => {
+                      setSelectedCampaign(c);
+                      setModalOpen(true);
+                    }}
+                  >
+                    View Conversions
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
 
-      {showModal && (
+      {modalOpen && (
         <ConversionsModal
           campaign={selectedCampaign}
-          onClose={closeModal}
-          apiUrl={process.env.REACT_APP_API_URL}
+          onClose={() => setModalOpen(false)}
         />
       )}
     </div>
@@ -138,7 +113,3 @@ const CampaignManager = () => {
 };
 
 export default CampaignManager;
-
-// Import this after file is ready
-import ConversionsModal from "./ConversionsModal";
-
