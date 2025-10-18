@@ -120,7 +120,7 @@ const CampaignManager = () => {
 
       {/* ===== Modal for Conversions / Manual Release ===== */}
       {showModal && selectedCampaign && (
-        <ConversionsModal
+        <
           campaign={selectedCampaign}
           onClose={handleCloseModal}
         />
