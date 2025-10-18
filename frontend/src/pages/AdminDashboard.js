@@ -3,56 +3,37 @@ import axios from "axios";
 import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
 import "../styles/AdminDashboard.css";
+import CampaignManager from "./CampaignManager";
 
 const AdminDashboard = () => {
   const [reportData, setReportData] = useState([]);
+  const [campaignStats, setCampaignStats] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
-  const [filters, setFilters] = useState({
-    partner: "",
-    affiliate: "",
-    startDate: "",
-    endDate: "",
-  });
-  const [visibleColumns, setVisibleColumns] = useState({
-    date: true,
-    partner_service_id: true,
-    publisher_campaign_id: true,
-    partner: true,
-    affiliate: true,
-    geo: true,
-    carrier: true,
-    partner_service_name: true,
-    clicks: true,
-    partner_conversions: true,
-    affiliate_conversions: true,
-    revenue: true,
-    cost_to_affiliate: true,
-    profit: true,
-  });
-  const [timer, setTimer] = useState(600); // 10 minutes
+  const [timer, setTimer] = useState(600);
 
-  // Fetch Data
   const fetchData = async () => {
     try {
-      const response = await axios.get(
-        `${process.env.REACT_APP_API_URL}/admin/reports`
-      );
-      setReportData(response.data);
-      setFilteredData(response.data);
-    } catch (error) {
-      console.error("Error fetching reports:", error);
+      const [reportRes, campaignRes] = await Promise.all([
+        axios.get(`${process.env.REACT_APP_API_URL}/admin/reports`),
+        axios.get(`${process.env.REACT_APP_API_URL}/admin/campaigns/stats`),
+      ]);
+      setReportData(reportRes.data);
+      setFilteredData(reportRes.data);
+      setCampaignStats(campaignRes.data);
+    } catch (err) {
+      console.error("Fetch error:", err);
     }
   };
 
   useEffect(() => {
     fetchData();
     const interval = setInterval(() => {
-      setTimer((prev) => {
-        if (prev <= 1) {
+      setTimer((t) => {
+        if (t <= 1) {
           fetchData();
           return 600;
         }
-        return prev - 1;
+        return t - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
@@ -64,240 +45,110 @@ const AdminDashboard = () => {
     return `${m}:${s}`;
   };
 
-  // Apply Filters
-  const applyFilters = () => {
-    let filtered = reportData;
-    if (filters.partner)
-      filtered = filtered.filter((r) =>
-        r.partner?.toLowerCase().includes(filters.partner.toLowerCase())
-      );
-    if (filters.affiliate)
-      filtered = filtered.filter((r) =>
-        r.affiliate?.toLowerCase().includes(filters.affiliate.toLowerCase())
-      );
-    if (filters.startDate)
-      filtered = filtered.filter(
-        (r) => new Date(r.date) >= new Date(filters.startDate)
-      );
-    if (filters.endDate)
-      filtered = filtered.filter(
-        (r) => new Date(r.date) <= new Date(filters.endDate)
-      );
-    setFilteredData(filtered);
-  };
-
-  // Totals
   const totals = useMemo(() => {
-    const totalClicks = filteredData.reduce(
-      (s, r) => s + (parseInt(r.clicks) || 0),
-      0
-    );
-    const totalPartnerConv = filteredData.reduce(
-      (s, r) => s + (parseInt(r.partner_conversions) || 0),
-      0
-    );
-    const totalAffiliateConv = filteredData.reduce(
-      (s, r) => s + (parseInt(r.affiliate_conversions) || 0),
-      0
-    );
-    const totalRevenue = filteredData.reduce(
-      (s, r) => s + (parseFloat(r.revenue) || 0),
-      0
-    );
-    const totalCost = filteredData.reduce(
-      (s, r) => s + (parseFloat(r.cost_to_affiliate) || 0),
-      0
-    );
     const totalProfit = filteredData.reduce(
-      (s, r) => s + (parseFloat(r.profit) || 0),
+      (sum, r) => sum + (parseFloat(r.profit) || 0),
       0
     );
-
-    return {
-      totalClicks,
-      totalPartnerConv,
-      totalAffiliateConv,
-      totalRevenue,
-      totalCost,
-      totalProfit,
-    };
+    return { totalProfit };
   }, [filteredData]);
-
-  // Export
-  const exportToCSV = () => {
-    const headers = Object.keys(visibleColumns).filter((k) => visibleColumns[k]);
-    const csvRows = [
-      headers.join(","),
-      ...filteredData.map((r) =>
-        headers.map((col) => JSON.stringify(r[col] || "")).join(",")
-      ),
-    ];
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
-    saveAs(blob, "mob13r_report.csv");
-  };
-
-  const exportToExcel = () => {
-    const visibleData = filteredData.map((r) => {
-      const obj = {};
-      for (const key in visibleColumns)
-        if (visibleColumns[key]) obj[key] = r[key];
-      return obj;
-    });
-    const sheet = XLSX.utils.json_to_sheet(visibleData);
-    const book = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(book, sheet, "Report");
-    XLSX.writeFile(book, "mob13r_report.xlsx");
-  };
-
-  const toggleColumn = (key) => {
-    setVisibleColumns((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
 
   return (
     <div className="admin-dashboard">
-      {/* Top Section */}
       <div className="dashboard-top">
-        <div className="navbar-placeholder">
-          🧭 Navbar Area — (menu buttons will be added later)
-        </div>
+        <div className="auto-refresh-left">⏱️ {formatTime(timer)}</div>
         <h2 className="dashboard-title">📊 Mob13r Performance Dashboard</h2>
-        <div className="auto-refresh-right">
-          ⏱️ Auto-refresh in {formatTime(timer)}
+        <div className="navbar-area">
+          <button>Partners</button>
+          <button>Services</button>
+          <button>Campaigns</button>
+          <button>Reports</button>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="filters">
-        <select
-          value={filters.partner}
-          onChange={(e) => setFilters({ ...filters, partner: e.target.value })}
-        >
-          <option value="">All Partners</option>
-          {[...new Set(reportData.map((r) => r.partner))].map((p, i) => (
-            <option key={i} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
+      {/* ✅ Campaign stats summary cards */}
+      <div className="campaign-stats-grid">
+        {campaignStats.map((c) => (
+          <div key={c.campaign_id} className="campaign-card">
+            <div className="card-header">
+              <h4>{c.campaign_name}</h4>
+              <span className="type-badge">{c.type}</span>
+            </div>
 
-        <select
-          value={filters.affiliate}
-          onChange={(e) =>
-            setFilters({ ...filters, affiliate: e.target.value })
-          }
-        >
-          <option value="">All Affiliates</option>
-          {[...new Set(reportData.map((r) => r.affiliate))].map((a, i) => (
-            <option key={i} value={a}>
-              {a}
-            </option>
-          ))}
-        </select>
+            <div className="card-body">
+              <div className="stat">
+                <strong>Received:</strong> {c.total_received}
+              </div>
+              <div className="stat">
+                <strong>Forwarded:</strong> {c.total_forwarded}
+              </div>
+              <div className="stat held">
+                <strong>Held:</strong>{" "}
+                {c.total_received - c.total_forwarded}
+              </div>
+              <div className="stat">
+                <strong>Forward %:</strong> {c.forward_percentage}%
+              </div>
+              <div className="stat">
+                <strong>Profit:</strong>{" "}
+                <span
+                  style={{
+                    color:
+                      c.total_profit >= 0 ? "#00ff80" : "#ff4d4d",
+                  }}
+                >
+                  ${c.total_profit.toFixed(2)}
+                </span>
+              </div>
+            </div>
 
-        <input
-          type="date"
-          value={filters.startDate}
-          onChange={(e) =>
-            setFilters({ ...filters, startDate: e.target.value })
-          }
-        />
-        <input
-          type="date"
-          value={filters.endDate}
-          onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-        />
-
-        <button onClick={applyFilters}>Apply Filters</button>
-        <button onClick={fetchData}>🔄 Refresh</button>
-
-        {/* Restore Hide/Unhide Columns */}
-        <div className="column-toggle">
-          <span>👁️ Columns</span>
-          <div className="column-dropdown">
-            {Object.keys(visibleColumns).map((key) => (
-              <label key={key}>
-                <input
-                  type="checkbox"
-                  checked={visibleColumns[key]}
-                  onChange={() => toggleColumn(key)}
-                />
-                {key.replaceAll("_", " ").toUpperCase()}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <button onClick={exportToCSV}>📄 CSV</button>
-        <button onClick={exportToExcel}>📘 Excel</button>
-      </div>
-
-      {/* Table */}
-      <table className="report-table">
-        <thead>
-          <tr>
-            {Object.keys(visibleColumns).map(
-              (key) =>
-                visibleColumns[key] && (
-                  <th key={key}>{key.replaceAll("_", " ").toUpperCase()}</th>
-                )
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {filteredData.map((row, i) => (
-            <tr key={i}>
-              {Object.keys(visibleColumns).map(
-                (key) =>
-                  visibleColumns[key] && (
-                    <td
-                      key={key}
-                      style={
-                        key === "profit"
-                          ? {
-                              color:
-                                parseFloat(row.profit) >= 0
-                                  ? "#00ff80"
-                                  : "#ff4d4d",
-                              fontWeight: "bold",
-                            }
-                          : {}
-                      }
-                    >
-                      {row[key]}
-                    </td>
-                  )
+            <div className="card-actions">
+              {c.total_received - c.total_forwarded > 0 && (
+                <button
+                  className="release-btn"
+                  onClick={async () => {
+                    try {
+                      await axios.post(
+                        `${process.env.REACT_APP_API_URL}/admin/campaigns/${c.campaign_id}/release-held`
+                      );
+                      fetchData();
+                      alert("✅ Held conversions released!");
+                    } catch (e) {
+                      alert("Failed to release conversions.");
+                    }
+                  }}
+                >
+                  🚀 Release Held
+                </button>
               )}
-            </tr>
-          ))}
-          <tr className="total-row">
-            <td colSpan={8}>Total</td>
-            {visibleColumns.clicks && <td>{totals.totalClicks}</td>}
-            {visibleColumns.partner_conversions && (
-              <td>{totals.totalPartnerConv}</td>
-            )}
-            {visibleColumns.affiliate_conversions && (
-              <td>{totals.totalAffiliateConv}</td>
-            )}
-            {visibleColumns.revenue && (
-              <td>${totals.totalRevenue.toFixed(2)}</td>
-            )}
-            {visibleColumns.cost_to_affiliate && (
-              <td>${totals.totalCost.toFixed(2)}</td>
-            )}
-            {visibleColumns.profit && (
-              <td
-                style={{
-                  color:
-                    totals.totalProfit >= 0 ? "#00ff80" : "#ff4d4d",
-                  fontWeight: "bold",
-                }}
+              <button
+                className="view-btn"
+                onClick={() => alert("Conversion details modal coming soon")}
               >
-                ${totals.totalProfit.toFixed(2)}
-              </td>
-            )}
-          </tr>
-        </tbody>
-      </table>
+                👁️ View Conversions
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Totals section */}
+      <div className="totals-section">
+        <h3>
+          💰 Total Profit:{" "}
+          <span
+            style={{
+              color: totals.totalProfit >= 0 ? "#00ff80" : "#ff4d4d",
+              fontWeight: "bold",
+            }}
+          >
+            ${totals.totalProfit.toFixed(2)}
+          </span>
+        </h3>
+      </div>
+
+      {/* Campaign Manager component placeholder */}
+      <CampaignManager />
     </div>
   );
 };
