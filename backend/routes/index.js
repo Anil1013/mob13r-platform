@@ -3,7 +3,7 @@ import { pool } from "../server.js";
 
 const router = express.Router();
 
-// ✅ Root API route
+// ✅ Root test route
 router.get("/", (req, res) => {
   res.json({
     status: "API working 🚀",
