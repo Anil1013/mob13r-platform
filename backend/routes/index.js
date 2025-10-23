@@ -3,30 +3,33 @@ import { pool } from "../server.js";
 
 const router = express.Router();
 
-// ✅ Root test route
+// Root API route
 router.get("/", (req, res) => {
   res.json({
-    status: "API working 🚀",
-    message: "Welcome to Mob13r backend",
+    status: "✅ Mob13r API working",
+    version: "v2.0",
+    message: "Publisher & Advertiser API is live",
   });
 });
 
-// ✅ DB connection test route
-router.get("/db-check", async (req, res) => {
+// List all advertisers
+router.get("/advertisers", async (req, res) => {
   try {
-    const result = await pool.query("SELECT NOW()");
-    res.json({
-      status: "✅ DB connected successfully",
-      time: result.rows[0].now,
-    });
+    const { rows } = await pool.query("SELECT * FROM advertisers ORDER BY id DESC");
+    res.json(rows);
   } catch (error) {
-    console.error("❌ DB connection failed:", error.message);
-    res.status(500).json({
-      status: "❌ DB connection failed",
-      error: error.message,
-    });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// List all publishers
+router.get("/publishers", async (req, res) => {
+  try {
+    const { rows } = await pool.query("SELECT * FROM publishers ORDER BY id DESC");
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
 export default router;
-
