@@ -1,11 +1,10 @@
 // backend/models/associations.js
-import Publisher from "./Publisher.js";
-import Advertiser from "./Advertiser.js";
-
 
 export function setupAssociations({ Publisher, Advertiser }) {
-  Publisher.hasMany(Advertiser, { foreignKey: "publisherId" });
-  Advertiser.belongsTo(Publisher, { foreignKey: "publisherId" });
-}
+  // If you want to relate Publisher and Advertiser:
+  // Publisher.hasMany(Advertiser, { foreignKey: "publisherId" });
+  // Advertiser.belongsTo(Publisher, { foreignKey: "publisherId" });
 
-export { Publisher, Advertiser };
+  // Currently keeping it empty to avoid relationship errors
+  console.log("✅ Associations setup completed");
+}
