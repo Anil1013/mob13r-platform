@@ -8,23 +8,21 @@ import { sequelize } from "./models/index.js";
 dotenv.config();
 
 const app = express();
+const PORT = process.env.PORT || 8080;
+
+// Middlewares
+app.use(cors());
 app.use(express.json());
 
-const allowedOrigins = [
-  "https://dashboard.mob13r.com",
-  "http://localhost:3000",
-];
-app.use(cors({ origin: allowedOrigins, credentials: true }));
-
+// Routes
 app.use("/api", routes);
 
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, async () => {
-  try {
-    await sequelize.authenticate();
-    console.log("✅ Database connection established.");
-    console.log(`🚀 Mob13r Backend running on port ${PORT}`);
-  } catch (error) {
-    console.error("❌ Failed to connect DB:", error.message);
-  }
+// Root endpoint
+app.get("/", (req, res) => {
+  res.json({ message: "Mob13r Backend is running ✅" });
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 Mob13r Backend running on port ${PORT}`);
 });

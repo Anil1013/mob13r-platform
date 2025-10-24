@@ -29,14 +29,14 @@ const sequelize = new Sequelize(
 const Publisher = initPublisher(sequelize);
 const Advertiser = initAdvertiser(sequelize);
 
-// Setup associations (Publisher ↔ Advertiser)
+// Setup associations
 setupAssociations({ Publisher, Advertiser });
 
 // Connect and sync DB
 try {
   await sequelize.authenticate();
   console.log("✅ Connected to PostgreSQL successfully!");
-  await sequelize.sync({ alter: true }); // Auto-create or update tables
+  await sequelize.sync({ alter: true });
   console.log("🧩 Tables synced with Sequelize models.");
 } catch (error) {
   console.error("❌ DB Connection Error:", error.message);
