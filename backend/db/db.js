@@ -14,8 +14,9 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-pool.connect()
-  .then(() => console.log("✅ Connected to PostgreSQL (mob13r-db)"))
-  .catch((err) => console.error("❌ Database connection error:", err));
+pool
+  .connect()
+  .then(() => console.log("✅ Connected to PostgreSQL Database (mob13r-db)"))
+  .catch((err) => console.error("❌ Database Connection Error:", err));
 
 export default pool;
