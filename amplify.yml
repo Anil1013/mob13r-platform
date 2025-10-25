@@ -3,9 +3,9 @@ frontend:
   phases:
     preBuild:
       commands:
-        - echo "🧹 Cleaning and installing frontend dependencies..."
+        - echo "🧹 Installing frontend dependencies..."
         - cd frontend
-        - npm ci || npm install
+        - npm install
     build:
       commands:
         - echo "⚙️ Building frontend..."
@@ -22,12 +22,11 @@ backend:
   phases:
     preBuild:
       commands:
-        - echo "🧠 Skipping backend build (handled by Elastic Beanstalk)"
+        - echo "🧠 Skipping backend build (Elastic Beanstalk handles backend)"
     build:
       commands:
-        - echo "🧩 Running backend API health check..."
-        # 🌍 Replace this URL with your real Elastic Beanstalk backend endpoint:
-        - curl -I https://backend.mob13r.com/api || echo "⚠️ Backend health check failed!"
+        - echo "🧩 Checking backend API health..."
+        - curl -I https://backend.mob13r.com/api || echo "⚠️ Backend check failed!"
         - echo "✅ Backend check complete."
   artifacts:
     baseDirectory: backend
