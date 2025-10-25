@@ -1,23 +1,4 @@
 version: 1
-frontend:
-  phases:
-    preBuild:
-      commands:
-        - echo "🧹 Installing frontend dependencies..."
-        - cd frontend
-        - npm install
-    build:
-      commands:
-        - echo "⚙️ Building frontend..."
-        - npm run build
-  artifacts:
-    baseDirectory: frontend/build
-    files:
-      - '**/*'
-  cache:
-    paths:
-      - frontend/node_modules/**/*
-
 backend:
   phases:
     preBuild:
@@ -32,3 +13,24 @@ backend:
     baseDirectory: backend
     files:
       - '**/*'
+
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - echo "🧹 Installing frontend dependencies..."
+        - cd frontend
+        - npm install --include=dev
+        - npm install react-scripts
+    build:
+      commands:
+        - echo "⚙️ Building frontend for production..."
+        - npm run build
+  artifacts:
+    baseDirectory: frontend/build
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - frontend/node_modules/**/*
+
