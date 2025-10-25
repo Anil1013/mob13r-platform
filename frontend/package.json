@@ -2,25 +2,24 @@
   "name": "mob13r-frontend",
   "version": "1.0.0",
   "private": true,
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "autoprefixer": "^10.4.20",
+    "axios": "^1.7.4",
+    "lucide-react": "^0.379.0",
+    "postcss": "^8.4.47",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.27.0",
+    "react-scripts": "5.0.1",
+    "tailwindcss": "^3.4.13"
+  },
+  "devDependencies": {},
   "scripts": {
-    "start": "set SKIP_PREFLIGHT_CHECK=true && react-scripts start",
+    "start": "set NODE_OPTIONS=--openssl-legacy-provider && react-scripts start",
     "build": "set NODE_OPTIONS=--openssl-legacy-provider && react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
-  },
-  "dependencies": {
-    "axios": "^1.7.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.0",
-    "react-scripts": "^5.0.1",
-    "tailwindcss": "^3.4.3"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4.0.0",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.47",
-    "tailwindcss": "^3.4.13"
   },
   "eslintConfig": {
     "extends": [
