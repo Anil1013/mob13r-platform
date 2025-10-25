@@ -7,6 +7,7 @@ import { setupAssociations } from "./associations.js";
 
 dotenv.config();
 
+// ✅ Create Sequelize instance
 const sequelize = new Sequelize(
   process.env.DB_NAME,
   process.env.DB_USER,
@@ -25,21 +26,23 @@ const sequelize = new Sequelize(
   }
 );
 
-// Initialize models
+// ✅ Initialize Models
 const Publisher = initPublisher(sequelize);
 const Advertiser = initAdvertiser(sequelize);
 
-// Setup associations
+// ✅ Setup Associations
 setupAssociations({ Publisher, Advertiser });
 
-// Connect and sync DB
-try {
-  await sequelize.authenticate();
-  console.log("✅ Connected to PostgreSQL successfully!");
-  await sequelize.sync({ alter: true });
-  console.log("🧩 Tables synced with Sequelize models.");
-} catch (error) {
-  console.error("❌ DB Connection Error:", error.message);
-}
+// ✅ Test DB connection
+(async () => {
+  try {
+    await sequelize.authenticate();
+    console.log("✅ Connected to PostgreSQL successfully!");
+    await sequelize.sync({ alter: true });
+    console.log("🧩 Tables synced with Sequelize models.");
+  } catch (error) {
+    console.error("❌ DB Connection Error:", error.message);
+  }
+})();
 
 export { sequelize, Publisher, Advertiser };
