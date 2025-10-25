@@ -4,7 +4,7 @@ frontend:
     preBuild:
       commands:
         - cd frontend
-        - npm install
+        - npm ci || npm install
     build:
       commands:
         - npm run build
@@ -14,5 +14,4 @@ frontend:
       - '**/*'
   cache:
     paths:
-      - node_modules/**/*
       - frontend/node_modules/**/*
