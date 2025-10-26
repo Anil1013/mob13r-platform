@@ -2,6 +2,13 @@
   "name": "mob13r-frontend",
   "version": "1.0.0",
   "private": true,
+{
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
   "dependencies": {
     "@tailwindcss/postcss": "^4.0.0",
     "autoprefixer": "^10.4.20",
