@@ -13,8 +13,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Create deployment package
-        run: zip -r mob13r-backend-v1.zip backend/
+      - name: Install dependencies
+        working-directory: backend
+        run: npm install
+
+      - name: Zip backend for deploy
+        run: zip -r backend.zip backend
 
       - name: Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
@@ -25,4 +29,4 @@ jobs:
           environment_name: "Mb13r-backend-env"
           region: "ap-south-1"
           version_label: "v1-${{ github.run_number }}"
-          deployment_package: "mob13r-backend-v1.zip"
+          deployment_package: "backend.zip"
