@@ -1,4 +1,4 @@
-// ✅ Mob13r Backend — Windows & ESM Safe
+// ✅ Mob13r Backend — ESM + AWS Elastic Beanstalk Ready
 import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
@@ -6,17 +6,16 @@ import helmet from "helmet";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-
-// Fix __dirname for ES Modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// ✅ Import local modules normally (relative paths work now)
 import pool from "./db/db.js";
 import { initDatabase } from "./db/initTables.js";
 import clickRoutes from "./routes/clicks.js";
 
 dotenv.config();
+
+// Fix __dirname for ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 const PORT = process.env.PORT || 8080;
 
@@ -40,7 +39,7 @@ app.use(express.json());
 // ✅ Routes
 app.use("/api/clicks", clickRoutes);
 
-// ✅ Initialize Database Tables Automatically
+// ✅ Initialize DB Tables
 initDatabase();
 
 // ✅ Health Check
@@ -55,7 +54,7 @@ app.get("/api/publishers", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM publishers ORDER BY id ASC");
     res.json(result.rows);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "Failed to fetch publishers" });
   }
 });
@@ -200,7 +199,10 @@ app.delete("/api/offers/:id", async (req, res) => {
   }
 });
 
-app.get("/api/test-db", async (req, res) => {
+// =========================
+// 🧪 DB Test Route
+// =========================
+app.get("/api/db-test", async (req, res) => {
   try {
     const result = await pool.query("SELECT NOW() as time");
     res.json({ status: "✅ Connected", time: result.rows[0].time });
@@ -215,5 +217,5 @@ app.get("/api/test-db", async (req, res) => {
 // =========================
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`✅ API ready at https://backend.mob13r.com/api`);
+  console.log(`✅ API ready at /api`);
 });
