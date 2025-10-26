@@ -25,7 +25,6 @@ jobs:
 
       - name: Zip backend folder for Elastic Beanstalk
         run: |
-          cd ..
           zip -r backend.zip backend/*
 
       - name: Deploy to Elastic Beanstalk
