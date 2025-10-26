@@ -1,0 +1,28 @@
+name: Deploy Backend to AWS Elastic Beanstalk
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Create deployment package
+        run: zip -r mob13r-backend-v1.zip backend/
+
+      - name: Deploy to Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v21
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          application_name: "Mb13r-backend"
+          environment_name: "Mb13r-backend-env"
+          region: "ap-south-1"
+          version_label: "v1-${{ github.run_number }}"
+          deployment_package: "mob13r-backend-v1.zip"
