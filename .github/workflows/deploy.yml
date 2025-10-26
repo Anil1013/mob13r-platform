@@ -18,14 +18,15 @@ jobs:
         with:
           node-version: 18
 
-      - name: Install dependencies
+      - name: Install backend dependencies
         run: |
           cd backend
           npm install
 
-      - name: Zip backend folder for Elastic Beanstalk
+      - name: Zip backend contents for Elastic Beanstalk
         run: |
-          zip -r backend.zip backend/*
+          cd backend
+          zip -r ../backend.zip .
 
       - name: Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
