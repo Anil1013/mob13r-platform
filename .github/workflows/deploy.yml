@@ -23,10 +23,10 @@ jobs:
           cd backend
           npm install
 
-      - name: Zip backend folder for deployment
+      - name: Zip backend folder for Elastic Beanstalk
         run: |
-          cd backend
-          zip -r ../backend.zip .
+          cd ..
+          zip -r backend.zip backend/*
 
       - name: Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
