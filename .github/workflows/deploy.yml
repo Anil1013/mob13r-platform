@@ -23,6 +23,11 @@ jobs:
           cd backend
           npm install
 
+      - name: Zip backend folder for deployment
+        run: |
+          cd backend
+          zip -r ../backend.zip .
+
       - name: Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
         with:
@@ -32,5 +37,5 @@ jobs:
           environment_name: Mb13r-backend-env
           region: ap-south-1
           version_label: v1-${{ github.run_number }}
-          deployment_package: backend/
+          deployment_package: backend.zip
           wait_for_deployment: true
