@@ -8,6 +8,8 @@ import adminRoutes from './routes/admin.js';
 import publishersRoutes from './routes/publishers.js';
 import advertisersRoutes from './routes/advertisers.js';
 import offersRoutes from './routes/offers.js';
+import clickRoutes from './routes/clicks.js';
+import postbackRoutes from './routes/postbacks.js';
 import conversionsRoutes from './routes/conversions.js';
 
 dotenv.config();
@@ -33,6 +35,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/publishers', publishersRoutes);
 app.use('/api/advertisers', advertisersRoutes);
 app.use('/api/offers', offersRoutes);
+app.use('/api/clicks', clickRoutes);
+app.use('/api/postbacks', postbackRoutes);
 app.use('/api/conversions', conversionsRoutes);
 
 // safe query runner for the QueryConsole (READ-ONLY)
