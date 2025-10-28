@@ -1,0 +1,40 @@
+name: 🚀 Deploy Backend to AWS Elastic Beanstalk
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧩 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: 📦 Install Dependencies
+        working-directory: backend
+        run: npm install
+
+      - name: 🗜️ Zip Backend for Beanstalk
+        run: |
+          cd backend
+          zip -r ../backend.zip .
+
+      - name: 🚀 Deploy to AWS Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v22
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          application_name: Mb13r-backend
+          environment_name: Mb13r-backend-env
+          region: ap-south-1
+          version_label: build-${{ github.run_number }}
+          deployment_package: backend.zip
+          wait_for_deployment: true
