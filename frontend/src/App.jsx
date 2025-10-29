@@ -14,13 +14,9 @@ import Postbacks from "./pages/Postbacks.jsx";
 function App() {
   return (
     <div className="flex min-h-screen bg-gray-50 text-gray-900">
-      {/* Sidebar (Navigation Menu) */}
       <Sidebar />
-
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
         <Header />
-
         <main className="flex-1 overflow-y-auto p-6">
           <Routes>
             <Route path="/" element={<Dashboard />} />
@@ -29,8 +25,6 @@ function App() {
             <Route path="/clicks" element={<Clicks />} />
             <Route path="/conversions" element={<Conversions />} />
             <Route path="/postbacks" element={<Postbacks />} />
-
-            {/* Redirect any invalid routes to dashboard */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
