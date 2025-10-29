@@ -19,9 +19,8 @@ frontend:
     preBuild:
       commands:
         - echo "🧹 Installing frontend dependencies..."
-        - cd frontend
-        - npm install --include=dev
-        - npm install react-scripts
+        - npm install --prefix frontend --include=dev
+        - npm install react-scripts --prefix frontend
     build:
       commands:
         - echo "⚙️ Building frontend for production..."
