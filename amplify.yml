@@ -18,12 +18,13 @@ frontend:
   phases:
     preBuild:
       commands:
-        - echo "🧹 Installing frontend dependencies..."
         - cd frontend
-        - npm install --include=dev
+        - echo "🧹 Installing frontend dependencies..."
+        - npm ci || npm install
         - npm install react-scripts
     build:
       commands:
+        - cd frontend
         - echo "⚙️ Building frontend for production..."
         - npm run build
   artifacts:
@@ -33,4 +34,3 @@ frontend:
   cache:
     paths:
       - frontend/node_modules/**/*
-
