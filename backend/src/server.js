@@ -22,33 +22,32 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 // ✅ CORS
-app.use(cors({
-  origin: ["https://dashboard.mob13r.com", "http://localhost:3000"],
-  credentials: true,
-  methods: "GET,POST,PUT,DELETE,OPTIONS",
-  allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"]
-}));
+app.use(
+  cors({
+    origin: ["https://dashboard.mob13r.com", "http://localhost:3000"],
+    credentials: true,
+    methods: "GET,POST,PUT,DELETE,OPTIONS",
+    allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"]
+  })
+);
 
-app.use(helmet({
-  crossOriginResourcePolicy: false
-}));
+app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(bodyParser.json({ limit: "10mb" }));
 
-app.use(bodyParser.json({ limit: "5mb" }));
-
-// ✅ Health Check (PUBLIC)
+// ✅ Health check (PUBLIC)
 app.get("/api/health", async (req, res) => {
   try {
     const r = await pool.query("SELECT NOW() AS db_time");
     res.json({ status: "ok", db_time: r.rows[0].db_time });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    res.status(500).json({ status: "error", message: err.message });
   }
 });
 
-// ✅ Admin keys route (first key creation allowed without auth)
+// ✅ Admin routes (first key creation allowed)
 app.use("/api/admin", adminRoutes);
 
-// ✅ Protected routes (API Key required)
+// ✅ Protected API routes (after admin key auth)
 app.use("/api/stats", authKey, statsRoutes);
 app.use("/api/publishers", authKey, publishersRoutes);
 app.use("/api/advertisers", authKey, advertisersRoutes);
@@ -57,7 +56,7 @@ app.use("/api/clicks", authKey, clickRoutes);
 app.use("/api/postbacks", authKey, postbackRoutes);
 app.use("/api/conversions", authKey, conversionsRoutes);
 
-// ✅ Start server
+// ✅ Server start
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Backend running on port ${PORT}`);
 });
