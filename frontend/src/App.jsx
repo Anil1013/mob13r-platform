@@ -3,9 +3,6 @@ import { Routes, Route, Navigate } from "react-router-dom";
 
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
-import ApiDocs from "./pages/ApiDocs.jsx";
-import FraudAlerts from "./pages/FraudAlerts.jsx";
-import LandingBuilder from "./pages/LandingBuilder.jsx";
 
 // Pages
 import Dashboard from "./pages/Dashboard.jsx";
@@ -15,6 +12,10 @@ import Clicks from "./pages/Clicks.jsx";
 import Conversions from "./pages/Conversions.jsx";
 import Postbacks from "./pages/Postbacks.jsx";
 import Offers from "./pages/Offers.jsx"; // ✅ Make sure this file exists
+import ApiDocs from "./pages/ApiDocs.jsx";
+import FraudAlerts from "./pages/FraudAlerts.jsx";
+import LandingBuilder from "./pages/LandingBuilder.jsx";
+import AdminKeys from "./pages/AdminKeys.jsx";
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
             <Route path="/conversions" element={<Conversions />} />
             <Route path="/postbacks" element={<Postbacks />} />
             <Route path="/offers" element={<Offers />} /> {/* ✅ new route */}
+            <Route path="/admin-keys" element={<AdminKeys />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
