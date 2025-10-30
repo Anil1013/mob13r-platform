@@ -19,13 +19,30 @@ export default function AdminKeys() {
 
   const createKey = async () => {
     const res = await apiClient.post("/admin/apikey");
-    alert("✅ New API key created: " + res.data.api_key);
+    const key = res.data.api_key;
+
+    // ✅ Save API key to browser localStorage
+    localStorage.setItem("admin_key", key);
+
+    alert("✅ New API key created and saved!");
     loadKeys();
+    window.location.reload(); // Refresh dashboard auto-auth
   };
 
   const deleteKey = async (id) => {
     if (!window.confirm("Delete this API key?")) return;
     await apiClient.delete(`/admin/apikey/${id}`);
+
+    // ✅ Clear localStorage if the active key was deleted
+    const activeKey = localStorage.getItem("admin_key");
+    const removedKey = keys.find(k => k.id === id)?.api_key;
+    if (removedKey === activeKey) {
+      localStorage.removeItem("admin_key");
+      alert("⚠️ Deleted active key. Login again.");
+      window.location.href = "/admin-keys";
+      return;
+    }
+
     loadKeys();
   };
 
