@@ -1,10 +1,32 @@
 import pool from "./db.js";
+import bcrypt from "bcrypt";
 
 async function seed() {
   try {
-    console.log("🌱 Seeding database...");
+    console.log("🌱 Starting database seed...");
 
-    // Publishers
+    // ✅ Create default admin key if none exists
+    const checkAdmin = await pool.query(
+      "SELECT id FROM admin_keys LIMIT 1"
+    );
+
+    if (checkAdmin.rowCount === 0) {
+      const defaultKey = "Admin@123"; // temporary master key
+      const hash = await bcrypt.hash(defaultKey, 10);
+
+      await pool.query(
+        `INSERT INTO admin_keys (api_key) VALUES ($1)`,
+        [hash]
+      );
+
+      console.log("✅ Default Admin API Key created:");
+      console.log("🔑 Key:", defaultKey);
+      console.log("⚠️ Change it after first login!");
+    } else {
+      console.log("✅ Admin key already exists — skipping admin seed");
+    }
+
+    // ✅ Publishers
     await pool.query(`
       INSERT INTO publishers (name, website)
       VALUES
@@ -14,7 +36,7 @@ async function seed() {
       ON CONFLICT DO NOTHING;
     `);
 
-    // Advertisers
+    // ✅ Advertisers
     await pool.query(`
       INSERT INTO advertisers (name, website)
       VALUES
@@ -23,7 +45,7 @@ async function seed() {
       ON CONFLICT DO NOTHING;
     `);
 
-    // Offers
+    // ✅ Offers
     await pool.query(`
       INSERT INTO offers (name, payout, url)
       VALUES
@@ -33,7 +55,7 @@ async function seed() {
       ON CONFLICT DO NOTHING;
     `);
 
-    // Clicks
+    // ✅ Clicks
     await pool.query(`
       INSERT INTO clicks (publisher_id, offer_id, ip)
       VALUES
@@ -42,7 +64,7 @@ async function seed() {
       ON CONFLICT DO NOTHING;
     `);
 
-    // Conversions
+    // ✅ Conversions
     await pool.query(`
       INSERT INTO conversions (click_id, payout)
       VALUES
@@ -51,11 +73,10 @@ async function seed() {
       ON CONFLICT DO NOTHING;
     `);
 
-    console.log("✅ Seed completed!");
-    process.exit(0);
+    console.log("✅ Database seed completed!");
+
   } catch (err) {
-    console.error("❌ Seeding error:", err);
-    process.exit(1);
+    console.error("❌ Seed Error:", err);
   }
 }
 
