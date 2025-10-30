@@ -20,7 +20,8 @@ function Sidebar() {
     { name: "API Docs", path: "/api-docs" },
     { name: "Fraud Alerts", path: "/fraud-alerts" },
     { name: "Landing Builder", path: "/landing-builder" },
-  ];
+    { name: "Admin Keys", path: "/admin-keys" },
+     ];
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 shadow-sm flex flex-col min-h-screen">
