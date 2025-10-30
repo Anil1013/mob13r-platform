@@ -17,6 +17,9 @@ function Sidebar() {
     { name: "Clicks", path: "/clicks", icon: <MousePointerClick size={18} /> },
     { name: "Conversions", path: "/conversions", icon: <LineChart size={18} /> },
     { name: "Postbacks", path: "/postbacks", icon: <Repeat size={18} /> },
+    { name: "API Docs", path: "/api-docs" },
+    { name: "Fraud Alerts", path: "/fraud-alerts" },
+    { name: "Landing Builder", path: "/landing-builder" },
   ];
 
   return (
