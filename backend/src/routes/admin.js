@@ -1,17 +1,31 @@
-import express from 'express';
-import pool from '../db.js';
+import express from "express";
+import pool from "../db.js";
+import crypto from "crypto";
+
 const router = express.Router();
 
-// Example: set hold percent for a publisher
-router.post('/publisher/:id/hold', async (req, res) => {
-  const { id } = req.params;
-  const { hold_percent } = req.body;
+// Get / Generate API Key
+router.get("/apikey", async (req, res) => {
   try {
-    await pool.query('UPDATE publishers SET hold_percent = $1 WHERE id = $2', [hold_percent, id]);
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    const { rows } = await pool.query("SELECT api_key FROM admin_keys LIMIT 1");
+    if (rows.length) return res.json({ key: rows[0].api_key });
+    res.status(404).json({ error: "NO_KEY" });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
+});
+
+router.post("/apikey", async (req, res) => {
+  const key = crypto.randomBytes(24).toString("hex");
+  await pool.query("DELETE FROM admin_keys");
+  await pool.query("INSERT INTO admin_keys(api_key) VALUES ($1)", [key]);
+  res.json({ key });
+});
+
+// Fraud alerts mock data (later connect real logic)
+router.get("/fraud-alerts", async (req, res) => {
+  const { rows } = await pool.query("SELECT * FROM fraud_alerts ORDER BY created_at DESC LIMIT 50");
+  res.json(rows);
 });
 
 export default router;
