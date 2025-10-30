@@ -13,8 +13,12 @@ router.get("/", async (req, res) => {
         (SELECT COUNT(*) FROM conversions) AS conversions
     `;
     
-    const response = await pool.query(statsQuery);
-    res.json(response.rows[0]);
+    const result = await pool.query(statsQuery);
+    res.json({
+      ...result.rows[0],
+      refreshedAt: new Date()
+    });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
