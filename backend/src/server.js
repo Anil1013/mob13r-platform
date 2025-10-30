@@ -13,6 +13,7 @@ import offersRoutes from './routes/offers.js';
 import clickRoutes from './routes/clicks.js';
 import postbackRoutes from './routes/postbacks.js';
 import conversionsRoutes from './routes/conversions.js';
+import statsRoutes from './routes/stats.js';
 
 dotenv.config();
 
@@ -61,6 +62,7 @@ app.use("/api/offers", offersRoutes);
 app.use("/api/clicks", clickRoutes);
 app.use("/api/postbacks", postbackRoutes);
 app.use("/api/conversions", conversionsRoutes);
+app.use("/api/stats", statsRoutes);
 
 // ✅ SQL Query Console
 app.post("/api/query", async (req, res) => {
