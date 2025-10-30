@@ -114,6 +114,25 @@ app.use((req, res) => {
 });
 
 // Start server
+
+app.get("/api/stats", async (req, res) => {
+  try {
+    const pub = await pool.query("SELECT COUNT(*) FROM publishers");
+    const adv = await pool.query("SELECT COUNT(*) FROM advertisers");
+    const offers = await pool.query("SELECT COUNT(*) FROM offers");
+    const conv = await pool.query("SELECT COUNT(*) FROM conversions");
+    
+    res.json({
+      publishers: pub.rows[0].count,
+      advertisers: adv.rows[0].count,
+      offers: offers.rows[0].count,
+      conversions: conv.rows[0].count
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Mob13r Backend running on port ${PORT}`);
 });
