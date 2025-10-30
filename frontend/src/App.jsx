@@ -3,6 +3,9 @@ import { Routes, Route, Navigate } from "react-router-dom";
 
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
+import ApiDocs from "./pages/ApiDocs.jsx";
+import FraudAlerts from "./pages/FraudAlerts.jsx";
+import LandingBuilder from "./pages/LandingBuilder.jsx";
 
 // Pages
 import Dashboard from "./pages/Dashboard.jsx";
@@ -21,6 +24,9 @@ function App() {
         <Header />
         <main className="flex-1 overflow-y-auto p-6">
           <Routes>
+            <Route path="/api-docs" element={<ApiDocs />} />
+            <Route path="/fraud-alerts" element={<FraudAlerts />} />
+            <Route path="/landing-builder" element={<LandingBuilder />} />
             <Route path="/" element={<Dashboard />} />
             <Route path="/advertisers" element={<Advertisers />} />
             <Route path="/publishers" element={<Publishers />} />
