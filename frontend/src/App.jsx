@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
@@ -19,18 +19,22 @@ import LandingBuilder from "./pages/LandingBuilder.jsx";
 import AdminKeys from "./pages/AdminKeys.jsx";
 
 function App() {
+  const location = useLocation();
+  const isAdminKeyPage = location.pathname === "/admin-keys"; // ✅ allow access without key
+
   const [hasKey, setHasKey] = useState(!!localStorage.getItem("mob13r_api_key"));
 
-  const refreshKey = () => {
-    setHasKey(!!localStorage.getItem("mob13r_api_key"));
-  };
+  const refreshKey = () => setHasKey(!!localStorage.getItem("mob13r_api_key"));
 
-  // If no key → show popup
-  if (!hasKey) return <ApiKeyPrompt onSave={refreshKey} />;
+  // ✅ If no key AND not admin key page → show key input popup
+  if (!hasKey && !isAdminKeyPage) {
+    return <ApiKeyPrompt onSave={refreshKey} />;
+  }
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
       <Sidebar />
+
       <div className="flex-1 flex flex-col">
         <Header />
 
@@ -43,7 +47,7 @@ function App() {
             <Route path="/conversions" element={<Conversions />} />
             <Route path="/postbacks" element={<Postbacks />} />
             <Route path="/offers" element={<Offers />} />
-            <Route path="/admin-keys" element={<AdminKeys />} />
+            <Route path="/admin-keys" element={<AdminKeys />} /> {/* ✅ open access */}
             <Route path="/api-docs" element={<ApiDocs />} />
             <Route path="/fraud-alerts" element={<FraudAlerts />} />
             <Route path="/landing-builder" element={<LandingBuilder />} />
