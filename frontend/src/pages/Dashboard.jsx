@@ -12,7 +12,8 @@ export default function Dashboard() {
       const res = await apiClient.get("/stats");
       setStats(res.data);
     } catch (e) {
-      console.error("Error loading stats:", e.message);
+      console.error("❌ Error loading stats:", e.message);
+      setStats(null);
     } finally {
       setLoading(false);
     }
@@ -20,9 +21,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 60000);
+    const interval = setInterval(fetchStats, 60000); // refresh every 60s
     return () => clearInterval(interval);
   }, []);
+
+  const safe = (key) => stats?.[key] ?? 0; // ✅ avoids null crash
 
   return (
     <div>
@@ -44,10 +47,10 @@ export default function Dashboard() {
         <p className="text-gray-600 dark:text-gray-300">Loading stats...</p>
       ) : (
         <div className="grid md:grid-cols-4 gap-6">
-          <StatCard title="Publishers" value={stats.publishers} color="indigo" />
-          <StatCard title="Advertisers" value={stats.advertisers} color="green" />
-          <StatCard title="Offers" value={stats.offers} color="yellow" />
-          <StatCard title="Conversions" value={stats.conversions} color="purple" />
+          <StatCard title="Publishers" value={safe("publishers")} color="indigo" />
+          <StatCard title="Advertisers" value={safe("advertisers")} color="green" />
+          <StatCard title="Offers" value={safe("offers")} color="yellow" />
+          <StatCard title="Conversions" value={safe("conversions")} color="purple" />
         </div>
       )}
 
