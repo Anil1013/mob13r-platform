@@ -2,20 +2,22 @@ import React, { useEffect, useState } from "react";
 import { Bell, User, Sun, Moon } from "lucide-react";
 
 function Header() {
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(
+    localStorage.getItem("theme") === "dark" || false
+  );
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem("theme", dark ? "dark" : "light");
   }, [dark]);
 
   return (
     <header className="flex items-center justify-between px-6 py-4 bg-white dark:bg-gray-900 shadow-md border-b border-gray-200 dark:border-gray-800 sticky top-0 z-50 transition-all">
-      {/* Left: App Name / Logo */}
+      
       <h1 className="text-2xl font-semibold text-gray-800 dark:text-white tracking-wide">
         Mob13r Dashboard
       </h1>
 
-      {/* Right: Notification + User + Theme */}
       <div className="flex items-center gap-6">
         <button
           className="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition"
@@ -30,7 +32,7 @@ function Header() {
           className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:scale-110 transition"
           title="Toggle Theme"
         >
-          {dark ? <Sun size={18} className="text-yellow-400" /> : <Moon size={18} className="text-gray-700" />}
+          {dark ? <Sun size={18} className="text-yellow-400"/> : <Moon size={18} className="text-gray-700" />}
         </button>
 
         <div className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 px-3 py-1 rounded-lg transition">
