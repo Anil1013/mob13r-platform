@@ -14,12 +14,17 @@ router.get("/", async (req, res) => {
     `;
     
     const result = await pool.query(statsQuery);
+
     res.json({
-      ...result.rows[0],
+      publishers: Number(result.rows[0].publishers),
+      advertisers: Number(result.rows[0].advertisers),
+      offers: Number(result.rows[0].offers),
+      conversions: Number(result.rows[0].conversions),
       refreshedAt: new Date()
     });
 
   } catch (err) {
+    console.error("Stats error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
