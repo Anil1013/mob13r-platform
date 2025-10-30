@@ -4,28 +4,35 @@ import crypto from "crypto";
 
 const router = express.Router();
 
-// Get / Generate API Key
+// 🟢 List all admin API keys
 router.get("/apikey", async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT api_key FROM admin_keys LIMIT 1");
-    if (rows.length) return res.json({ key: rows[0].api_key });
-    res.status(404).json({ error: "NO_KEY" });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+    const result = await pool.query("SELECT * FROM admin_keys ORDER BY id DESC;");
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
+// 🟢 Generate new API key
 router.post("/apikey", async (req, res) => {
-  const key = crypto.randomBytes(24).toString("hex");
-  await pool.query("DELETE FROM admin_keys");
-  await pool.query("INSERT INTO admin_keys(api_key) VALUES ($1)", [key]);
-  res.json({ key });
+  try {
+    const newKey = crypto.randomBytes(24).toString("hex");
+    await pool.query("INSERT INTO admin_keys (api_key) VALUES ($1);", [newKey]);
+    res.json({ api_key: newKey });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Fraud alerts mock data (later connect real logic)
-router.get("/fraud-alerts", async (req, res) => {
-  const { rows } = await pool.query("SELECT * FROM fraud_alerts ORDER BY created_at DESC LIMIT 50");
-  res.json(rows);
+// 🔴 Delete an API key
+router.delete("/apikey/:id", async (req, res) => {
+  try {
+    await pool.query("DELETE FROM admin_keys WHERE id = $1;", [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;
