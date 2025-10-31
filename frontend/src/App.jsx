@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
-import ApiKeyPrompt from "./components/ApiKeyPrompt.jsx";
 
 // Pages
 import Dashboard from "./pages/Dashboard.jsx";
@@ -16,41 +15,39 @@ import Offers from "./pages/Offers.jsx";
 import ApiDocs from "./pages/ApiDocs.jsx";
 import FraudAlerts from "./pages/FraudAlerts.jsx";
 import LandingBuilder from "./pages/LandingBuilder.jsx";
-import AdminKeys from "./pages/AdminKeys.jsx";
+import Login from "./pages/Login.jsx";
+
+function PrivateRoute({ children }) {
+  const token = localStorage.getItem("mob13r_token");
+  return token ? children : <Navigate to="/login" replace />;
+}
 
 function App() {
   const location = useLocation();
-  const isAdminKeyPage = location.pathname === "/admin-keys"; // ✅ allow access without key
-
-  const [hasKey, setHasKey] = useState(!!localStorage.getItem("mob13r_api_key"));
-
-  const refreshKey = () => setHasKey(!!localStorage.getItem("mob13r_api_key"));
-
-  // ✅ If no key AND not admin key page → show key input popup
-  if (!hasKey && !isAdminKeyPage) {
-    return <ApiKeyPrompt onSave={refreshKey} />;
-  }
+  const isLogin = location.pathname === "/login";
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
-      <Sidebar />
+    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+      {!isLogin && <Sidebar />}
 
       <div className="flex-1 flex flex-col">
-        <Header />
+        {!isLogin && <Header />}
 
         <main className="flex-1 overflow-y-auto p-6">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/advertisers" element={<Advertisers />} />
-            <Route path="/publishers" element={<Publishers />} />
-            <Route path="/clicks" element={<Clicks />} />
-            <Route path="/conversions" element={<Conversions />} />
-            <Route path="/postbacks" element={<Postbacks />} />
-            <Route path="/offers" element={<Offers />} />
-            <Route path="/admin-keys" element={<AdminKeys />} /> {/* ✅ open access */}
-            <Route path="/api-docs" element={<ApiDocs />} />
-            <Route path="/fraud-alerts" element={<FraudAlerts />} />
-            <Route path="/landing-builder" element={<LandingBuilder />} />
+            <Route path="/login" element={<Login />} />
+
+            <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+            <Route path="/advertisers" element={<PrivateRoute><Advertisers /></PrivateRoute>} />
+            <Route path="/publishers" element={<PrivateRoute><Publishers /></PrivateRoute>} />
+            <Route path="/clicks" element={<PrivateRoute><Clicks /></PrivateRoute>} />
+            <Route path="/conversions" element={<PrivateRoute><Conversions /></PrivateRoute>} />
+            <Route path="/postbacks" element={<PrivateRoute><Postbacks /></PrivateRoute>} />
+            <Route path="/offers" element={<PrivateRoute><Offers /></PrivateRoute>} />
+            <Route path="/api-docs" element={<PrivateRoute><ApiDocs /></PrivateRoute>} />
+            <Route path="/fraud-alerts" element={<PrivateRoute><FraudAlerts /></PrivateRoute>} />
+            <Route path="/landing-builder" element={<PrivateRoute><LandingBuilder /></PrivateRoute>} />
+
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
