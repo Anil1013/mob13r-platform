@@ -18,9 +18,16 @@ jobs:
         with:
           node-version: 18
 
-      - name: 📦 Install Dependencies
+      - name: 📦 Install Backend Dependencies
         working-directory: backend
         run: npm install
+
+      - name: 🧠 Run DB Migrations
+        working-directory: backend
+        run: |
+          echo "🚀 Running DB migrations before deployment..."
+          node src/migrate.js
+          echo "✅ Migration finished"
 
       - name: 🗜️ Zip Backend for Beanstalk
         run: |
