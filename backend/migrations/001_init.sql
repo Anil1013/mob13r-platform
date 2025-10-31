@@ -1,5 +1,9 @@
 -- 001_init.sql - Mob13r platform base schema
 
+-- =========================
+-- 🔹 TABLES
+-- =========================
+
 CREATE TABLE IF NOT EXISTS publishers (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -51,7 +55,7 @@ CREATE TABLE IF NOT EXISTS conversions (
     publisher_id INT,
     offer_id INT,
     amount NUMERIC(10,2),
-    status VARCHAR(50) DEFAULT 'pending', -- pending, validated, paid, rejected
+    status VARCHAR(50) DEFAULT 'pending',
     postback_received BOOLEAN DEFAULT false,
     validated_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -86,7 +90,10 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- trigger to update updated_at
+-- =========================
+-- 🔹 TRIGGER FUNCTION
+-- =========================
+
 CREATE OR REPLACE FUNCTION mob13r_update_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -95,7 +102,33 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_publishers_updated BEFORE UPDATE ON publishers FOR EACH ROW EXECUTE FUNCTION mob13r_update_timestamp();
-CREATE TRIGGER trg_advertisers_updated BEFORE UPDATE ON advertisers FOR EACH ROW EXECUTE FUNCTION mob13r_update_timestamp();
-CREATE TRIGGER trg_offers_updated BEFORE UPDATE ON offers FOR EACH ROW EXECUTE FUNCTION mob13r_update_timestamp();
-CREATE TRIGGER trg_users_updated BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION mob13r_update_timestamp();
+-- =========================
+-- 🔹 SAFE TRIGGER CREATION
+-- =========================
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_publishers_updated') THEN
+        CREATE TRIGGER trg_publishers_updated 
+        BEFORE UPDATE ON publishers 
+        FOR EACH ROW EXECUTE FUNCTION mob13r_update_timestamp();
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_advertisers_updated') THEN
+        CREATE TRIGGER trg_advertisers_updated 
+        BEFORE UPDATE ON advertisers 
+        FOR EACH ROW EXECUTE FUNCTION mob13r_update_timestamp();
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_offers_updated') THEN
+        CREATE TRIGGER trg_offers_updated 
+        BEFORE UPDATE ON offers 
+        FOR EACH ROW EXECUTE FUNCTION mob13r_update_timestamp();
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_users_updated') THEN
+        CREATE TRIGGER trg_users_updated 
+        BEFORE UPDATE ON users 
+        FOR EACH ROW EXECUTE FUNCTION mob13r_update_timestamp();
+    END IF;
+END $$;
