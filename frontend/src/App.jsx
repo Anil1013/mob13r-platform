@@ -4,7 +4,6 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
 
-// Pages
 import Dashboard from "./pages/Dashboard.jsx";
 import Advertisers from "./pages/Advertisers.jsx";
 import Publishers from "./pages/Publishers.jsx";
@@ -17,37 +16,39 @@ import FraudAlerts from "./pages/FraudAlerts.jsx";
 import LandingBuilder from "./pages/LandingBuilder.jsx";
 import Login from "./pages/Login.jsx";
 
-function PrivateRoute({ children }) {
-  const token = localStorage.getItem("mob13r_token");
-  return token ? children : <Navigate to="/login" replace />;
-}
-
 function App() {
   const location = useLocation();
-  const isLogin = location.pathname === "/login";
+  const isLoginPage = location.pathname === "/login";
+
+  const isLoggedIn = !!localStorage.getItem("auth_token");
+
+  // ✅ If not logged in & not on /login → redirect
+  if (!isLoggedIn && !isLoginPage) {
+    return <Navigate to="/login" replace />;
+  }
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
-      {!isLogin && <Sidebar />}
-
+    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
+      {/* ❌ Hide Sidebar & Header on login page */}
+      {!isLoginPage && <Sidebar />}
       <div className="flex-1 flex flex-col">
-        {!isLogin && <Header />}
+        {!isLoginPage && <Header />}
 
         <main className="flex-1 overflow-y-auto p-6">
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/advertisers" element={<Advertisers />} />
+            <Route path="/publishers" element={<Publishers />} />
+            <Route path="/clicks" element={<Clicks />} />
+            <Route path="/conversions" element={<Conversions />} />
+            <Route path="/postbacks" element={<Postbacks />} />
+            <Route path="/offers" element={<Offers />} />
+            <Route path="/api-docs" element={<ApiDocs />} />
+            <Route path="/fraud-alerts" element={<FraudAlerts />} />
+            <Route path="/landing-builder" element={<LandingBuilder />} />
 
-            <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-            <Route path="/advertisers" element={<PrivateRoute><Advertisers /></PrivateRoute>} />
-            <Route path="/publishers" element={<PrivateRoute><Publishers /></PrivateRoute>} />
-            <Route path="/clicks" element={<PrivateRoute><Clicks /></PrivateRoute>} />
-            <Route path="/conversions" element={<PrivateRoute><Conversions /></PrivateRoute>} />
-            <Route path="/postbacks" element={<PrivateRoute><Postbacks /></PrivateRoute>} />
-            <Route path="/offers" element={<PrivateRoute><Offers /></PrivateRoute>} />
-            <Route path="/api-docs" element={<PrivateRoute><ApiDocs /></PrivateRoute>} />
-            <Route path="/fraud-alerts" element={<PrivateRoute><FraudAlerts /></PrivateRoute>} />
-            <Route path="/landing-builder" element={<PrivateRoute><LandingBuilder /></PrivateRoute>} />
-
+            {/* Default */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
