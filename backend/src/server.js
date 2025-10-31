@@ -5,7 +5,6 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import pool from "./db.js";
 
-// Routes
 import adminRoutes from "./routes/admin.js";
 import publishersRoutes from "./routes/publishers.js";
 import advertisersRoutes from "./routes/advertisers.js";
@@ -27,14 +26,14 @@ app.use(
     origin: ["https://dashboard.mob13r.com", "http://localhost:3000"],
     credentials: true,
     methods: "GET,POST,PUT,DELETE,OPTIONS",
-    allowedHeaders: ["Content-Type", Authorization", "X-API-Key"]
+    allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"]
   })
 );
 
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(bodyParser.json({ limit: "10mb" }));
 
-// ✅ Health check (Public)
+// ✅ Public Health Check
 app.get("/api/health", async (req, res) => {
   try {
     const r = await pool.query("SELECT NOW() AS db_time");
@@ -44,13 +43,10 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// ✅ Admin Routes (Public only for first key)
-app.use("/api/admin/apikey", adminRoutes); // only allow apikey route without auth
+// ✅ Admin (first key allowed)
+app.use("/api/admin", adminRoutes);
 
-// ✅ Protect all other admin routes for future login system
-app.use("/api/admin", authKey, adminRoutes);
-
-// ✅ Protected API Routes
+// ✅ Protected API
 app.use("/api/stats", authKey, statsRoutes);
 app.use("/api/publishers", authKey, publishersRoutes);
 app.use("/api/advertisers", authKey, advertisersRoutes);
