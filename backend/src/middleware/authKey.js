@@ -3,28 +3,26 @@ import pool from "../db.js";
 
 export default async function authKey(req, res, next) {
   try {
-    // ✅ Allow CORS preflight
     if (req.method === "OPTIONS") return res.sendStatus(204);
 
-    // ✅ If no admin key exists yet -> allow first setup
-    const countResult = await pool.query("SELECT COUNT(*)::int AS total FROM admin_keys");
-    if (countResult.rows[0]?.total === 0) return next();
+    // ✅ Allow first boot without any key
+    const countRes = await pool.query("SELECT COUNT(*)::int AS c FROM admin_keys");
+    if (countRes.rows[0]?.c === 0) return next();
 
-    // ✅ Read API Key from multiple sources
-    const apiKey =
+    const key =
       req.header("x-api-key") ||
       (req.headers.authorization?.startsWith("Bearer ")
-        ? req.headers.authorization.replace("Bearer ", "")
+        ? req.headers.authorization.slice(7)
         : undefined) ||
       req.query.key;
 
-    if (!apiKey) {
+    if (!key) {
       return res.status(401).json({ error: "Missing API Key" });
     }
 
     const result = await pool.query(
       "SELECT id FROM admin_keys WHERE api_key = $1 LIMIT 1",
-      [apiKey]
+      [key]
     );
 
     if (result.rowCount === 0) {
@@ -32,8 +30,8 @@ export default async function authKey(req, res, next) {
     }
 
     return next();
-  } catch (error) {
-    console.error("authKey error:", error);
-    return res.status(500).json({ error: "Server auth error" });
+  } catch (err) {
+    console.error("authKey error:", err);
+    return res.status(500).json({ error: "Auth error" });
   }
 }
