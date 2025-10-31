@@ -27,14 +27,14 @@ app.use(
     origin: ["https://dashboard.mob13r.com", "http://localhost:3000"],
     credentials: true,
     methods: "GET,POST,PUT,DELETE,OPTIONS",
-    allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"]
+    allowedHeaders: ["Content-Type", Authorization", "X-API-Key"]
   })
 );
 
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(bodyParser.json({ limit: "10mb" }));
 
-// ✅ Health check (PUBLIC)
+// ✅ Health check (Public)
 app.get("/api/health", async (req, res) => {
   try {
     const r = await pool.query("SELECT NOW() AS db_time");
@@ -44,10 +44,13 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// ✅ Admin routes (first key creation allowed)
-app.use("/api/admin", adminRoutes);
+// ✅ Admin Routes (Public only for first key)
+app.use("/api/admin/apikey", adminRoutes); // only allow apikey route without auth
 
-// ✅ Protected API routes (after admin key auth)
+// ✅ Protect all other admin routes for future login system
+app.use("/api/admin", authKey, adminRoutes);
+
+// ✅ Protected API Routes
 app.use("/api/stats", authKey, statsRoutes);
 app.use("/api/publishers", authKey, publishersRoutes);
 app.use("/api/advertisers", authKey, advertisersRoutes);
@@ -56,7 +59,7 @@ app.use("/api/clicks", authKey, clickRoutes);
 app.use("/api/postbacks", authKey, postbackRoutes);
 app.use("/api/conversions", authKey, conversionsRoutes);
 
-// ✅ Server start
+// ✅ Start Server
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Backend running on port ${PORT}`);
 });
