@@ -20,7 +20,6 @@ function Sidebar() {
     { name: "API Docs", path: "/api-docs" },
     { name: "Fraud Alerts", path: "/fraud-alerts" },
     { name: "Landing Builder", path: "/landing-builder" },
-    { name: "Admin Keys", path: "/admin-keys" },
      ];
 
   return (
