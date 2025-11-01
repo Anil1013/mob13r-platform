@@ -20,7 +20,8 @@ function App() {
   const location = useLocation();
   const isLoginPage = location.pathname === "/login";
 
-  const isLoggedIn = !!localStorage.getItem("auth_token");
+  const isLoggedIn = !!localStorage.getItem("mob13r_token");
+
 
   // ✅ If not logged in & not on /login → redirect
   if (!isLoggedIn && !isLoginPage) {
