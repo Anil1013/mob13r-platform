@@ -12,7 +12,7 @@ export default function Login() {
     e.preventDefault();
     setErr("");
     try {
-      const { data } = await apiClient.post("/admin/login", { username, password });
+      const { data } = await apiClient.post("/auth/login", { username, password });
       localStorage.setItem("mob13r_token", data.token);
       nav("/");
     } catch (e) {
