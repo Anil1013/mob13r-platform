@@ -5,7 +5,6 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import pool from "./db.js";
 
-import adminRoutes from "./routes/admin.js";
 import publishersRoutes from "./routes/publishers.js";
 import advertisersRoutes from "./routes/advertisers.js";
 import offersRoutes from "./routes/offers.js";
@@ -44,7 +43,7 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// ✅ Public Auth Route
+// ✅ Public Auth Route (Login)
 app.use("/api/auth", authRoutes);
 
 // ✅ Protected Routes via JWT
