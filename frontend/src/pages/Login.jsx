@@ -12,7 +12,7 @@ export default function Login() {
     e.preventDefault();
     setErr("");
     try {
-      const { data } = await apiClient.post("/auth/login", { username, password });
+      const { data } = await apiClient.post("/admin/login", { username, password });
       localStorage.setItem("mob13r_token", data.token);
       nav("/");
     } catch (e) {
@@ -26,12 +26,15 @@ export default function Login() {
         <h2 className="text-lg font-bold mb-4">Mob13r Login</h2>
         {err && <p className="text-red-500 text-sm">{err}</p>}
 
-        <input className="w-full p-2 border rounded my-2"
+        <input 
+          className="w-full p-2 border rounded my-2"
           placeholder="Username"
           value={username}
           onChange={(e) => setU(e.target.value)}
         />
-        <input className="w-full p-2 border rounded my-2"
+
+        <input 
+          className="w-full p-2 border rounded my-2"
           type="password"
           placeholder="Password"
           value={password}
