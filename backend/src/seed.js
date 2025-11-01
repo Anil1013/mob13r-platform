@@ -18,17 +18,17 @@ async function seed() {
         [hash]
       );
 
-      console.log("✅ Default Admin user created");
+      console.log("✅ Default Admin created");
       console.log("👤 Username: admin");
       console.log("🔑 Password:", password);
     } else {
-      console.log("✅ Admin user already exists — skipping user seed");
+      console.log("✅ Admin already exists — skipped");
     }
 
-    // ✅ Create admin API key (not login password — ignore)
+    // ✅ Create Admin API key (not login password)
     const checkAdminKey = await pool.query("SELECT id FROM admin_keys LIMIT 1");
     if (checkAdminKey.rowCount === 0) {
-      const defaultKey = "Admin@123"; 
+      const defaultKey = "Admin@123";
       await pool.query(`INSERT INTO admin_keys (api_key) VALUES ($1)`, [defaultKey]);
       console.log("🔑 Admin API Key:", defaultKey);
     }
@@ -60,7 +60,6 @@ async function seed() {
     `);
 
     console.log("✅ Seed Completed!");
-
   } catch (err) {
     console.error("❌ Seed Error:", err);
   }
