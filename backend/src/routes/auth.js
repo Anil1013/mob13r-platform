@@ -5,13 +5,13 @@ import pool from "../db.js";
 
 const router = express.Router();
 
-// ✅ Login API
+// ✅ Login API (Admin Only)
 router.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
   try {
     const q = await pool.query(
-      "SELECT id, username, password_hash FROM users WHERE username = $1 LIMIT 1",
+      "SELECT id, username, password_hash, role FROM users WHERE username = $1 LIMIT 1",
       [username]
     );
 
@@ -19,12 +19,15 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid username or password" });
 
     const user = q.rows[0];
-    const match = await bcrypt.compare(password, user.password_hash);
 
+    if (user.role !== "admin")
+      return res.status(403).json({ error: "Access denied" });
+
+    const match = await bcrypt.compare(password, user.password_hash);
     if (!match) return res.status(401).json({ error: "Invalid credentials" });
 
     const token = jwt.sign(
-      { id: user.id, username: user.username },
+      { id: user.id, username: user.username, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
