@@ -2,106 +2,106 @@ import React, { useState, useEffect } from "react";
 import apiClient from "../api/apiClient";
 
 export default function Publishers() {
-  const [form, setForm] = useState({ name: "", email: "", website: "" });
-  const [pubs, setPubs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [publishers, setPublishers] = useState([]);
+  const [form, setForm] = useState({ id: null, name: "", email: "", website: "", hold_percent: 20 });
+  const [isEditing, setIsEditing] = useState(false);
 
-  const fetchPubs = async () => {
+  const fetchData = async () => {
+    const res = await apiClient.get("/publishers");
+    setPublishers(res.data);
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  const handleSubmit = async () => {
+    if (!form.name || !form.email || !form.website) return alert("All fields required");
+
     try {
-      const res = await apiClient.get("/publishers");
-      setPubs(res.data);
+      if (isEditing) {
+        await apiClient.put(`/publishers/${form.id}`, form);
+        alert("✅ Publisher updated");
+      } else {
+        const res = await apiClient.post("/publishers", form);
+        alert(`✅ Publisher created\nAPI Key: ${res.data.api_key}`);
+      }
+      resetForm();
+      fetchData();
     } catch (err) {
-      console.error(err);
-      alert("❌ Failed to load publishers");
-    }
-    setLoading(false);
-  };
-
-  const createPublisher = async () => {
-    if (!form.name || !form.email) return alert("Name & Email required");
-
-    try {
-      const res = await apiClient.post("/publishers", form);
-      alert(`✅ Publisher created!\nAPI Key: ${res.data.api_key}`);
-
-      setForm({ name: "", email: "", website: "" });
-      fetchPubs();
-    } catch (err) {
-      console.log(err);
-      alert("❌ Error creating publisher");
+      alert("⚠️ Error: " + err.response?.data?.error);
     }
   };
 
-  const regenKey = async (id) => {
-    if (!window.confirm("Regenerate API Key? Old key will stop working.")) return;
-
-    try {
-      const res = await apiClient.post(`/publishers/${id}/regenerate-key`);
-      alert(`✅ New API Key: ${res.data.api_key}`);
-      fetchPubs();
-    } catch {
-      alert("❌ Failed to regenerate key");
-    }
+  const resetForm = () => {
+    setForm({ id: null, name: "", email: "", website: "", hold_percent: 20 });
+    setIsEditing(false);
   };
 
-  useEffect(() => { fetchPubs(); }, []);
+  const editPublisher = (p) => {
+    setForm(p);
+    setIsEditing(true);
+  };
 
-  if (loading) return <div>Loading...</div>;
+  const deletePublisher = async (id) => {
+    if (!window.confirm("Delete this publisher?")) return;
+    await apiClient.delete(`/publishers/${id}`);
+    fetchData();
+  };
+
+  const regenerateKey = async (id) => {
+    const res = await apiClient.post(`/publishers/${id}/regenerate-key`);
+    alert(`✅ New API Key: ${res.data.api_key}`);
+    fetchData();
+  };
 
   return (
     <div>
       <h2 className="text-2xl font-semibold mb-4">Publishers</h2>
 
-      {/* Input Form */}
-      <div className="grid grid-cols-4 gap-2 mb-4">
-        <input
-          className="border p-2 rounded"
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          placeholder="Name"
-        />
-        <input
-          className="border p-2 rounded"
-          value={form.email}
-          onChange={(e) => setForm({ ...form, email: e.target.value })}
-          placeholder="Email"
-        />
-        <input
-          className="border p-2 rounded"
-          value={form.website}
-          onChange={(e) => setForm({ ...form, website: e.target.value })}
-          placeholder="Website"
-        />
-        <button onClick={createPublisher} className="bg-green-600 text-white rounded px-3">
-          Add Publisher
+      {/* FORM */}
+      <div className="grid grid-cols-5 gap-2 mb-4">
+        <input className="border p-2 rounded" placeholder="Name" 
+          value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} />
+        <input className="border p-2 rounded" placeholder="Email"
+          value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} />
+        <input className="border p-2 rounded" placeholder="Website"
+          value={form.website} onChange={(e) => setForm({...form, website: e.target.value})} />
+        <input className="border p-2 rounded" type="number" placeholder="Hold %"
+          value={form.hold_percent} onChange={(e) => setForm({...form, hold_percent: e.target.value})} />
+        <button className="bg-green-600 text-white p-2 rounded" onClick={handleSubmit}>
+          {isEditing ? "Update" : "Add Publisher"}
         </button>
       </div>
 
-      {/* Table */}
+      {isEditing && (
+        <button onClick={resetForm} className="mb-3 text-red-500 underline">
+          Cancel Edit
+        </button>
+      )}
+
+      {/* LIST */}
       <table className="min-w-full bg-white rounded shadow text-sm">
         <thead className="bg-gray-100">
           <tr>
-            <th className="p-2 text-left">Name</th>
-            <th className="p-2 text-left">Email</th>
-            <th className="p-2 text-left">Website</th>
-            <th className="p-2 text-left">API Key</th>
-            <th className="p-2 text-center">Action</th>
+            <th className="p-2">Name</th>
+            <th className="p-2">Email</th>
+            <th className="p-2">Website</th>
+            <th className="p-2">Hold %</th>
+            <th className="p-2">API Key</th>
+            <th className="p-2">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {pubs.map((p) => (
+          {publishers.map((p) => (
             <tr key={p.id} className="border-b">
               <td className="p-2">{p.name}</td>
               <td className="p-2">{p.email}</td>
-              <td className="p-2">{p.website || "-"}</td>
+              <td className="p-2">{p.website}</td>
+              <td className="p-2">{p.hold_percent}%</td>
               <td className="p-2 font-mono text-xs bg-gray-50">{p.api_key}</td>
-              <td className="p-2 text-center">
-                <button
-                  className="bg-blue-500 text-white text-xs px-2 py-1 rounded"
-                  onClick={() => regenKey(p.id)}
-                >
-                  Regenerate Key
-                </button>
+              <td className="p-2 flex gap-2">
+                <button className="text-blue-600 underline" onClick={() => editPublisher(p)}>Edit</button>
+                <button className="text-red-600 underline" onClick={() => deletePublisher(p.id)}>Delete</button>
+                <button className="text-green-600 underline" onClick={() => regenerateKey(p.id)}>Regenerate Key</button>
               </td>
             </tr>
           ))}
