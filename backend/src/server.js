@@ -5,7 +5,6 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import pool from "./db.js";
 
-import adminRoutes from "./routes/admin.js";
 import publishersRoutes from "./routes/publishers.js";
 import advertisersRoutes from "./routes/advertisers.js";
 import offersRoutes from "./routes/offers.js";
@@ -49,7 +48,6 @@ app.use("/api/auth", authRoutes);
 
 // ✅ Protected Routes via JWT
 app.use("/api/stats", authJWT, statsRoutes);
-app.use("/api/admin", adminRoutes);
 app.use("/api/publishers", authJWT, publishersRoutes);
 app.use("/api/advertisers", authJWT, advertisersRoutes);
 app.use("/api/offers", authJWT, offersRoutes);
