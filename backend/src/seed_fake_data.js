@@ -4,23 +4,19 @@ async function seedFake() {
   console.log("🌱 Seeding Sample Data...");
 
   // ✅ Publishers
-  await pool.query(`
-    INSERT INTO publishers (name, website)
-    VALUES 
-    ('Publisher One', 'https://pub1.com'),
-    ('Publisher Two', 'https://pub2.com'),
-    ('LeadTraffic', 'https://leadtraffic.com')
-    ON CONFLICT DO NOTHING;
-  `);
+  await pool.query(
+  `INSERT INTO publishers (name, email, status)
+   VALUES ($1, $2, 'active')`,
+  [Abc, 123ad@gmail.com]
+);
+
 
   // ✅ Advertisers
   await pool.query(`
-    INSERT INTO advertisers (name, website)
-    VALUES 
-    ('OfferGate Media', 'https://offergate.com'),
-    ('AdFlex Corp', 'https://adflex.io')
-    ON CONFLICT DO NOTHING;
-  `);
+    INSERT INTO publishers (name, email, status)
+   VALUES ($1, $2, 'active')`,
+  [Abc, 123ad@gmail.com]
+);
 
   // ✅ Offers
   await pool.query(`
