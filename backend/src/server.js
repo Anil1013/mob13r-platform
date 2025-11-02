@@ -14,6 +14,7 @@ import postbackRoutes from "./routes/postbacks.js";
 import conversionsRoutes from "./routes/conversions.js";
 import statsRoutes from "./routes/stats.js";
 
+import adminRoutes from "./routes/admin.js";
 import authRoutes from "./routes/auth.js";
 import authJWT from "./middleware/authJWT.js";
 
@@ -49,6 +50,7 @@ app.use("/api/auth", authRoutes);
 
 // ✅ Protected Routes via JWT
 app.use("/api/stats", authJWT, statsRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api/publishers", authJWT, publishersRoutes);
 app.use("/api/advertisers", authJWT, advertisersRoutes);
 app.use("/api/offers", authJWT, offersRoutes);
