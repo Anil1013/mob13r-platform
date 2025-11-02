@@ -1,112 +1,88 @@
-import React, { useState, useEffect } from "react";
-import apiClient from "../api/apiClient";
+import express from "express";
+import pool from "../db.js";
+import crypto from "crypto";
 
-export default function Publishers() {
-  const [publishers, setPublishers] = useState([]);
-  const [form, setForm] = useState({ id: null, name: "", email: "", website: "", hold_percent: 20 });
-  const [isEditing, setIsEditing] = useState(false);
+const router = express.Router();
 
-  const fetchData = async () => {
-    const res = await apiClient.get("/publishers");
-    setPublishers(res.data);
-  };
+// ✅ Get all publishers
+router.get("/", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, name, email, website, api_key, hold_percent, status 
+       FROM publishers ORDER BY id DESC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("GET publishers error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
-  useEffect(() => { fetchData(); }, []);
+// ✅ Create publisher
+router.post("/", async (req, res) => {
+  try {
+    const { name, email, website, hold_percent } = req.body;
+    const apiKey = crypto.randomBytes(16).toString("hex");
 
-  const handleSubmit = async () => {
-    if (!form.name || !form.email || !form.website) return alert("All fields required");
+    const result = await pool.query(
+      `INSERT INTO publishers (name, email, website, api_key, hold_percent)
+       VALUES ($1,$2,$3,$4,$5)
+       RETURNING *`,
+      [name, email, website, apiKey, hold_percent ?? 20]
+    );
 
-    try {
-      if (isEditing) {
-        await apiClient.put(`/publishers/${form.id}`, form);
-        alert("✅ Publisher updated");
-      } else {
-        const res = await apiClient.post("/publishers", form);
-        alert(`✅ Publisher created\nAPI Key: ${res.data.api_key}`);
-      }
-      resetForm();
-      fetchData();
-    } catch (err) {
-      alert("⚠️ Error: " + err.response?.data?.error);
-    }
-  };
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("POST publisher error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
-  const resetForm = () => {
-    setForm({ id: null, name: "", email: "", website: "", hold_percent: 20 });
-    setIsEditing(false);
-  };
+// ✅ Update publisher
+router.put("/:id", async (req, res) => {
+  try {
+    const { name, email, website, hold_percent, status } = req.body;
 
-  const editPublisher = (p) => {
-    setForm(p);
-    setIsEditing(true);
-  };
+    const result = await pool.query(
+      `UPDATE publishers 
+       SET name=$1, email=$2, website=$3, hold_percent=$4, status=$5
+       WHERE id=$6 RETURNING *`,
+      [name, email, website, hold_percent, status ?? "active", req.params.id]
+    );
 
-  const deletePublisher = async (id) => {
-    if (!window.confirm("Delete this publisher?")) return;
-    await apiClient.delete(`/publishers/${id}`);
-    fetchData();
-  };
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("PUT publisher error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
-  const regenerateKey = async (id) => {
-    const res = await apiClient.post(`/publishers/${id}/regenerate-key`);
-    alert(`✅ New API Key: ${res.data.api_key}`);
-    fetchData();
-  };
+// ✅ Regenerate API key
+router.post("/:id/regenerate-key", async (req, res) => {
+  try {
+    const newKey = crypto.randomBytes(16).toString("hex");
 
-  return (
-    <div>
-      <h2 className="text-2xl font-semibold mb-4">Publishers</h2>
+    const result = await pool.query(
+      `UPDATE publishers SET api_key=$1 WHERE id=$2 RETURNING api_key`,
+      [newKey, req.params.id]
+    );
 
-      {/* FORM */}
-      <div className="grid grid-cols-5 gap-2 mb-4">
-        <input className="border p-2 rounded" placeholder="Name" 
-          value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} />
-        <input className="border p-2 rounded" placeholder="Email"
-          value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} />
-        <input className="border p-2 rounded" placeholder="Website"
-          value={form.website} onChange={(e) => setForm({...form, website: e.target.value})} />
-        <input className="border p-2 rounded" type="number" placeholder="Hold %"
-          value={form.hold_percent} onChange={(e) => setForm({...form, hold_percent: e.target.value})} />
-        <button className="bg-green-600 text-white p-2 rounded" onClick={handleSubmit}>
-          {isEditing ? "Update" : "Add Publisher"}
-        </button>
-      </div>
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("API KEY regenerate error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
-      {isEditing && (
-        <button onClick={resetForm} className="mb-3 text-red-500 underline">
-          Cancel Edit
-        </button>
-      )}
+// ✅ Delete publisher
+router.delete("/:id", async (req, res) => {
+  try {
+    await pool.query("DELETE FROM publishers WHERE id=$1", [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("DELETE publisher error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
-      {/* LIST */}
-      <table className="min-w-full bg-white rounded shadow text-sm">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="p-2">Name</th>
-            <th className="p-2">Email</th>
-            <th className="p-2">Website</th>
-            <th className="p-2">Hold %</th>
-            <th className="p-2">API Key</th>
-            <th className="p-2">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {publishers.map((p) => (
-            <tr key={p.id} className="border-b">
-              <td className="p-2">{p.name}</td>
-              <td className="p-2">{p.email}</td>
-              <td className="p-2">{p.website}</td>
-              <td className="p-2">{p.hold_percent}%</td>
-              <td className="p-2 font-mono text-xs bg-gray-50">{p.api_key}</td>
-              <td className="p-2 flex gap-2">
-                <button className="text-blue-600 underline" onClick={() => editPublisher(p)}>Edit</button>
-                <button className="text-red-600 underline" onClick={() => deletePublisher(p.id)}>Delete</button>
-                <button className="text-green-600 underline" onClick={() => regenerateKey(p.id)}>Regenerate Key</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+export default router;
