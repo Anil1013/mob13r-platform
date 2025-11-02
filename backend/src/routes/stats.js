@@ -5,33 +5,22 @@ const router = express.Router();
 
 router.get("/", async (req, res) => {
   try {
-    const queries = [
-      "SELECT COUNT(*) AS total FROM publishers;",
-      "SELECT COUNT(*) AS total FROM advertisers;",
-      "SELECT COUNT(*) AS total FROM offers;",
-      "SELECT COUNT(*) AS total FROM clicks;",
-      "SELECT COUNT(*) AS total FROM conversions;"
-    ];
-
-    const [
-      publishers,
-      advertisers,
-      offers,
-      clicks,
-      conversions
-    ] = await Promise.all(queries.map(q => pool.query(q)));
+    const [publishers, advertisers, offers, conversions] = await Promise.all([
+      pool.query("SELECT COUNT(*) FROM publishers"),
+      pool.query("SELECT COUNT(*) FROM advertisers"),
+      pool.query("SELECT COUNT(*) FROM offers"),
+      pool.query("SELECT COUNT(*) FROM conversions")
+    ]);
 
     res.json({
-      publishers: Number(publishers.rows[0].total),
-      advertisers: Number(advertisers.rows[0].total),
-      offers: Number(offers.rows[0].total),
-      clicks: Number(clicks.rows[0].total),
-      conversions: Number(conversions.rows[0].total)
+      publishers: Number(publishers.rows[0].count),
+      advertisers: Number(advertisers.rows[0].count),
+      offers: Number(offers.rows[0].count),
+      conversions: Number(conversions.rows[0].count)
     });
-
   } catch (err) {
-    console.error("Stats Error:", err);
-    res.status(500).json({ error: "Failed to fetch stats" });
+    console.error(err);
+    res.status(500).json({ error: "Stats fetch failed" });
   }
 });
 
