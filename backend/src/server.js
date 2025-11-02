@@ -14,7 +14,6 @@ import postbackRoutes from "./routes/postbacks.js";
 import conversionsRoutes from "./routes/conversions.js";
 import statsRoutes from "./routes/stats.js";
 
-import adminRoutes from "./routes/admin.js";
 import authRoutes from "./routes/auth.js";
 import authJWT from "./middleware/authJWT.js";
 
