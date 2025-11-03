@@ -2,56 +2,63 @@ import React, { useEffect, useState } from "react";
 import apiClient from "../api/apiClient";
 
 export default function Offers() {
-  const [name, setName] = useState("");
-  const [payout, setPayout] = useState("");
-  const [url, setUrl] = useState("");
   const [offers, setOffers] = useState([]);
+  const [form, setForm] = useState({
+    name: "",
+    advertiser_id: "",
+    payout: "",
+    url: "",
+    status: "active"
+  });
 
-  const loadOffers = async () => {
+  const fetchOffers = async () => {
     const res = await apiClient.get("/offers");
     setOffers(res.data);
   };
 
   const createOffer = async () => {
-    if (!name || !payout || !url) return alert("Fill all fields!");
-
-    const res = await apiClient.post("/offers", { name, payout, url });
-    alert("✅ Offer Created");
-    setName(""); setPayout(""); setUrl("");
-    loadOffers();
+    await apiClient.post("/offers", form);
+    setForm({ name: "", advertiser_id: "", payout: "", url: "", status: "active" });
+    fetchOffers();
   };
 
-  useEffect(() => {
-    loadOffers();
-  }, []);
+  useEffect(() => { fetchOffers(); }, []);
 
   return (
     <div>
       <h2 className="text-2xl font-semibold mb-4">Offers</h2>
 
-      {/* Add Offer Form */}
-      <div className="grid grid-cols-4 gap-2 mb-4 max-w-3xl">
-        <input className="border p-2 rounded" placeholder="Offer Name" value={name} onChange={(e)=>setName(e.target.value)} />
-        <input className="border p-2 rounded" placeholder="Payout" value={payout} onChange={(e)=>setPayout(e.target.value)} />
-        <input className="border p-2 rounded" placeholder="Offer URL" value={url} onChange={(e)=>setUrl(e.target.value)} />
-        <button onClick={createOffer} className="bg-green-600 text-white px-4 py-2 rounded">Add</button>
+      <div className="flex gap-2 mb-4">
+        <input placeholder="Name" className="input" 
+          value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+        <input placeholder="Advertiser ID" className="input"
+          value={form.advertiser_id} onChange={e => setForm({ ...form, advertiser_id: e.target.value })} />
+        <input placeholder="Payout" className="input"
+          value={form.payout} onChange={e => setForm({ ...form, payout: e.target.value })} />
+        <input placeholder="URL" className="input"
+          value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} />
+
+        <button className="btn btn-primary" onClick={createOffer}>Add Offer</button>
       </div>
 
-      {/* Offer List */}
-      <table className="min-w-full bg-white rounded shadow text-sm">
-        <thead className="bg-gray-100">
+      <table className="table">
+        <thead>
           <tr>
-            <th className="p-2">Name</th>
-            <th className="p-2">Payout</th>
-            <th className="p-2">URL</th>
+            <th>Name</th>
+            <th>Advertiser</th>
+            <th>Payout</th>
+            <th>URL</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody>
           {offers.map(o => (
-            <tr key={o.id} className="border-b">
-              <td className="p-2">{o.name}</td>
-              <td className="p-2">${o.payout}</td>
-              <td className="p-2 text-blue-600 break-all">{o.url}</td>
+            <tr key={o.id}>
+              <td>{o.name}</td>
+              <td>{o.advertiser_id}</td>
+              <td>${o.payout}</td>
+              <td>{o.url}</td>
+              <td>{o.status}</td>
             </tr>
           ))}
         </tbody>
