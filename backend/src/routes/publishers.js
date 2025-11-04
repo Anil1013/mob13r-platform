@@ -1,10 +1,10 @@
 import express from "express";
 import pool from "../db.js";
-import auth from "../middleware/auth.js";
+import authJWT from "../middleware/authJWT.js";
 
 const router = express.Router();
 
-router.get("/", auth, async (req, res) => {
+router.get("/", authJWT, async (req, res) => {
   try {
     const { rows } = await pool.query(
       "SELECT id, name, email, api_key, status, hold_percent FROM publishers ORDER BY id DESC"
@@ -15,7 +15,7 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
-router.post("/", auth, async (req, res) => {
+router.post("/", authJWT, async (req, res) => {
   try {
     const { name, email, api_key, hold_percent = 20, status = "active" } = req.body;
 
