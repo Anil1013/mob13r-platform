@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Mob13r backend API",
   "type": "module",
-  "main": "src/server.js",
+  "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
