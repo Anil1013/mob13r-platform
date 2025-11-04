@@ -25,13 +25,12 @@ const PORT = process.env.PORT || 8080;
 app.use(
   cors({
     origin: ["https://dashboard.mob13r.com", "http://localhost:3000"],
-    credentials: true,
-    methods: "GET,POST,PUT,DELETE,OPTIONS",
-    allowedHeaders: ["Content-Type", Authorization"]
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
   })
 );
 
-// ✅ CORS for preflight
+// Handle preflight
 app.options("*", (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "https://dashboard.mob13r.com");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
