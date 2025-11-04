@@ -13,22 +13,23 @@ import clickRoutes from "./routes/clicks.js";
 import postbackRoutes from "./routes/postbacks.js";
 import conversionsRoutes from "./routes/conversions.js";
 import statsRoutes from "./routes/stats.js";
-import authJWT from "./middleware/authJWT.js";
+import authRoutes from "./routes/auth.js";
+
+import authJWT from "./middleware/authJWT.js"; // ✅ Correct middleware
 
 dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-/* ✅ CORS */
+/* ✅ CORS CONFIG */
 app.use(
   cors({
     origin: ["https://dashboard.mob13r.com", "http://localhost:3000"],
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
+    credentials: true,
   })
 );
 
-// Handle preflight
+// ✅ Preflight Options Handler
 app.options("*", (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "https://dashboard.mob13r.com");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -49,10 +50,10 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-/* ✅ Public routes (NO token needed) */
+/* ✅ Public Route */
 app.use("/api/auth", authRoutes);
 
-/* ✅ Protected routes */
+/* ✅ Private Routes */
 app.use("/api/stats", authJWT, statsRoutes);
 app.use("/api/publishers", authJWT, publishersRoutes);
 app.use("/api/advertisers", authJWT, advertisersRoutes);
@@ -61,7 +62,7 @@ app.use("/api/clicks", authJWT, clickRoutes);
 app.use("/api/postbacks", authJWT, postbackRoutes);
 app.use("/api/conversions", authJWT, conversionsRoutes);
 
-/* ✅ Start server */
+/* ✅ Start Server */
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Backend running on port ${PORT}`);
 });
