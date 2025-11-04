@@ -51,9 +51,6 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-/* ✅ Public route */
-app.use("/api/auth", authRoutes);
-
 /* ✅ Protected routes */
 app.use("/api/stats", authJWT, statsRoutes);
 app.use("/api/publishers", authJWT, publishersRoutes);
