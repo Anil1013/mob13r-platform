@@ -12,6 +12,9 @@ app.use(cors({
   allowedHeaders: "Content-Type, Authorization"
 }));
 
+app.use(express.json());
+
+// ✅ Preflight OPTIONS handler
 app.options("*", (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "https://dashboard.mob13r.com");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -19,5 +22,6 @@ app.options("*", (req, res) => {
   res.sendStatus(200);
 });
 
-
-app.use(express.json());
+// ✅ your routes start below
+import authRoutes from "./routes/auth.js";
+// ...
