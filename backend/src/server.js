@@ -13,7 +13,6 @@ import clickRoutes from "./routes/clicks.js";
 import postbackRoutes from "./routes/postbacks.js";
 import conversionsRoutes from "./routes/conversions.js";
 import statsRoutes from "./routes/stats.js";
-import authRoutes from "./routes/auth.js";
 
 import authJWT from "./middleware/authJWT.js"; // ✅ Correct middleware
 
