@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "Mob13r backend API",
   "type": "module",
-  "main": "src/index.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
     "migrate": "node src/migrate.js"
   },
   "dependencies": {
