@@ -1,4 +1,3 @@
-// frontend/src/api/apiClient.js
 import axios from "axios";
 
 const apiClient = axios.create({
@@ -6,26 +5,35 @@ const apiClient = axios.create({
   timeout: 15000,
 });
 
-// ✅ Attach token automatically
+// ✅ Automatically attach token
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem("mob13r_token");
+
+  config.headers["Content-Type"] = "application/json";
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   } else {
     delete config.headers.Authorization;
   }
+
   return config;
 });
 
-// ✅ Handle expired token
+// ✅ Global 401 handling
 apiClient.interceptors.response.use(
-  res => res,
-  err => {
-    if (err?.response?.status === 401) {
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      console.warn("⚠️ Session expired. Redirecting...");
       localStorage.removeItem("mob13r_token");
-      window.location.href = "/login";
+
+      // ✅ Fix: Only redirect if NOT already at login page
+      if (!window.location.pathname.includes("login")) {
+        window.location.href = "/login";
+      }
     }
-    return Promise.reject(err);
+    return Promise.reject(error);
   }
 );
 
