@@ -1,68 +1,70 @@
 import express from "express";
 import pool from "../db.js";
+import authJWT from "../middleware/authJWT.js"; 
 
 const router = express.Router();
 
 // ✅ Get all advertisers
-router.get("/", async (req, res) => {
+router.get("/", authJWT, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT id, name, email, website, status 
-       FROM advertisers ORDER BY id DESC`
+    const { rows } = await pool.query(
+      "SELECT id, name, email, website, status, created_at FROM advertisers ORDER BY id DESC"
     );
-    res.json(result.rows);
+    res.json(rows);
   } catch (err) {
-    console.error("GET advertisers error:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: err.message });
   }
 });
 
 // ✅ Create advertiser
-router.post("/", async (req, res) => {
+router.post("/", authJWT, async (req, res) => {
   try {
     const { name, email, website } = req.body;
+    if (!name) return res.status(400).json({ error: "Name required" });
 
-    const result = await pool.query(
-      `INSERT INTO advertisers (name, email, website, status)
-       VALUES ($1, $2, $3, 'active')
+    const q = await pool.query(
+      `INSERT INTO advertisers (name, email, website)
+       VALUES ($1,$2,$3)
        RETURNING *`,
       [name, email, website]
     );
 
-    res.json(result.rows[0]);
+    res.json(q.rows[0]);
   } catch (err) {
-    console.error("POST advertiser error:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: err.message });
   }
 });
 
 // ✅ Update advertiser
-router.put("/:id", async (req, res) => {
+router.put("/:id", authJWT, async (req, res) => {
   try {
+    const { id } = req.params;
     const { name, email, website, status } = req.body;
 
-    const result = await pool.query(
+    const q = await pool.query(
       `UPDATE advertisers 
        SET name=$1, email=$2, website=$3, status=$4
-       WHERE id=$5 RETURNING *`,
-      [name, email, website, status ?? "active", req.params.id]
+       WHERE id=$5
+       RETURNING *`,
+      [name, email, website, status, id]
     );
 
-    res.json(result.rows[0]);
+    res.json(q.rows[0]);
   } catch (err) {
-    console.error("PUT advertiser error:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: err.message });
   }
 });
 
 // ✅ Delete advertiser
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authJWT, async (req, res) => {
   try {
-    await pool.query("DELETE FROM advertisers WHERE id=$1", [req.params.id]);
-    res.json({ success: true });
+    const { id } = req.params;
+
+    await pool.query("DELETE FROM advertisers WHERE id=$1", [id]);
+
+    res.json({ message: "Deleted ✅" });
   } catch (err) {
-    console.error("DELETE advertiser error:", err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: err.message });
   }
 });
 
