@@ -39,14 +39,14 @@ router.post("/", authJWT, async (req, res) => {
 router.put("/:id", authJWT, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, website, status } = req.body;
+    const { name, email, website } = req.body;
 
     const q = await pool.query(
       `UPDATE advertisers 
-       SET name=$1, email=$2, website=$3, status=$4
-       WHERE id=$5
+       SET name=$1, email=$2, website=$3
+       WHERE id=$4
        RETURNING *`,
-      [name, email, website, status, id]
+      [name, email, website, id]
     );
 
     res.json(q.rows[0]);
@@ -54,6 +54,7 @@ router.put("/:id", authJWT, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // ✅ Delete advertiser
 router.delete("/:id", authJWT, async (req, res) => {
