@@ -8,7 +8,6 @@ export default function Advertisers() {
   const [ads, setAds] = useState([]);
   const [editId, setEditId] = useState(null);
 
-  // ✅ Fetch advertisers
   const fetchAds = async () => {
     try {
       const res = await apiClient.get("/advertisers");
@@ -19,7 +18,6 @@ export default function Advertisers() {
     }
   };
 
-  // ✅ Create / Update advertiser
   const saveAdvertiser = async () => {
     if (!name.trim()) return alert("Name is required");
 
@@ -32,7 +30,11 @@ export default function Advertisers() {
         });
         alert("✅ Advertiser updated");
       } else {
-        await apiClient.post("/advertisers", { name, email, website });
+        await apiClient.post("/advertisers", {
+          name,
+          email,
+          website,
+        });
         alert("✅ Advertiser added");
       }
 
@@ -40,7 +42,6 @@ export default function Advertisers() {
       setEmail("");
       setWebsite("");
       setEditId(null);
-
       fetchAds();
     } catch (err) {
       console.error(err);
@@ -48,7 +49,6 @@ export default function Advertisers() {
     }
   };
 
-  // ✅ Fill fields for editing
   const editAdvertiser = (a) => {
     setEditId(a.id);
     setName(a.name);
@@ -56,7 +56,6 @@ export default function Advertisers() {
     setWebsite(a.website);
   };
 
-  // ✅ Delete advertiser
   const deleteAdvertiser = async (id) => {
     if (!window.confirm("Delete this advertiser?")) return;
 
@@ -115,7 +114,6 @@ export default function Advertisers() {
             <th className="p-2">Action</th>
           </tr>
         </thead>
-
         <tbody>
           {ads.map((a) => (
             <tr key={a.id} className="border-b">
@@ -126,7 +124,6 @@ export default function Advertisers() {
                   {a.website}
                 </a>
               </td>
-
               <td className="p-2 space-x-2">
                 <button
                   onClick={() => editAdvertiser(a)}
