@@ -30,7 +30,10 @@ export default function Advertisers() {
         alert("✅ Added");
       }
 
-      setName(""); setEmail(""); setWebsite(""); setEditId(null);
+      setName("");
+      setEmail("");
+      setWebsite("");
+      setEditId(null);
       fetchAds();
     } catch (err) {
       console.error(err);
@@ -63,8 +66,4 @@ export default function Advertisers() {
   }, []);
 
   return (
-    <div className="p-5">
-      <h2 className="text-2xl font-bold mb-4">Advertisers</h2>
-
-      <div className="grid grid-cols-4 gap-2 max-w-xl mb-4">
-        <input className="bord
+    <div className="p-5
