@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import helmet from "helmet";
 import cors from "cors";
 import bodyParser from "body-parser";
-import pool from "./db.js";
+import pool from "../db.js";
 
 /* Routes */
 import authRoutes from "./routes/auth.js";
