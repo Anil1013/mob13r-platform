@@ -11,9 +11,20 @@ export default function Login() {
   const submit = async (e) => {
     e.preventDefault();
     setErr("");
+
+    if (!email.trim() || !password.trim()) {
+      return setErr("Email & Password required");
+    }
+
     try {
       const { data } = await apiClient.post("/auth/login", { email, password });
+
+      // ✅ Store token
       localStorage.setItem("mob13r_token", data.token);
+
+      // ✅ Store admin info (optional but useful)
+      localStorage.setItem("mob13r_admin", JSON.stringify(data.admin));
+
       nav("/");
     } catch (e) {
       setErr("Invalid credentials");
