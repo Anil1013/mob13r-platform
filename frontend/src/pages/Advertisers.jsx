@@ -8,29 +8,31 @@ export default function Advertisers() {
   const [ads, setAds] = useState([]);
   const [editId, setEditId] = useState(null);
 
+  // ✅ Fetch advertisers
   const fetchAds = async () => {
     try {
-      const res = await apiClient.get("/api/advertisers");
+      const res = await apiClient.get("/advertisers");
       setAds(res.data);
     } catch (err) {
       console.error(err);
-      alert("Error fetching advertisers");
+      alert("❌ Error fetching advertisers");
     }
   };
 
+  // ✅ Create / Update advertiser
   const saveAdvertiser = async () => {
-    if (!name) return alert("Name is required");
+    if (!name.trim()) return alert("Name is required");
 
     try {
       if (editId) {
-        await apiClient.put(`/api/advertisers/${editId}`, {
+        await apiClient.put(`/advertisers/${editId}`, {
           name,
           email,
           website,
         });
         alert("✅ Advertiser updated");
       } else {
-        await apiClient.post("/api/advertisers", { name, email, website });
+        await apiClient.post("/advertisers", { name, email, website });
         alert("✅ Advertiser added");
       }
 
@@ -38,13 +40,15 @@ export default function Advertisers() {
       setEmail("");
       setWebsite("");
       setEditId(null);
+
       fetchAds();
     } catch (err) {
       console.error(err);
-      alert("Error saving advertiser");
+      alert("❌ Error saving advertiser");
     }
   };
 
+  // ✅ Fill fields for editing
   const editAdvertiser = (a) => {
     setEditId(a.id);
     setName(a.name);
@@ -52,16 +56,17 @@ export default function Advertisers() {
     setWebsite(a.website);
   };
 
+  // ✅ Delete advertiser
   const deleteAdvertiser = async (id) => {
-    if (!window.confirm("Delete advertiser?")) return;
+    if (!window.confirm("Delete this advertiser?")) return;
 
     try {
-      await apiClient.delete(`/api/advertisers/${id}`);
+      await apiClient.delete(`/advertisers/${id}`);
       alert("🗑️ Deleted");
       fetchAds();
     } catch (err) {
       console.error(err);
-      alert("Error deleting advertiser");
+      alert("❌ Error deleting advertiser");
     }
   };
 
@@ -110,20 +115,18 @@ export default function Advertisers() {
             <th className="p-2">Action</th>
           </tr>
         </thead>
+
         <tbody>
           {ads.map((a) => (
             <tr key={a.id} className="border-b">
               <td className="p-2">{a.name}</td>
               <td className="p-2">{a.email}</td>
-              <td className="p-2 text-blue-600 underline cursor-pointer">
-                <a
-                  href={a.website}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+              <td className="p-2 text-blue-600 underline">
+                <a href={a.website} target="_blank" rel="noreferrer">
                   {a.website}
                 </a>
               </td>
+
               <td className="p-2 space-x-2">
                 <button
                   onClick={() => editAdvertiser(a)}
