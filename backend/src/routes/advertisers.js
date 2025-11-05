@@ -17,14 +17,14 @@ router.get("/", authJWT, async (req, res) => {
 });
 
 // ✅ Create advertiser
+
 router.post("/", authJWT, async (req, res) => {
   try {
     const { name, email, website } = req.body;
-    if (!name) return res.status(400).json({ error: "Name required" });
 
     const q = await pool.query(
-      `INSERT INTO advertisers (name, email, website)
-       VALUES ($1,$2,$3)
+      `INSERT INTO advertisers (name, email, website, status, balance)
+       VALUES ($1,$2,$3,'active',0)
        RETURNING *`,
       [name, email, website]
     );
@@ -35,6 +35,7 @@ router.post("/", authJWT, async (req, res) => {
   }
 });
 
+
 // ✅ Update advertiser
 router.put("/:id", authJWT, async (req, res) => {
   try {
@@ -43,7 +44,7 @@ router.put("/:id", authJWT, async (req, res) => {
 
     const q = await pool.query(
       `UPDATE advertisers 
-       SET name=$1, email=$2, website=$3
+       SET name=$1, email=$2, website=$3 
        WHERE id=$4
        RETURNING *`,
       [name, email, website, id]
