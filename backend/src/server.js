@@ -13,8 +13,8 @@ import clickRoutes from "./routes/clicks.js";
 import postbackRoutes from "./routes/postbacks.js";
 import conversionsRoutes from "./routes/conversions.js";
 import statsRoutes from "./routes/stats.js";
-
 import authRoutes from "./routes/auth.js";
+
 /* Middleware */
 import authJWT from "./middleware/authJWT.js";
 
@@ -31,9 +31,9 @@ app.use(
   })
 );
 
-// ✅ Preflight support
+// ✅ Preflight
 app.options("*", (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "https://dashboard.mob13r.com");
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.sendStatus(200);
@@ -52,7 +52,10 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-/* ✅ Protected routes */
+/* ✅ Public Auth Route (No JWT) */
+app.use("/api/auth", authRoutes);
+
+/* ✅ Protected Routes (JWT Required) */
 app.use("/api/stats", authJWT, statsRoutes);
 app.use("/api/publishers", authJWT, publishersRoutes);
 app.use("/api/advertisers", authJWT, advertisersRoutes);
