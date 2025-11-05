@@ -13,7 +13,7 @@ export default function Advertisers() {
       const res = await apiClient.get("/api/advertisers");
       setAds(res.data);
     } catch (err) {
-      console.log(err);
+      console.error(err);
       alert("Error fetching advertisers");
     }
   };
@@ -40,7 +40,7 @@ export default function Advertisers() {
       setEditId(null);
       fetchAds();
     } catch (err) {
-      console.log(err);
+      console.error(err);
       alert("Error saving advertiser");
     }
   };
@@ -52,7 +52,7 @@ export default function Advertisers() {
     setWebsite(a.website);
   };
 
-  const deleteAd = async (id) => {
+  const deleteAdvertiser = async (id) => {
     if (!window.confirm("Delete advertiser?")) return;
 
     try {
@@ -60,7 +60,7 @@ export default function Advertisers() {
       alert("🗑️ Deleted");
       fetchAds();
     } catch (err) {
-      console.log(err);
+      console.error(err);
       alert("Error deleting advertiser");
     }
   };
@@ -102,4 +102,46 @@ export default function Advertisers() {
       </div>
 
       <table className="min-w-full bg-white rounded shadow text-sm">
-        <the
+        <thead className="bg-gray-100">
+          <tr>
+            <th className="p-2">Name</th>
+            <th className="p-2">Email</th>
+            <th className="p-2">Website</th>
+            <th className="p-2">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ads.map((a) => (
+            <tr key={a.id} className="border-b">
+              <td className="p-2">{a.name}</td>
+              <td className="p-2">{a.email}</td>
+              <td className="p-2 text-blue-600 underline cursor-pointer">
+                <a
+                  href={a.website}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {a.website}
+                </a>
+              </td>
+              <td className="p-2 space-x-2">
+                <button
+                  onClick={() => editAdvertiser(a)}
+                  className="bg-yellow-500 text-white px-2 py-1 rounded"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => deleteAdvertiser(a.id)}
+                  className="bg-red-600 text-white px-2 py-1 rounded"
+                >
+                  Del
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
