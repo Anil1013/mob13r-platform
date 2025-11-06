@@ -3,31 +3,48 @@ import apiClient from "../api/apiClient";
 
 export default function Publishers() {
   const [publishers, setPublishers] = useState([]);
-  const [form, setForm] = useState({ id: null, name: "", email: "", website: "", hold_percent: 20 });
+  const [form, setForm] = useState({
+    id: null,
+    name: "",
+    email: "",
+    website: "",
+    hold_percent: 20,
+  });
   const [isEditing, setIsEditing] = useState(false);
 
+  // ✅ Fetch all publishers
   const fetchData = async () => {
-    const res = await apiClient.get("/publishers");
-    setPublishers(res.data);
+    try {
+      const res = await apiClient.get("/publishers");
+      setPublishers(res.data || []);
+    } catch (err) {
+      console.error("Fetch publishers failed:", err);
+      alert("⚠️ Failed to fetch publishers. Check backend API.");
+    }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
+  // ✅ Add or update
   const handleSubmit = async () => {
-    if (!form.name || !form.email || !form.website) return alert("All fields required");
+    if (!form.name || !form.email || !form.website)
+      return alert("⚠️ All fields are required!");
 
     try {
       if (isEditing) {
         await apiClient.put(`/publishers/${form.id}`, form);
-        alert("✅ Publisher updated");
+        alert("✅ Publisher updated successfully!");
       } else {
         const res = await apiClient.post("/publishers", form);
-        alert(`✅ Publisher created\nAPI Key: ${res.data.api_key}`);
+        alert(`✅ Publisher created\nAPI Key: ${res.data?.api_key || "N/A"}`);
       }
       resetForm();
       fetchData();
     } catch (err) {
-      alert("⚠️ Error: " + err.response?.data?.error);
+      console.error("Submit error:", err);
+      alert("⚠️ Error: " + (err.response?.data?.error || err.message));
     }
   };
 
@@ -43,14 +60,22 @@ export default function Publishers() {
 
   const deletePublisher = async (id) => {
     if (!window.confirm("Delete this publisher?")) return;
-    await apiClient.delete(`/publishers/${id}`);
-    fetchData();
+    try {
+      await apiClient.delete(`/publishers/${id}`);
+      fetchData();
+    } catch (err) {
+      alert("⚠️ Failed to delete publisher: " + err.response?.data?.error);
+    }
   };
 
   const regenerateKey = async (id) => {
-    const res = await apiClient.post(`/publishers/${id}/regenerate-key`);
-    alert(`✅ New API Key: ${res.data.api_key}`);
-    fetchData();
+    try {
+      const res = await apiClient.post(`/publishers/${id}/regenerate-key`);
+      alert(`✅ New API Key: ${res.data?.api_key}`);
+      fetchData();
+    } catch (err) {
+      alert("⚠️ Failed to regenerate key: " + err.response?.data?.error);
+    }
   };
 
   return (
@@ -59,15 +84,37 @@ export default function Publishers() {
 
       {/* FORM */}
       <div className="grid grid-cols-5 gap-2 mb-4">
-        <input className="border p-2 rounded" placeholder="Name" 
-          value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} />
-        <input className="border p-2 rounded" placeholder="Email"
-          value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} />
-        <input className="border p-2 rounded" placeholder="Website"
-          value={form.website} onChange={(e) => setForm({...form, website: e.target.value})} />
-        <input className="border p-2 rounded" type="number" placeholder="Hold %"
-          value={form.hold_percent} onChange={(e) => setForm({...form, hold_percent: e.target.value})} />
-        <button className="bg-green-600 text-white p-2 rounded" onClick={handleSubmit}>
+        <input
+          className="border p-2 rounded"
+          placeholder="Name"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+        />
+        <input
+          className="border p-2 rounded"
+          placeholder="Email"
+          value={form.email}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+        />
+        <input
+          className="border p-2 rounded"
+          placeholder="Website"
+          value={form.website}
+          onChange={(e) => setForm({ ...form, website: e.target.value })}
+        />
+        <input
+          className="border p-2 rounded"
+          type="number"
+          placeholder="Hold %"
+          value={form.hold_percent}
+          onChange={(e) =>
+            setForm({ ...form, hold_percent: Number(e.target.value) })
+          }
+        />
+        <button
+          className="bg-green-600 text-white p-2 rounded hover:bg-green-700"
+          onClick={handleSubmit}
+        >
           {isEditing ? "Update" : "Add Publisher"}
         </button>
       </div>
@@ -99,9 +146,24 @@ export default function Publishers() {
               <td className="p-2">{p.hold_percent}%</td>
               <td className="p-2 font-mono text-xs bg-gray-50">{p.api_key}</td>
               <td className="p-2 flex gap-2">
-                <button className="text-blue-600 underline" onClick={() => editPublisher(p)}>Edit</button>
-                <button className="text-red-600 underline" onClick={() => deletePublisher(p.id)}>Delete</button>
-                <button className="text-green-600 underline" onClick={() => regenerateKey(p.id)}>Regenerate Key</button>
+                <button
+                  className="text-blue-600 underline"
+                  onClick={() => editPublisher(p)}
+                >
+                  Edit
+                </button>
+                <button
+                  className="text-red-600 underline"
+                  onClick={() => deletePublisher(p.id)}
+                >
+                  Delete
+                </button>
+                <button
+                  className="text-green-600 underline"
+                  onClick={() => regenerateKey(p.id)}
+                >
+                  Regenerate Key
+                </button>
               </td>
             </tr>
           ))}
