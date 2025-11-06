@@ -1,80 +1,124 @@
-import express from "express";
-import pool from "../db.js";
-import authJWT from "../middleware/authJWT.js";
+import React, { useState, useEffect } from "react";
+import apiClient from "../api/apiClient";
 
-const router = express.Router();
+export default function Advertisers() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [website, setWebsite] = useState("");
+  const [ads, setAds] = useState([]);
+  const [editId, setEditId] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-/* Get all advertisers */
-router.get("/", authJWT, async (req, res) => {
-  try {
-    const { rows } = await pool.query("SELECT * FROM advertisers ORDER BY id DESC");
-    res.json(rows);
-  } catch (err) {
-    console.error("GET advertisers error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* Create advertiser */
-router.post("/", authJWT, async (req, res) => {
-  try {
-    const { name, email, website } = req.body;
-
-    const existing = await pool.query("SELECT id FROM advertisers WHERE email = $1", [email]);
-    if (existing.rows.length > 0) {
-      return res.status(400).json({ error: "Email already exists" });
+  const fetchAds = async () => {
+    try {
+      setLoading(true);
+      const res = await apiClient.get("/advertisers");
+      setAds(res.data);
+    } catch (err) {
+      console.error("Error fetching advertisers:", err);
+      alert("Unable to load advertisers. Please check backend connection.");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const result = await pool.query(
-      `INSERT INTO advertisers (name, email, website, status, balance)
-       VALUES ($1, $2, $3, 'active', 0)
-       RETURNING *`,
-      [name, email, website]
-    );
+  const saveAdvertiser = async () => {
+    if (!name.trim() || !email.trim()) return alert("Enter name and email");
 
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error("POST advertiser error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* Update advertiser */
-router.put("/:id", authJWT, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, email, website } = req.body;
-
-    const check = await pool.query("SELECT id FROM advertisers WHERE id=$1", [id]);
-    if (check.rows.length === 0) {
-      return res.status(404).json({ error: "Advertiser not found" });
+    try {
+      setLoading(true);
+      if (editId) {
+        await apiClient.put(`/advertisers/${editId}`, { name, email, website });
+        alert("✅ Advertiser updated!");
+      } else {
+        await apiClient.post("/advertisers", { name, email, website });
+        alert("✅ Advertiser added!");
+      }
+      setName("");
+      setEmail("");
+      setWebsite("");
+      setEditId(null);
+      fetchAds();
+    } catch (err) {
+      console.error("Error saving advertiser:", err);
+      alert("❌ Error saving advertiser");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const q = await pool.query(
-      `UPDATE advertisers
-       SET name=$1, email=$2, website=$3, updated_at=NOW()
-       WHERE id=$4
-       RETURNING id, name, email, website, status, balance`,
-      [name, email, website, id]
-    );
+  const editAdvertiser = (a) => {
+    setEditId(a.id);
+    setName(a.name);
+    setEmail(a.email);
+    setWebsite(a.website);
+  };
 
-    res.json(q.rows[0]);
-  } catch (err) {
-    console.error("PUT advertiser error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+  const deleteAdvertiser = async (id) => {
+    if (!window.confirm("Delete this advertiser?")) return;
+    try {
+      setLoading(true);
+      await apiClient.delete(`/advertisers/${id}`);
+      fetchAds();
+    } catch (err) {
+      alert("❌ Error deleting advertiser");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-/* Delete advertiser */
-router.delete("/:id", authJWT, async (req, res) => {
-  try {
-    const { id } = req.params;
-    await pool.query("DELETE FROM advertisers WHERE id=$1", [id]);
-    res.json({ message: "Advertiser deleted successfully" });
-  } catch (err) {
-    console.error("DELETE advertiser error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+  useEffect(() => {
+    fetchAds();
+  }, []);
 
-export default router;
+  return (
+    <div className="p-6">
+      <h2 className="text-2xl font-semibold mb-4">Advertisers</h2>
+
+      <div className="grid grid-cols-4 gap-2 mb-4 max-w-xl">
+        <input className="border p-2 rounded" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className="border p-2 rounded" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input className="border p-2 rounded" placeholder="Website" value={website} onChange={(e) => setWebsite(e.target.value)} />
+        <button onClick={saveAdvertiser} disabled={loading} className={`px-4 py-2 rounded text-white ${loading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"}`}>
+          {editId ? "Update" : "Add"}
+        </button>
+      </div>
+
+      {loading ? (
+        <p>Loading...</p>
+      ) : (
+        <table className="min-w-full bg-white rounded shadow text-sm">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="p-2 text-left">Name</th>
+              <th className="p-2 text-left">Email</th>
+              <th className="p-2 text-left">Website</th>
+              <th className="p-2 text-left">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ads.map((a) => (
+              <tr key={a.id} className="border-b">
+                <td className="p-2">{a.name}</td>
+                <td className="p-2">{a.email}</td>
+                <td className="p-2">
+                  <a href={a.website} className="text-blue-600 underline" target="_blank" rel="noreferrer">
+                    {a.website}
+                  </a>
+                </td>
+                <td className="p-2">
+                  <button onClick={() => editAdvertiser(a)} className="bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600 mr-2">
+                    Edit
+                  </button>
+                  <button onClick={() => deleteAdvertiser(a.id)} className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700">
+                    Del
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
