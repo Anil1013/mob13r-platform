@@ -19,12 +19,20 @@ router.get("/", authJWT, async (req, res) => {
 router.post("/", authJWT, async (req, res) => {
   try {
     const { name, email, website } = req.body;
+
+    // Check duplicate email before insert
+    const existing = await pool.query("SELECT id FROM advertisers WHERE email = $1", [email]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: "Email already exists" });
+    }
+
     const result = await pool.query(
       `INSERT INTO advertisers (name, email, website, status, balance)
        VALUES ($1, $2, $3, 'active', 0)
        RETURNING *`,
       [name, email, website]
     );
+
     res.json(result.rows[0]);
   } catch (err) {
     console.error("POST advertiser error:", err.message);
@@ -46,7 +54,7 @@ router.put("/:id", authJWT, async (req, res) => {
 
     const q = await pool.query(
       `UPDATE advertisers
-       SET name=$1, email=$2, website=$3
+       SET name=$1, email=$2, website=$3, updated_at=NOW()
        WHERE id=$4
        RETURNING id, name, email, website, status, balance`,
       [name, email, website, id]
@@ -58,7 +66,6 @@ router.put("/:id", authJWT, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 /* Delete advertiser */
 router.delete("/:id", authJWT, async (req, res) => {
