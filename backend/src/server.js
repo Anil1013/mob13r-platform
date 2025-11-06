@@ -22,37 +22,62 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-/* ✅ CORS */
+/* ✅ CORS Configuration */
 app.use(
   cors({
-    origin: ["https://dashboard.mob13r.com", "http://localhost:3000"],
+    origin: [
+      "https://dashboard.mob13r.com",
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+    ],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true, // important for token handling
   })
 );
 
-// ✅ Preflight
+// ✅ Ensure Preflight OPTIONS responses always succeed
 app.options("*", (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.sendStatus(200);
+  res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, OPTIONS"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  return res.sendStatus(200);
 });
 
-app.use(helmet({ crossOriginResourcePolicy: false }));
-app.use(bodyParser.json({ limit: "10mb" }));
+/* ✅ Security Middlewares */
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+  })
+);
 
-/* ✅ Health */
+/* ✅ JSON Body Parsing */
+app.use(bodyParser.json({ limit: "10mb" }));
+app.use(bodyParser.urlencoded({ extended: true }));
+
+/* ✅ Health Check Endpoint */
 app.get("/api/health", async (req, res) => {
   try {
     const r = await pool.query("SELECT NOW() AS db_time");
-    res.json({ status: "ok", db_time: r.rows[0].db_time });
+    res.json({
+      status: "ok",
+      db_time: r.rows[0].db_time,
+      env: process.env.NODE_ENV || "development",
+    });
   } catch (err) {
+    console.error("❌ Health check failed:", err.message);
     res.status(500).json({ status: "error", message: err.message });
   }
 });
 
-/* ✅ Public Auth Route (No JWT) */
+/* ✅ Public Route (no auth) */
 app.use("/api/auth", authRoutes);
 
 /* ✅ Protected Routes (JWT Required) */
@@ -64,7 +89,12 @@ app.use("/api/clicks", authJWT, clickRoutes);
 app.use("/api/postbacks", authJWT, postbackRoutes);
 app.use("/api/conversions", authJWT, conversionsRoutes);
 
-/* ✅ Start */
+/* ✅ Default 404 Handler */
+app.use((req, res) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
+/* ✅ Start Server */
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Backend running on port ${PORT}`);
 });
