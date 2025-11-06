@@ -2,31 +2,31 @@ import React, { useState, useEffect } from "react";
 import apiClient from "../api/apiClient";
 
 export default function Advertisers() {
+  const [ads, setAds] = useState([]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
-  const [ads, setAds] = useState([]);
   const [editId, setEditId] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const fetchAds = async () => {
+  const fetchAdvertisers = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const res = await apiClient.get("/advertisers");
       setAds(res.data);
     } catch (err) {
-      console.error("Error fetching advertisers:", err);
-      alert("Unable to load advertisers. Please check backend connection.");
+      console.error("Fetch advertisers failed:", err);
+      alert("❌ Failed to fetch advertisers. Check backend API.");
     } finally {
       setLoading(false);
     }
   };
 
   const saveAdvertiser = async () => {
-    if (!name.trim() || !email.trim()) return alert("Enter name and email");
+    if (!name.trim() || !email.trim()) return alert("Enter name & email");
 
+    setLoading(true);
     try {
-      setLoading(true);
       if (editId) {
         await apiClient.put(`/advertisers/${editId}`, { name, email, website });
         alert("✅ Advertiser updated!");
@@ -38,10 +38,10 @@ export default function Advertisers() {
       setEmail("");
       setWebsite("");
       setEditId(null);
-      fetchAds();
+      fetchAdvertisers();
     } catch (err) {
-      console.error("Error saving advertiser:", err);
       alert("❌ Error saving advertiser");
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -57,29 +57,49 @@ export default function Advertisers() {
   const deleteAdvertiser = async (id) => {
     if (!window.confirm("Delete this advertiser?")) return;
     try {
-      setLoading(true);
       await apiClient.delete(`/advertisers/${id}`);
-      fetchAds();
+      fetchAdvertisers();
     } catch (err) {
-      alert("❌ Error deleting advertiser");
-    } finally {
-      setLoading(false);
+      console.error(err);
+      alert("❌ Failed to delete advertiser");
     }
   };
 
   useEffect(() => {
-    fetchAds();
+    fetchAdvertisers();
   }, []);
 
   return (
     <div className="p-6">
-      <h2 className="text-2xl font-semibold mb-4">Advertisers</h2>
+      <h1 className="text-2xl font-semibold mb-4">Advertisers</h1>
 
-      <div className="grid grid-cols-4 gap-2 mb-4 max-w-xl">
-        <input className="border p-2 rounded" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-        <input className="border p-2 rounded" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input className="border p-2 rounded" placeholder="Website" value={website} onChange={(e) => setWebsite(e.target.value)} />
-        <button onClick={saveAdvertiser} disabled={loading} className={`px-4 py-2 rounded text-white ${loading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"}`}>
+      <div className="flex gap-2 mb-4">
+        <input
+          type="text"
+          placeholder="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="border p-2 rounded w-1/4"
+        />
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="border p-2 rounded w-1/4"
+        />
+        <input
+          type="text"
+          placeholder="Website"
+          value={website}
+          onChange={(e) => setWebsite(e.target.value)}
+          className="border p-2 rounded w-1/4"
+        />
+        <button
+          onClick={saveAdvertiser}
+          disabled={loading}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
           {editId ? "Update" : "Add"}
         </button>
       </div>
@@ -87,13 +107,13 @@ export default function Advertisers() {
       {loading ? (
         <p>Loading...</p>
       ) : (
-        <table className="min-w-full bg-white rounded shadow text-sm">
+        <table className="min-w-full border rounded shadow">
           <thead className="bg-gray-100">
             <tr>
               <th className="p-2 text-left">Name</th>
               <th className="p-2 text-left">Email</th>
               <th className="p-2 text-left">Website</th>
-              <th className="p-2 text-left">Action</th>
+              <th className="p-2 text-left">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -102,16 +122,27 @@ export default function Advertisers() {
                 <td className="p-2">{a.name}</td>
                 <td className="p-2">{a.email}</td>
                 <td className="p-2">
-                  <a href={a.website} className="text-blue-600 underline" target="_blank" rel="noreferrer">
+                  <a
+                    href={a.website}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 underline"
+                  >
                     {a.website}
                   </a>
                 </td>
                 <td className="p-2">
-                  <button onClick={() => editAdvertiser(a)} className="bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600 mr-2">
+                  <button
+                    onClick={() => editAdvertiser(a)}
+                    className="bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600 mr-2"
+                  >
                     Edit
                   </button>
-                  <button onClick={() => deleteAdvertiser(a.id)} className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700">
-                    Del
+                  <button
+                    onClick={() => deleteAdvertiser(a.id)}
+                    className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
+                  >
+                    Delete
                   </button>
                 </td>
               </tr>
