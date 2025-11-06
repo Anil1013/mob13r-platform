@@ -16,4 +16,6 @@ const pool = new Pool({
   idleTimeoutMillis: 30000
 });
 
+await pool.query("SET search_path TO public;");
+
 export default pool;
