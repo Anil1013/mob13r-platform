@@ -4,79 +4,74 @@ import authJWT from "../middleware/authJWT.js";
 
 const router = express.Router();
 
-/* Get all advertisers */
+/**
+ * 🧩 GET — All advertisers
+ */
 router.get("/", authJWT, async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT * FROM advertisers ORDER BY id DESC");
-    res.json(rows);
+    const { rows } = await pool.query(
+      "SELECT id, name, email, website, status, balance, created_at, updated_at FROM advertisers ORDER BY id DESC"
+    );
+    res.status(200).json(rows);
   } catch (err) {
-    console.error("GET advertisers error:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error("❌ GET /advertisers error:", err);
+    res.status(500).json({ error: "Failed to fetch advertisers" });
   }
 });
 
-/* Create advertiser */
+/**
+ * 🧩 POST — Create new advertiser
+ */
 router.post("/", authJWT, async (req, res) => {
   try {
     const { name, email, website } = req.body;
 
-    // Check duplicate email before insert
-    const existing = await pool.query("SELECT id FROM advertisers WHERE email = $1", [email]);
+    if (!name || !email) {
+      return res.status(400).json({ error: "Name and email are required" });
+    }
+
+    // Check duplicate email
+    const existing = await pool.query(
+      "SELECT id FROM advertisers WHERE LOWER(email) = LOWER($1)",
+      [email]
+    );
+
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: "Email already exists" });
     }
 
     const result = await pool.query(
-      `INSERT INTO advertisers (name, email, website, status, balance)
-       VALUES ($1, $2, $3, 'active', 0)
-       RETURNING *`,
+      `INSERT INTO advertisers (name, email, website, status, balance, created_at, updated_at)
+       VALUES ($1, $2, $3, 'active', 0, NOW(), NOW())
+       RETURNING id, name, email, website, status, balance, created_at, updated_at`,
       [name, email, website]
     );
 
-    res.json(result.rows[0]);
+    res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error("POST advertiser error:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error("❌ POST /advertisers error:", err);
+    res.status(500).json({ error: "Failed to create advertiser" });
   }
 });
 
-/* Update advertiser */
+/**
+ * 🧩 PUT — Update advertiser
+ */
 router.put("/:id", authJWT, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, email, website } = req.body;
 
-    // Check if advertiser exists
-    const check = await pool.query("SELECT id FROM advertisers WHERE id=$1", [id]);
+    // Check advertiser existence
+    const check = await pool.query("SELECT id FROM advertisers WHERE id = $1", [id]);
     if (check.rows.length === 0) {
       return res.status(404).json({ error: "Advertiser not found" });
     }
 
-    const q = await pool.query(
-      `UPDATE advertisers
-       SET name=$1, email=$2, website=$3, updated_at=NOW()
-       WHERE id=$4
-       RETURNING id, name, email, website, status, balance`,
-      [name, email, website, id]
+    // Prevent email conflicts
+    const duplicate = await pool.query(
+      "SELECT id FROM advertisers WHERE LOWER(email) = LOWER($1) AND id != $2",
+      [email, id]
     );
-
-    res.json(q.rows[0]);
-  } catch (err) {
-    console.error("PUT advertiser error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* Delete advertiser */
-router.delete("/:id", authJWT, async (req, res) => {
-  try {
-    const { id } = req.params;
-    await pool.query("DELETE FROM advertisers WHERE id=$1", [id]);
-    res.json({ message: "Advertiser deleted successfully" });
-  } catch (err) {
-    console.error("DELETE advertiser error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-export default router;
+    if (duplicate.rows.length > 0) {
+      return res.status(400).json({ error: "Email already in use by another advertiser" });
