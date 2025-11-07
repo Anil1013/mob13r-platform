@@ -28,6 +28,8 @@ export default function Offers() {
     portal_url: "",
   });
 
+  const BASE_URL = "https://backend.mob13r.com";
+
   /* ------------------- Fetch All Data ------------------- */
   const fetchOffers = async () => {
     try {
@@ -73,6 +75,13 @@ export default function Offers() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      if (
+        form.flow_type === "normal" &&
+        (form.click_url && !form.click_url.startsWith("http"))
+      ) {
+        return alert("⚠️ Please enter a valid Click URL (must start with http/https).");
+      }
+
       const payload = {
         ...form,
         advertiser_payout: parseFloat(form.advertiser_payout),
@@ -121,7 +130,12 @@ export default function Offers() {
   /* ------------------- Edit Offer ------------------- */
   const handleEdit = (offer) => {
     setEditingId(offer.id);
-    setForm({ ...offer });
+    setForm({
+      ...offer,
+      advertiser_id: offer.advertiser_id || "",
+      publisher_id: offer.publisher_id || "",
+      flow_type: offer.flow_type || "normal",
+    });
   };
 
   /* ------------------- Delete Offer ------------------- */
@@ -246,8 +260,10 @@ export default function Offers() {
                   <td className="p-2 text-xs text-gray-600">
                     {offer.flow_type === "normal" ? (
                       <>
-                        <div><b>Click:</b> /api/click?offer_id={offer.id}&pub_id=</div>
-                        <div><b>Postback:</b> /api/postback?clickid=&status=&amount=</div>
+                        <div><b>Click URL:</b></div>
+                        <code>{`${BASE_URL}/api/click?offer_id=${offer.id}&pub_id={pub_id}`}</code>
+                        <div className="mt-1"><b>Postback URL:</b></div>
+                        <code>{`${BASE_URL}/api/postback?clickid={clickid}&status={status}&amount={amount}`}</code>
                       </>
                     ) : (
                       <>
