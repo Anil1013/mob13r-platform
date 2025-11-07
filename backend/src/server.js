@@ -14,6 +14,7 @@ import postbackRoutes from "./routes/postbacks.js";
 import conversionsRoutes from "./routes/conversions.js";
 import statsRoutes from "./routes/stats.js";
 import authRoutes from "./routes/auth.js";
+import analyticsRoutes from "./routes/analytics.js";
 
 /* Middleware */
 import authJWT from "./middleware/authJWT.js";
@@ -62,6 +63,7 @@ app.use("/api/offers", authJWT, offersRoutes);
 app.use("/api/clicks", authJWT, clickRoutes);
 app.use("/api/postbacks", authJWT, postbackRoutes);
 app.use("/api/conversions", authJWT, conversionsRoutes);
+app.use("/api", authJWT, analyticsRoutes);
 app.use("/api/stats", authJWT, statsRoutes);
 
 /* ✅ Start Server */
