@@ -7,6 +7,8 @@ export default function Offers() {
   const [advertisers, setAdvertisers] = useState([]);
   const [publishers, setPublishers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+
   const [form, setForm] = useState({
     name: "",
     geo: "",
@@ -17,9 +19,14 @@ export default function Offers() {
     advertiser_payout: "",
     publisher_payout: "",
     cap_daily: "",
-    flow_type: "direct",
+    flow_type: "normal", // normal | inapp
+    click_url: "",
+    postback_url: "",
+    pin_send_url: "",
+    pin_verify_url: "",
+    status_check_url: "",
+    portal_url: "",
   });
-  const [editingId, setEditingId] = useState(null);
 
   /* ------------------- Fetch All Data ------------------- */
   const fetchOffers = async () => {
@@ -81,19 +88,7 @@ export default function Offers() {
         alert("✅ Offer added successfully!");
       }
 
-      setForm({
-        name: "",
-        geo: "",
-        carrier: "",
-        type: "CPA",
-        advertiser_id: "",
-        publisher_id: "",
-        advertiser_payout: "",
-        publisher_payout: "",
-        cap_daily: "",
-        flow_type: "direct",
-      });
-      setEditingId(null);
+      resetForm();
       fetchOffers();
     } catch (err) {
       console.error("❌ Error saving offer:", err);
@@ -101,21 +96,32 @@ export default function Offers() {
     }
   };
 
+  const resetForm = () => {
+    setForm({
+      name: "",
+      geo: "",
+      carrier: "",
+      type: "CPA",
+      advertiser_id: "",
+      publisher_id: "",
+      advertiser_payout: "",
+      publisher_payout: "",
+      cap_daily: "",
+      flow_type: "normal",
+      click_url: "",
+      postback_url: "",
+      pin_send_url: "",
+      pin_verify_url: "",
+      status_check_url: "",
+      portal_url: "",
+    });
+    setEditingId(null);
+  };
+
   /* ------------------- Edit Offer ------------------- */
   const handleEdit = (offer) => {
     setEditingId(offer.id);
-    setForm({
-      name: offer.name,
-      geo: offer.geo,
-      carrier: offer.carrier,
-      type: offer.type,
-      advertiser_id: offer.advertiser_id,
-      publisher_id: offer.publisher_id || "",
-      advertiser_payout: offer.advertiser_payout,
-      publisher_payout: offer.publisher_payout,
-      cap_daily: offer.cap_daily,
-      flow_type: offer.flow_type,
-    });
+    setForm({ ...offer });
   };
 
   /* ------------------- Delete Offer ------------------- */
@@ -149,110 +155,59 @@ export default function Offers() {
       {/* Offer Form */}
       <form
         onSubmit={handleSubmit}
-        className="grid md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6 bg-white dark:bg-gray-800 p-6 rounded-lg shadow"
+        className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 bg-white dark:bg-gray-800 p-6 rounded-lg shadow"
       >
-        <input
-          type="text"
-          name="name"
-          placeholder="Offer Name"
-          value={form.name}
-          onChange={handleChange}
-          required
-          className="p-2 border rounded w-full"
-        />
-        <input
-          type="text"
-          name="geo"
-          placeholder="GEO (e.g. KW, IQ)"
-          value={form.geo}
-          onChange={handleChange}
-          className="p-2 border rounded w-full"
-        />
-        <input
-          type="text"
-          name="carrier"
-          placeholder="Carrier (e.g. Zain, STC)"
-          value={form.carrier}
-          onChange={handleChange}
-          className="p-2 border rounded w-full"
-        />
+        <input name="name" placeholder="Offer Name" value={form.name} onChange={handleChange} className="p-2 border rounded w-full" required />
+        <input name="geo" placeholder="Geo (e.g. IN, KW)" value={form.geo} onChange={handleChange} className="p-2 border rounded w-full" />
+        <input name="carrier" placeholder="Carrier (e.g. Airtel)" value={form.carrier} onChange={handleChange} className="p-2 border rounded w-full" />
 
-        <select
-          name="type"
-          value={form.type}
-          onChange={handleChange}
-          className="p-2 border rounded w-full"
-        >
+        <select name="type" value={form.type} onChange={handleChange} className="p-2 border rounded w-full">
           <option>CPA</option>
           <option>CPI</option>
           <option>CPL</option>
           <option>CPS</option>
-          <option>INAPP</option>
+          <option>InApp</option>
         </select>
 
-        <select
-          name="advertiser_id"
-          value={form.advertiser_id}
-          onChange={handleChange}
-          required
-          className="p-2 border rounded w-full"
-        >
+        <select name="flow_type" value={form.flow_type} onChange={handleChange} className="p-2 border rounded w-full">
+          <option value="normal">Normal</option>
+          <option value="inapp">InApp</option>
+        </select>
+
+        <select name="advertiser_id" value={form.advertiser_id} onChange={handleChange} className="p-2 border rounded w-full" required>
           <option value="">Select Advertiser</option>
           {advertisers.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
+            <option key={a.id} value={a.id}>{a.name}</option>
           ))}
         </select>
 
-        <select
-          name="publisher_id"
-          value={form.publisher_id}
-          onChange={handleChange}
-          className="p-2 border rounded w-full"
-        >
-          <option value="">Select Publisher (optional)</option>
+        <select name="publisher_id" value={form.publisher_id} onChange={handleChange} className="p-2 border rounded w-full">
+          <option value="">Select Publisher</option>
           {publishers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
+            <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
 
-        <input
-          type="number"
-          step="0.01"
-          name="advertiser_payout"
-          placeholder="Advertiser Payout ($)"
-          value={form.advertiser_payout}
-          onChange={handleChange}
-          required
-          className="p-2 border rounded w-full"
-        />
+        <input type="number" step="0.01" name="advertiser_payout" placeholder="Advertiser Payout ($)" value={form.advertiser_payout} onChange={handleChange} className="p-2 border rounded w-full" required />
+        <input type="number" step="0.01" name="publisher_payout" placeholder="Publisher Payout ($)" value={form.publisher_payout} onChange={handleChange} className="p-2 border rounded w-full" />
+        <input type="number" name="cap_daily" placeholder="Daily Cap" value={form.cap_daily} onChange={handleChange} className="p-2 border rounded w-full" />
 
-        <input
-          type="number"
-          step="0.01"
-          name="publisher_payout"
-          placeholder="Publisher Payout ($)"
-          value={form.publisher_payout}
-          onChange={handleChange}
-          className="p-2 border rounded w-full"
-        />
+        {/* Conditional Fields */}
+        {form.flow_type === "normal" ? (
+          <>
+            <input name="click_url" placeholder="Advertiser Click URL (use {clickid})" value={form.click_url} onChange={handleChange} className="p-2 border rounded w-full col-span-2" />
+            <input name="postback_url" placeholder="Advertiser Postback URL" value={form.postback_url} onChange={handleChange} className="p-2 border rounded w-full col-span-2" />
+          </>
+        ) : (
+          <>
+            <input name="pin_send_url" placeholder="PIN Send API URL" value={form.pin_send_url} onChange={handleChange} className="p-2 border rounded w-full col-span-2" />
+            <input name="pin_verify_url" placeholder="PIN Verify API URL" value={form.pin_verify_url} onChange={handleChange} className="p-2 border rounded w-full col-span-2" />
+            <input name="status_check_url" placeholder="Status Check URL" value={form.status_check_url} onChange={handleChange} className="p-2 border rounded w-full col-span-2" />
+            <input name="portal_url" placeholder="Portal URL (final redirect)" value={form.portal_url} onChange={handleChange} className="p-2 border rounded w-full col-span-2" />
+          </>
+        )}
 
-        <input
-          type="number"
-          name="cap_daily"
-          placeholder="Daily Cap"
-          value={form.cap_daily}
-          onChange={handleChange}
-          className="p-2 border rounded w-full"
-        />
-
-        <button
-          type="submit"
-          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition w-full"
-        >
+        <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 w-full">
           {editingId ? "Update Offer" : "Add Offer"}
         </button>
       </form>
@@ -267,54 +222,45 @@ export default function Offers() {
           <table className="min-w-full text-sm">
             <thead className="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
               <tr>
-                <th className="p-2">Offer Name</th>
-                <th className="p-2">Geo</th>
-                <th className="p-2">Carrier</th>
+                <th className="p-2">Offer</th>
                 <th className="p-2">Type</th>
+                <th className="p-2">Flow</th>
                 <th className="p-2">Advertiser</th>
                 <th className="p-2">Publisher</th>
                 <th className="p-2">Payouts</th>
                 <th className="p-2">Cap</th>
-                <th className="p-2">Status</th>
+                <th className="p-2">URLs</th>
                 <th className="p-2">Actions</th>
               </tr>
             </thead>
             <tbody>
               {offers.map((offer) => (
-                <tr
-                  key={offer.id}
-                  className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                >
-                  <td className="p-2 font-medium">{offer.name}</td>
-                  <td className="p-2">{offer.geo}</td>
-                  <td className="p-2">{offer.carrier}</td>
+                <tr key={offer.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <td className="p-2 font-semibold">{offer.name}</td>
                   <td className="p-2">{offer.type}</td>
+                  <td className="p-2">{offer.flow_type}</td>
                   <td className="p-2">{offer.advertiser_name || "-"}</td>
                   <td className="p-2">{offer.publisher_name || "-"}</td>
-                  <td className="p-2">
-                    ${offer.advertiser_payout} / ${offer.publisher_payout}
-                  </td>
+                  <td className="p-2">${offer.publisher_payout}</td>
                   <td className="p-2">{offer.cap_daily}</td>
-                  <td
-                    className={`p-2 font-semibold ${
-                      offer.status === "active"
-                        ? "text-green-600"
-                        : "text-red-500"
-                    }`}
-                  >
-                    {offer.status}
+                  <td className="p-2 text-xs text-gray-600">
+                    {offer.flow_type === "normal" ? (
+                      <>
+                        <div><b>Click:</b> /api/click?offer_id={offer.id}&pub_id=</div>
+                        <div><b>Postback:</b> /api/postback?clickid=&status=&amount=</div>
+                      </>
+                    ) : (
+                      <>
+                        <div><b>PIN Send:</b> {offer.pin_send_url}</div>
+                        <div><b>PIN Verify:</b> {offer.pin_verify_url}</div>
+                      </>
+                    )}
                   </td>
                   <td className="p-2 flex gap-3">
-                    <button
-                      onClick={() => handleEdit(offer)}
-                      className="text-blue-600 hover:text-blue-800"
-                    >
+                    <button onClick={() => handleEdit(offer)} className="text-blue-600 hover:text-blue-800">
                       <Edit3 size={16} />
                     </button>
-                    <button
-                      onClick={() => handleDelete(offer.id)}
-                      className="text-red-600 hover:text-red-800"
-                    >
+                    <button onClick={() => handleDelete(offer.id)} className="text-red-600 hover:text-red-800">
                       <Trash2 size={16} />
                     </button>
                   </td>
