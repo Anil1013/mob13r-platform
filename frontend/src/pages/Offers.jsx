@@ -20,52 +20,52 @@ export default function Offers() {
   });
   const [isEditing, setIsEditing] = useState(false);
 
-  // Fetch all data
-  const fetchAll = async () => {
+  // ✅ Fetch all offers, advertisers & publishers
+  const fetchData = async () => {
     try {
-      const [offerRes, advRes, pubRes] = await Promise.all([
+      const [offersRes, advRes, pubRes] = await Promise.all([
         apiClient.get("/offers"),
         apiClient.get("/advertisers"),
         apiClient.get("/publishers"),
       ]);
-      setOffers(offerRes.data);
+      setOffers(offersRes.data);
       setAdvertisers(advRes.data);
       setPublishers(pubRes.data);
     } catch (err) {
-      alert("⚠️ Error loading data: " + err.message);
+      console.error("⚠️ Error fetching data:", err);
+      alert("Error loading data. Please check API connection.");
     }
   };
 
   useEffect(() => {
-    fetchAll();
+    fetchData();
   }, []);
 
-  // Handle input changes
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    let updatedForm = { ...form, [name]: value };
-
-    // Auto calculate publisher payout (80% of advertiser payout)
-    if (name === "advertiser_payout") {
-      const advPayout = parseFloat(value);
-      if (!isNaN(advPayout)) {
-        updatedForm.publisher_payout = (advPayout * 0.8).toFixed(2);
-      }
-    }
-
-    setForm(updatedForm);
-  };
-
-  // Submit offer (Add / Update)
+  // ✅ Add or Update Offer
   const handleSubmit = async () => {
+    const {
+      name,
+      geo,
+      carrier,
+      type,
+      advertiser_id,
+      publisher_id,
+      advertiser_payout,
+      publisher_payout,
+      cap_daily,
+    } = form;
+
     if (
-      !form.name ||
-      !form.geo ||
-      !form.carrier ||
-      !form.advertiser_id ||
-      !form.advertiser_payout
+      !name ||
+      !geo ||
+      !carrier ||
+      !type ||
+      !advertiser_id ||
+      !publisher_id ||
+      !advertiser_payout ||
+      !publisher_payout
     ) {
-      return alert("⚠️ Please fill all required fields!");
+      return alert("⚠️ Please fill all fields!");
     }
 
     try {
@@ -77,12 +77,14 @@ export default function Offers() {
         alert("✅ Offer added successfully!");
       }
       resetForm();
-      fetchAll();
+      fetchData();
     } catch (err) {
-      alert("⚠️ Error: " + (err.response?.data?.error || err.message));
+      console.error("❌ Error saving offer:", err);
+      alert("Failed to save offer.");
     }
   };
 
+  // ✅ Reset form after submit / cancel
   const resetForm = () => {
     setForm({
       id: null,
@@ -100,65 +102,67 @@ export default function Offers() {
     setIsEditing(false);
   };
 
-  const editOffer = (offer) => {
+  // ✅ Edit Offer
+  const handleEdit = (offer) => {
     setForm(offer);
     setIsEditing(true);
   };
 
-  const deleteOffer = async (id) => {
+  // ✅ Delete Offer
+  const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this offer?")) return;
     try {
       await apiClient.delete(`/offers/${id}`);
-      fetchAll();
+      alert("🗑️ Offer deleted.");
+      fetchData();
     } catch (err) {
-      alert("⚠️ Error deleting offer: " + err.message);
+      alert("Error deleting offer.");
     }
   };
 
   return (
-    <div className="p-4">
+    <div>
       <h2 className="text-2xl font-semibold mb-4">Offers Management</h2>
 
-      {/* FORM SECTION */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      {/* Add / Edit Form */}
+      <div className="grid grid-cols-3 gap-3 mb-5 bg-white p-4 rounded shadow">
         <input
           className="border p-2 rounded"
-          name="name"
           placeholder="Offer Name"
           value={form.name}
-          onChange={handleChange}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
         />
+
         <input
           className="border p-2 rounded"
-          name="geo"
-          placeholder="Geo (e.g., KW, IQ)"
+          placeholder="GEO (e.g. KW, IQ)"
           value={form.geo}
-          onChange={handleChange}
+          onChange={(e) => setForm({ ...form, geo: e.target.value })}
         />
+
         <input
           className="border p-2 rounded"
-          name="carrier"
-          placeholder="Carrier (e.g., STC, Zain, InApp)"
+          placeholder="Carrier (e.g. Zain, STC, INAPP)"
           value={form.carrier}
-          onChange={handleChange}
+          onChange={(e) => setForm({ ...form, carrier: e.target.value })}
         />
+
         <select
           className="border p-2 rounded"
-          name="type"
           value={form.type}
-          onChange={handleChange}
+          onChange={(e) => setForm({ ...form, type: e.target.value })}
         >
-          <option>CPA</option>
-          <option>CPI</option>
-          <option>CPL</option>
-          <option>CPS</option>
-          <option>INAPP</option>
+          <option value="CPA">CPA</option>
+          <option value="CPI">CPI</option>
+          <option value="CPL">CPL</option>
+          <option value="CPS">CPS</option>
+          <option value="INAPP">INAPP</option>
         </select>
+
         <select
           className="border p-2 rounded"
-          name="advertiser_id"
           value={form.advertiser_id}
-          onChange={handleChange}
+          onChange={(e) => setForm({ ...form, advertiser_id: e.target.value })}
         >
           <option value="">Select Advertiser</option>
           {advertisers.map((a) => (
@@ -167,11 +171,11 @@ export default function Offers() {
             </option>
           ))}
         </select>
+
         <select
           className="border p-2 rounded"
-          name="publisher_id"
           value={form.publisher_id}
-          onChange={handleChange}
+          onChange={(e) => setForm({ ...form, publisher_id: e.target.value })}
         >
           <option value="">Select Publisher</option>
           {publishers.map((p) => (
@@ -183,86 +187,86 @@ export default function Offers() {
 
         <input
           className="border p-2 rounded"
-          name="advertiser_payout"
           type="number"
           placeholder="Advertiser Payout ($)"
           value={form.advertiser_payout}
-          onChange={handleChange}
+          onChange={(e) =>
+            setForm({ ...form, advertiser_payout: e.target.value })
+          }
         />
+
         <input
-          className="border p-2 rounded bg-gray-50"
-          name="publisher_payout"
+          className="border p-2 rounded"
           type="number"
           placeholder="Publisher Payout ($)"
           value={form.publisher_payout}
-          onChange={handleChange}
-          readOnly
+          onChange={(e) =>
+            setForm({ ...form, publisher_payout: e.target.value })
+          }
         />
+
         <input
           className="border p-2 rounded"
-          name="cap_daily"
           type="number"
           placeholder="Daily Cap"
           value={form.cap_daily}
-          onChange={handleChange}
+          onChange={(e) => setForm({ ...form, cap_daily: e.target.value })}
         />
+
         <button
-          className="bg-green-600 text-white p-2 rounded col-span-3"
           onClick={handleSubmit}
+          className="bg-green-600 text-white p-2 rounded hover:bg-green-700"
         >
           {isEditing ? "Update Offer" : "Add Offer"}
         </button>
       </div>
 
       {isEditing && (
-        <button
-          onClick={resetForm}
-          className="mb-4 text-red-500 underline text-sm"
-        >
+        <button onClick={resetForm} className="text-red-500 underline mb-3">
           Cancel Edit
         </button>
       )}
 
-      {/* OFFERS TABLE */}
-      <table className="min-w-full bg-white rounded shadow text-sm">
+      {/* Offers Table */}
+      <table className="min-w-full bg-white shadow rounded text-sm">
         <thead className="bg-gray-100">
           <tr>
-            <th className="p-2">Name</th>
+            <th className="p-2">Offer Name</th>
             <th className="p-2">Geo</th>
             <th className="p-2">Carrier</th>
             <th className="p-2">Type</th>
             <th className="p-2">Advertiser</th>
             <th className="p-2">Publisher</th>
-            <th className="p-2">Adv Payout</th>
-            <th className="p-2">Pub Payout</th>
+            <th className="p-2">Payouts</th>
             <th className="p-2">Cap</th>
             <th className="p-2">Status</th>
             <th className="p-2">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {offers.map((o) => (
-            <tr key={o.id} className="border-b">
-              <td className="p-2">{o.name}</td>
-              <td className="p-2">{o.geo}</td>
-              <td className="p-2">{o.carrier}</td>
-              <td className="p-2">{o.type}</td>
-              <td className="p-2">{o.advertiser_name || "-"}</td>
-              <td className="p-2">{o.publisher_name || "-"}</td>
-              <td className="p-2">${o.advertiser_payout}</td>
-              <td className="p-2">${o.publisher_payout}</td>
-              <td className="p-2">{o.cap_daily}</td>
-              <td className="p-2">{o.status}</td>
+          {offers.map((offer) => (
+            <tr key={offer.id} className="border-b">
+              <td className="p-2">{offer.name}</td>
+              <td className="p-2">{offer.geo}</td>
+              <td className="p-2">{offer.carrier}</td>
+              <td className="p-2">{offer.type}</td>
+              <td className="p-2">{offer.advertiser_name}</td>
+              <td className="p-2">{offer.publisher_name}</td>
+              <td className="p-2">
+                Adv: ${offer.advertiser_payout} | Pub: ${offer.publisher_payout}
+              </td>
+              <td className="p-2">{offer.cap_daily}</td>
+              <td className="p-2">{offer.status}</td>
               <td className="p-2 flex gap-2">
                 <button
                   className="text-blue-600 underline"
-                  onClick={() => editOffer(o)}
+                  onClick={() => handleEdit(offer)}
                 >
                   Edit
                 </button>
                 <button
                   className="text-red-600 underline"
-                  onClick={() => deleteOffer(o.id)}
+                  onClick={() => handleDelete(offer.id)}
                 >
                   Delete
                 </button>
