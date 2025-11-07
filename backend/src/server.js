@@ -1,3 +1,4 @@
+// 📂 /backend/src/server.js
 import express from "express";
 import dotenv from "dotenv";
 import helmet from "helmet";
@@ -23,50 +24,64 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-/* ✅ CORS */
+/* 🧱 Security */
 app.use(
-  cors({
-    origin: ["https://dashboard.mob13r.com", "http://localhost:3000"],
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+  helmet({
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
 
-// ✅ Handle preflight
-app.options("*", (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.sendStatus(200);
-});
+/* 🌐 CORS */
+app.use(
+  cors({
+    origin: [
+      "https://dashboard.mob13r.com",
+      "http://localhost:3000",
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
 
-app.use(helmet({ crossOriginResourcePolicy: false }));
+/* 🧾 Request Body */
 app.use(bodyParser.json({ limit: "10mb" }));
 
-/* ✅ Health Check */
+/* ✅ Health Check (used by NGINX / monitoring) */
 app.get("/api/health", async (req, res) => {
   try {
     const result = await pool.query("SELECT NOW() AS db_time");
-    res.json({ status: "ok", db_time: result.rows[0].db_time });
+    res.status(200).json({ status: "ok", db_time: result.rows[0].db_time });
   } catch (err) {
+    console.error("❌ Database health check failed:", err.message);
     res.status(500).json({ status: "error", message: err.message });
   }
 });
 
-/* ✅ Public Auth */
+/* =========================
+   🔓 PUBLIC ROUTES
+   ========================= */
 app.use("/api/auth", authRoutes);
+app.use("/api/click", clickRoutes);        // Public click tracking endpoint
+app.use("/api/postback", postbackRoutes);  // Public advertiser conversion postbacks
 
-/* ✅ Protected APIs */
+/* =========================
+   🔐 PROTECTED ROUTES
+   ========================= */
 app.use("/api/publishers", authJWT, publishersRoutes);
 app.use("/api/advertisers", authJWT, advertisersRoutes);
 app.use("/api/offers", authJWT, offersRoutes);
-app.use("/api/clicks", authJWT, clickRoutes);
-app.use("/api/postbacks", authJWT, postbackRoutes);
 app.use("/api/conversions", authJWT, conversionsRoutes);
-app.use("/api", authJWT, analyticsRoutes);
 app.use("/api/stats", authJWT, statsRoutes);
+app.use("/api/analytics", authJWT, analyticsRoutes);
 
-/* ✅ Start Server */
+/* ✅ Default root */
+app.get("/", (req, res) => {
+  res.send("✅ Mob13r Backend API running successfully!");
+});
+
+/* 🚀 Start Server */
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Backend running on port ${PORT}`);
+  console.log(`✅ Mob13r backend running on port ${PORT}`);
 });
