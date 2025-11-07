@@ -10,12 +10,14 @@ import {
   AlertTriangle,
   FileCode,
   Layers,
+  Gift, // 🎁 Added for Offers
 } from "lucide-react";
 
 function Sidebar() {
   const menuItems = [
     { name: "Dashboard", path: "/", icon: <LayoutDashboard size={18} /> },
     { name: "Advertisers", path: "/advertisers", icon: <Building2 size={18} /> },
+    { name: "Offers", path: "/offers", icon: <Gift size={18} /> }, // ✅ Added Offers here
     { name: "Publishers", path: "/publishers", icon: <Users size={18} /> },
     { name: "Clicks", path: "/clicks", icon: <MousePointerClick size={18} /> },
     { name: "Conversions", path: "/conversions", icon: <LineChart size={18} /> },
@@ -59,7 +61,8 @@ function Sidebar() {
 
       {/* Footer */}
       <div className="p-4 border-t border-gray-200 text-xs text-gray-500 text-center bg-gray-50">
-        © {new Date().getFullYear()} <span className="font-semibold">Mob13r Platform</span>
+        © {new Date().getFullYear()}{" "}
+        <span className="font-semibold">Mob13r Platform</span>
       </div>
     </aside>
   );
