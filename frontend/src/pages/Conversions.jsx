@@ -3,65 +3,46 @@ import apiClient from "../api/apiClient";
 
 export default function Conversions() {
   const [data, setData] = useState([]);
-  const [filter, setFilter] = useState("all");
-  const [loading, setLoading] = useState(true);
 
-  const loadData = async () => {
-    try {
-      const res = await apiClient.get("/conversions", {
-        params: { status: filter }
-      });
-      setData(res.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { loadData(); }, [filter]);
-
-  if (loading) return "Loading conversions...";
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await apiClient.get("/conversions");
+        setData(res.data);
+      } catch (err) {
+        alert("⚠️ Failed to load conversions");
+      }
+    };
+    fetchData();
+  }, []);
 
   return (
     <div>
-      <div className="flex justify-between mb-4">
-        <h2 className="text-2xl font-semibold">Conversions</h2>
-
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="border p-2 rounded"
-        >
-          <option value="all">All</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-          <option value="pending">Pending</option>
-        </select>
-      </div>
-
-      <div className="bg-white shadow rounded-lg p-4 overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="p-2">Click ID</th>
-              <th className="p-2">Offer</th>
-              <th className="p-2">Payout</th>
-              <th className="p-2">Status</th>
+      <h2 className="text-2xl font-semibold mb-4">Conversions Log</h2>
+      <table className="min-w-full bg-white rounded shadow text-sm">
+        <thead className="bg-gray-100">
+          <tr>
+            <th className="p-2">Publisher</th>
+            <th className="p-2">Advertiser</th>
+            <th className="p-2">Click ID</th>
+            <th className="p-2">Payout ($)</th>
+            <th className="p-2">Status</th>
+            <th className="p-2">Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((c) => (
+            <tr key={c.id} className="border-b">
+              <td className="p-2">{c.publisher_name}</td>
+              <td className="p-2">{c.advertiser_name}</td>
+              <td className="p-2">{c.click_id}</td>
+              <td className="p-2">{c.payout}</td>
+              <td className="p-2">{c.status}</td>
+              <td className="p-2">{new Date(c.conversion_time).toLocaleString()}</td>
             </tr>
-          </thead>
-          <tbody>
-            {data.map((c) => (
-              <tr key={c.id} className="border-b">
-                <td className="p-2">{c.click_id}</td>
-                <td className="p-2">{c.offer_name}</td>
-                <td className="p-2">${c.payout}</td>
-                <td className="p-2 uppercase font-semibold">{c.status}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
