@@ -10,33 +10,28 @@ const router = express.Router();
  */
 router.get("/", authJWT, async (req, res) => {
   try {
-    // Check if each table exists before querying
     const checkTables = ["publishers", "advertisers", "offers", "conversions"];
 
+    // ✅ Proper table existence check (no parameter substitution issue)
     for (const table of checkTables) {
-      const result = await pool.query(
-        `SELECT to_regclass($1) AS exists;`,
-        [table]
-      );
+      const result = await pool.query(`SELECT to_regclass('${table}') AS exists;`);
       if (!result.rows[0].exists) {
         console.warn(`⚠️ Table missing: ${table}`);
       }
     }
 
-    const stats = {};
-
-    // ✅ Use COALESCE to avoid null errors
+    // ✅ Safe COUNT queries with COALESCE
     const pub = await pool.query("SELECT COALESCE(COUNT(*), 0) AS count FROM publishers;");
     const adv = await pool.query("SELECT COALESCE(COUNT(*), 0) AS count FROM advertisers;");
     const offers = await pool.query("SELECT COALESCE(COUNT(*), 0) AS count FROM offers;");
     const conv = await pool.query("SELECT COALESCE(COUNT(*), 0) AS count FROM conversions;");
 
-    stats.publishers = parseInt(pub.rows[0].count);
-    stats.advertisers = parseInt(adv.rows[0].count);
-    stats.offers = parseInt(offers.rows[0].count);
-    stats.conversions = parseInt(conv.rows[0].count);
-
-    res.json(stats);
+    res.json({
+      publishers: parseInt(pub.rows[0].count),
+      advertisers: parseInt(adv.rows[0].count),
+      offers: parseInt(offers.rows[0].count),
+      conversions: parseInt(conv.rows[0].count),
+    });
   } catch (err) {
     console.error("❌ Stats route error:", err.message);
     res.status(500).json({ error: "Stats fetch failed", details: err.message });
