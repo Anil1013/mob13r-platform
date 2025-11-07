@@ -5,17 +5,18 @@ import axios from "axios";
 const router = express.Router();
 
 /**
- * 📥 Example:
- * /api/postback?clickid=abcd1234&status=approved&amount=2.5
+ * 💰 RECEIVE ADVERTISER POSTBACK
+ * Example: /api/postback?clickid=abcd1234&status=approved&amount=2.5
  */
 router.get("/", async (req, res) => {
   const { clickid, status = "approved", amount = 0, txid } = req.query;
+
   if (!clickid) return res.status(400).send("Missing clickid");
 
   try {
-    // 1️⃣ Find the click in DB
+    // 1️⃣ Find click in database
     const clickRes = await pool.query(
-      `SELECT c.*, o.id AS offer_id, o.advertiser_id, o.publisher_payout
+      `SELECT c.*, o.id AS offer_id, o.advertiser_id, o.publisher_id, o.publisher_payout
        FROM clicks c
        JOIN offers o ON c.offer_id = o.id
        WHERE c.clickid=$1`,
@@ -34,28 +35,31 @@ router.get("/", async (req, res) => {
       [clickid, c.offer_id, c.publisher_id, c.advertiser_id, amount || c.publisher_payout, status, txid]
     );
 
-    // 3️⃣ Fetch publisher’s postback URL
-    const pubRes = await pool.query("SELECT postback_url FROM publishers WHERE id=$1", [c.publisher_id]);
-    const pubUrl = pubRes.rows[0]?.postback_url;
+    // 3️⃣ Get publisher’s postback URL
+    const pub = await pool.query(
+      "SELECT postback_url FROM publishers WHERE id=$1",
+      [c.publisher_id]
+    );
+    const publisherPostback = pub.rows[0]?.postback_url;
 
-    // 4️⃣ Fire postback to publisher if exists
-    if (pubUrl) {
-      const finalUrl = pubUrl
+    if (publisherPostback) {
+      const finalPostback = publisherPostback
         .replace("{clickid}", clickid)
         .replace("{status}", status)
         .replace("{amount}", amount);
 
+      // Fire publisher postback
       axios
-        .get(finalUrl)
-        .then(() => console.log("✅ Publisher postback sent:", finalUrl))
-        .catch((err) => console.error("⚠️ Publisher postback failed:", err.message));
+        .get(finalPostback)
+        .then(() => console.log("✅ Publisher Postback Sent:", finalPostback))
+        .catch((err) => console.error("⚠️ Failed to send publisher postback:", err.message));
     } else {
-      console.log("ℹ️ Publisher has no postback URL");
+      console.log("ℹ️ No publisher postback found for this publisher");
     }
 
-    res.send("✅ Conversion recorded");
+    res.send("✅ Conversion Recorded");
   } catch (err) {
-    console.error("❌ Postback error:", err.message);
+    console.error("❌ Postback Error:", err.message);
     res.status(500).send("Internal Server Error");
   }
 });
