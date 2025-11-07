@@ -1,82 +1,47 @@
-import express from 'express';
-import pool from '../db.js';
+import express from "express";
+import pool from "../db.js";
+import { v4 as uuidv4 } from "uuid";
 
 const router = express.Router();
 
-// 🧩 Auto-create clicks table
-const init = async () => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS clicks (
-      id SERIAL PRIMARY KEY,
-      offer_id INT REFERENCES offers(id) ON DELETE CASCADE,
-      advertiser_id INT REFERENCES advertisers(id) ON DELETE CASCADE,
-      publisher_id INT,
-      click_id VARCHAR(100) UNIQUE NOT NULL,
-      ip_address VARCHAR(100),
-      user_agent TEXT,
-      status VARCHAR(20) DEFAULT 'valid',
-      created_at TIMESTAMP DEFAULT NOW()
+/**
+ * 📥 Example:
+ * /api/click?offer_id=10&pub_id=5&sub1=xyz
+ */
+router.get("/", async (req, res) => {
+  try {
+    const { offer_id, pub_id, sub1 } = req.query;
+
+    if (!offer_id || !pub_id)
+      return res.status(400).send("Missing offer_id or pub_id");
+
+    const clickid = uuidv4();
+
+    // Save click
+    await pool.query(
+      `INSERT INTO clicks (offer_id, publisher_id, clickid, ip_address, user_agent)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [offer_id, pub_id, clickid, req.ip, req.get("user-agent")]
     );
-  `);
-};
-init();
 
-// ✅ Log new click
-router.post('/', async (req, res) => {
-  const { offer_id, advertiser_id, publisher_id, click_id, ip_address, user_agent } = req.body;
-  try {
-    const result = await pool.query(
-      `INSERT INTO clicks (offer_id, advertiser_id, publisher_id, click_id, ip_address, user_agent)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [offer_id, advertiser_id, publisher_id, click_id, ip_address, user_agent]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error('Error inserting click:', err);
-    if (err.code === '23505') {
-      res.status(409).json({ error: 'Duplicate click_id' });
-    } else {
-      res.status(500).json({ error: 'Database error' });
-    }
-  }
-});
+    // Fetch advertiser click URL
+    const offer = await pool.query("SELECT click_url FROM offers WHERE id=$1", [offer_id]);
+    if (!offer.rowCount) return res.status(404).send("Offer not found");
 
-// ✅ Get all clicks
-router.get('/', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT c.*, o.title AS offer_title, a.name AS advertiser_name
-      FROM clicks c
-      LEFT JOIN offers o ON c.offer_id = o.id
-      LEFT JOIN advertisers a ON c.advertiser_id = a.id
-      ORDER BY c.id DESC;
-    `);
-    res.json(result.rows);
-  } catch (err) {
-    console.error('Error fetching clicks:', err);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
+    let advertiserUrl = offer.rows[0].click_url;
 
-// ✅ Get click by ID
-router.get('/:id', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM clicks WHERE id = $1', [req.params.id]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Click not found' });
-    res.json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: 'Database error' });
-  }
-});
+    // Replace macros dynamically
+    advertiserUrl = advertiserUrl
+      .replace("{clickid}", clickid)
+      .replace("{pub_id}", pub_id || "")
+      .replace("{sub1}", sub1 || "");
 
-// ✅ Delete click
-router.delete('/:id', async (req, res) => {
-  try {
-    await pool.query('DELETE FROM clicks WHERE id = $1', [req.params.id]);
-    res.json({ success: true });
+    console.log("🔗 Redirecting to Advertiser:", advertiserUrl);
+
+    res.redirect(advertiserUrl);
   } catch (err) {
-    console.error('Error deleting click:', err);
-    res.status(500).json({ error: 'Database error' });
+    console.error("❌ Click error:", err.message);
+    res.status(500).send("Internal Server Error");
   }
 });
 
