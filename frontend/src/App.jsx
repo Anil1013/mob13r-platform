@@ -1,3 +1,5 @@
+// 📂 /frontend/src/App.jsx
+
 import React, { useEffect, useState } from "react";
 import {
   Routes,
@@ -7,10 +9,11 @@ import {
   useNavigate,
 } from "react-router-dom";
 
+/* Components */
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
 
-// Pages
+/* Pages */
 import Dashboard from "./pages/Dashboard.jsx";
 import Advertisers from "./pages/Advertisers.jsx";
 import Publishers from "./pages/Publishers.jsx";
@@ -32,33 +35,30 @@ function App() {
     !!localStorage.getItem("mob13r_token")
   );
 
-  // ✅ Watch for token changes (auto logout/login handling)
+  // 🔁 Watch for login/logout via localStorage
   useEffect(() => {
     const checkToken = () => {
       const token = localStorage.getItem("mob13r_token");
       setIsLoggedIn(!!token);
     };
-    checkToken();
 
     window.addEventListener("storage", checkToken);
     return () => window.removeEventListener("storage", checkToken);
   }, []);
 
-  // ✅ Auto redirect when not logged in
+  // 🔐 Redirect to login if token missing
   useEffect(() => {
-    if (!isLoggedIn && !isLoginPage) {
+    const token = localStorage.getItem("mob13r_token");
+    if (!token && !isLoginPage) {
       navigate("/login", { replace: true });
     }
-  }, [isLoggedIn, isLoginPage, navigate]);
+  }, [isLoginPage, navigate]);
 
-  // ✅ Protect routes
-  if (!isLoggedIn && !isLoginPage) {
-    return null; // prevent flicker
-  }
+  // 🚫 Prevent showing protected UI before redirect
+  if (!isLoggedIn && !isLoginPage) return null;
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
-      {/* Hide Sidebar & Header on login page */}
       {!isLoginPage && <Sidebar />}
 
       <div className="flex-1 flex flex-col">
@@ -66,10 +66,7 @@ function App() {
 
         <main className="flex-1 overflow-y-auto p-6">
           <Routes>
-            {/* Auth */}
-            <Route path="/login" element={<Login />} />
-
-            {/* Dashboard */}
+            {/* Protected Routes */}
             <Route path="/" element={<Dashboard />} />
             <Route path="/advertisers" element={<Advertisers />} />
             <Route path="/publishers" element={<Publishers />} />
@@ -80,6 +77,9 @@ function App() {
             <Route path="/api-docs" element={<ApiDocs />} />
             <Route path="/fraud-alerts" element={<FraudAlerts />} />
             <Route path="/landing-builder" element={<LandingBuilder />} />
+
+            {/* Public Route */}
+            <Route path="/login" element={<Login />} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
