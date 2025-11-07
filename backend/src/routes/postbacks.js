@@ -1,82 +1,62 @@
-import express from 'express';
-import pool from '../db.js';
+import express from "express";
+import pool from "../db.js";
+import axios from "axios";
 
 const router = express.Router();
 
-// 🧩 Auto-create postbacks table
-const init = async () => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS postbacks (
-      id SERIAL PRIMARY KEY,
-      click_id VARCHAR(100) NOT NULL,
-      offer_id INT REFERENCES offers(id) ON DELETE CASCADE,
-      advertiser_id INT REFERENCES advertisers(id) ON DELETE CASCADE,
-      revenue NUMERIC DEFAULT 0,
-      status VARCHAR(20) DEFAULT 'pending',
-      callback_url TEXT,
-      response_code INT,
-      created_at TIMESTAMP DEFAULT NOW()
+/**
+ * 📥 Example:
+ * /api/postback?clickid=abcd1234&status=approved&amount=2.5
+ */
+router.get("/", async (req, res) => {
+  const { clickid, status = "approved", amount = 0, txid } = req.query;
+  if (!clickid) return res.status(400).send("Missing clickid");
+
+  try {
+    // 1️⃣ Find the click in DB
+    const clickRes = await pool.query(
+      `SELECT c.*, o.id AS offer_id, o.advertiser_id, o.publisher_payout
+       FROM clicks c
+       JOIN offers o ON c.offer_id = o.id
+       WHERE c.clickid=$1`,
+      [clickid]
     );
-  `);
-};
-init();
 
-// ✅ Register new postback
-router.post('/', async (req, res) => {
-  const { click_id, offer_id, advertiser_id, revenue, status, callback_url } = req.body;
-  try {
-    const result = await pool.query(
-      `INSERT INTO postbacks (click_id, offer_id, advertiser_id, revenue, status, callback_url)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [click_id, offer_id, advertiser_id, revenue || 0, status || 'pending', callback_url || null]
+    if (!clickRes.rowCount) return res.status(404).send("Click not found");
+
+    const c = clickRes.rows[0];
+
+    // 2️⃣ Insert conversion
+    await pool.query(
+      `INSERT INTO conversions (clickid, offer_id, publisher_id, advertiser_id, payout, status, advertiser_txid)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (clickid) DO NOTHING`,
+      [clickid, c.offer_id, c.publisher_id, c.advertiser_id, amount || c.publisher_payout, status, txid]
     );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error('Error inserting postback:', err);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
 
-// ✅ Get all postbacks
-router.get('/', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT p.*, o.title AS offer_title, a.name AS advertiser_name
-      FROM postbacks p
-      LEFT JOIN offers o ON p.offer_id = o.id
-      LEFT JOIN advertisers a ON p.advertiser_id = a.id
-      ORDER BY p.id DESC;
-    `);
-    res.json(result.rows);
-  } catch (err) {
-    console.error('Error fetching postbacks:', err);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
+    // 3️⃣ Fetch publisher’s postback URL
+    const pubRes = await pool.query("SELECT postback_url FROM publishers WHERE id=$1", [c.publisher_id]);
+    const pubUrl = pubRes.rows[0]?.postback_url;
 
-// ✅ Update postback status (e.g., mark as "validated" or "failed")
-router.put('/:id', async (req, res) => {
-  const { status, response_code } = req.body;
-  try {
-    const result = await pool.query(
-      `UPDATE postbacks SET status=$1, response_code=$2 WHERE id=$3 RETURNING *`,
-      [status, response_code, req.params.id]
-    );
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error('Error updating postback:', err);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
+    // 4️⃣ Fire postback to publisher if exists
+    if (pubUrl) {
+      const finalUrl = pubUrl
+        .replace("{clickid}", clickid)
+        .replace("{status}", status)
+        .replace("{amount}", amount);
 
-// ✅ Delete postback
-router.delete('/:id', async (req, res) => {
-  try {
-    await pool.query('DELETE FROM postbacks WHERE id=$1', [req.params.id]);
-    res.json({ success: true });
+      axios
+        .get(finalUrl)
+        .then(() => console.log("✅ Publisher postback sent:", finalUrl))
+        .catch((err) => console.error("⚠️ Publisher postback failed:", err.message));
+    } else {
+      console.log("ℹ️ Publisher has no postback URL");
+    }
+
+    res.send("✅ Conversion recorded");
   } catch (err) {
-    console.error('Error deleting postback:', err);
-    res.status(500).json({ error: 'Database error' });
+    console.error("❌ Postback error:", err.message);
+    res.status(500).send("Internal Server Error");
   }
 });
 
