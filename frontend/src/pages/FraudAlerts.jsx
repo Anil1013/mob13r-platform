@@ -5,37 +5,40 @@ export default function FraudAlerts() {
   const [alerts, setAlerts] = useState([]);
 
   useEffect(() => {
-    const load = async () => {
-      const res = await apiClient.get("/admin/fraud-alerts");
-      setAlerts(res.data);
+    const fetchData = async () => {
+      try {
+        const res = await apiClient.get("/fraud-alerts");
+        setAlerts(res.data);
+      } catch (err) {
+        alert("⚠️ Failed to load fraud alerts");
+      }
     };
-    load();
+    fetchData();
   }, []);
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold mb-6">⚠️ Fraud Detection Alerts</h2>
-
-      <table className="min-w-full bg-white dark:bg-gray-800 rounded shadow">
-        <thead className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-white">
+      <h2 className="text-2xl font-semibold mb-4">Fraud Alerts</h2>
+      <table className="min-w-full bg-white rounded shadow text-sm">
+        <thead className="bg-gray-100">
           <tr>
             <th className="p-2">Publisher</th>
-            <th className="p-2">Issue</th>
-            <th className="p-2">Value</th>
-            <th className="p-2">Time</th>
+            <th className="p-2">Advertiser</th>
+            <th className="p-2">IP Address</th>
+            <th className="p-2">Reason</th>
+            <th className="p-2">Risk Score</th>
+            <th className="p-2">Date</th>
           </tr>
         </thead>
         <tbody>
-          {alerts.length === 0 && (
-            <tr><td colSpan="4" className="text-center p-4">✅ No Issues Found</td></tr>
-          )}
-          
-          {alerts.map((a,i)=>(
-            <tr key={i} className="border-t border-gray-200 dark:border-gray-700">
-              <td className="p-2">{a.publisher}</td>
-              <td className="p-2 text-red-500 font-semibold">{a.issue}</td>
-              <td className="p-2">{a.value}</td>
-              <td className="p-2 text-sm">{a.time}</td>
+          {alerts.map((a) => (
+            <tr key={a.id} className="border-b">
+              <td className="p-2">{a.publisher_name}</td>
+              <td className="p-2">{a.advertiser_name}</td>
+              <td className="p-2">{a.ip_address}</td>
+              <td className="p-2">{a.reason}</td>
+              <td className="p-2">{a.risk_score}</td>
+              <td className="p-2">{new Date(a.created_at).toLocaleString()}</td>
             </tr>
           ))}
         </tbody>
