@@ -10,14 +10,15 @@ import {
   AlertTriangle,
   FileCode,
   Layers,
-  Gift, // 🎁 Added for Offers
+  Gift,
 } from "lucide-react";
 
 function Sidebar() {
   const menuItems = [
     { name: "Dashboard", path: "/", icon: <LayoutDashboard size={18} /> },
     { name: "Advertisers", path: "/advertisers", icon: <Building2 size={18} /> },
-    { name: "Offers", path: "/offers", icon: <Gift size={18} /> }, // ✅ Added Offers here
+    { name: "Offers", path: "/offers", icon: <Gift size={18} /> },
+    { name: "Templates", path: "/templates", icon: <FileCode size={18} /> }, // ✅ Templates added
     { name: "Publishers", path: "/publishers", icon: <Users size={18} /> },
     { name: "Clicks", path: "/clicks", icon: <MousePointerClick size={18} /> },
     { name: "Conversions", path: "/conversions", icon: <LineChart size={18} /> },
@@ -28,7 +29,10 @@ function Sidebar() {
   ];
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 shadow-sm flex flex-col min-h-screen">
+    <aside
+      className="w-64 bg-white border-r border-gray-200 shadow-sm flex flex-col min-h-screen"
+      aria-label="Main navigation"
+    >
       {/* Logo Section */}
       <div className="flex items-center justify-center h-16 border-b border-gray-200 bg-gray-50">
         <h2 className="text-xl font-semibold text-blue-600 tracking-wide">
@@ -37,7 +41,7 @@ function Sidebar() {
       </div>
 
       {/* Navigation Menu */}
-      <nav className="flex-1 overflow-y-auto mt-4">
+      <nav className="flex-1 overflow-y-auto mt-4" aria-label="Sidebar menu">
         <ul className="space-y-1 px-3">
           {menuItems.map((item) => (
             <li key={item.name}>
@@ -50,6 +54,7 @@ function Sidebar() {
                       : "hover:bg-blue-50 hover:text-blue-600"
                   }`
                 }
+                aria-current={window.location.pathname === item.path ? "page" : undefined}
               >
                 {item.icon}
                 <span>{item.name}</span>
@@ -61,8 +66,7 @@ function Sidebar() {
 
       {/* Footer */}
       <div className="p-4 border-t border-gray-200 text-xs text-gray-500 text-center bg-gray-50">
-        © {new Date().getFullYear()}{" "}
-        <span className="font-semibold">Mob13r Platform</span>
+        © {new Date().getFullYear()} <span className="font-semibold">Mob13r Platform</span>
       </div>
     </aside>
   );
