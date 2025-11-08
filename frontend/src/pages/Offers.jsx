@@ -22,35 +22,57 @@ export default function Offers() {
   const [isEditing, setIsEditing] = useState(false);
 
   const fetchAll = async () => {
-    const [resOffers, resAdv, resTemp] = await Promise.all([
-      apiClient.get("/offers"),
-      apiClient.get("/offers/advertisers"),
-      apiClient.get("/templates")
-    ]);
-    setOffers(resOffers.data || []);
-    setAdvertisers(resAdv.data || []);
-    setTemplates(resTemp.data || []);
+    try {
+      const [resOffers, resAdv, resTemp] = await Promise.all([
+        apiClient.get("/offers"),
+        apiClient.get("/offers/advertisers"),
+        apiClient.get("/templates")
+      ]);
+      setOffers(resOffers.data || []);
+      setAdvertisers(resAdv.data || []);
+      setTemplates(resTemp.data || []);
+    } catch (err) {
+      console.error("Fetch error:", err);
+      alert("⚠️ Failed to fetch data");
+    }
   };
 
   useEffect(() => { fetchAll(); }, []);
 
   const resetForm = () => {
     setForm({
-      advertiser_name: "", name: "", type: "CPA", payout: "", tracking_url: "",
-      cap_daily: "", cap_total: "", status: "active", fallback_offer_id: "",
-      inapp_template_id: "", inapp_config: "", targets: []
+      advertiser_name: "",
+      name: "",
+      type: "CPA",
+      payout: "",
+      tracking_url: "",
+      cap_daily: "",
+      cap_total: "",
+      status: "active",
+      fallback_offer_id: "",
+      inapp_template_id: "",
+      inapp_config: "",
+      targets: []
     });
     setIsEditing(false);
   };
 
   const saveOffer = async () => {
     try {
-      const payload = { ...form, inapp_config: form.inapp_config ? JSON.parse(form.inapp_config) : null };
+      const payload = { ...form };
+      if (payload.inapp_config && typeof payload.inapp_config === "string") {
+        try {
+          payload.inapp_config = JSON.parse(payload.inapp_config);
+        } catch {
+          alert("⚠️ Invalid JSON in INAPP Config");
+          return;
+        }
+      }
       if (isEditing)
         await apiClient.put(`/offers/${form.offer_id}`, payload);
       else
         await apiClient.post("/offers", payload);
-      alert("✅ Saved successfully");
+      alert("✅ Offer saved");
       resetForm();
       fetchAll();
     } catch (err) {
@@ -61,7 +83,6 @@ export default function Offers() {
   const editOffer = (o) => {
     setForm({
       ...o,
-      advertiser_name: o.advertiser_name,
       inapp_config: o.inapp_config ? JSON.stringify(o.inapp_config, null, 2) : ""
     });
     setIsEditing(true);
@@ -103,7 +124,9 @@ export default function Offers() {
           >
             <option value="">Select Template</option>
             {templates.map((t) => (
-              <option key={t.id} value={t.id}>{t.template_name}</option>
+              <option key={t.id} value={t.id}>
+                {t.template_name}
+              </option>
             ))}
           </select>
           <textarea
@@ -124,14 +147,15 @@ export default function Offers() {
       <h2 className="text-2xl font-bold mb-3">Advertiser Offers</h2>
 
       <div className="grid grid-cols-3 gap-2 mb-4">
+        {/* Advertiser Dropdown */}
         <select
           value={form.advertiser_name}
           onChange={(e) => setForm({ ...form, advertiser_name: e.target.value })}
           className="border p-2 rounded"
         >
           <option value="">Select Advertiser</option>
-          {advertisers.map((a) => (
-            <option key={a.id} value={a.name}>{a.name}</option>
+          {advertisers.map((a, i) => (
+            <option key={i} value={a.name}>{a.name}</option>
           ))}
         </select>
 
@@ -182,6 +206,7 @@ export default function Offers() {
           <option value="inactive">Inactive</option>
         </select>
 
+        {/* Fallback Offer */}
         <select
           value={form.fallback_offer_id}
           onChange={(e) => setForm({ ...form, fallback_offer_id: e.target.value })}
@@ -269,4 +294,3 @@ export default function Offers() {
     </div>
   );
 }
-``
