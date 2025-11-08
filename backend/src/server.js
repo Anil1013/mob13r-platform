@@ -15,6 +15,7 @@ import conversionsRoutes from "./routes/conversions.js";
 import statsRoutes from "./routes/stats.js";
 import authRoutes from "./routes/auth.js";
 import analyticsRoutes from "./routes/analytics.js";
+import templateRoutes from "./routes/templates.js";  // ✅ NEW IMPORT
 
 /* Middleware */
 import authJWT from "./middleware/authJWT.js";
@@ -30,15 +31,15 @@ app.use(
   cors({
     origin: [
       "https://dashboard.mob13r.com", // frontend domain
-      "http://localhost:3000"          // local testing
+      "http://localhost:3000",         // local testing
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true, // allow cookies / tokens
+    credentials: true,
   })
 );
 
-// ✅ Handle preflight OPTIONS manually (very important for Elastic Beanstalk)
+// ✅ Handle preflight OPTIONS manually
 app.options("*", (req, res) => {
   res.setHeader(
     "Access-Control-Allow-Origin",
@@ -63,7 +64,7 @@ app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(bodyParser.json({ limit: "10mb" }));
 
 /* ======================================================
-   ✅ HEALTH CHECK ENDPOINT (for AWS + testing)
+   ✅ HEALTH CHECK ENDPOINT
    ====================================================== */
 app.get("/api/health", async (req, res) => {
   try {
@@ -79,7 +80,7 @@ app.get("/api/health", async (req, res) => {
    ✅ ROUTES
    ====================================================== */
 
-// Public route (login/register)
+// Public route
 app.use("/api/auth", authRoutes);
 
 // Protected routes (JWT required)
@@ -90,6 +91,7 @@ app.use("/api/clicks", authJWT, clickRoutes);
 app.use("/api/postbacks", authJWT, postbackRoutes);
 app.use("/api/conversions", authJWT, conversionsRoutes);
 app.use("/api/stats", authJWT, statsRoutes);
+app.use("/api/templates", authJWT, templateRoutes); // ✅ NEW ROUTE
 app.use("/api", authJWT, analyticsRoutes);
 
 /* ======================================================
