@@ -84,7 +84,9 @@ export default function Templates() {
         <textarea className="border p-2 col-span-2" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}></textarea>
       </div>
 
-      <button onClick={saveTemplate} className="bg-blue-600 text-white px-4 py-2 rounded">{isEditing ? "Update Template" : "Add Template"}</button>
+      <button onClick={saveTemplate} className="bg-blue-600 text-white px-4 py-2 rounded">
+        {isEditing ? "Update Template" : "Add Template"}
+      </button>
       {isEditing && (
         <button onClick={resetForm} className="ml-2 bg-gray-400 text-white px-4 py-2 rounded">
           Cancel
