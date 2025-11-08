@@ -49,7 +49,7 @@ router.put("/:id", authJWT, async (req, res) => {
       return res.status(400).json({ error: "Name is required" });
     }
 
-    const q = await pool.query(
+    const result = await pool.query(
       `UPDATE advertisers
        SET name=$1, email=$2, status=$3
        WHERE id=$4
@@ -57,26 +57,12 @@ router.put("/:id", authJWT, async (req, res) => {
       [name, email || null, status || "active", id]
     );
 
-    if (q.rows.length === 0) return res.status(404).json({ error: "Advertiser not found" });
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: "Advertiser not found" });
 
-    res.json(q.rows[0]);
+    res.json(result.rows[0]);
   } catch (err) {
     console.error("PUT /api/advertisers/:id error:", err);
-    res.status(500).json({ error: "Internal server error", details: err.message });
-  }
-});
-
-/* 🔴 Delete advertiser */
-router.delete("/:id", authJWT, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const del = await pool.query("DELETE FROM advertisers WHERE id=$1 RETURNING id", [id]);
-    if (del.rows.length === 0) return res.status(404).json({ error: "Advertiser not found" });
-
-    res.json({ message: "Advertiser deleted successfully" });
-  } catch (err) {
-    console.error("DELETE /api/advertisers/:id error:", err);
     res.status(500).json({ error: "Internal server error", details: err.message });
   }
 });
