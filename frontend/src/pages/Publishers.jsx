@@ -8,14 +8,13 @@ export default function Publishers() {
     id: null,
     name: "",
     email: "",
-    postback: "",
+    postback_url: "",
     status: "active",
   });
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
 
-  // Fetch publishers
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -34,22 +33,16 @@ export default function Publishers() {
     fetchData();
   }, []);
 
-  // Search logic
   useEffect(() => {
-    if (!search.trim()) {
-      setFiltered(publishers);
-    } else {
+    if (!search.trim()) setFiltered(publishers);
+    else {
       const lower = search.toLowerCase();
-      setFiltered(
-        publishers.filter((p) => p.name.toLowerCase().includes(lower))
-      );
+      setFiltered(publishers.filter((p) => p.name.toLowerCase().includes(lower)));
     }
   }, [search, publishers]);
 
-  // Add or update
   const handleSubmit = async () => {
     if (!form.name.trim()) return alert("⚠️ Name is required!");
-
     try {
       if (isEditing) {
         await apiClient.put(`/publishers/${form.id}`, form);
@@ -71,30 +64,23 @@ export default function Publishers() {
       id: null,
       name: "",
       email: "",
-      postback: "",
+      postback_url: "",
       status: "active",
     });
     setIsEditing(false);
   };
 
-  // Edit publisher
   const editPublisher = (p) => {
     setForm(p);
     setIsEditing(true);
   };
 
-  // Toggle status (active/inactive)
   const toggleStatus = async (p) => {
     const newStatus = p.status === "active" ? "inactive" : "active";
     try {
-      await apiClient.put(`/publishers/${p.id}`, {
-        ...p,
-        status: newStatus,
-      });
+      await apiClient.put(`/publishers/${p.id}`, { ...p, status: newStatus });
       setPublishers((prev) =>
-        prev.map((x) =>
-          x.id === p.id ? { ...x, status: newStatus } : x
-        )
+        prev.map((x) => (x.id === p.id ? { ...x, status: newStatus } : x))
       );
     } catch (err) {
       console.error("Toggle status failed:", err);
@@ -102,7 +88,6 @@ export default function Publishers() {
     }
   };
 
-  // Regenerate API key
   const regenerateKey = async (id) => {
     try {
       const res = await apiClient.post(`/publishers/${id}/regenerate-key`);
@@ -117,7 +102,6 @@ export default function Publishers() {
     <div className="p-6">
       <h2 className="text-2xl font-semibold mb-4">Publishers</h2>
 
-      {/* FORM */}
       <div className="flex flex-wrap gap-2 mb-4">
         <input
           className="border p-2 rounded w-56"
@@ -133,9 +117,9 @@ export default function Publishers() {
         />
         <input
           className="border p-2 rounded w-72"
-          placeholder="Postback (optional)"
-          value={form.postback}
-          onChange={(e) => setForm({ ...form, postback: e.target.value })}
+          placeholder="Postback URL (optional)"
+          value={form.postback_url}
+          onChange={(e) => setForm({ ...form, postback_url: e.target.value })}
         />
         <select
           className="border p-2 rounded w-40"
@@ -159,7 +143,6 @@ export default function Publishers() {
         </button>
       )}
 
-      {/* Search Bar */}
       <div className="mb-3">
         <input
           type="text"
@@ -170,7 +153,6 @@ export default function Publishers() {
         />
       </div>
 
-      {/* TABLE */}
       {loading ? (
         <p>Loading...</p>
       ) : (
@@ -190,7 +172,7 @@ export default function Publishers() {
               <tr key={p.id} className="border-b">
                 <td className="p-2">{p.name}</td>
                 <td className="p-2">{p.email || "-"}</td>
-                <td className="p-2">{p.postback || "-"}</td>
+                <td className="p-2">{p.postback_url || "-"}</td>
                 <td className="p-2 font-mono bg-gray-50">{p.api_key}</td>
                 <td className="p-2">
                   <button
