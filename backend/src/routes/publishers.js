@@ -40,7 +40,7 @@ router.post("/", authJWT, async (req, res) => {
   }
 });
 
-/* 🟣 Update publisher */
+/* 🟣 Update publisher (used for Edit + Toggle Status) */
 router.put("/:id", authJWT, async (req, res) => {
   try {
     const { id } = req.params;
