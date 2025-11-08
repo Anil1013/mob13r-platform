@@ -7,6 +7,7 @@ export default function Templates() {
     template_name: "",
     country_code: "",
     carrier: "",
+    api_type: "PIN",
     pin_send_url: "",
     pin_verify_url: "",
     status_check_url: "",
@@ -25,6 +26,23 @@ export default function Templates() {
   useEffect(() => {
     fetchTemplates();
   }, []);
+
+  const resetForm = () => {
+    setForm({
+      template_name: "",
+      country_code: "",
+      carrier: "",
+      api_type: "PIN",
+      pin_send_url: "",
+      pin_verify_url: "",
+      status_check_url: "",
+      portal_url: "",
+      parameters: '{"msisdn":"string","click_id":"string","pin":"string"}',
+      description: "",
+    });
+    setIsEditing(false);
+    setEditId(null);
+  };
 
   const saveTemplate = async () => {
     try {
@@ -52,20 +70,11 @@ export default function Templates() {
     setIsEditing(true);
   };
 
-  const resetForm = () => {
-    setForm({
-      template_name: "",
-      country_code: "",
-      carrier: "",
-      pin_send_url: "",
-      pin_verify_url: "",
-      status_check_url: "",
-      portal_url: "",
-      parameters: '{"msisdn":"string","click_id":"string","pin":"string"}',
-      description: "",
-    });
-    setIsEditing(false);
-    setEditId(null);
+  const deleteTemplate = async (id) => {
+    if (window.confirm("Delete this template?")) {
+      await apiClient.delete(`/templates/${id}`);
+      fetchTemplates();
+    }
   };
 
   return (
@@ -74,6 +83,12 @@ export default function Templates() {
 
       <div className="grid grid-cols-2 gap-2 mb-3">
         <input className="border p-2" placeholder="Template Name" value={form.template_name} onChange={(e) => setForm({ ...form, template_name: e.target.value })} />
+        <select className="border p-2" value={form.api_type} onChange={(e) => setForm({ ...form, api_type: e.target.value })}>
+          <option value="PIN">PIN</option>
+          <option value="CLICK2SMS">Click2SMS</option>
+          <option value="PIN_CLICK2SMS">Hybrid (PIN + Click2SMS)</option>
+          <option value="DCB">DCB</option>
+        </select>
         <input className="border p-2" placeholder="Country Code" value={form.country_code} onChange={(e) => setForm({ ...form, country_code: e.target.value })} />
         <input className="border p-2" placeholder="Carrier" value={form.carrier} onChange={(e) => setForm({ ...form, carrier: e.target.value })} />
         <input className="border p-2" placeholder="Pin Send URL" value={form.pin_send_url} onChange={(e) => setForm({ ...form, pin_send_url: e.target.value })} />
@@ -95,10 +110,11 @@ export default function Templates() {
 
       <hr className="my-4" />
 
-      <table className="min-w-full border">
+      <table className="min-w-full border text-sm">
         <thead className="bg-gray-100">
           <tr>
             <th className="p-2">Name</th>
+            <th className="p-2">Type</th>
             <th className="p-2">Carrier</th>
             <th className="p-2">Country</th>
             <th className="p-2">Actions</th>
@@ -108,12 +124,12 @@ export default function Templates() {
           {templates.map((t) => (
             <tr key={t.id} className="border-t">
               <td className="p-2">{t.template_name}</td>
+              <td className="p-2">{t.api_type}</td>
               <td className="p-2">{t.carrier}</td>
               <td className="p-2">{t.country_code}</td>
-              <td className="p-2">
-                <button onClick={() => editTemplate(t)} className="bg-yellow-500 text-white px-3 py-1 rounded">
-                  Edit
-                </button>
+              <td className="p-2 flex gap-2">
+                <button onClick={() => editTemplate(t)} className="bg-yellow-500 text-white px-3 py-1 rounded">Edit</button>
+                <button onClick={() => deleteTemplate(t.id)} className="bg-red-500 text-white px-3 py-1 rounded">Del</button>
               </td>
             </tr>
           ))}
