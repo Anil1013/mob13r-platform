@@ -5,7 +5,7 @@ export default function Advertisers() {
   const [ads, setAds] = useState([]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [website, setWebsite] = useState("");
+  const [status, setStatus] = useState("active");
   const [editId, setEditId] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -23,20 +23,21 @@ export default function Advertisers() {
   };
 
   const saveAdvertiser = async () => {
-    if (!name.trim() || !email.trim()) return alert("Enter name & email");
+    if (!name.trim()) return alert("Enter advertiser name");
 
     setLoading(true);
     try {
+      const payload = { name, email, status };
       if (editId) {
-        await apiClient.put(`/advertisers/${editId}`, { name, email, website });
+        await apiClient.put(`/advertisers/${editId}`, payload);
         alert("✅ Advertiser updated!");
       } else {
-        await apiClient.post("/advertisers", { name, email, website });
+        await apiClient.post("/advertisers", payload);
         alert("✅ Advertiser added!");
       }
       setName("");
       setEmail("");
-      setWebsite("");
+      setStatus("active");
       setEditId(null);
       fetchAdvertisers();
     } catch (err) {
@@ -50,8 +51,8 @@ export default function Advertisers() {
   const editAdvertiser = (a) => {
     setEditId(a.id);
     setName(a.name);
-    setEmail(a.email);
-    setWebsite(a.website);
+    setEmail(a.email || "");
+    setStatus(a.status);
   };
 
   const deleteAdvertiser = async (id) => {
@@ -83,18 +84,19 @@ export default function Advertisers() {
         />
         <input
           type="email"
-          placeholder="Email"
+          placeholder="Email (optional)"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="border p-2 rounded w-1/4"
         />
-        <input
-          type="text"
-          placeholder="Website"
-          value={website}
-          onChange={(e) => setWebsite(e.target.value)}
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
           className="border p-2 rounded w-1/4"
-        />
+        >
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
         <button
           onClick={saveAdvertiser}
           disabled={loading}
@@ -112,7 +114,7 @@ export default function Advertisers() {
             <tr>
               <th className="p-2 text-left">Name</th>
               <th className="p-2 text-left">Email</th>
-              <th className="p-2 text-left">Website</th>
+              <th className="p-2 text-left">Status</th>
               <th className="p-2 text-left">Actions</th>
             </tr>
           </thead>
@@ -120,16 +122,15 @@ export default function Advertisers() {
             {ads.map((a) => (
               <tr key={a.id} className="border-b">
                 <td className="p-2">{a.name}</td>
-                <td className="p-2">{a.email}</td>
+                <td className="p-2">{a.email || "-"}</td>
                 <td className="p-2">
-                  <a
-                    href={a.website}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-blue-600 underline"
+                  <span
+                    className={`px-2 py-1 rounded text-white ${
+                      a.status === "active" ? "bg-green-600" : "bg-gray-500"
+                    }`}
                   >
-                    {a.website}
-                  </a>
+                    {a.status}
+                  </span>
                 </td>
                 <td className="p-2">
                   <button
