@@ -6,6 +6,7 @@ export default function Offers() {
   const [advertisers, setAdvertisers] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [form, setForm] = useState({
+    offer_id: "",
     advertiser_name: "",
     name: "",
     type: "CPA",
@@ -17,7 +18,7 @@ export default function Offers() {
     fallback_offer_id: "",
     inapp_template_id: "",
     inapp_config: "",
-    targets: []
+    targets: [],
   });
   const [isEditing, setIsEditing] = useState(false);
 
@@ -26,21 +27,23 @@ export default function Offers() {
       const [resOffers, resAdv, resTemp] = await Promise.all([
         apiClient.get("/offers"),
         apiClient.get("/offers/advertisers"),
-        apiClient.get("/templates")
+        apiClient.get("/templates"),
       ]);
       setOffers(resOffers.data || []);
       setAdvertisers(resAdv.data || []);
       setTemplates(resTemp.data || []);
     } catch (err) {
-      console.error("Fetch error:", err);
-      alert("⚠️ Failed to fetch data");
+      alert("⚠️ Failed to load data");
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    fetchAll();
+  }, []);
 
   const resetForm = () => {
     setForm({
+      offer_id: "",
       advertiser_name: "",
       name: "",
       type: "CPA",
@@ -52,7 +55,7 @@ export default function Offers() {
       fallback_offer_id: "",
       inapp_template_id: "",
       inapp_config: "",
-      targets: []
+      targets: [],
     });
     setIsEditing(false);
   };
@@ -68,10 +71,8 @@ export default function Offers() {
           return;
         }
       }
-      if (isEditing)
-        await apiClient.put(`/offers/${form.offer_id}`, payload);
-      else
-        await apiClient.post("/offers", payload);
+      if (isEditing) await apiClient.put(`/offers/${form.offer_id}`, payload);
+      else await apiClient.post("/offers", payload);
       alert("✅ Offer saved");
       resetForm();
       fetchAll();
@@ -83,9 +84,20 @@ export default function Offers() {
   const editOffer = (o) => {
     setForm({
       ...o,
-      inapp_config: o.inapp_config ? JSON.stringify(o.inapp_config, null, 2) : ""
+      inapp_config: o.inapp_config ? JSON.stringify(o.inapp_config, null, 2) : "",
+      targets: o.targets || [],
     });
     setIsEditing(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const toggleStatus = async (offer_id) => {
+    try {
+      await apiClient.put(`/offers/${offer_id}/toggle`);
+      fetchAll();
+    } catch {
+      alert("⚠️ Failed to toggle status");
+    }
   };
 
   const addTarget = () =>
@@ -139,15 +151,14 @@ export default function Offers() {
         </>
       );
     }
-    return null;
   };
 
   return (
     <div className="p-6">
       <h2 className="text-2xl font-bold mb-3">Advertiser Offers</h2>
 
+      {/* Offer Form */}
       <div className="grid grid-cols-3 gap-2 mb-4">
-        {/* Advertiser Dropdown */}
         <select
           value={form.advertiser_name}
           onChange={(e) => setForm({ ...form, advertiser_name: e.target.value })}
@@ -155,7 +166,9 @@ export default function Offers() {
         >
           <option value="">Select Advertiser</option>
           {advertisers.map((a, i) => (
-            <option key={i} value={a.name}>{a.name}</option>
+            <option key={i} value={a.name}>
+              {a.name}
+            </option>
           ))}
         </select>
 
@@ -171,8 +184,11 @@ export default function Offers() {
           onChange={(e) => setForm({ ...form, type: e.target.value })}
           className="border p-2 rounded"
         >
-          <option>CPA</option><option>CPI</option><option>CPL</option>
-          <option>CPS</option><option>INAPP</option>
+          <option>CPA</option>
+          <option>CPI</option>
+          <option>CPL</option>
+          <option>CPS</option>
+          <option>INAPP</option>
         </select>
 
         <input
@@ -206,7 +222,6 @@ export default function Offers() {
           <option value="inactive">Inactive</option>
         </select>
 
-        {/* Fallback Offer */}
         <select
           value={form.fallback_offer_id}
           onChange={(e) => setForm({ ...form, fallback_offer_id: e.target.value })}
@@ -214,7 +229,9 @@ export default function Offers() {
         >
           <option value="">Select Fallback Offer</option>
           {offers.map((o) => (
-            <option key={o.offer_id} value={o.offer_id}>{o.name}</option>
+            <option key={o.offer_id} value={o.offer_id}>
+              {o.name}
+            </option>
           ))}
         </select>
       </div>
@@ -242,30 +259,41 @@ export default function Offers() {
           </button>
         </div>
       ))}
-      <button onClick={addTarget} className="bg-green-600 text-white px-3 py-1 rounded mb-4">
+      <button
+        onClick={addTarget}
+        className="bg-green-600 text-white px-3 py-1 rounded mb-4"
+      >
         + Add Target
       </button>
 
       <div>
-        <button onClick={saveOffer} className="bg-blue-600 text-white px-4 py-2 rounded">
+        <button
+          onClick={saveOffer}
+          className="bg-blue-600 text-white px-4 py-2 rounded"
+        >
           {isEditing ? "Update Offer" : "Add Offer"}
         </button>
         {isEditing && (
-          <button onClick={resetForm} className="ml-3 bg-gray-400 text-white px-4 py-2 rounded">
+          <button
+            onClick={resetForm}
+            className="ml-3 bg-gray-400 text-white px-4 py-2 rounded"
+          >
             Cancel
           </button>
         )}
       </div>
 
+      {/* Offer List */}
       <h3 className="text-xl font-semibold mt-6 mb-2">Offers List</h3>
-      <table className="min-w-full border">
+      <table className="min-w-full border text-sm">
         <thead className="bg-gray-100">
           <tr>
             <th className="p-2">Offer ID</th>
             <th className="p-2">Name</th>
+            <th className="p-2">Advertiser</th>
             <th className="p-2">Type</th>
             <th className="p-2">Payout</th>
-            <th className="p-2">Advertiser</th>
+            <th className="p-2">Cap (Daily / Total)</th>
             <th className="p-2">Status</th>
             <th className="p-2">Actions</th>
           </tr>
@@ -275,16 +303,31 @@ export default function Offers() {
             <tr key={o.offer_id} className="border-t">
               <td className="p-2 font-mono">{o.offer_id}</td>
               <td className="p-2">{o.name}</td>
+              <td className="p-2">{o.advertiser_name}</td>
               <td className="p-2">{o.type}</td>
               <td className="p-2">{o.payout}</td>
-              <td className="p-2">{o.advertiser_name}</td>
-              <td className="p-2">{o.status}</td>
               <td className="p-2">
+                {o.cap_daily} / {o.cap_total}
+              </td>
+              <td className={`p-2 font-semibold ${o.status === "active" ? "text-green-600" : "text-red-600"}`}>
+                {o.status}
+              </td>
+              <td className="p-2 flex gap-2">
                 <button
                   onClick={() => editOffer(o)}
                   className="bg-yellow-500 text-white px-3 py-1 rounded"
                 >
                   Edit
+                </button>
+                <button
+                  onClick={() => toggleStatus(o.offer_id)}
+                  className={`${
+                    o.status === "active"
+                      ? "bg-red-600"
+                      : "bg-green-600"
+                  } text-white px-3 py-1 rounded`}
+                >
+                  {o.status === "active" ? "Deactivate" : "Activate"}
                 </button>
               </td>
             </tr>
