@@ -9,6 +9,7 @@ export default function Advertisers() {
   const [editId, setEditId] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // Fetch advertisers
   const fetchAdvertisers = async () => {
     setLoading(true);
     try {
@@ -22,6 +23,7 @@ export default function Advertisers() {
     }
   };
 
+  // Save or update advertiser
   const saveAdvertiser = async () => {
     if (!name.trim()) return alert("Enter advertiser name");
 
@@ -48,22 +50,12 @@ export default function Advertisers() {
     }
   };
 
+  // Edit advertiser
   const editAdvertiser = (a) => {
     setEditId(a.id);
     setName(a.name);
     setEmail(a.email || "");
     setStatus(a.status);
-  };
-
-  const deleteAdvertiser = async (id) => {
-    if (!window.confirm("Delete this advertiser?")) return;
-    try {
-      await apiClient.delete(`/advertisers/${id}`);
-      fetchAdvertisers();
-    } catch (err) {
-      console.error(err);
-      alert("❌ Failed to delete advertiser");
-    }
   };
 
   useEffect(() => {
@@ -135,15 +127,9 @@ export default function Advertisers() {
                 <td className="p-2">
                   <button
                     onClick={() => editAdvertiser(a)}
-                    className="bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600 mr-2"
+                    className="bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600"
                   >
                     Edit
-                  </button>
-                  <button
-                    onClick={() => deleteAdvertiser(a.id)}
-                    className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
-                  >
-                    Delete
                   </button>
                 </td>
               </tr>
