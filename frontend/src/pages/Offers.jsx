@@ -4,8 +4,9 @@ import apiClient from "../api/apiClient";
 export default function Offers() {
   const [offers, setOffers] = useState([]);
   const [advertisers, setAdvertisers] = useState([]);
+  const [templates, setTemplates] = useState([]);
   const [form, setForm] = useState({
-    advertiser_id: "",
+    advertiser_name: "",
     name: "",
     type: "CPA",
     payout: "",
@@ -13,102 +14,129 @@ export default function Offers() {
     cap_daily: "",
     cap_total: "",
     status: "active",
-    targets: [],
+    fallback_offer_id: "",
+    inapp_template_id: "",
+    inapp_config: "",
+    targets: []
   });
   const [isEditing, setIsEditing] = useState(false);
 
-  // Fetch advertisers for dropdown
-  const fetchAdvertisers = async () => {
-    const res = await apiClient.get("/offers/advertisers");
-    setAdvertisers(res.data);
+  const fetchAll = async () => {
+    const [resOffers, resAdv, resTemp] = await Promise.all([
+      apiClient.get("/offers"),
+      apiClient.get("/offers/advertisers"),
+      apiClient.get("/templates")
+    ]);
+    setOffers(resOffers.data || []);
+    setAdvertisers(resAdv.data || []);
+    setTemplates(resTemp.data || []);
   };
 
-  // Fetch offers
-  const fetchOffers = async () => {
-    const res = await apiClient.get("/offers");
-    setOffers(res.data);
-  };
-
-  useEffect(() => {
-    fetchAdvertisers();
-    fetchOffers();
-  }, []);
-
-  // Add or update
-  const saveOffer = async () => {
-    try {
-      const payload = { ...form };
-      if (isEditing) {
-        await apiClient.put(`/offers/${form.offer_id}`, payload);
-        alert("✅ Offer updated");
-      } else {
-        await apiClient.post("/offers", payload);
-        alert("✅ Offer added");
-      }
-      resetForm();
-      fetchOffers();
-    } catch (err) {
-      alert("⚠️ Error saving offer");
-      console.error(err);
-    }
-  };
+  useEffect(() => { fetchAll(); }, []);
 
   const resetForm = () => {
     setForm({
-      advertiser_id: "",
-      name: "",
-      type: "CPA",
-      payout: "",
-      tracking_url: "",
-      cap_daily: "",
-      cap_total: "",
-      status: "active",
-      targets: [],
+      advertiser_name: "", name: "", type: "CPA", payout: "", tracking_url: "",
+      cap_daily: "", cap_total: "", status: "active", fallback_offer_id: "",
+      inapp_template_id: "", inapp_config: "", targets: []
     });
     setIsEditing(false);
   };
 
+  const saveOffer = async () => {
+    try {
+      const payload = { ...form, inapp_config: form.inapp_config ? JSON.parse(form.inapp_config) : null };
+      if (isEditing)
+        await apiClient.put(`/offers/${form.offer_id}`, payload);
+      else
+        await apiClient.post("/offers", payload);
+      alert("✅ Saved successfully");
+      resetForm();
+      fetchAll();
+    } catch (err) {
+      alert("⚠️ " + (err.response?.data?.error || err.message));
+    }
+  };
+
   const editOffer = (o) => {
-    setForm(o);
+    setForm({
+      ...o,
+      advertiser_name: o.advertiser_name,
+      inapp_config: o.inapp_config ? JSON.stringify(o.inapp_config, null, 2) : ""
+    });
     setIsEditing(true);
   };
 
   const addTarget = () =>
     setForm({ ...form, targets: [...form.targets, { geo: "", carrier: "" }] });
 
-  const updateTarget = (i, key, val) => {
-    const newTargets = [...form.targets];
-    newTargets[i][key] = val;
-    setForm({ ...form, targets: newTargets });
+  const updateTarget = (i, k, v) => {
+    const arr = [...form.targets];
+    arr[i][k] = v;
+    setForm({ ...form, targets: arr });
   };
 
   const removeTarget = (i) => {
-    const newTargets = [...form.targets];
-    newTargets.splice(i, 1);
-    setForm({ ...form, targets: newTargets });
+    const arr = [...form.targets];
+    arr.splice(i, 1);
+    setForm({ ...form, targets: arr });
+  };
+
+  const renderTypeFields = () => {
+    if (["CPA", "CPI", "CPL", "CPS"].includes(form.type)) {
+      return (
+        <input
+          placeholder="Tracking URL"
+          value={form.tracking_url}
+          onChange={(e) => setForm({ ...form, tracking_url: e.target.value })}
+          className="border p-2 rounded"
+        />
+      );
+    }
+    if (form.type === "INAPP") {
+      return (
+        <>
+          <select
+            className="border p-2 rounded"
+            value={form.inapp_template_id}
+            onChange={(e) => setForm({ ...form, inapp_template_id: e.target.value })}
+          >
+            <option value="">Select Template</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>{t.template_name}</option>
+            ))}
+          </select>
+          <textarea
+            placeholder="INAPP Config JSON"
+            rows="4"
+            value={form.inapp_config}
+            onChange={(e) => setForm({ ...form, inapp_config: e.target.value })}
+            className="border p-2 rounded w-full mt-2"
+          />
+        </>
+      );
+    }
+    return null;
   };
 
   return (
     <div className="p-6">
       <h2 className="text-2xl font-bold mb-3">Advertiser Offers</h2>
 
-      {/* Offer form */}
       <div className="grid grid-cols-3 gap-2 mb-4">
         <select
-          value={form.advertiser_id}
-          onChange={(e) => setForm({ ...form, advertiser_id: e.target.value })}
+          value={form.advertiser_name}
+          onChange={(e) => setForm({ ...form, advertiser_name: e.target.value })}
           className="border p-2 rounded"
         >
           <option value="">Select Advertiser</option>
           {advertisers.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
+            <option key={a.id} value={a.name}>{a.name}</option>
           ))}
         </select>
 
         <input
-          placeholder="Offer name"
+          placeholder="Offer Name"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
           className="border p-2 rounded"
@@ -119,11 +147,8 @@ export default function Offers() {
           onChange={(e) => setForm({ ...form, type: e.target.value })}
           className="border p-2 rounded"
         >
-          <option>CPA</option>
-          <option>CPI</option>
-          <option>CPL</option>
-          <option>CPS</option>
-          <option>INAPP</option>
+          <option>CPA</option><option>CPI</option><option>CPL</option>
+          <option>CPS</option><option>INAPP</option>
         </select>
 
         <input
@@ -133,12 +158,7 @@ export default function Offers() {
           className="border p-2 rounded"
         />
 
-        <input
-          placeholder="Tracking URL"
-          value={form.tracking_url}
-          onChange={(e) => setForm({ ...form, tracking_url: e.target.value })}
-          className="border p-2 rounded"
-        />
+        {renderTypeFields()}
 
         <input
           placeholder="Cap Daily"
@@ -146,7 +166,6 @@ export default function Offers() {
           onChange={(e) => setForm({ ...form, cap_daily: e.target.value })}
           className="border p-2 rounded"
         />
-
         <input
           placeholder="Cap Total"
           value={form.cap_total}
@@ -162,20 +181,30 @@ export default function Offers() {
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
         </select>
+
+        <select
+          value={form.fallback_offer_id}
+          onChange={(e) => setForm({ ...form, fallback_offer_id: e.target.value })}
+          className="border p-2 rounded"
+        >
+          <option value="">Select Fallback Offer</option>
+          {offers.map((o) => (
+            <option key={o.offer_id} value={o.offer_id}>{o.name}</option>
+          ))}
+        </select>
       </div>
 
-      {/* Offer Targets */}
-      <h4 className="font-semibold mb-2">Offer Targeting (Geo & Carrier)</h4>
+      <h4 className="font-semibold mb-2">Targeting (Geo & Carrier)</h4>
       {form.targets.map((t, i) => (
         <div key={i} className="flex gap-2 mb-2">
           <input
-            placeholder="Geo (e.g., IQ)"
+            placeholder="Geo (e.g. IQ)"
             value={t.geo}
             onChange={(e) => updateTarget(i, "geo", e.target.value)}
             className="border p-2 rounded"
           />
           <input
-            placeholder="Carrier (e.g., Zain)"
+            placeholder="Carrier (e.g. Zain)"
             value={t.carrier}
             onChange={(e) => updateTarget(i, "carrier", e.target.value)}
             className="border p-2 rounded"
@@ -188,35 +217,25 @@ export default function Offers() {
           </button>
         </div>
       ))}
-      <button
-        onClick={addTarget}
-        className="bg-green-600 text-white px-4 py-1 rounded mb-3"
-      >
+      <button onClick={addTarget} className="bg-green-600 text-white px-3 py-1 rounded mb-4">
         + Add Target
       </button>
 
       <div>
-        <button
-          onClick={saveOffer}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-        >
+        <button onClick={saveOffer} className="bg-blue-600 text-white px-4 py-2 rounded">
           {isEditing ? "Update Offer" : "Add Offer"}
         </button>
         {isEditing && (
-          <button
-            onClick={resetForm}
-            className="ml-3 bg-gray-400 text-white px-4 py-2 rounded"
-          >
+          <button onClick={resetForm} className="ml-3 bg-gray-400 text-white px-4 py-2 rounded">
             Cancel
           </button>
         )}
       </div>
 
-      <hr className="my-4" />
-      <h3 className="text-xl font-semibold mb-2">Offers List</h3>
+      <h3 className="text-xl font-semibold mt-6 mb-2">Offers List</h3>
       <table className="min-w-full border">
-        <thead>
-          <tr className="bg-gray-100">
+        <thead className="bg-gray-100">
+          <tr>
             <th className="p-2">Offer ID</th>
             <th className="p-2">Name</th>
             <th className="p-2">Type</th>
@@ -250,3 +269,4 @@ export default function Offers() {
     </div>
   );
 }
+``
