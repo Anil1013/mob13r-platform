@@ -3,13 +3,13 @@ import apiClient from "../api/apiClient";
 
 export default function Offers() {
   const [offers, setOffers] = useState([]);
+  const [advertisers, setAdvertisers] = useState([]);
   const [form, setForm] = useState({
     advertiser_id: "",
     name: "",
     type: "CPA",
     payout: "",
     tracking_url: "",
-    landing_url: "",
     cap_daily: "",
     cap_total: "",
     status: "active",
@@ -17,36 +17,38 @@ export default function Offers() {
   });
   const [isEditing, setIsEditing] = useState(false);
 
+  // Fetch advertisers for dropdown
+  const fetchAdvertisers = async () => {
+    const res = await apiClient.get("/offers/advertisers");
+    setAdvertisers(res.data);
+  };
+
   // Fetch offers
   const fetchOffers = async () => {
-    try {
-      const res = await apiClient.get("/offers");
-      setOffers(res.data);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to fetch offers.");
-    }
+    const res = await apiClient.get("/offers");
+    setOffers(res.data);
   };
 
   useEffect(() => {
+    fetchAdvertisers();
     fetchOffers();
   }, []);
 
-  // Add or edit
+  // Add or update
   const saveOffer = async () => {
     try {
       const payload = { ...form };
       if (isEditing) {
-        await apiClient.put(`/offers/${form.id}`, payload);
-        alert("Offer updated");
+        await apiClient.put(`/offers/${form.offer_id}`, payload);
+        alert("✅ Offer updated");
       } else {
         await apiClient.post("/offers", payload);
-        alert("Offer added");
+        alert("✅ Offer added");
       }
       resetForm();
       fetchOffers();
     } catch (err) {
-      alert("Error saving offer");
+      alert("⚠️ Error saving offer");
       console.error(err);
     }
   };
@@ -58,7 +60,6 @@ export default function Offers() {
       type: "CPA",
       payout: "",
       tracking_url: "",
-      landing_url: "",
       cap_daily: "",
       cap_total: "",
       status: "active",
@@ -67,17 +68,13 @@ export default function Offers() {
     setIsEditing(false);
   };
 
-  const editOffer = (offer) => {
-    setForm(offer);
+  const editOffer = (o) => {
+    setForm(o);
     setIsEditing(true);
   };
 
-  const addTarget = () => {
-    setForm({
-      ...form,
-      targets: [...form.targets, { geo: "", carrier: "" }],
-    });
-  };
+  const addTarget = () =>
+    setForm({ ...form, targets: [...form.targets, { geo: "", carrier: "" }] });
 
   const updateTarget = (i, key, val) => {
     const newTargets = [...form.targets];
@@ -97,18 +94,26 @@ export default function Offers() {
 
       {/* Offer form */}
       <div className="grid grid-cols-3 gap-2 mb-4">
-        <input
-          placeholder="Advertiser ID"
+        <select
           value={form.advertiser_id}
           onChange={(e) => setForm({ ...form, advertiser_id: e.target.value })}
           className="border p-2 rounded"
-        />
+        >
+          <option value="">Select Advertiser</option>
+          {advertisers.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+
         <input
           placeholder="Offer name"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
           className="border p-2 rounded"
         />
+
         <select
           value={form.type}
           onChange={(e) => setForm({ ...form, type: e.target.value })}
@@ -120,36 +125,35 @@ export default function Offers() {
           <option>CPS</option>
           <option>INAPP</option>
         </select>
+
         <input
           placeholder="Payout"
           value={form.payout}
           onChange={(e) => setForm({ ...form, payout: e.target.value })}
           className="border p-2 rounded"
         />
+
         <input
           placeholder="Tracking URL"
           value={form.tracking_url}
           onChange={(e) => setForm({ ...form, tracking_url: e.target.value })}
           className="border p-2 rounded"
         />
-        <input
-          placeholder="Landing URL"
-          value={form.landing_url}
-          onChange={(e) => setForm({ ...form, landing_url: e.target.value })}
-          className="border p-2 rounded"
-        />
+
         <input
           placeholder="Cap Daily"
           value={form.cap_daily}
           onChange={(e) => setForm({ ...form, cap_daily: e.target.value })}
           className="border p-2 rounded"
         />
+
         <input
           placeholder="Cap Total"
           value={form.cap_total}
           onChange={(e) => setForm({ ...form, cap_total: e.target.value })}
           className="border p-2 rounded"
         />
+
         <select
           value={form.status}
           onChange={(e) => setForm({ ...form, status: e.target.value })}
@@ -160,6 +164,7 @@ export default function Offers() {
         </select>
       </div>
 
+      {/* Offer Targets */}
       <h4 className="font-semibold mb-2">Offer Targeting (Geo & Carrier)</h4>
       {form.targets.map((t, i) => (
         <div key={i} className="flex gap-2 mb-2">
@@ -212,7 +217,7 @@ export default function Offers() {
       <table className="min-w-full border">
         <thead>
           <tr className="bg-gray-100">
-            <th className="p-2">ID</th>
+            <th className="p-2">Offer ID</th>
             <th className="p-2">Name</th>
             <th className="p-2">Type</th>
             <th className="p-2">Payout</th>
@@ -223,8 +228,8 @@ export default function Offers() {
         </thead>
         <tbody>
           {offers.map((o) => (
-            <tr key={o.id} className="border-t">
-              <td className="p-2">{o.id}</td>
+            <tr key={o.offer_id} className="border-t">
+              <td className="p-2 font-mono">{o.offer_id}</td>
               <td className="p-2">{o.name}</td>
               <td className="p-2">{o.type}</td>
               <td className="p-2">{o.payout}</td>
