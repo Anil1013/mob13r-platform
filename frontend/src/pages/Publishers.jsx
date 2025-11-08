@@ -1,226 +1,131 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import apiClient from "../api/apiClient";
 
-export default function Publishers() {
-  const [publishers, setPublishers] = useState([]);
-  const [filtered, setFiltered] = useState([]);
+export default function Offers() {
+  const [offers, setOffers] = useState([]);
   const [form, setForm] = useState({
-    id: null,
-    name: "",
-    email: "",
-    postback: "",
-    status: "active",
+    id: null, advertiser_id: "", name: "", type: "CPA", payout: 0,
+    tracking_url: "", landing_url: "", cap_daily: "", cap_total: "", status: "active",
+    targets: [] // {geo, carrier}
   });
-  const [isEditing, setIsEditing] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState("");
 
-  // Fetch publishers
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchOffers = async () => {
     try {
-      const res = await apiClient.get("/publishers");
-      setPublishers(res.data || []);
-      setFiltered(res.data || []);
+      const res = await apiClient.get("/offers");
+      setOffers(res.data || []);
     } catch (err) {
-      console.error("Fetch publishers failed:", err);
-      alert("⚠️ Failed to fetch publishers. Check backend API.");
-    } finally {
-      setLoading(false);
+      alert("Failed to fetch offers");
+      console.error(err);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchOffers(); }, []);
 
-  // Search logic
-  useEffect(() => {
-    if (!search.trim()) {
-      setFiltered(publishers);
-    } else {
-      const lower = search.toLowerCase();
-      setFiltered(
-        publishers.filter((p) => p.name.toLowerCase().includes(lower))
-      );
-    }
-  }, [search, publishers]);
+  const addTarget = () => setForm({ ...form, targets: [...form.targets, { geo: "", carrier: "" }] });
+  const updateTarget = (i, key, val) => {
+    const newTargets = [...form.targets]; newTargets[i][key] = val; setForm({ ...form, targets: newTargets });
+  };
+  const removeTarget = (i) => { const t = [...form.targets]; t.splice(i,1); setForm({...form, targets:t}); };
 
-  // Add or update
-  const handleSubmit = async () => {
-    if (!form.name.trim()) return alert("⚠️ Name is required!");
-
+  const save = async () => {
     try {
-      if (isEditing) {
-        await apiClient.put(`/publishers/${form.id}`, form);
-        alert("✅ Publisher updated!");
+      // basic validation
+      if (!form.advertiser_id || !form.name) return alert("Advertiser & name required");
+      const payload = {
+        advertiser_id: form.advertiser_id,
+        name: form.name,
+        type: form.type,
+        payout: Number(form.payout),
+        tracking_url: form.tracking_url,
+        landing_url: form.landing_url,
+        cap_daily: form.cap_daily || null,
+        cap_total: form.cap_total || null,
+        status: form.status,
+        targets: form.targets
+      };
+      if (form.id) {
+        await apiClient.put(`/offers/${form.id}`, payload);
+        alert("Offer updated");
       } else {
-        const res = await apiClient.post("/publishers", form);
-        alert(`✅ Publisher created!\nAPI Key: ${res.data.api_key}`);
+        await apiClient.post("/offers", payload);
+        alert("Offer created");
       }
-      resetForm();
-      fetchData();
+      setForm({ id:null, advertiser_id:"", name:"", type:"CPA", payout:0, tracking_url:"", landing_url:"", cap_daily:"", cap_total:"", status:"active", targets:[]});
+      fetchOffers();
     } catch (err) {
-      console.error("Submit error:", err);
-      alert("⚠️ Error saving publisher");
+      console.error(err);
+      alert("Error saving offer");
     }
   };
 
-  const resetForm = () => {
+  const edit = (o) => {
     setForm({
-      id: null,
-      name: "",
-      email: "",
-      postback: "",
-      status: "active",
+      id: o.id,
+      advertiser_id: o.advertiser_id,
+      name: o.name,
+      type: o.type,
+      payout: o.payout,
+      tracking_url: o.tracking_url,
+      landing_url: o.landing_url,
+      cap_daily: o.cap_daily,
+      cap_total: o.cap_total,
+      status: o.status,
+      targets: [] // fetch targets separately if needed
     });
-    setIsEditing(false);
-  };
-
-  // Edit publisher
-  const editPublisher = (p) => {
-    setForm(p);
-    setIsEditing(true);
-  };
-
-  // Toggle status (active/inactive)
-  const toggleStatus = async (p) => {
-    const newStatus = p.status === "active" ? "inactive" : "active";
-    try {
-      await apiClient.put(`/publishers/${p.id}`, {
-        ...p,
-        status: newStatus,
-      });
-      setPublishers((prev) =>
-        prev.map((x) =>
-          x.id === p.id ? { ...x, status: newStatus } : x
-        )
-      );
-    } catch (err) {
-      console.error("Toggle status failed:", err);
-      alert("⚠️ Failed to change status");
-    }
-  };
-
-  // Regenerate API key
-  const regenerateKey = async (id) => {
-    try {
-      const res = await apiClient.post(`/publishers/${id}/regenerate-key`);
-      alert(`✅ New API Key: ${res.data.api_key}`);
-      fetchData();
-    } catch (err) {
-      alert("⚠️ Failed to regenerate key");
-    }
   };
 
   return (
     <div className="p-6">
-      <h2 className="text-2xl font-semibold mb-4">Publishers</h2>
-
-      {/* FORM */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        <input
-          className="border p-2 rounded w-56"
-          placeholder="Name"
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-        />
-        <input
-          className="border p-2 rounded w-56"
-          placeholder="Email (optional)"
-          value={form.email}
-          onChange={(e) => setForm({ ...form, email: e.target.value })}
-        />
-        <input
-          className="border p-2 rounded w-72"
-          placeholder="Postback (optional)"
-          value={form.postback}
-          onChange={(e) => setForm({ ...form, postback: e.target.value })}
-        />
-        <select
-          className="border p-2 rounded w-40"
-          value={form.status}
-          onChange={(e) => setForm({ ...form, status: e.target.value })}
-        >
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
+      <h1 className="text-xl font-bold mb-3">Offers</h1>
+      <div className="grid grid-cols-3 gap-2">
+        <input placeholder="Advertiser ID" value={form.advertiser_id} onChange={e=>setForm({...form, advertiser_id:e.target.value})} />
+        <input placeholder="Offer name" value={form.name} onChange={e=>setForm({...form, name:e.target.value})} />
+        <select value={form.type} onChange={e=>setForm({...form, type:e.target.value})}>
+          <option>CPA</option><option>CPI</option><option>CPL</option><option>CPS</option><option>INAPP</option>
         </select>
-        <button
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          onClick={handleSubmit}
-        >
-          {isEditing ? "Update" : "Add Publisher"}
-        </button>
+        <input placeholder="Payout" value={form.payout} onChange={e=>setForm({...form,payout:e.target.value})} />
+        <input placeholder="Tracking URL template" value={form.tracking_url} onChange={e=>setForm({...form,tracking_url:e.target.value})} />
+        <input placeholder="Landing URL" value={form.landing_url} onChange={e=>setForm({...form,landing_url:e.target.value})} />
+        <input placeholder="cap_daily" value={form.cap_daily} onChange={e=>setForm({...form,cap_daily:e.target.value})} />
+        <input placeholder="cap_total" value={form.cap_total} onChange={e=>setForm({...form,cap_total:e.target.value})} />
+        <select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option>active</option><option>inactive</option></select>
       </div>
 
-      {isEditing && (
-        <button onClick={resetForm} className="mb-3 text-red-500 underline">
-          Cancel Edit
-        </button>
-      )}
-
-      {/* Search Bar */}
-      <div className="mb-3">
-        <input
-          type="text"
-          placeholder="🔍 Search publisher by name..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border p-2 rounded w-1/3"
-        />
+      <div className="mt-2">
+        <h3>Targets (geo/carrier)</h3>
+        {form.targets.map((t,i) => (
+          <div key={i} className="flex gap-2">
+            <input placeholder="geo (IQ)" value={t.geo} onChange={e=>updateTarget(i,'geo',e.target.value)} />
+            <input placeholder="carrier (Zain IQ)" value={t.carrier} onChange={e=>updateTarget(i,'carrier',e.target.value)} />
+            <button onClick={()=>removeTarget(i)}>Remove</button>
+          </div>
+        ))}
+        <button onClick={addTarget}>Add target</button>
       </div>
 
-      {/* TABLE */}
-      {loading ? (
-        <p>Loading...</p>
-      ) : (
-        <table className="min-w-full bg-white rounded shadow text-sm">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="p-2 text-left">Name</th>
-              <th className="p-2 text-left">Email</th>
-              <th className="p-2 text-left">Postback</th>
-              <th className="p-2 text-left">API Key</th>
-              <th className="p-2 text-left">Status</th>
-              <th className="p-2 text-left">Actions</th>
+      <div className="mt-3">
+        <button onClick={save} className="bg-blue-600 text-white px-4 py-1 rounded">Save Offer</button>
+      </div>
+
+      <hr className="my-4" />
+      <h2 className="font-bold">Existing Offers</h2>
+      <table className="min-w-full">
+        <thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Payout</th><th>cap_daily</th><th>cap_total</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          {offers.map(o => (
+            <tr key={o.id}>
+              <td>{o.id}</td>
+              <td>{o.name}</td>
+              <td>{o.type}</td>
+              <td>{o.payout}</td>
+              <td>{o.cap_daily}</td>
+              <td>{o.cap_total}</td>
+              <td>{o.status}</td>
+              <td><button onClick={()=>edit(o)}>Edit</button></td>
             </tr>
-          </thead>
-          <tbody>
-            {filtered.map((p) => (
-              <tr key={p.id} className="border-b">
-                <td className="p-2">{p.name}</td>
-                <td className="p-2">{p.email || "-"}</td>
-                <td className="p-2">{p.postback || "-"}</td>
-                <td className="p-2 font-mono bg-gray-50">{p.api_key}</td>
-                <td className="p-2">
-                  <button
-                    onClick={() => toggleStatus(p)}
-                    className={`px-3 py-1 rounded text-white ${
-                      p.status === "active" ? "bg-green-600" : "bg-gray-500"
-                    } hover:opacity-90`}
-                  >
-                    {p.status === "active" ? "Active" : "Inactive"}
-                  </button>
-                </td>
-                <td className="p-2">
-                  <button
-                    onClick={() => editPublisher(p)}
-                    className="bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600 mr-2"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => regenerateKey(p.id)}
-                    className="bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700"
-                  >
-                    Regenerate Key
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
