@@ -3,23 +3,30 @@ import apiClient from "../api/apiClient";
 
 export default function Publishers() {
   const [publishers, setPublishers] = useState([]);
+  const [filtered, setFiltered] = useState([]);
   const [form, setForm] = useState({
     id: null,
     name: "",
     email: "",
-    website: "",
-    hold_percent: 20,
+    postback: "",
+    status: "active",
   });
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
 
-  // ✅ Fetch all publishers
+  // Fetch publishers
   const fetchData = async () => {
+    setLoading(true);
     try {
       const res = await apiClient.get("/publishers");
       setPublishers(res.data || []);
+      setFiltered(res.data || []);
     } catch (err) {
       console.error("Fetch publishers failed:", err);
       alert("⚠️ Failed to fetch publishers. Check backend API.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -27,92 +34,119 @@ export default function Publishers() {
     fetchData();
   }, []);
 
-  // ✅ Add or update
+  // Search logic
+  useEffect(() => {
+    if (!search.trim()) {
+      setFiltered(publishers);
+    } else {
+      const lower = search.toLowerCase();
+      setFiltered(
+        publishers.filter((p) => p.name.toLowerCase().includes(lower))
+      );
+    }
+  }, [search, publishers]);
+
+  // Add or update
   const handleSubmit = async () => {
-    if (!form.name || !form.email || !form.website)
-      return alert("⚠️ All fields are required!");
+    if (!form.name.trim()) return alert("⚠️ Name is required!");
 
     try {
       if (isEditing) {
         await apiClient.put(`/publishers/${form.id}`, form);
-        alert("✅ Publisher updated successfully!");
+        alert("✅ Publisher updated!");
       } else {
         const res = await apiClient.post("/publishers", form);
-        alert(`✅ Publisher created\nAPI Key: ${res.data?.api_key || "N/A"}`);
+        alert(`✅ Publisher created!\nAPI Key: ${res.data.api_key}`);
       }
       resetForm();
       fetchData();
     } catch (err) {
       console.error("Submit error:", err);
-      alert("⚠️ Error: " + (err.response?.data?.error || err.message));
+      alert("⚠️ Error saving publisher");
     }
   };
 
   const resetForm = () => {
-    setForm({ id: null, name: "", email: "", website: "", hold_percent: 20 });
+    setForm({
+      id: null,
+      name: "",
+      email: "",
+      postback: "",
+      status: "active",
+    });
     setIsEditing(false);
   };
 
+  // Edit publisher
   const editPublisher = (p) => {
     setForm(p);
     setIsEditing(true);
   };
 
-  const deletePublisher = async (id) => {
-    if (!window.confirm("Delete this publisher?")) return;
+  // Toggle status (active/inactive)
+  const toggleStatus = async (p) => {
+    const newStatus = p.status === "active" ? "inactive" : "active";
     try {
-      await apiClient.delete(`/publishers/${id}`);
-      fetchData();
+      await apiClient.put(`/publishers/${p.id}`, {
+        ...p,
+        status: newStatus,
+      });
+      setPublishers((prev) =>
+        prev.map((x) =>
+          x.id === p.id ? { ...x, status: newStatus } : x
+        )
+      );
     } catch (err) {
-      alert("⚠️ Failed to delete publisher: " + err.response?.data?.error);
+      console.error("Toggle status failed:", err);
+      alert("⚠️ Failed to change status");
     }
   };
 
+  // Regenerate API key
   const regenerateKey = async (id) => {
     try {
       const res = await apiClient.post(`/publishers/${id}/regenerate-key`);
-      alert(`✅ New API Key: ${res.data?.api_key}`);
+      alert(`✅ New API Key: ${res.data.api_key}`);
       fetchData();
     } catch (err) {
-      alert("⚠️ Failed to regenerate key: " + err.response?.data?.error);
+      alert("⚠️ Failed to regenerate key");
     }
   };
 
   return (
-    <div>
+    <div className="p-6">
       <h2 className="text-2xl font-semibold mb-4">Publishers</h2>
 
       {/* FORM */}
-      <div className="grid grid-cols-5 gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-4">
         <input
-          className="border p-2 rounded"
+          className="border p-2 rounded w-56"
           placeholder="Name"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
         />
         <input
-          className="border p-2 rounded"
-          placeholder="Email"
+          className="border p-2 rounded w-56"
+          placeholder="Email (optional)"
           value={form.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })}
         />
         <input
-          className="border p-2 rounded"
-          placeholder="Website"
-          value={form.website}
-          onChange={(e) => setForm({ ...form, website: e.target.value })}
+          className="border p-2 rounded w-72"
+          placeholder="Postback (optional)"
+          value={form.postback}
+          onChange={(e) => setForm({ ...form, postback: e.target.value })}
         />
-        <input
-          className="border p-2 rounded"
-          type="number"
-          placeholder="Hold %"
-          value={form.hold_percent}
-          onChange={(e) =>
-            setForm({ ...form, hold_percent: Number(e.target.value) })
-          }
-        />
+        <select
+          className="border p-2 rounded w-40"
+          value={form.status}
+          onChange={(e) => setForm({ ...form, status: e.target.value })}
+        >
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
         <button
-          className="bg-green-600 text-white p-2 rounded hover:bg-green-700"
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           onClick={handleSubmit}
         >
           {isEditing ? "Update" : "Add Publisher"}
@@ -125,50 +159,68 @@ export default function Publishers() {
         </button>
       )}
 
-      {/* LIST */}
-      <table className="min-w-full bg-white rounded shadow text-sm">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="p-2">Name</th>
-            <th className="p-2">Email</th>
-            <th className="p-2">Website</th>
-            <th className="p-2">Hold %</th>
-            <th className="p-2">API Key</th>
-            <th className="p-2">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {publishers.map((p) => (
-            <tr key={p.id} className="border-b">
-              <td className="p-2">{p.name}</td>
-              <td className="p-2">{p.email}</td>
-              <td className="p-2">{p.website}</td>
-              <td className="p-2">{p.hold_percent}%</td>
-              <td className="p-2 font-mono text-xs bg-gray-50">{p.api_key}</td>
-              <td className="p-2 flex gap-2">
-                <button
-                  className="text-blue-600 underline"
-                  onClick={() => editPublisher(p)}
-                >
-                  Edit
-                </button>
-                <button
-                  className="text-red-600 underline"
-                  onClick={() => deletePublisher(p.id)}
-                >
-                  Delete
-                </button>
-                <button
-                  className="text-green-600 underline"
-                  onClick={() => regenerateKey(p.id)}
-                >
-                  Regenerate Key
-                </button>
-              </td>
+      {/* Search Bar */}
+      <div className="mb-3">
+        <input
+          type="text"
+          placeholder="🔍 Search publisher by name..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="border p-2 rounded w-1/3"
+        />
+      </div>
+
+      {/* TABLE */}
+      {loading ? (
+        <p>Loading...</p>
+      ) : (
+        <table className="min-w-full bg-white rounded shadow text-sm">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="p-2 text-left">Name</th>
+              <th className="p-2 text-left">Email</th>
+              <th className="p-2 text-left">Postback</th>
+              <th className="p-2 text-left">API Key</th>
+              <th className="p-2 text-left">Status</th>
+              <th className="p-2 text-left">Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {filtered.map((p) => (
+              <tr key={p.id} className="border-b">
+                <td className="p-2">{p.name}</td>
+                <td className="p-2">{p.email || "-"}</td>
+                <td className="p-2">{p.postback || "-"}</td>
+                <td className="p-2 font-mono bg-gray-50">{p.api_key}</td>
+                <td className="p-2">
+                  <button
+                    onClick={() => toggleStatus(p)}
+                    className={`px-3 py-1 rounded text-white ${
+                      p.status === "active" ? "bg-green-600" : "bg-gray-500"
+                    } hover:opacity-90`}
+                  >
+                    {p.status === "active" ? "Active" : "Inactive"}
+                  </button>
+                </td>
+                <td className="p-2">
+                  <button
+                    onClick={() => editPublisher(p)}
+                    className="bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600 mr-2"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => regenerateKey(p.id)}
+                    className="bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700"
+                  >
+                    Regenerate Key
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
