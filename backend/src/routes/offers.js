@@ -4,12 +4,12 @@ import authJWT from "../middleware/authJWT.js";
 
 const router = express.Router();
 
-/* Helper: Generate OFF IDs (OFF1001, OFF1002...) */
+/* Helper: Generate OFF IDs (OFF01, OFF02, etc.) */
 const generateOfferId = async () => {
   const prefix = "OFF";
   const { rows } = await pool.query("SELECT COUNT(*)::int AS count FROM offers");
-  const next = rows[0].count + 1001;
-  return `${prefix}${next}`;
+  const next = rows[0].count + 1;
+  return `${prefix}${String(next).padStart(2, "0")}`; // OFF01, OFF02, etc.
 };
 
 /* ======================
@@ -31,7 +31,7 @@ router.get("/", authJWT, async (req, res) => {
 });
 
 /* ======================
-   GET ADVERTISERS LIST
+   GET ACTIVE ADVERTISERS
 ====================== */
 router.get("/advertisers", authJWT, async (req, res) => {
   try {
@@ -61,10 +61,10 @@ router.post("/", authJWT, async (req, res) => {
       cap_daily,
       cap_total,
       status,
-      targets,
       fallback_offer_id,
       inapp_template_id,
-      inapp_config
+      inapp_config,
+      targets
     } = req.body;
 
     if (!advertiser_name) return res.status(400).json({ error: "Advertiser name is required" });
@@ -87,7 +87,7 @@ router.post("/", authJWT, async (req, res) => {
        RETURNING *`,
       [
         offer_id, advertiser_name, name, type, payout, tracking_url,
-        cap_daily, cap_total, status || "active", fallback_offer_id || null,
+        cap_daily || 0, cap_total || 0, status || "active", fallback_offer_id || null,
         inapp_template_id || null,
         inapp_config ? JSON.stringify(inapp_config) : null
       ]
@@ -137,7 +137,7 @@ router.put("/:offer_id", authJWT, async (req, res) => {
            inapp_template_id=$10, inapp_config=$11, updated_at=NOW()
        WHERE offer_id=$12 RETURNING *`,
       [
-        advertiser_name, name, type, payout, tracking_url, cap_daily, cap_total,
+        advertiser_name, name, type, payout, tracking_url, cap_daily || 0, cap_total || 0,
         status, fallback_offer_id, inapp_template_id || null,
         inapp_config ? JSON.stringify(inapp_config) : null, offer_id
       ]
@@ -154,6 +154,27 @@ router.put("/:offer_id", authJWT, async (req, res) => {
     res.json(q.rows[0]);
   } catch (err) {
     console.error("PUT /offers error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ======================
+   TOGGLE ACTIVE/INACTIVE
+====================== */
+router.put("/:offer_id/toggle", authJWT, async (req, res) => {
+  try {
+    const { offer_id } = req.params;
+    const { rows } = await pool.query("SELECT status FROM offers WHERE offer_id=$1", [offer_id]);
+    if (!rows.length) return res.status(404).json({ error: "Offer not found" });
+
+    const newStatus = rows[0].status === "active" ? "inactive" : "active";
+    const q = await pool.query(
+      "UPDATE offers SET status=$1, updated_at=NOW() WHERE offer_id=$2 RETURNING *",
+      [newStatus, offer_id]
+    );
+    res.json(q.rows[0]);
+  } catch (err) {
+    console.error("Toggle offer error:", err);
     res.status(500).json({ error: err.message });
   }
 });
