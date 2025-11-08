@@ -23,81 +23,78 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-/* ----------------- CORS ----------------- */
-/* allow dashboard + localhost; include credentials if needed */
-const allowedOrigins = [
-  "https://dashboard.mob13r.com",
-  "http://localhost:3000",
-];
-
+/* ======================================================
+   ✅ FIXED CORS CONFIGURATION (for both frontend & EB)
+   ====================================================== */
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // allow requests with no origin (like curl, server-to-server)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) !== -1) {
-        return callback(null, true);
-      } else {
-        return callback(new Error("CORS not allowed"), false);
-      }
-    },
+    origin: [
+      "https://dashboard.mob13r.com", // frontend domain
+      "http://localhost:3000"          // local testing
+    ],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
+    credentials: true, // allow cookies / tokens
   })
 );
 
-// Preflight handler (extra safety)
+// ✅ Handle preflight OPTIONS manually (very important for Elastic Beanstalk)
 app.options("*", (req, res) => {
-  res.header("Access-Control-Allow-Origin", allowedOrigins.join(","));
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  return res.sendStatus(200);
+  res.setHeader(
+    "Access-Control-Allow-Origin",
+    req.headers.origin || "https://dashboard.mob13r.com"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, OPTIONS"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.sendStatus(200);
 });
 
+/* ======================================================
+   ✅ SECURITY + JSON HANDLING
+   ====================================================== */
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(bodyParser.json({ limit: "10mb" }));
 
-/* ----------------- Health ----------------- */
+/* ======================================================
+   ✅ HEALTH CHECK ENDPOINT (for AWS + testing)
+   ====================================================== */
 app.get("/api/health", async (req, res) => {
   try {
-    const r = await pool.query("SELECT NOW() AS db_time");
-    res.json({ status: "ok", db_time: r.rows[0].db_time });
+    const result = await pool.query("SELECT NOW() AS db_time");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.json({ status: "ok", db_time: result.rows[0].db_time });
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
   }
 });
 
-/* ----------------- Public (auth) ----------------- */
+/* ======================================================
+   ✅ ROUTES
+   ====================================================== */
+
+// Public route (login/register)
 app.use("/api/auth", authRoutes);
 
-/* ----------------- Protected routes (JWT) ----------------- */
+// Protected routes (JWT required)
 app.use("/api/publishers", authJWT, publishersRoutes);
 app.use("/api/advertisers", authJWT, advertisersRoutes);
 app.use("/api/offers", authJWT, offersRoutes);
 app.use("/api/clicks", authJWT, clickRoutes);
 app.use("/api/postbacks", authJWT, postbackRoutes);
 app.use("/api/conversions", authJWT, conversionsRoutes);
-app.use("/api", authJWT, analyticsRoutes);
 app.use("/api/stats", authJWT, statsRoutes);
+app.use("/api", authJWT, analyticsRoutes);
 
-/* ----------------- Error handler ----------------- */
-app.use((err, req, res, next) => {
-  console.error("Unhandled error:", err && err.stack ? err.stack : err);
-  res.status(500).json({ error: "Internal server error", message: err?.message });
-});
-
-/* ----------------- Optional: serve frontend build (if deployed together) ----------------- */
-// If you want to serve the React build from backend, uncomment below and ensure
-// frontend build is located at ../frontend/build
-//
-// import path from "path";
-// app.use(express.static(path.join(process.cwd(), "../frontend/build")));
-// app.get("/", (req, res) => {
-//   res.sendFile(path.join(process.cwd(), "../frontend/build", "index.html"));
-// });
-
-/* ----------------- Start ----------------- */
+/* ======================================================
+   ✅ START SERVER
+   ====================================================== */
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Backend running on port ${PORT}`);
 });
