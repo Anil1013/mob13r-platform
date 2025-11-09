@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from "react";
-import apiClient from "../api/apiClient";
+import apiClient from "../api/apiClient"; // uses baseURL = backend.mob13r.com/api
 
 export default function PublisherTracking() {
   const [publishers, setPublishers] = useState([]);
   const [trackingLinks, setTrackingLinks] = useState([]);
-  const [search, setSearch] = useState("");
   const [form, setForm] = useState({
     pub_id: "",
     name: "",
@@ -17,19 +16,18 @@ export default function PublisherTracking() {
     hold_percent: "",
     landing_page_url: "",
   });
+  const [search, setSearch] = useState("");
 
   const fetchAll = async () => {
     try {
-      const [pubRes, linkRes] = await Promise.all([
-        apiClient.get("/api/publishers"), // ✅ Corrected endpoint
-        apiClient.get("/api/tracking"),
+      const [pubRes, trackRes] = await Promise.all([
+        apiClient.get("/publishers"),
+        apiClient.get("/tracking"),
       ]);
-      // Show only active publishers
-      setPublishers(pubRes.data.filter((p) => p.status === "active"));
-      setTrackingLinks(linkRes.data || []);
+      setPublishers(pubRes.data || []);
+      setTrackingLinks(trackRes.data || []);
     } catch (err) {
-      console.error("⚠️ Fetch error:", err);
-      alert("Failed to load data.");
+      alert("⚠️ Failed to load tracking data");
     }
   };
 
@@ -37,60 +35,43 @@ export default function PublisherTracking() {
     fetchAll();
   }, []);
 
-  const resetForm = () =>
-    setForm({
-      pub_id: "",
-      name: "",
-      geo: "",
-      carrier: "",
-      type: "CPA",
-      payout: "",
-      cap_daily: "",
-      cap_total: "",
-      hold_percent: "",
-      landing_page_url: "",
-    });
-
-  const saveTracking = async () => {
+  const addTracking = async () => {
     try {
-      if (!form.pub_id || !form.geo || !form.carrier || !form.name) {
-        alert("⚠️ Please fill all mandatory fields.");
-        return;
-      }
-
-      await apiClient.post("/api/tracking", form);
-      alert("✅ Tracking URL created successfully.");
-      resetForm();
+      await apiClient.post("/tracking", form);
+      alert("✅ Tracking URL added successfully");
+      setForm({
+        pub_id: "",
+        name: "",
+        geo: "",
+        carrier: "",
+        type: "CPA",
+        payout: "",
+        cap_daily: "",
+        cap_total: "",
+        hold_percent: "",
+        landing_page_url: "",
+      });
       fetchAll();
     } catch (err) {
-      console.error(err);
-      alert("⚠️ Failed to create tracking URL.");
+      alert("⚠️ " + (err.response?.data?.error || err.message));
     }
   };
 
   const filtered = trackingLinks.filter((t) => {
-    const q = search.toLowerCase();
+    const s = search.toLowerCase();
     return (
-      t.publisher_name?.toLowerCase().includes(q) ||
-      t.name?.toLowerCase().includes(q) ||
-      t.geo?.toLowerCase().includes(q) ||
-      t.carrier?.toLowerCase().includes(q)
+      t.name?.toLowerCase().includes(s) ||
+      t.geo?.toLowerCase().includes(s) ||
+      t.carrier?.toLowerCase().includes(s) ||
+      t.publisher_name?.toLowerCase().includes(s)
     );
   });
 
-  const copyToClipboard = (text) => {
-    navigator.clipboard
-      .writeText(text)
-      .then(() => alert("📋 Copied to clipboard!"))
-      .catch(() => alert("⚠️ Failed to copy!"));
-  };
-
   return (
     <div className="p-6">
-      <h2 className="text-2xl font-bold mb-3">Publisher Tracking URLs</h2>
+      <h2 className="text-2xl font-bold mb-4">Publisher Tracking URLs</h2>
 
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        {/* Publisher Dropdown */}
+      <div className="grid grid-cols-4 gap-2 mb-3">
         <select
           value={form.pub_id}
           onChange={(e) => setForm({ ...form, pub_id: e.target.value })}
@@ -98,7 +79,7 @@ export default function PublisherTracking() {
         >
           <option value="">Select Publisher</option>
           {publishers.map((p) => (
-            <option key={p.publisher_id} value={p.publisher_id}>
+            <option key={p.pub_id} value={p.pub_id}>
               {p.name}
             </option>
           ))}
@@ -139,7 +120,6 @@ export default function PublisherTracking() {
 
         <input
           placeholder="Payout"
-          type="number"
           value={form.payout}
           onChange={(e) => setForm({ ...form, payout: e.target.value })}
           className="border p-2 rounded"
@@ -161,7 +141,6 @@ export default function PublisherTracking() {
 
         <input
           placeholder="Hold %"
-          type="number"
           value={form.hold_percent}
           onChange={(e) => setForm({ ...form, hold_percent: e.target.value })}
           className="border p-2 rounded"
@@ -173,27 +152,26 @@ export default function PublisherTracking() {
           onChange={(e) =>
             setForm({ ...form, landing_page_url: e.target.value })
           }
-          className="border p-2 rounded"
+          className="border p-2 rounded col-span-2"
         />
       </div>
 
       <button
-        onClick={saveTracking}
-        className="bg-blue-600 text-white px-4 py-2 rounded mb-4"
+        onClick={addTracking}
+        className="bg-blue-600 text-white px-4 py-2 rounded"
       >
         Add Tracking URL
       </button>
 
-      {/* ===== Search and Table ===== */}
-      <div className="mb-3">
-        <input
-          type="text"
-          placeholder="🔍 Search pub, geo, carrier, name..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border p-2 rounded w-1/3"
-        />
-      </div>
+      <h3 className="text-xl font-semibold mt-6 mb-3">Tracking Links</h3>
+
+      <input
+        type="text"
+        placeholder="🔍 Search pub, geo, carrier, name..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="border p-2 rounded mb-3 w-1/3"
+      />
 
       <table className="min-w-full border text-sm">
         <thead className="bg-gray-100">
@@ -221,67 +199,37 @@ export default function PublisherTracking() {
               <td className="p-2">{t.carrier}</td>
               <td className="p-2">{t.type}</td>
               <td className="p-2">{t.payout}</td>
-              <td className="p-2">
-                {t.cap_daily} / {t.cap_total}
-              </td>
+              <td className="p-2">{t.cap_daily} / {t.cap_total}</td>
               <td className="p-2">{t.hold_percent}%</td>
-              <td className="p-2">
-                {t.landing_page_url ? (
-                  <a
-                    href={t.landing_page_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-blue-600 underline"
-                  >
-                    Visit
-                  </a>
-                ) : (
-                  "-"
-                )}
+              <td className="p-2 text-blue-600 truncate max-w-[150px]">
+                <a href={t.landing_page_url} target="_blank" rel="noreferrer">
+                  {t.landing_page_url}
+                </a>
               </td>
-              <td className="p-2">
-                {t.type === "INAPP" ? (
-                  <div className="flex flex-col gap-1">
-                    {[
-                      { label: "SendPin", url: t.pin_send_url },
-                      { label: "VerifyPin", url: t.pin_verify_url },
-                      { label: "Status", url: t.check_status_url },
-                      { label: "Portal", url: t.portal_url },
-                    ].map(({ label, url }) => (
-                      <div key={label} className="flex items-center gap-2">
-                        <a
-                          href={url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-blue-600 underline"
-                        >
-                          {label}
-                        </a>
-                        <button
-                          onClick={() => copyToClipboard(url)}
-                          className="text-xs bg-gray-200 px-2 py-0.5 rounded hover:bg-gray-300"
-                        >
-                          Copy
-                        </button>
-                      </div>
-                    ))}
+              <td className="p-2 text-xs break-words max-w-[250px]">
+                {t.tracking_url && (
+                  <div>
+                    <b>Click:</b> {t.tracking_url}
                   </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <a
-                      href={t.tracking_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-blue-600 underline"
-                    >
-                      Link
-                    </a>
-                    <button
-                      onClick={() => copyToClipboard(t.tracking_url)}
-                      className="text-xs bg-gray-200 px-2 py-0.5 rounded hover:bg-gray-300"
-                    >
-                      Copy
-                    </button>
+                )}
+                {t.pin_send_url && (
+                  <div>
+                    <b>PinSend:</b> {t.pin_send_url}
+                  </div>
+                )}
+                {t.pin_verify_url && (
+                  <div>
+                    <b>PinVerify:</b> {t.pin_verify_url}
+                  </div>
+                )}
+                {t.check_status_url && (
+                  <div>
+                    <b>Status:</b> {t.check_status_url}
+                  </div>
+                )}
+                {t.portal_url && (
+                  <div>
+                    <b>Portal:</b> {t.portal_url}
                   </div>
                 )}
               </td>
