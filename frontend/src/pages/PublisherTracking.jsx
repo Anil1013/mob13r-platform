@@ -102,6 +102,14 @@ export default function Tracking() {
   };
 
   /* ======================================================
+     📋 Copy to Clipboard
+     ====================================================== */
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    alert("✅ URL copied to clipboard!");
+  };
+
+  /* ======================================================
      🔍 Search Filter
      ====================================================== */
   const filteredLinks = trackingLinks.filter((t) => {
@@ -273,23 +281,29 @@ export default function Tracking() {
               <td className="p-2">{t.carrier}</td>
               <td className="p-2">{t.type}</td>
               <td className="p-2">{t.payout}</td>
-              <td className="p-2">
-                {t.cap_daily} / {t.cap_total}
-              </td>
+              <td className="p-2">{t.cap_daily} / {t.cap_total}</td>
               <td className="p-2">{t.hold_percent}%</td>
               <td className="p-2 truncate max-w-[150px]">{t.landing_page_url}</td>
-              <td className="p-2 text-xs">
+
+              {/* ===== Click-to-copy URLs ===== */}
+              <td className="p-2 text-xs text-blue-700">
                 {t.type === "INAPP" ? (
-                  <div className="flex flex-col text-blue-700">
-                    <span>🔹 SendPIN</span>
-                    <span>🔹 VerifyPIN</span>
-                    <span>🔹 Status</span>
-                    <span>🔹 Portal</span>
+                  <div className="flex flex-col gap-1">
+                    <button onClick={() => copyToClipboard(t.pin_send_url)} className="hover:underline">🔹 SendPIN</button>
+                    <button onClick={() => copyToClipboard(t.pin_verify_url)} className="hover:underline">🔹 VerifyPIN</button>
+                    <button onClick={() => copyToClipboard(t.check_status_url)} className="hover:underline">🔹 Status</button>
+                    <button onClick={() => copyToClipboard(t.portal_url)} className="hover:underline">🔹 Portal</button>
                   </div>
                 ) : (
-                  <span className="text-blue-700">🔹 Click URL</span>
+                  <button
+                    onClick={() => copyToClipboard(t.tracking_url)}
+                    className="hover:underline"
+                  >
+                    🔹 Click URL
+                  </button>
                 )}
               </td>
+
               <td className="p-2 flex gap-2">
                 <button
                   onClick={() => editTracking(t)}
