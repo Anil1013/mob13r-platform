@@ -11,7 +11,8 @@ import {
   FileCode,
   Layers,
   Gift,
-  Link2, // 🔗 Added for Tracking
+  Link2, // 🔗 Tracking icon
+  Shuffle, // 🔁 For Traffic Distribution
 } from "lucide-react";
 
 function Sidebar() {
@@ -19,7 +20,12 @@ function Sidebar() {
     { name: "Dashboard", path: "/", icon: <LayoutDashboard size={18} /> },
     { name: "Advertisers", path: "/advertisers", icon: <Building2 size={18} /> },
     { name: "Offers", path: "/offers", icon: <Gift size={18} /> },
-    { name: "Tracking", path: "/tracking", icon: <Link2 size={18} /> }, // ✅ NEW TRACKING MENU
+    { name: "Tracking", path: "/tracking", icon: <Link2 size={18} /> },
+    {
+      name: "Traffic Distribution",
+      path: "/traffic-distribution",
+      icon: <Shuffle size={18} />, // ✅ Added new route for distribution
+    },
     { name: "Templates", path: "/templates", icon: <FileCode size={18} /> },
     { name: "Publishers", path: "/publishers", icon: <Users size={18} /> },
     { name: "Clicks", path: "/clicks", icon: <MousePointerClick size={18} /> },
