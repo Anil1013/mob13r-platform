@@ -20,9 +20,6 @@ export default function Tracking() {
     landing_page_url: "",
   });
 
-  /* ======================================================
-     🟢 Load Publishers and Tracking Data
-     ====================================================== */
   const fetchData = async () => {
     try {
       const [pubRes, trackRes] = await Promise.all([
@@ -41,9 +38,6 @@ export default function Tracking() {
     fetchData();
   }, []);
 
-  /* ======================================================
-     🟡 Add / Update Tracking
-     ====================================================== */
   const saveTracking = async () => {
     try {
       const payload = { ...form };
@@ -81,37 +75,17 @@ export default function Tracking() {
     }
   };
 
-  /* ======================================================
-     🟠 Edit and Delete
-     ====================================================== */
   const editTracking = (item) => {
     setForm({ ...item });
     setIsEditing(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const deleteTracking = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this tracking URL?")) return;
-    try {
-      await apiClient.delete(`/tracking/${id}`);
-      alert("🗑️ Tracking URL deleted");
-      fetchData();
-    } catch {
-      alert("⚠️ Failed to delete tracking URL");
-    }
-  };
-
-  /* ======================================================
-     📋 Copy to Clipboard
-     ====================================================== */
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     alert("✅ URL copied to clipboard!");
   };
 
-  /* ======================================================
-     🔍 Search Filter
-     ====================================================== */
   const filteredLinks = trackingLinks.filter((t) => {
     const lower = search.toLowerCase();
     return (
@@ -126,7 +100,6 @@ export default function Tracking() {
     <div className="p-6">
       <h2 className="text-2xl font-bold mb-3">Publisher Tracking URLs</h2>
 
-      {/* ===== Form Section ===== */}
       <div className="grid grid-cols-5 gap-3 mb-4">
         <select
           value={form.publisher_id}
@@ -147,21 +120,18 @@ export default function Tracking() {
           onChange={(e) => setForm({ ...form, name: e.target.value })}
           className="border p-2 rounded"
         />
-
         <input
           placeholder="Geo"
           value={form.geo}
           onChange={(e) => setForm({ ...form, geo: e.target.value })}
           className="border p-2 rounded"
         />
-
         <input
           placeholder="Carrier"
           value={form.carrier}
           onChange={(e) => setForm({ ...form, carrier: e.target.value })}
           className="border p-2 rounded"
         />
-
         <select
           value={form.type}
           onChange={(e) => setForm({ ...form, type: e.target.value })}
@@ -173,35 +143,33 @@ export default function Tracking() {
           <option>CPS</option>
           <option>INAPP</option>
         </select>
+      </div>
 
+      <div className="grid grid-cols-5 gap-3 mb-4">
         <input
           placeholder="Payout"
           value={form.payout}
           onChange={(e) => setForm({ ...form, payout: e.target.value })}
           className="border p-2 rounded"
         />
-
         <input
           placeholder="Cap Daily"
           value={form.cap_daily}
           onChange={(e) => setForm({ ...form, cap_daily: e.target.value })}
           className="border p-2 rounded"
         />
-
         <input
           placeholder="Cap Total"
           value={form.cap_total}
           onChange={(e) => setForm({ ...form, cap_total: e.target.value })}
           className="border p-2 rounded"
         />
-
         <input
           placeholder="Hold %"
           value={form.hold_percent}
           onChange={(e) => setForm({ ...form, hold_percent: e.target.value })}
           className="border p-2 rounded"
         />
-
         <input
           placeholder="Landing Page URL"
           value={form.landing_page_url}
@@ -211,47 +179,18 @@ export default function Tracking() {
       </div>
 
       <div className="mb-4">
-        <button
-          onClick={saveTracking}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-        >
+        <button onClick={saveTracking} className="bg-blue-600 text-white px-4 py-2 rounded">
           {isEditing ? "Update Tracking URL" : "Add Tracking URL"}
         </button>
-
-        {isEditing && (
-          <button
-            onClick={() => {
-              setIsEditing(false);
-              setForm({
-                publisher_id: "",
-                name: "",
-                geo: "",
-                carrier: "",
-                type: "CPA",
-                payout: "",
-                cap_daily: "",
-                cap_total: "",
-                hold_percent: "",
-                landing_page_url: "",
-              });
-            }}
-            className="ml-3 bg-gray-400 text-white px-4 py-2 rounded"
-          >
-            Cancel
-          </button>
-        )}
       </div>
 
-      {/* ===== Search and Table ===== */}
-      <div className="mb-3">
-        <input
-          type="text"
-          placeholder="🔍 Search pub, geo, carrier, name..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border p-2 rounded w-1/3"
-        />
-      </div>
+      <input
+        type="text"
+        placeholder="🔍 Search pub, geo, carrier, name..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="border p-2 rounded w-1/3 mb-3"
+      />
 
       <table className="min-w-full border text-sm">
         <thead className="bg-gray-100">
@@ -267,55 +206,52 @@ export default function Tracking() {
             <th className="p-2">Hold</th>
             <th className="p-2">Landing</th>
             <th className="p-2">Tracking URLs</th>
-            <th className="p-2">Actions</th>
+            <th className="p-2">Edit</th>
           </tr>
         </thead>
-
         <tbody>
           {filteredLinks.map((t) => (
             <tr key={t.id} className="border-t">
-              <td className="p-2 font-mono">PUB{t.publisher_id}</td>
+              <td className="p-2 font-mono">{t.pub_code}</td>
               <td className="p-2">{t.publisher_name}</td>
               <td className="p-2">{t.name}</td>
               <td className="p-2">{t.geo}</td>
               <td className="p-2">{t.carrier}</td>
               <td className="p-2">{t.type}</td>
               <td className="p-2">{t.payout}</td>
-              <td className="p-2">{t.cap_daily} / {t.cap_total}</td>
+              <td className="p-2">
+                {t.cap_daily} / {t.cap_total}
+              </td>
               <td className="p-2">{t.hold_percent}%</td>
               <td className="p-2 truncate max-w-[150px]">{t.landing_page_url}</td>
-
-              {/* ===== Click-to-copy URLs ===== */}
               <td className="p-2 text-xs text-blue-700">
                 {t.type === "INAPP" ? (
                   <div className="flex flex-col gap-1">
-                    <button onClick={() => copyToClipboard(t.pin_send_url)} className="hover:underline">🔹 SendPIN</button>
-                    <button onClick={() => copyToClipboard(t.pin_verify_url)} className="hover:underline">🔹 VerifyPIN</button>
-                    <button onClick={() => copyToClipboard(t.check_status_url)} className="hover:underline">🔹 Status</button>
-                    <button onClick={() => copyToClipboard(t.portal_url)} className="hover:underline">🔹 Portal</button>
+                    <button onClick={() => copyToClipboard(t.pin_send_url)} className="hover:underline">
+                      🔹 SendPIN
+                    </button>
+                    <button onClick={() => copyToClipboard(t.pin_verify_url)} className="hover:underline">
+                      🔹 VerifyPIN
+                    </button>
+                    <button onClick={() => copyToClipboard(t.check_status_url)} className="hover:underline">
+                      🔹 Status
+                    </button>
+                    <button onClick={() => copyToClipboard(t.portal_url)} className="hover:underline">
+                      🔹 Portal
+                    </button>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => copyToClipboard(t.tracking_url)}
-                    className="hover:underline"
-                  >
+                  <button onClick={() => copyToClipboard(t.tracking_url)} className="hover:underline">
                     🔹 Click URL
                   </button>
                 )}
               </td>
-
-              <td className="p-2 flex gap-2">
+              <td className="p-2">
                 <button
                   onClick={() => editTracking(t)}
                   className="bg-yellow-500 text-white px-3 py-1 rounded"
                 >
                   Edit
-                </button>
-                <button
-                  onClick={() => deleteTracking(t.id)}
-                  className="bg-red-600 text-white px-3 py-1 rounded"
-                >
-                  Delete
                 </button>
               </td>
             </tr>
