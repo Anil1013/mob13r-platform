@@ -84,7 +84,7 @@ app.use("/api/conversions", authJWT, conversionsRoutes);
 app.use("/api/stats", authJWT, statsRoutes);
 app.use("/api/templates", authJWT, templateRoutes);
 app.use("/api/tracking", authJWT, publisherTrackingRoutes); // ✅ NEW TRACKING ROUTE
-app.use("/api/trafficDistribution", authJWT, trafficDistributionRoutes);
+app.use("/api/traffic-distribution", authJWT, trafficDistributionRoutes);
 app.use("/api", authJWT, analyticsRoutes);
 
 /* ======================================================
