@@ -11,6 +11,7 @@ import {
   FileCode,
   Layers,
   Gift,
+  Link2, // 🔗 Added for Tracking
 } from "lucide-react";
 
 function Sidebar() {
@@ -18,7 +19,8 @@ function Sidebar() {
     { name: "Dashboard", path: "/", icon: <LayoutDashboard size={18} /> },
     { name: "Advertisers", path: "/advertisers", icon: <Building2 size={18} /> },
     { name: "Offers", path: "/offers", icon: <Gift size={18} /> },
-    { name: "Templates", path: "/templates", icon: <FileCode size={18} /> }, // ✅ Templates added
+    { name: "Tracking", path: "/tracking", icon: <Link2 size={18} /> }, // ✅ NEW TRACKING MENU
+    { name: "Templates", path: "/templates", icon: <FileCode size={18} /> },
     { name: "Publishers", path: "/publishers", icon: <Users size={18} /> },
     { name: "Clicks", path: "/clicks", icon: <MousePointerClick size={18} /> },
     { name: "Conversions", path: "/conversions", icon: <LineChart size={18} /> },
@@ -66,7 +68,8 @@ function Sidebar() {
 
       {/* Footer */}
       <div className="p-4 border-t border-gray-200 text-xs text-gray-500 text-center bg-gray-50">
-        © {new Date().getFullYear()} <span className="font-semibold">Mob13r Platform</span>
+        © {new Date().getFullYear()}{" "}
+        <span className="font-semibold">Mob13r Platform</span>
       </div>
     </aside>
   );
