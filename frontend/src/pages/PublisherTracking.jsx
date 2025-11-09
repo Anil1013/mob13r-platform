@@ -2,8 +2,9 @@ import React, { useEffect, useState } from "react";
 import apiClient from "../api/apiClient";
 
 export default function PublisherTracking() {
-  const [links, setLinks] = useState([]);
   const [publishers, setPublishers] = useState([]);
+  const [trackingLinks, setTrackingLinks] = useState([]);
+  const [search, setSearch] = useState("");
   const [form, setForm] = useState({
     pub_id: "",
     name: "",
@@ -15,27 +16,28 @@ export default function PublisherTracking() {
     cap_total: "",
     hold_percent: "",
     landing_page_url: "",
-    status: "active",
   });
-  const [isEditing, setIsEditing] = useState(false);
-  const [editId, setEditId] = useState(null);
-  const [search, setSearch] = useState("");
-  const [copiedUrl, setCopiedUrl] = useState(null);
 
   const fetchAll = async () => {
-    const [pubRes, linkRes] = await Promise.all([
-      apiClient.get("/publishers"),
-      apiClient.get("/publisher-tracking"),
-    ]);
-    setPublishers(pubRes.data || []);
-    setLinks(linkRes.data || []);
+    try {
+      const [pubRes, linkRes] = await Promise.all([
+        apiClient.get("/api/publishers"), // ✅ Corrected endpoint
+        apiClient.get("/api/tracking"),
+      ]);
+      // Show only active publishers
+      setPublishers(pubRes.data.filter((p) => p.status === "active"));
+      setTrackingLinks(linkRes.data || []);
+    } catch (err) {
+      console.error("⚠️ Fetch error:", err);
+      alert("Failed to load data.");
+    }
   };
 
   useEffect(() => {
     fetchAll();
   }, []);
 
-  const resetForm = () => {
+  const resetForm = () =>
     setForm({
       pub_id: "",
       name: "",
@@ -47,89 +49,87 @@ export default function PublisherTracking() {
       cap_total: "",
       hold_percent: "",
       landing_page_url: "",
-      status: "active",
     });
-    setIsEditing(false);
-    setEditId(null);
-  };
 
-  const save = async () => {
+  const saveTracking = async () => {
     try {
-      if (isEditing) await apiClient.put(`/publisher-tracking/${editId}`, form);
-      else await apiClient.post("/publisher-tracking", form);
-      alert("✅ Saved");
+      if (!form.pub_id || !form.geo || !form.carrier || !form.name) {
+        alert("⚠️ Please fill all mandatory fields.");
+        return;
+      }
+
+      await apiClient.post("/api/tracking", form);
+      alert("✅ Tracking URL created successfully.");
       resetForm();
       fetchAll();
     } catch (err) {
-      alert("⚠️ " + (err.response?.data?.error || err.message));
+      console.error(err);
+      alert("⚠️ Failed to create tracking URL.");
     }
   };
 
-  const edit = (l) => {
-    setForm({
-      pub_id: l.pub_id,
-      name: l.name,
-      geo: l.geo,
-      carrier: l.carrier,
-      type: l.type,
-      payout: l.payout,
-      cap_daily: l.cap_daily,
-      cap_total: l.cap_total,
-      hold_percent: l.hold_percent,
-      landing_page_url: l.landing_page_url,
-      status: l.status,
-    });
-    setIsEditing(true);
-    setEditId(l.id);
-  };
-
-  const remove = async (id) => {
-    if (!window.confirm("Delete this link?")) return;
-    await apiClient.delete(`/publisher-tracking/${id}`);
-    fetchAll();
-  };
+  const filtered = trackingLinks.filter((t) => {
+    const q = search.toLowerCase();
+    return (
+      t.publisher_name?.toLowerCase().includes(q) ||
+      t.name?.toLowerCase().includes(q) ||
+      t.geo?.toLowerCase().includes(q) ||
+      t.carrier?.toLowerCase().includes(q)
+    );
+  });
 
   const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    setCopiedUrl(text);
-    setTimeout(() => setCopiedUrl(null), 2000);
+    navigator.clipboard
+      .writeText(text)
+      .then(() => alert("📋 Copied to clipboard!"))
+      .catch(() => alert("⚠️ Failed to copy!"));
   };
-
-  const filtered = links.filter((l) =>
-    [l.pub_id, l.publisher_name_db, l.geo, l.carrier, l.name]
-      .join(" ")
-      .toLowerCase()
-      .includes(search.toLowerCase())
-  );
 
   return (
     <div className="p-6">
-      <h2 className="text-2xl font-semibold mb-4">Publisher Tracking URLs</h2>
+      <h2 className="text-2xl font-bold mb-3">Publisher Tracking URLs</h2>
 
-      {/* ===== FORM ===== */}
-      <div className="grid grid-cols-4 gap-2 mb-4">
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        {/* Publisher Dropdown */}
         <select
-          className="border p-2 rounded"
           value={form.pub_id}
           onChange={(e) => setForm({ ...form, pub_id: e.target.value })}
+          className="border p-2 rounded"
         >
           <option value="">Select Publisher</option>
           {publishers.map((p) => (
             <option key={p.publisher_id} value={p.publisher_id}>
-              {p.publisher_id} - {p.name}
+              {p.name}
             </option>
           ))}
         </select>
 
-        <input placeholder="Offer Name" className="border p-2 rounded"
-          value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <input placeholder="Geo" className="border p-2 rounded"
-          value={form.geo} onChange={(e) => setForm({ ...form, geo: e.target.value })} />
-        <input placeholder="Carrier" className="border p-2 rounded"
-          value={form.carrier} onChange={(e) => setForm({ ...form, carrier: e.target.value })} />
+        <input
+          placeholder="Offer Name"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          className="border p-2 rounded"
+        />
 
-        <select className="border p-2 rounded"
-          value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+        <input
+          placeholder="Geo"
+          value={form.geo}
+          onChange={(e) => setForm({ ...form, geo: e.target.value })}
+          className="border p-2 rounded"
+        />
+
+        <input
+          placeholder="Carrier"
+          value={form.carrier}
+          onChange={(e) => setForm({ ...form, carrier: e.target.value })}
+          className="border p-2 rounded"
+        />
+
+        <select
+          value={form.type}
+          onChange={(e) => setForm({ ...form, type: e.target.value })}
+          className="border p-2 rounded"
+        >
           <option>CPA</option>
           <option>CPI</option>
           <option>CPL</option>
@@ -137,34 +137,64 @@ export default function PublisherTracking() {
           <option>INAPP</option>
         </select>
 
-        <input placeholder="Payout" className="border p-2 rounded"
-          value={form.payout} onChange={(e) => setForm({ ...form, payout: e.target.value })} />
-        <input placeholder="Cap Daily" className="border p-2 rounded"
-          value={form.cap_daily} onChange={(e) => setForm({ ...form, cap_daily: e.target.value })} />
-        <input placeholder="Cap Total" className="border p-2 rounded"
-          value={form.cap_total} onChange={(e) => setForm({ ...form, cap_total: e.target.value })} />
-        <input placeholder="Hold %" className="border p-2 rounded"
-          value={form.hold_percent} onChange={(e) => setForm({ ...form, hold_percent: e.target.value })} />
-        <input placeholder="Landing Page URL" className="border p-2 rounded col-span-2"
-          value={form.landing_page_url} onChange={(e) => setForm({ ...form, landing_page_url: e.target.value })} />
+        <input
+          placeholder="Payout"
+          type="number"
+          value={form.payout}
+          onChange={(e) => setForm({ ...form, payout: e.target.value })}
+          className="border p-2 rounded"
+        />
+
+        <input
+          placeholder="Cap Daily"
+          value={form.cap_daily}
+          onChange={(e) => setForm({ ...form, cap_daily: e.target.value })}
+          className="border p-2 rounded"
+        />
+
+        <input
+          placeholder="Cap Total"
+          value={form.cap_total}
+          onChange={(e) => setForm({ ...form, cap_total: e.target.value })}
+          className="border p-2 rounded"
+        />
+
+        <input
+          placeholder="Hold %"
+          type="number"
+          value={form.hold_percent}
+          onChange={(e) => setForm({ ...form, hold_percent: e.target.value })}
+          className="border p-2 rounded"
+        />
+
+        <input
+          placeholder="Landing Page URL"
+          value={form.landing_page_url}
+          onChange={(e) =>
+            setForm({ ...form, landing_page_url: e.target.value })
+          }
+          className="border p-2 rounded"
+        />
       </div>
 
-      <div className="mb-4 flex gap-2">
-        <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={save}>
-          {isEditing ? "Update" : "Add"} Tracking URL
-        </button>
-        {isEditing && (
-          <button className="bg-gray-400 text-white px-4 py-2 rounded" onClick={resetForm}>
-            Cancel
-          </button>
-        )}
+      <button
+        onClick={saveTracking}
+        className="bg-blue-600 text-white px-4 py-2 rounded mb-4"
+      >
+        Add Tracking URL
+      </button>
+
+      {/* ===== Search and Table ===== */}
+      <div className="mb-3">
+        <input
+          type="text"
+          placeholder="🔍 Search pub, geo, carrier, name..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="border p-2 rounded w-1/3"
+        />
       </div>
 
-      <input className="border p-2 rounded w-1/3 mb-3"
-        placeholder="🔍 Search pub, geo, carrier, name..."
-        value={search} onChange={(e) => setSearch(e.target.value)} />
-
-      {/* ===== TABLE ===== */}
       <table className="min-w-full border text-sm">
         <thead className="bg-gray-100">
           <tr>
@@ -182,70 +212,77 @@ export default function PublisherTracking() {
           </tr>
         </thead>
         <tbody>
-          {filtered.map((l) => (
-            <tr key={l.id} className="border-t">
-              <td className="p-2">{l.pub_id}</td>
-              <td className="p-2">{l.publisher_name_db || l.publisher_name}</td>
-              <td className="p-2">{l.name}</td>
-              <td className="p-2">{l.geo}</td>
-              <td className="p-2">{l.carrier}</td>
-              <td className="p-2">{l.type}</td>
-              <td className="p-2">{l.payout}</td>
-              <td className="p-2">{l.cap_daily}/{l.cap_total}</td>
-              <td className="p-2">{l.hold_percent}%</td>
-              <td className="p-2 break-all">{l.landing_page_url}</td>
-
-              <td className="p-2 break-all">
-                {l.type === "INAPP" ? (
-                  <>
-                    <div className="mb-1 flex items-center gap-1">
-                      <strong>Pin Send:</strong>
-                      <button onClick={() => copyToClipboard(l.pin_send_url)}
-                        className="text-xs bg-blue-500 text-white px-2 py-1 rounded">
-                        Copy
-                      </button>
-                      <span className="text-gray-700">{l.pin_send_url}</span>
-                    </div>
-
-                    <div className="mb-1 flex items-center gap-1">
-                      <strong>Verify:</strong>
-                      <button onClick={() => copyToClipboard(l.pin_verify_url)}
-                        className="text-xs bg-blue-500 text-white px-2 py-1 rounded">
-                        Copy
-                      </button>
-                      <span className="text-gray-700">{l.pin_verify_url}</span>
-                    </div>
-
-                    <div className="mb-1 flex items-center gap-1">
-                      <strong>Status:</strong>
-                      <button onClick={() => copyToClipboard(l.check_status_url)}
-                        className="text-xs bg-blue-500 text-white px-2 py-1 rounded">
-                        Copy
-                      </button>
-                      <span className="text-gray-700">{l.check_status_url}</span>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <strong>Portal:</strong>
-                      <button onClick={() => copyToClipboard(l.portal_url)}
-                        className="text-xs bg-blue-500 text-white px-2 py-1 rounded">
-                        Copy
-                      </button>
-                      <span className="text-gray-700">{l.portal_url}</span>
-                    </div>
-                  </>
+          {filtered.map((t) => (
+            <tr key={t.id} className="border-t">
+              <td className="p-2">{t.pub_id}</td>
+              <td className="p-2">{t.publisher_name}</td>
+              <td className="p-2">{t.name}</td>
+              <td className="p-2">{t.geo}</td>
+              <td className="p-2">{t.carrier}</td>
+              <td className="p-2">{t.type}</td>
+              <td className="p-2">{t.payout}</td>
+              <td className="p-2">
+                {t.cap_daily} / {t.cap_total}
+              </td>
+              <td className="p-2">{t.hold_percent}%</td>
+              <td className="p-2">
+                {t.landing_page_url ? (
+                  <a
+                    href={t.landing_page_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 underline"
+                  >
+                    Visit
+                  </a>
                 ) : (
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => copyToClipboard(l.tracking_url)}
-                      className="text-xs bg-blue-500 text-white px-2 py-1 rounded">
+                  "-"
+                )}
+              </td>
+              <td className="p-2">
+                {t.type === "INAPP" ? (
+                  <div className="flex flex-col gap-1">
+                    {[
+                      { label: "SendPin", url: t.pin_send_url },
+                      { label: "VerifyPin", url: t.pin_verify_url },
+                      { label: "Status", url: t.check_status_url },
+                      { label: "Portal", url: t.portal_url },
+                    ].map(({ label, url }) => (
+                      <div key={label} className="flex items-center gap-2">
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-600 underline"
+                        >
+                          {label}
+                        </a>
+                        <button
+                          onClick={() => copyToClipboard(url)}
+                          className="text-xs bg-gray-200 px-2 py-0.5 rounded hover:bg-gray-300"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={t.tracking_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-600 underline"
+                    >
+                      Link
+                    </a>
+                    <button
+                      onClick={() => copyToClipboard(t.tracking_url)}
+                      className="text-xs bg-gray-200 px-2 py-0.5 rounded hover:bg-gray-300"
+                    >
                       Copy
                     </button>
-                    <span className="text-gray-700">{l.tracking_url}</span>
                   </div>
-                )}
-
-                {copiedUrl && copiedUrl.includes(l.pub_id) && (
-                  <div className="text-green-600 text-xs mt-1">Copied ✅</div>
                 )}
               </td>
             </tr>
