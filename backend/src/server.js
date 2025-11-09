@@ -15,7 +15,8 @@ import conversionsRoutes from "./routes/conversions.js";
 import statsRoutes from "./routes/stats.js";
 import authRoutes from "./routes/auth.js";
 import analyticsRoutes from "./routes/analytics.js";
-import templateRoutes from "./routes/templates.js";  // ✅ NEW IMPORT
+import templateRoutes from "./routes/templates.js"; 
+import publisherTrackingRoutes from "./routes/publisherTracking.js"; // ✅ NEW IMPORT
 
 /* Middleware */
 import authJWT from "./middleware/authJWT.js";
@@ -25,13 +26,13 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 /* ======================================================
-   ✅ FIXED CORS CONFIGURATION (for both frontend & EB)
+   ✅ CORS CONFIGURATION
    ====================================================== */
 app.use(
   cors({
     origin: [
-      "https://dashboard.mob13r.com", // frontend domain
-      "http://localhost:3000",         // local testing
+      "https://dashboard.mob13r.com",
+      "http://localhost:3000",
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -39,20 +40,13 @@ app.use(
   })
 );
 
-// ✅ Handle preflight OPTIONS manually
 app.options("*", (req, res) => {
   res.setHeader(
     "Access-Control-Allow-Origin",
     req.headers.origin || "https://dashboard.mob13r.com"
   );
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, DELETE, OPTIONS"
-  );
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.sendStatus(200);
 });
@@ -64,7 +58,7 @@ app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(bodyParser.json({ limit: "10mb" }));
 
 /* ======================================================
-   ✅ HEALTH CHECK ENDPOINT
+   ✅ HEALTH CHECK
    ====================================================== */
 app.get("/api/health", async (req, res) => {
   try {
@@ -79,11 +73,7 @@ app.get("/api/health", async (req, res) => {
 /* ======================================================
    ✅ ROUTES
    ====================================================== */
-
-// Public route
 app.use("/api/auth", authRoutes);
-
-// Protected routes (JWT required)
 app.use("/api/publishers", authJWT, publishersRoutes);
 app.use("/api/advertisers", authJWT, advertisersRoutes);
 app.use("/api/offers", authJWT, offersRoutes);
@@ -91,7 +81,8 @@ app.use("/api/clicks", authJWT, clickRoutes);
 app.use("/api/postbacks", authJWT, postbackRoutes);
 app.use("/api/conversions", authJWT, conversionsRoutes);
 app.use("/api/stats", authJWT, statsRoutes);
-app.use("/api/templates", authJWT, templateRoutes); // ✅ NEW ROUTE
+app.use("/api/templates", authJWT, templateRoutes);
+app.use("/api/tracking", authJWT, publisherTrackingRoutes); // ✅ NEW TRACKING ROUTE
 app.use("/api", authJWT, analyticsRoutes);
 
 /* ======================================================
