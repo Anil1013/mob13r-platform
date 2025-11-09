@@ -20,7 +20,7 @@ import Postbacks from "./pages/Postbacks.jsx";
 import Offers from "./pages/Offers.jsx";
 import Templates from "./pages/Templates.jsx"; // ✅ NEW IMPORT
 import PublisherTracking from "./pages/PublisherTracking.jsx"; // ✅ NEW IMPORT
-import TrafficDistribution from "./pages/TrafficDistribution.jsx";
+import TrafficDistribution from "./pages/Traffic-distribution.jsx";
 import ApiDocs from "./pages/ApiDocs.jsx";
 import FraudAlerts from "./pages/FraudAlerts.jsx";
 import LandingBuilder from "./pages/LandingBuilder.jsx";
