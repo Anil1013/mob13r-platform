@@ -20,7 +20,6 @@ import Postbacks from "./pages/Postbacks.jsx";
 import Offers from "./pages/Offers.jsx";
 import Templates from "./pages/Templates.jsx"; // ✅ NEW IMPORT
 import PublisherTracking from "./pages/PublisherTracking.jsx"; // ✅ NEW IMPORT
-import TrafficDistribution from "./pages/Traffic-distribution.jsx";
 import ApiDocs from "./pages/ApiDocs.jsx";
 import FraudAlerts from "./pages/FraudAlerts.jsx";
 import LandingBuilder from "./pages/LandingBuilder.jsx";
@@ -77,7 +76,6 @@ function App() {
             <Route path="/offers" element={<Offers />} />
             <Route path="/templates" element={<Templates />} /> {/* ✅ NEW ROUTE */}
             <Route path="/tracking" element={<PublisherTracking />} /> {/* ✅ NEW ROUTE */}
-            <Route path="/traffic-distribution" element={<TrafficDistribution />} />
             <Route path="/api-docs" element={<ApiDocs />} />
             <Route path="/fraud-alerts" element={<FraudAlerts />} />
             <Route path="/landing-builder" element={<LandingBuilder />} />
