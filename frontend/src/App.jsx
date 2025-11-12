@@ -18,8 +18,8 @@ import Clicks from "./pages/Clicks.jsx";
 import Conversions from "./pages/Conversions.jsx";
 import Postbacks from "./pages/Postbacks.jsx";
 import Offers from "./pages/Offers.jsx";
-import Templates from "./pages/Templates.jsx"; // ✅ NEW IMPORT
-import PublisherTracking from "./pages/PublisherTracking.jsx"; // ✅ NEW IMPORT
+import Templates from "./pages/Templates.jsx";
+import PublisherTracking from "./pages/PublisherTracking.jsx";
 import ApiDocs from "./pages/ApiDocs.jsx";
 import FraudAlerts from "./pages/FraudAlerts.jsx";
 import LandingBuilder from "./pages/LandingBuilder.jsx";
@@ -51,7 +51,6 @@ function App() {
     }
   }, [isLoggedIn, isLoginPage, navigate]);
 
-  // Prevent flicker while redirecting
   if (!isLoggedIn && !isLoginPage) {
     return null;
   }
@@ -66,21 +65,20 @@ function App() {
         <main className="flex-1 overflow-y-auto p-6">
           <Routes>
             <Route path="/login" element={<Login />} />
-
             <Route path="/" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/advertisers" element={<Advertisers />} />
             <Route path="/publishers" element={<Publishers />} />
             <Route path="/clicks" element={<Clicks />} />
             <Route path="/conversions" element={<Conversions />} />
             <Route path="/postbacks" element={<Postbacks />} />
             <Route path="/offers" element={<Offers />} />
-            <Route path="/templates" element={<Templates />} /> {/* ✅ NEW ROUTE */}
-            <Route path="/tracking" element={<PublisherTracking />} /> {/* ✅ NEW ROUTE */}
+            <Route path="/templates" element={<Templates />} />
+            <Route path="/tracking" element={<PublisherTracking />} />
             <Route path="/api-docs" element={<ApiDocs />} />
             <Route path="/fraud-alerts" element={<FraudAlerts />} />
             <Route path="/landing-builder" element={<LandingBuilder />} />
-
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </main>
       </div>
