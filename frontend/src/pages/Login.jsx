@@ -18,15 +18,11 @@ export default function Login() {
       const res = await apiClient.post("/auth/login", { email, password });
 
       if (res.data?.token) {
-        // ✅ Save token & basic admin info
         localStorage.setItem("mob13r_token", res.data.token);
         localStorage.setItem("mob13r_admin", JSON.stringify(res.data.admin));
 
-        // ✅ Optional: success feedback
         alert("✅ Login successful!");
-
-        // ✅ Redirect to main dashboard or advertisers page
-        navigate("/advertisers");
+        navigate("/dashboard", { replace: true });
       } else {
         setError("❌ Invalid login response. Please try again.");
       }
@@ -48,7 +44,9 @@ export default function Login() {
         onSubmit={handleLogin}
         className="bg-white p-6 rounded shadow w-80 text-center"
       >
-        <h2 className="text-lg font-bold mb-4 text-gray-700">Mob13r Admin Login</h2>
+        <h2 className="text-lg font-bold mb-4 text-gray-700">
+          Mob13r Admin Login
+        </h2>
 
         {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
 
