@@ -11,8 +11,8 @@ import {
   FileCode,
   Layers,
   Gift,
-  Link2, // 🔗 Tracking icon
-  Shuffle, // 🔁 For Traffic Distribution
+  Link2,
+  Shuffle,
 } from "lucide-react";
 
 function Sidebar() {
@@ -24,7 +24,7 @@ function Sidebar() {
     {
       name: "Traffic Distribution",
       path: "/traffic-distribution",
-      icon: <Shuffle size={18} />, // ✅ Added new route for distribution
+      icon: <Shuffle size={18} />,
     },
     { name: "Templates", path: "/templates", icon: <FileCode size={18} /> },
     { name: "Publishers", path: "/publishers", icon: <Users size={18} /> },
@@ -37,32 +37,35 @@ function Sidebar() {
   ];
 
   return (
-    <aside
-      className="w-64 bg-white border-r border-gray-200 shadow-sm flex flex-col min-h-screen"
-      aria-label="Main navigation"
-    >
-      {/* Logo Section */}
-      <div className="flex items-center justify-center h-16 border-b border-gray-200 bg-gray-50">
-        <h2 className="text-xl font-semibold text-blue-600 tracking-wide">
-          Mob13r
-        </h2>
+    <aside className="w-64 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 
+      border-r border-white/10 shadow-xl flex flex-col min-h-screen">
+
+      {/* LOGO SECTION */}
+      <div className="flex items-center justify-center h-20 border-b border-white/10">
+        <img
+          src="/logo.png"
+          alt="Mob13r Logo"
+          className="w-20 h-auto drop-shadow-2xl"
+        />
       </div>
 
-      {/* Navigation Menu */}
-      <nav className="flex-1 overflow-y-auto mt-4" aria-label="Sidebar menu">
-        <ul className="space-y-1 px-3">
+      {/* MENU */}
+      <nav className="flex-1 mt-4 overflow-y-auto">
+        <ul className="px-3 space-y-1">
           {menuItems.map((item) => (
             <li key={item.name}>
               <NavLink
                 to={item.path}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-4 py-2.5 rounded-lg text-gray-700 font-medium transition-all duration-150 ${
-                    isActive
-                      ? "bg-blue-100 text-blue-600 shadow-sm"
-                      : "hover:bg-blue-50 hover:text-blue-600"
-                  }`
+                  `
+                  flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium 
+                  transition-all duration-150 text-gray-300 
+                  
+                  ${isActive
+                    ? "bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-lg"
+                    : "hover:bg-white/10 hover:text-white"}
+                  `
                 }
-                aria-current={window.location.pathname === item.path ? "page" : undefined}
               >
                 {item.icon}
                 <span>{item.name}</span>
@@ -72,10 +75,9 @@ function Sidebar() {
         </ul>
       </nav>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-gray-200 text-xs text-gray-500 text-center bg-gray-50">
-        © {new Date().getFullYear()}{" "}
-        <span className="font-semibold">Mob13r Platform</span>
+      {/* FOOTER */}
+      <div className="p-4 border-t border-white/10 text-xs text-gray-400 text-center">
+        © {new Date().getFullYear()} Mob13r Digital Media
       </div>
     </aside>
   );
