@@ -8,7 +8,7 @@ function Header() {
     localStorage.getItem("theme") === "dark" || false
   );
 
-  // ✅ Get Admin Email from localStorage
+  // Get logged-in admin email
   const adminData = JSON.parse(localStorage.getItem("mob13r_admin") || "{}");
   const adminEmail = adminData?.email || "Admin";
 
@@ -18,64 +18,67 @@ function Header() {
   }, [dark]);
 
   const handleLogout = () => {
-    // ✅ Clear session and redirect
     localStorage.removeItem("mob13r_token");
     localStorage.removeItem("mob13r_admin");
     navigate("/login", { replace: true });
   };
 
   return (
-    <header className="flex items-center justify-between px-6 py-4 bg-white dark:bg-gray-900 shadow-md border-b border-gray-200 dark:border-gray-800 sticky top-0 z-50 transition-all">
-      {/* ✅ Dashboard Title */}
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-800 dark:text-white tracking-wide">
-          Mob13r Dashboard
-        </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          Welcome, {adminEmail}
-        </p>
+    <header className="flex items-center justify-between px-6 py-4 
+      bg-white/10 dark:bg-gray-900/80 backdrop-blur-lg 
+      shadow-lg border-b border-white/20 sticky top-0 z-50 transition-all">
+
+      {/* LOGO + TITLE */}
+      <div className="flex items-center gap-3">
+        <img
+          src="/logo.png"
+          alt="Mob13r Logo"
+          className="w-12 h-12 drop-shadow-xl"
+        />
+        <div>
+          <h1 className="text-xl font-semibold text-white tracking-wide">
+            Mob13r Dashboard
+          </h1>
+          <p className="text-sm text-gray-300">Welcome, {adminEmail}</p>
+        </div>
       </div>
 
-      {/* ✅ Right Icons Section */}
+      {/* RIGHT SIDE ICONS */}
       <div className="flex items-center gap-6">
+
         {/* Notifications */}
-        <button
-          className="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-          title="Notifications"
-        >
-          <Bell size={20} className="text-gray-600 dark:text-gray-300" />
+        <button className="relative p-2 rounded-full hover:bg-white/10 transition">
+          <Bell size={20} className="text-white" />
           <span className="absolute top-1 right-1 inline-flex h-2 w-2 bg-red-500 rounded-full"></span>
         </button>
 
         {/* Theme Toggle */}
         <button
           onClick={() => setDark(!dark)}
-          className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:scale-110 transition"
-          title="Toggle Theme"
+          className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition"
         >
           {dark ? (
-            <Sun size={18} className="text-yellow-400" />
+            <Sun size={20} className="text-yellow-400" />
           ) : (
-            <Moon size={18} className="text-gray-700" />
+            <Moon size={20} className="text-white" />
           )}
         </button>
 
-        {/* Admin Info */}
-        <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-gray-100 dark:bg-gray-800">
-          <User size={18} className="text-gray-700 dark:text-gray-300" />
-          <span className="text-gray-800 dark:text-gray-200 text-sm font-medium">
+        {/* Admin Profile */}
+        <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/20">
+          <User size={18} className="text-white" />
+          <span className="text-white font-medium text-sm">
             {adminEmail.split("@")[0]}
           </span>
         </div>
 
-        {/* ✅ Logout Button */}
+        {/* Logout */}
         <button
           onClick={handleLogout}
-          className="flex items-center gap-1 bg-red-500 text-white px-3 py-1.5 rounded hover:bg-red-600 transition"
-          title="Logout"
+          className="flex items-center gap-1 bg-red-500 text-white px-3 py-1.5 rounded-lg hover:bg-red-600 transition"
         >
           <LogOut size={16} />
-          <span className="text-sm font-medium">Logout</span>
+          <span className="text-sm">Logout</span>
         </button>
       </div>
     </header>
