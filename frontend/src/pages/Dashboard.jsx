@@ -1,100 +1,133 @@
 import React, { useEffect, useState } from "react";
-import apiClient from "../api/apiClient";
-import { RefreshCcw } from "lucide-react";
+import { TrendingUp, Users, MousePointerClick, BarChart2, Zap } from "lucide-react";
 
 export default function Dashboard() {
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [lastRefresh, setLastRefresh] = useState(null);
-
-  const fetchStats = async () => {
-    try {
-      const res = await apiClient.get("/stats");
-      setStats(res.data);
-      setLastRefresh(new Date().toLocaleTimeString());
-      setLoading(false);
-    } catch (err) {
-      console.error("❌ Stats Error:", err);
-    }
-  };
+  const [stats, setStats] = useState({
+    clicks: 12450,
+    conversions: 742,
+    revenue: 3567,
+    publishers: 89,
+  });
 
   useEffect(() => {
-    fetchStats();
-    const interval = setInterval(fetchStats, 10000); // auto refresh
-    return () => clearInterval(interval);
+    // Later you can fetch live stats from backend
   }, []);
 
-  if (loading)
-    return <div className="text-center mt-20 text-lg">Loading stats...</div>;
-
-  // Tailwind color map fix
-  const colorMap = {
-    indigo: {
-      border: "border-indigo-500",
-      text: "text-indigo-600",
-      dark: "dark:text-indigo-400",
+  const kpiCards = [
+    {
+      title: "Total Clicks",
+      value: stats.clicks,
+      icon: <MousePointerClick size={28} />,
+      color: "from-orange-400 to-yellow-500",
     },
-    green: {
-      border: "border-green-500",
-      text: "text-green-600",
-      dark: "dark:text-green-400",
+    {
+      title: "Conversions",
+      value: stats.conversions,
+      icon: <Zap size={28} />,
+      color: "from-pink-500 to-red-500",
     },
-    yellow: {
-      border: "border-yellow-500",
-      text: "text-yellow-600",
-      dark: "dark:text-yellow-400",
+    {
+      title: "Revenue (USD)",
+      value: `$${stats.revenue}`,
+      icon: <TrendingUp size={28} />,
+      color: "from-green-400 to-emerald-500",
     },
-    purple: {
-      border: "border-purple-500",
-      text: "text-purple-600",
-      dark: "dark:text-purple-400",
+    {
+      title: "Active Publishers",
+      value: stats.publishers,
+      icon: <Users size={28} />,
+      color: "from-blue-400 to-cyan-500",
     },
-  };
-
-  const cards = [
-    { title: "Publishers", value: stats.publishers, color: "indigo" },
-    { title: "Advertisers", value: stats.advertisers, color: "green" },
-    { title: "Offers", value: stats.offers, color: "yellow" },
-    { title: "Conversions", value: stats.conversions, color: "purple" },
   ];
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-semibold text-gray-700 dark:text-white">
-          Live Stats
-        </h2>
+    <div className="space-y-8">
 
-        <button
-          onClick={fetchStats}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
-        >
-          <RefreshCcw size={18} /> Refresh Now
-        </button>
-      </div>
-
-      <div className="grid md:grid-cols-4 gap-6">
-        {cards.map((card) => {
-          const styles = colorMap[card.color];
-          return (
+      {/* -------------------------- KPI CARDS -------------------------- */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+        {kpiCards.map((card, i) => (
+          <div
+            key={i}
+            className="p-6 rounded-xl bg-white/10 backdrop-blur-xl border border-white/20 
+              shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:shadow-xl hover:scale-[1.02] 
+              transition-all cursor-pointer"
+          >
             <div
-              key={card.title}
-              className={`bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center border-t-4 ${styles.border}`}
+              className={`w-14 h-14 rounded-xl bg-gradient-to-br ${card.color} 
+                flex items-center justify-center text-white shadow-lg mb-4`}
             >
-              <h3 className="text-gray-600 dark:text-gray-300 text-lg">
-                {card.title}
-              </h3>
-              <p className={`text-3xl font-bold mt-2 ${styles.text} ${styles.dark}`}>
-                {card.value}
-              </p>
+              {card.icon}
             </div>
-          );
-        })}
+
+            <h2 className="text-gray-300 text-sm font-medium tracking-wide">{card.title}</h2>
+
+            <p className="text-3xl font-semibold text-white mt-1 drop-shadow-lg">
+              {card.value}
+            </p>
+
+            <p className="text-xs text-gray-400 mt-2">
+              Updated just now
+            </p>
+          </div>
+        ))}
       </div>
 
-      <p className="mt-4 text-sm text-gray-500 dark:text-gray-300">
-        Last updated: {lastRefresh}
-      </p>
+
+      {/* -------------------------- CHART AREA -------------------------- */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+
+        {/* PERFORMANCE CHART */}
+        <div className="bg-white/10 rounded-xl p-6 border border-white/20 backdrop-blur-xl shadow-lg">
+          <h3 className="text-xl font-semibold text-white mb-2">
+            Traffic Performance
+          </h3>
+          <p className="text-gray-400 text-sm mb-6">Clicks vs Conversions trend</p>
+
+          {/* Chart Placeholder */}
+          <div className="w-full h-64 bg-black/20 border border-white/10 rounded-lg 
+            flex items-center justify-center text-gray-500 text-sm">
+            📊 Chart Component Goes Here
+          </div>
+        </div>
+
+        {/* REVENUE CHART */}
+        <div className="bg-white/10 rounded-xl p-6 border border-white/20 backdrop-blur-xl shadow-lg">
+          <h3 className="text-xl font-semibold text-white mb-2">
+            Revenue Analytics
+          </h3>
+          <p className="text-gray-400 text-sm mb-6">Daily revenue distribution</p>
+
+          <div className="w-full h-64 bg-black/20 border border-white/10 rounded-lg 
+            flex items-center justify-center text-gray-500 text-sm">
+            💰 Revenue Chart Component Goes Here
+          </div>
+        </div>
+      </div>
+
+
+      {/* -------------------------- RECENT ACTIVITY -------------------------- */}
+      <div className="bg-white/10 rounded-xl p-6 border border-white/20 backdrop-blur-xl shadow-lg">
+
+        <h3 className="text-xl font-semibold text-white mb-4">Recent Activity</h3>
+
+        <div className="space-y-3">
+
+          {[
+            "Publisher #122 just generated a new conversion",
+            "Offer #221 CTR increased by 12%",
+            "New advertiser registered on the platform",
+            "Traffic anomaly detected from Region X",
+          ].map((item, i) => (
+            <div
+              key={i}
+              className="p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition"
+            >
+              <p className="text-gray-300">{item}</p>
+            </div>
+          ))}
+
+        </div>
+      </div>
     </div>
   );
 }
