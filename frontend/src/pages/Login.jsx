@@ -1,26 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import apiClient from "../api/apiClient";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 
 export default function Login() {
-  const navigate = useNavigate();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
-  // 🌓 Detect Dark Mode for Logo
-  const [isDarkMode, setIsDarkMode] = useState(
-    localStorage.getItem("theme") === "dark"
-  );
-
-  useEffect(() => {
-    const theme = localStorage.getItem("theme");
-    setIsDarkMode(theme === "dark");
-  }, []);
+  const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -33,97 +23,96 @@ export default function Login() {
       if (res.data?.token) {
         localStorage.setItem("mob13r_token", res.data.token);
         localStorage.setItem("mob13r_admin", JSON.stringify(res.data.admin));
-
-        alert("✅ Login successful!");
         navigate("/advertisers");
       } else {
-        setError("❌ Invalid login response.");
+        setError("Invalid login response.");
       }
     } catch (err) {
-      console.error("Login error:", err);
-      setError(err?.response?.data?.error || "❌ Incorrect credentials");
+      if (err?.response?.data?.error) {
+        setError(err.response.data.error);
+      } else {
+        setError("Failed to login. Please check your credentials.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen px-4 bg-gray-100 dark:bg-gray-900">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-4">
+
       <form
         onSubmit={handleLogin}
-        className="bg-white dark:bg-gray-800 p-8 rounded-2xl w-full max-w-md shadow-lg border border-gray-200 dark:border-gray-700"
+        className="bg-white/10 backdrop-blur-xl p-8 rounded-2xl shadow-2xl w-96 border border-white/20"
       >
-        {/* 🌟 Responsive, Dark-Mode Smart Logo */}
-        <div className="flex justify-center mb-6">
+        {/* LOGO */}
+        <div className="flex justify-center mb-4">
           <img
-            src={isDarkMode ? "/logo-dark.png" : "/logo-light.png"}
-            alt="Mob13r"
-            className="h-16 w-auto"
+            src="/logo.png"
+            alt="Mob13r Logo"
+            className="w-32 h-auto drop-shadow-xl"
           />
         </div>
 
-        <h2 className="text-xl font-semibold mb-4 text-center text-gray-800 dark:text-gray-100">
-          Welcome to Mob13r Admin
+        <h2 className="text-2xl font-bold text-center mb-6 text-white tracking-wide">
+          Mob13r Admin Login
         </h2>
 
         {error && (
-          <p className="text-red-500 text-sm mb-4 text-center bg-red-100 dark:bg-red-900/30 py-2 rounded">
-            {error}
+          <p className="text-red-400 bg-red-900/20 border border-red-700/30 p-2 rounded mb-4 text-center text-sm">
+            ⚠️ {error}
           </p>
         )}
 
-        {/* Email */}
-        <div className="mb-4">
-          <label className="text-sm text-gray-600 dark:text-gray-300">
-            Email
-          </label>
-          <input
-            type="email"
-            className="w-full p-3 mt-1 rounded-lg border bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
-            placeholder="admin@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
+        {/* EMAIL */}
+        <input
+          className="w-full p-3 rounded-lg mb-4 bg-white/20 border border-white/30 
+                     text-white placeholder-gray-300 
+                     focus:outline-none focus:ring-2 focus:ring-blue-400"
+          placeholder="Email address"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          type="email"
+          required
+        />
 
-        {/* Password */}
-        <div className="mb-5 relative">
-          <label className="text-sm text-gray-600 dark:text-gray-300">
-            Password
-          </label>
+        {/* PASSWORD WITH SHOW/HIDE */}
+        <div className="relative mb-4">
           <input
+            className="w-full p-3 pr-12 rounded-lg bg-white/20 border border-white/30 
+                       text-white placeholder-gray-300 
+                       focus:outline-none focus:ring-2 focus:ring-blue-400"
             type={showPassword ? "text" : "password"}
-            className="w-full p-3 mt-1 pr-12 rounded-lg border bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
-            placeholder="Enter password"
+            placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            required
           />
 
+          {/* Toggle eye icon */}
           <button
             type="button"
+            className="absolute right-3 top-3 text-gray-300 hover:text-white"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 bottom-3 text-gray-500 dark:text-gray-300"
           >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
           </button>
         </div>
 
-        {/* Login Button */}
+        {/* LOGIN BUTTON */}
         <button
           type="submit"
           disabled={loading}
-          className={`w-full py-3 rounded-lg text-white font-medium transition ${
-            loading
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-700"
-          }`}
+          className={`w-full p-3 rounded-lg text-lg font-semibold shadow-md transition 
+            ${loading ? "bg-gray-500" : "bg-blue-600 hover:bg-blue-700"}
+            text-white`}
         >
           {loading ? "Logging in..." : "Login"}
         </button>
 
-        {/* Mobile Footer */}
-        <p className="text-xs text-center mt-4 text-gray-500 dark:text-gray-400">
-          © {new Date().getFullYear()} Mob13r. All Rights Reserved.
+        {/* FOOTER */}
+        <p className="text-center text-gray-400 text-xs mt-4">
+          © {new Date().getFullYear()} Mob13r Digital Media
         </p>
       </form>
     </div>
