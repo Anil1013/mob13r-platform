@@ -17,6 +17,7 @@ import authRoutes from "./routes/auth.js";
 import analyticsRoutes from "./routes/analytics.js";
 import templateRoutes from "./routes/templates.js"; 
 import publisherTrackingRoutes from "./routes/publisherTracking.js"; // ✅ NEW IMPORT
+import distributionRoutes from "./routes/distribution.js";
 
 /* Middleware */
 import authJWT from "./middleware/authJWT.js";
@@ -83,6 +84,7 @@ app.use("/api/conversions", authJWT, conversionsRoutes);
 app.use("/api/stats", authJWT, statsRoutes);
 app.use("/api/templates", authJWT, templateRoutes);
 app.use("/api/tracking", authJWT, publisherTrackingRoutes); // ✅ NEW TRACKING ROUTE
+app.use("/api/distribution", distributionRoutes);
 app.use("/api", authJWT, analyticsRoutes);
 
 /* ======================================================
