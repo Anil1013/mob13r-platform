@@ -13,161 +13,213 @@ import {
   ShieldAlert,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Search,
+  User,
+  LogOut,
 } from "lucide-react";
-import { NavLink } from "react-router-dom";
-
-const menuSections = [
-  {
-    title: "Overview",
-    items: [{ name: "Dashboard", icon: LayoutDashboard, path: "/" }],
-  },
-  {
-    title: "Management",
-    items: [
-      { name: "Advertisers", icon: Building2, path: "/advertisers" },
-      { name: "Publishers", icon: Users, path: "/publishers" },
-      { name: "Offers", icon: Gift, path: "/offers" },
-      { name: "Templates", icon: FileText, path: "/templates" },
-      { name: "Landing Builder", icon: Layers, path: "/landing-builder" },
-    ],
-  },
-  {
-    title: "Tracking & Analytics",
-    items: [
-      { name: "Tracking", icon: TrendingUp, path: "/tracking" },
-      { name: "Clicks", icon: MousePointerClick, path: "/clicks" },
-      { name: "Conversions", icon: BarChart3, path: "/conversions" },
-      { name: "Postbacks", icon: Repeat, path: "/postbacks" },
-      { name: "Fraud Alerts", icon: ShieldAlert, path: "/fraud-alerts" },
-      { name: "Traffic Distribution", icon: TrendingUp, path: "/traffic-distribution" },
-    ],
-  },
-];
+import { NavLink, useNavigate } from "react-router-dom";
 
 export default function Sidebar() {
+  const navigate = useNavigate();
+
   const [collapsed, setCollapsed] = useState(false);
+  const [openSections, setOpenSections] = useState({
+    overview: true,
+    management: true,
+    analytics: true,
+  });
+
+  const toggleSection = (key) =>
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const admin = JSON.parse(localStorage.getItem("mob13r_admin") || "{}");
+
+  const menu = {
+    overview: [
+      { label: "Dashboard", icon: LayoutDashboard, to: "/" },
+    ],
+    management: [
+      { label: "Advertisers", icon: Building2, to: "/advertisers" },
+      { label: "Publishers", icon: Users, to: "/publishers" },
+      { label: "Offers", icon: Gift, to: "/offers" },
+      { label: "Templates", icon: FileText, to: "/templates" },
+      { label: "Landing Builder", icon: Layers, to: "/landing-builder" },
+    ],
+    analytics: [
+      { label: "Tracking", icon: TrendingUp, to: "/tracking" },
+      { label: "Clicks", icon: MousePointerClick, to: "/clicks" },
+      { label: "Conversions", icon: BarChart3, to: "/conversions" },
+      { label: "Postbacks", icon: Repeat, to: "/postbacks" },
+      { label: "Fraud Alerts", icon: ShieldAlert, to: "/fraud-alerts" },
+      { label: "Traffic Distribution", icon: TrendingUp, to: "/traffic-distribution" },
+    ],
+  };
 
   return (
     <aside
       className={`
-        fixed left-0 top-0 h-screen z-50 transition-all duration-300
-        border-r border-white/20 backdrop-blur-xl
-        bg-white/30 dark:bg-gray-900/40 shadow-xl
-        ${collapsed ? "w-20" : "w-72"}
+        fixed top-4 left-4 h-[96vh] rounded-3xl shadow-2xl z-50
+        border border-white/20 backdrop-blur-3xl
+        bg-white/20 dark:bg-gray-900/30
+        transition-all duration-500 ease-in-out
+        ${collapsed ? "w-20" : "w-80"}
       `}
     >
-      {/* TOP AREA */}
+
+      {/* TOP BAR */}
       <div
         className="
           flex items-center justify-between px-4 py-4
-          bg-white/40 dark:bg-gray-800/40 backdrop-blur-md
           border-b border-white/20
         "
       >
-        {/* LOGO */}
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="logo" className="w-10 h-10" />
-
+          <img src="/logo.png" className="w-10 h-10" alt="logo" />
           {!collapsed && (
-            <span className="text-xl font-extrabold text-gray-900 dark:text-white tracking-wide">
+            <span className="font-bold text-lg text-gray-900 dark:text-white">
               Mob13r
             </span>
           )}
         </div>
 
-        {/* COLLAPSE BUTTON */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-2 rounded-xl bg-white/30 dark:bg-gray-700/30 hover:bg-white/50 dark:hover:bg-gray-700/60 transition shadow-md"
+          className="p-2 rounded-xl bg-white/30 dark:bg-gray-700/40 hover:bg-white/50 dark:hover:bg-gray-700/60 transition"
         >
-          {collapsed ? (
-            <ChevronRight className="text-gray-700 dark:text-gray-200" />
-          ) : (
-            <ChevronLeft className="text-gray-700 dark:text-gray-200" />
-          )}
+          {collapsed ? <ChevronRight /> : <ChevronLeft />}
         </button>
       </div>
 
-      {/* SEARCH BAR */}
+      {/* SEARCH */}
       {!collapsed && (
         <div className="px-4 py-3">
           <div
             className="
-              flex items-center px-3 py-2 bg-white/40 dark:bg-gray-800/40
-              backdrop-blur-md rounded-xl border border-white/20
+              flex items-center bg-white/30 dark:bg-gray-700/30
+              px-3 py-2 rounded-xl backdrop-blur-sm border border-white/20
             "
           >
-            <Search className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+            <Search size={16} />
             <input
               placeholder="Search menu..."
-              className="ml-2 w-full bg-transparent outline-none text-gray-800 dark:text-gray-200 text-sm"
+              className="ml-2 w-full bg-transparent outline-none text-sm"
             />
           </div>
         </div>
       )}
 
       {/* MENU */}
-      <nav className="mt-3 px-2 overflow-y-auto h-[78vh] scrollbar-thin">
-        {menuSections.map((section, index) => (
-          <div key={index} className="mb-6">
-            {!collapsed && (
-              <p className="px-3 mb-2 text-xs font-semibold uppercase text-gray-600 dark:text-gray-400 tracking-widest opacity-70">
-                {section.title}
-              </p>
-            )}
+      <div className="px-3 mt-3 h-[62vh] overflow-y-auto scrollbar-thin">
 
-            {section.items.map((item, idx) => {
-              const Icon = item.icon;
+        {/* SECTION BUILDER */}
+        {Object.entries(menu).map(([section, items]) => {
+          const isOpen = openSections[section];
 
-              return (
-                <NavLink
-                  key={idx}
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `
-                    group relative flex items-center gap-3 px-3 py-3 rounded-xl mb-1
-                    transition-all duration-200 cursor-pointer select-none
+          return (
+            <div key={section} className="mb-6">
 
-                    ${
-                      isActive
-                        ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg scale-[1.02]"
-                        : "text-gray-800 dark:text-gray-200 bg-white/20 dark:bg-gray-800/20 hover:bg-white/40 dark:hover:bg-gray-700/40"
-                    }
-                  `
-                  }
-                >
-                  <Icon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              {/* Section Header */}
+              <button
+                onClick={() => toggleSection(section)}
+                className={`
+                  flex items-center justify-between w-full px-3 py-2
+                  text-xs uppercase tracking-wider font-bold
+                  text-gray-600 dark:text-gray-400
+                  ${collapsed ? "hidden" : ""}
+                `}
+              >
+                {section.replace(/^\w/, (c) => c.toUpperCase())}
+                <ChevronDown
+                  className={`transition-transform ${isOpen ? "rotate-180" : ""}`}
+                />
+              </button>
 
-                  {!collapsed && (
-                    <span className="font-medium text-sm">{item.name}</span>
-                  )}
+              {/* Items */}
+              <div
+                className={`
+                  transition-all duration-300
+                  ${isOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0 overflow-hidden"}
+                `}
+              >
+                {items.map((item, index) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={index}
+                      to={item.to}
+                      className={({ isActive }) =>
+                        `
+                        group flex items-center gap-3 my-1 px-3 py-3 rounded-xl
+                        transition-all duration-300 cursor-pointer
 
-                  {/* Tooltip in collapsed mode */}
-                  {collapsed && (
-                    <span
-                      className="
-                        absolute left-20 bg-black text-white text-xs
-                        px-3 py-1 rounded-md opacity-0 group-hover:opacity-100
-                        whitespace-nowrap transition pointer-events-none
-                      "
+                        ${
+                          isActive
+                            ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md scale-[1.03]"
+                            : "bg-white/10 dark:bg-gray-800/20 text-gray-800 dark:text-gray-200 hover:bg-white/20 dark:hover:bg-gray-700/30"
+                        }
+                      `
+                      }
                     >
-                      {item.name}
-                    </span>
-                  )}
-                </NavLink>
-              );
-            })}
-          </div>
-        ))}
-      </nav>
+                      <Icon className="w-5 h-5" />
+                      {!collapsed && <span className="font-medium">{item.label}</span>}
 
-      {/* FOOTER LABEL */}
-      {!collapsed && (
-        <div className="py-4 text-center text-sm text-gray-600 dark:text-gray-400 opacity-70">
-          © 2025 Mob13r Digital Media
+                      {/* Tooltip for collapsed */}
+                      {collapsed && (
+                        <span
+                          className="
+                            absolute left-20 bg-black text-white text-xs
+                            px-3 py-1 rounded-md opacity-0 group-hover:opacity-100
+                            whitespace-nowrap transition
+                          "
+                        >
+                          {item.label}
+                        </span>
+                      )}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* BOTTOM PROFILE CARD */}
+      <div
+        className={`
+          absolute bottom-4 left-0 right-0 mx-4 rounded-2xl p-4
+          bg-white/30 dark:bg-gray-800/40 border border-white/20
+          backdrop-blur-xl shadow-xl transition-all duration-300
+          ${collapsed ? "opacity-0 pointer-events-none" : "opacity-100"}
+        `}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-white/60 dark:bg-gray-700 flex items-center justify-center shadow">
+            <User className="text-gray-900 dark:text-white" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900 dark:text-white">
+              {admin?.email?.split("@")[0] || "Admin"}
+            </p>
+            <p className="text-xs text-gray-600 dark:text-gray-400">Online</p>
+          </div>
         </div>
-      )}
+
+        <button
+          onClick={() => {
+            localStorage.clear();
+            navigate("/login");
+          }}
+          className="
+            mt-3 w-full flex items-center justify-center gap-2 px-3 py-2
+            rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm transition
+          "
+        >
+          <LogOut size={16} />
+          Logout
+        </button>
+      </div>
     </aside>
   );
 }
