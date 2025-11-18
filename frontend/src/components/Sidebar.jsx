@@ -63,10 +63,10 @@ const MENU = [
 ];
 
 const ACCENTS = [
-  { id: "blue", label: "Blue", class: "from-blue-500 to-indigo-500" },
-  { id: "purple", label: "Purple", class: "from-purple-500 to-pink-500" },
-  { id: "emerald", label: "Emerald", class: "from-emerald-500 to-teal-500" },
-  { id: "rose", label: "Rose", class: "from-rose-500 to-orange-400" },
+  { id: "blue", label: "Blue", classes: "from-blue-500 to-blue-700" },
+  { id: "purple", label: "Purple", classes: "from-purple-500 to-purple-700" },
+  { id: "emerald", label: "Emerald", classes: "from-emerald-500 to-emerald-700" },
+  { id: "rose", label: "Rose", classes: "from-rose-500 to-rose-700" },
 ];
 
 export default function SidebarUltraV5() {
