@@ -1,262 +1,199 @@
 // frontend/src/pages/TrafficDistribution.jsx
 import React, { useEffect, useState } from "react";
-import apiClient from "../api/apiClient";
+
+const BACKEND = "https://backend.mob13r.com";
 
 export default function TrafficDistribution() {
-  const [trackingLinks, setTrackingLinks] = useState([]);
-  const [selectedTL, setSelectedTL] = useState(null); // tracking link object
-  const [offers, setOffers] = useState([]);
-  const [distributions, setDistributions] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [pubId, setPubId] = useState("");
+  const [meta, setMeta] = useState(null);
+  const [loadingMeta, setLoadingMeta] = useState(false);
+  const [selectedGeo, setSelectedGeo] = useState("");
+  const [selectedCarrier, setSelectedCarrier] = useState("");
+  const [selectedOfferId, setSelectedOfferId] = useState("");
+  const [rules, setRules] = useState([]);
 
-  // form to add / edit
-  const [form, setForm] = useState({
-    id: null, // distribution id when editing
-    offer_id: "",
-    percentage: "",
-    sequence_order: 0,
-  });
-
-  // Load tracking links (PUBs) and optionally distributions
-  const fetchTrackingLinks = async () => {
+  // fetch meta for pubId
+  const fetchMeta = async (p) => {
+    if (!p) return;
+    setLoadingMeta(true);
     try {
-      const res = await apiClient.get("/tracking");
-      setTrackingLinks(res.data || []);
-    } catch (err) {
-      console.error("Failed to load tracking links", err);
-      alert("⚠️ Failed to load tracking links");
-    }
-  };
-
-  useEffect(() => {
-    fetchTrackingLinks();
-  }, []);
-
-  // When a tracking link (PUB) is selected:
-  const onSelectTracking = async (id) => {
-    setSelectedTL(null);
-    setOffers([]);
-    setDistributions([]);
-    setForm({ id: null, offer_id: "", percentage: "", sequence_order: 0 });
-
-    if (!id) return;
-    const tl = trackingLinks.find((t) => t.id === Number(id));
-    setSelectedTL(tl);
-
-    // load offers for geo/carrier
-    try {
-      const resOff = await apiClient.get("/distribution/offers", {
-        params: { geo: tl.geo, carrier: tl.carrier },
+      const token = localStorage.getItem("mob13r_token");
+      const res = await fetch(`${BACKEND}/api/distribution/meta?pub_id=${encodeURIComponent(p)}`, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+          "Content-Type": "application/json",
+        },
       });
-      setOffers(resOff.data || []);
-    } catch (err) {
-      console.error("Failed to load offers", err);
-      setOffers([]);
-    }
-
-    // load existing distribution rows for this tracking link
-    try {
-      const resDist = await apiClient.get("/distribution", {
-        params: { tracking_link_id: id },
-      });
-      setDistributions(resDist.data || []);
-    } catch (err) {
-      console.error("Failed to load distributions", err);
-      setDistributions([]);
-    }
-  };
-
-  const resetForm = () => {
-    setForm({ id: null, offer_id: "", percentage: "", sequence_order: 0 });
-  };
-
-  const handleSave = async () => {
-    if (!selectedTL) return alert("Select PUB first");
-    if (!form.offer_id) return alert("Select offer");
-    const percent = Number(form.percentage);
-    if (!percent || percent <= 0) return alert("Enter valid percentage > 0");
-
-    try {
-      if (form.id) {
-        // update
-        await apiClient.put(`/distribution/${form.id}`, {
-          offer_id: form.offer_id,
-          percentage: percent,
-          sequence_order: form.sequence_order,
-        });
-        alert("✅ Updated distribution row");
+      if (!res.ok) {
+        const txt = await res.text();
+        console.warn("meta fetch failed", res.status, txt);
+        setMeta({ error: true, geos: [], carriers: [], offers: [] });
       } else {
-        // create
-        await apiClient.post("/distribution", {
-          tracking_link_id: selectedTL.id,
-          offer_id: form.offer_id,
-          percentage: percent,
-          sequence_order: form.sequence_order,
-        });
-        alert("✅ Added distribution row");
+        const data = await res.json();
+        setMeta(data);
+        // reset selections
+        setSelectedGeo("");
+        setSelectedCarrier("");
+        setSelectedOfferId("");
       }
-      // refresh
-      onSelectTracking(selectedTL.id);
-      resetForm();
     } catch (err) {
-      const msg = err?.response?.data?.error || err.message;
-      alert("⚠️ " + msg);
+      console.error("meta fetch err", err);
+      setMeta({ error: true, geos: [], carriers: [], offers: [] });
+    } finally {
+      setLoadingMeta(false);
     }
   };
 
-  const handleEdit = (row) => {
-    setForm({
-      id: row.id,
-      offer_id: row.offer_id,
-      percentage: row.percentage,
-      sequence_order: row.sequence_order,
-    });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  // Add a local distribution rule (you can POST to backend later)
+  const addRule = () => {
+    if (!pubId) return alert("Select PUB_ID first");
+    if (!selectedOfferId) return alert("Select Offer");
+    const offer = (meta?.offers || []).find((o) => String(o.offer_id) === String(selectedOfferId));
+    const newRule = {
+      id: Date.now(),
+      pub_id: pubId,
+      publisher_name: meta?.publisher_name || null,
+      geo: selectedGeo || offer?.geo || null,
+      carrier: selectedCarrier || offer?.carrier || null,
+      offer_id: selectedOfferId,
+      offer_name: offer?.name || "",
+      weight: 100,
+      priority: 1,
+    };
+    setRules((r) => [newRule, ...r]);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete this distribution row?")) return;
-    try {
-      await apiClient.delete(`/distribution/${id}`);
-      alert("🗑️ Deleted");
-      onSelectTracking(selectedTL.id);
-    } catch (err) {
-      alert("⚠️ Failed to delete");
-    }
-  };
-
-  // helper: show sum percentages
-  const sumPercent = distributions.reduce((s, r) => s + (r.percentage || 0), 0);
+  const removeRule = (id) => setRules((r) => r.filter((x) => x.id !== id));
 
   return (
-    <div className="p-6">
-      <h2 className="text-2xl font-bold mb-4">Traffic Distribution</h2>
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <input
+          value={pubId}
+          onChange={(e) => setPubId(e.target.value)}
+          placeholder="Enter PUB_ID (e.g. PUB02)"
+          className="px-3 py-2 border rounded w-48"
+        />
+        <button
+          onClick={() => fetchMeta(pubId)}
+          className="px-3 py-2 bg-blue-600 text-white rounded"
+          disabled={loadingMeta || !pubId}
+        >
+          {loadingMeta ? "Loading..." : "Fetch PUB Meta"}
+        </button>
+        {meta?.publisher_name && (
+          <div className="ml-4 text-sm">
+            Publisher: <strong>{meta.publisher_name}</strong>
+          </div>
+        )}
+      </div>
 
-      {/* Pick PUB (tracking link) */}
-      <div className="mb-4 grid grid-cols-3 gap-3 items-end">
+      {/* Meta selects */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <label className="block text-sm font-medium mb-1">Select PUB (tracking link)</label>
+          <label className="block text-xs mb-1">Geo</label>
           <select
-            className="border p-2 rounded w-full"
-            onChange={(e) => onSelectTracking(e.target.value)}
-            defaultValue=""
+            value={selectedGeo}
+            onChange={(e) => setSelectedGeo(e.target.value)}
+            className="w-full px-3 py-2 border rounded"
           >
-            <option value="">-- Select PUB --</option>
-            {trackingLinks.map((t) => (
-              <option key={t.id} value={t.id}>
-                {`PUB${t.id} • ${t.publisher_name || t.pub_id || "Publisher"} • ${t.geo}/${t.carrier}`}
+            <option value="">— any —</option>
+            {(meta?.geos || []).map((g) => (
+              <option key={g} value={g}>
+                {g}
               </option>
             ))}
           </select>
         </div>
 
-        {/* Auto filled fields */}
         <div>
-          <label className="block text-sm font-medium mb-1">Publisher</label>
-          <input type="text" readOnly className="border p-2 rounded w-full" value={selectedTL?.publisher_name || ""} />
+          <label className="block text-xs mb-1">Carrier</label>
+          <select
+            value={selectedCarrier}
+            onChange={(e) => setSelectedCarrier(e.target.value)}
+            className="w-full px-3 py-2 border rounded"
+          >
+            <option value="">— any —</option>
+            {(meta?.carriers || []).map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
         </div>
+
         <div>
-          <label className="block text-sm font-medium mb-1">Geo / Carrier</label>
-          <input
-            type="text"
-            readOnly
-            className="border p-2 rounded w-full"
-            value={selectedTL ? `${selectedTL.geo} / ${selectedTL.carrier}` : ""}
-          />
-        </div>
-      </div>
-
-      {/* Add/Edit Form */}
-      <div className="mb-6 p-4 border rounded">
-        <h3 className="font-semibold mb-2">{form.id ? "Edit" : "Add"} distribution row</h3>
-
-        <div className="grid grid-cols-4 gap-3">
-          <div>
-            <label className="block text-sm font-medium mb-1">Offer (targeting)</label>
-            <select
-              className="border p-2 rounded w-full"
-              value={form.offer_id}
-              onChange={(e) => setForm({ ...form, offer_id: e.target.value })}
-            >
-              <option value="">-- Select offer --</option>
-              {offers.map((o) => (
+          <label className="block text-xs mb-1">Offers (filtered)</label>
+          <select
+            value={selectedOfferId}
+            onChange={(e) => setSelectedOfferId(e.target.value)}
+            className="w-full px-3 py-2 border rounded"
+          >
+            <option value="">— select offer —</option>
+            {(meta?.offers || [])
+              .filter((o) => {
+                // filter logic: if selectedGeo/carrier set, match both if provided
+                if (selectedGeo && String(o.geo) !== String(selectedGeo)) return false;
+                if (selectedCarrier && String(o.carrier) !== String(selectedCarrier)) return false;
+                return true;
+              })
+              .map((o) => (
                 <option key={o.offer_id} value={o.offer_id}>
-                  {`${o.offer_id} • ${o.name} • payout:${o.payout}`}
+                  {o.name} ({o.geo || "any"} / {o.carrier || "any"})
                 </option>
               ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Percentage (%)</label>
-            <input
-              type="number"
-              min="1"
-              max="100"
-              className="border p-2 rounded w-full"
-              value={form.percentage}
-              onChange={(e) => setForm({ ...form, percentage: e.target.value })}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Sequence (optional)</label>
-            <input
-              type="number"
-              className="border p-2 rounded w-full"
-              value={form.sequence_order}
-              onChange={(e) => setForm({ ...form, sequence_order: Number(e.target.value) })}
-            />
-          </div>
-
-          <div className="flex items-end gap-2">
-            <button onClick={handleSave} className="bg-blue-600 text-white px-4 py-2 rounded">
-              {form.id ? "Update" : "Add"}
-            </button>
-            {form.id && (
-              <button onClick={() => { resetForm(); }} className="bg-gray-400 text-white px-4 py-2 rounded">
-                Cancel
-              </button>
-            )}
-          </div>
+          </select>
         </div>
-
-        <p className="mt-3 text-sm text-gray-600">
-          Current total percentage for this PUB/geo/carrier: <strong>{sumPercent}%</strong>
-        </p>
       </div>
 
-      {/* Distribution table */}
-      <h3 className="text-lg font-semibold mb-2">Configured Distribution Rows</h3>
-      {distributions.length === 0 ? (
-        <p className="text-sm text-gray-500">No distribution rows configured for selected PUB.</p>
-      ) : (
-        <table className="min-w-full border text-sm">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="p-2">Offer ID</th>
-              <th className="p-2">Offer Name</th>
-              <th className="p-2">Percentage</th>
-              <th className="p-2">Sequence</th>
-              <th className="p-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {distributions.map((d) => (
-              <tr key={d.id} className="border-t">
-                <td className="p-2 font-mono">{d.offer_id}</td>
-                <td className="p-2">{d.offer_name}</td>
-                <td className="p-2">{d.percentage}%</td>
-                <td className="p-2">{d.sequence_order}</td>
-                <td className="p-2 flex gap-2">
-                  <button onClick={() => handleEdit(d)} className="bg-yellow-500 text-white px-2 py-1 rounded">Edit</button>
-                  <button onClick={() => handleDelete(d.id)} className="bg-red-600 text-white px-2 py-1 rounded">Delete</button>
-                </td>
+      <div>
+        <button onClick={addRule} className="px-3 py-2 bg-green-600 text-white rounded">
+          Add Distribution Rule (local)
+        </button>
+        <small className="ml-2 text-gray-500">Rules added locally — POST to /api/distribution to persist</small>
+      </div>
+
+      {/* Rules table */}
+      <div className="mt-4">
+        <h3 className="font-semibold mb-2">Preview Rules</h3>
+        <div className="overflow-auto border rounded">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2">PUB_ID</th>
+                <th className="px-3 py-2">Publisher</th>
+                <th className="px-3 py-2">Geo</th>
+                <th className="px-3 py-2">Carrier</th>
+                <th className="px-3 py-2">Offer</th>
+                <th className="px-3 py-2">Weight</th>
+                <th className="px-3 py-2">Priority</th>
+                <th className="px-3 py-2">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {rules.map((r) => (
+                <tr key={r.id} className="border-t">
+                  <td className="px-3 py-2">{r.pub_id}</td>
+                  <td className="px-3 py-2">{r.publisher_name}</td>
+                  <td className="px-3 py-2">{r.geo}</td>
+                  <td className="px-3 py-2">{r.carrier}</td>
+                  <td className="px-3 py-2">{r.offer_name}</td>
+                  <td className="px-3 py-2">{r.weight}%</td>
+                  <td className="px-3 py-2">{r.priority}</td>
+                  <td className="px-3 py-2">
+                    <button onClick={() => removeRule(r.id)} className="text-red-500">Remove</button>
+                  </td>
+                </tr>
+              ))}
+              {rules.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-3 py-4 text-center text-gray-500">No rules yet</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
