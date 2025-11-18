@@ -1,17 +1,19 @@
-import React, { useEffect, useState, useRef } from "react";
+// File: frontend/src/components/Header.jsx
+
+import React, { useEffect, useState } from "react";
 import { Bell, User, Sun, Moon, LogOut, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 function Header() {
   const navigate = useNavigate();
-  const dropdownRef = useRef(null);
 
   const [dark, setDark] = useState(
     localStorage.getItem("theme") === "dark" || false
   );
 
-  const [openDropdown, setOpenDropdown] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
+  // Get logged-in admin email
   const adminData = JSON.parse(localStorage.getItem("mob13r_admin") || "{}");
   const adminEmail = adminData?.email || "Admin";
 
@@ -19,17 +21,6 @@ function Header() {
     document.documentElement.classList.toggle("dark", dark);
     localStorage.setItem("theme", dark ? "dark" : "light");
   }, [dark]);
-
-  // Auto-close dropdown on outside click
-  useEffect(() => {
-    const handleClick = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setOpenDropdown(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("mob13r_token");
@@ -39,126 +30,94 @@ function Header() {
 
   return (
     <header
-      className="
-        flex items-center justify-between 
-        px-6 py-4
-        bg-white/70 dark:bg-[#0f111a]/80 
-        backdrop-blur-xl
-        shadow-md border-b border-gray-300/40 dark:border-gray-700/40
-        sticky top-0 z-50 transition-all
-      "
+      className="flex items-center justify-between px-6 py-4 
+      bg-white/10 dark:bg-gray-900/80 backdrop-blur-lg 
+      shadow-lg border-b border-white/20 sticky top-0 z-50"
     >
-      {/* LEFT */}
-      <div className="flex items-center gap-4">
+      {/* LOGO + TITLE */}
+      <div className="flex items-center gap-3">
         <img
           src="/logo.png"
           alt="Mob13r Logo"
-          className="w-10 h-10 object-contain rounded-md shadow-sm"
+          className="w-12 h-12 drop-shadow-xl"
         />
-        <div className="leading-tight">
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+        <div>
+          <h1 className="text-xl font-semibold text-white tracking-wide">
             Mob13r Dashboard
           </h1>
-          <p className="text-xs text-gray-600 dark:text-gray-400">
-            Welcome, {adminEmail}
-          </p>
+          <p className="text-sm text-gray-300">Welcome, {adminEmail}</p>
         </div>
       </div>
 
-      {/* RIGHT */}
-      <div className="flex items-center gap-5">
+      {/* RIGHT SIDE */}
+      <div className="flex items-center gap-6">
 
         {/* Notifications */}
-        <button className="relative p-2 rounded-full hover:bg-gray-200/50 dark:hover:bg-gray-800/60 transition">
-          <Bell size={20} className="text-gray-700 dark:text-gray-200" />
-          <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+        <button className="relative p-2 rounded-full hover:bg-white/10 transition">
+          <Bell size={20} className="text-white" />
+          <span className="absolute top-1 right-1 inline-flex h-2 w-2 bg-red-500 rounded-full"></span>
         </button>
 
         {/* Theme Toggle */}
         <button
           onClick={() => setDark(!dark)}
-          className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+          className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition"
         >
           {dark ? (
             <Sun size={20} className="text-yellow-400" />
           ) : (
-            <Moon size={20} className="text-gray-700" />
+            <Moon size={20} className="text-white" />
           )}
         </button>
 
-        {/* DROPDOWN MENU */}
-        <div className="relative" ref={dropdownRef}>
+        {/* PROFILE DROPDOWN */}
+        <div className="relative">
           <button
-            onClick={() => setOpenDropdown(!openDropdown)}
-            className="
-              flex items-center gap-2 
-              px-3 py-1 rounded-full 
-              bg-gray-100 dark:bg-gray-800 
-              hover:bg-gray-200 dark:hover:bg-gray-700 
-              transition
-            "
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg 
+            bg-white/20 hover:bg-white/30 transition"
           >
-            <User size={18} className="text-gray-700 dark:text-gray-300" />
-            <span className="text-sm text-gray-700 dark:text-gray-200 font-medium">
+            <User size={18} className="text-white" />
+            <span className="text-white font-medium text-sm">
               {adminEmail.split("@")[0]}
             </span>
             <ChevronDown
-              size={16}
-              className={`transition-transform text-gray-600 dark:text-gray-300 ${
-                openDropdown ? "rotate-180" : ""
+              size={18}
+              className={`text-white transition-transform ${
+                menuOpen ? "rotate-180" : ""
               }`}
             />
           </button>
 
-          {/* DROPDOWN PANEL */}
-          {openDropdown && (
+          {/* DROPDOWN MENU */}
+          {menuOpen && (
             <div
-              className="
-                absolute right-0 mt-2 w-48 
-                bg-white dark:bg-gray-900 
-                shadow-xl rounded-lg border border-gray-200 dark:border-gray-700
-                animate-dropdown
-                overflow-hidden
-              "
+              className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 
+              shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 
+              overflow-hidden animate-fadeIn"
             >
-              <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-                  {adminEmail}
-                </p>
-              </div>
-
               <button
+                className="w-full text-left px-4 py-3 text-sm hover:bg-gray-100 
+                dark:hover:bg-gray-700 transition"
                 onClick={() => navigate("/profile")}
-                className="
-                  w-full text-left px-4 py-2 
-                  text-sm text-gray-700 dark:text-gray-300 
-                  hover:bg-gray-100 dark:hover:bg-gray-800 transition
-                "
               >
-                Profile Settings
+                My Profile
               </button>
 
               <button
-                onClick={() => navigate("/notifications")}
-                className="
-                  w-full text-left px-4 py-2 
-                  text-sm text-gray-700 dark:text-gray-300 
-                  hover:bg-gray-100 dark:hover:bg-gray-800 transition
-                "
+                className="w-full text-left px-4 py-3 text-sm hover:bg-gray-100 
+                dark:hover:bg-gray-700 transition"
+                onClick={() => navigate("/settings")}
               >
-                Notifications
+                Settings
               </button>
 
               <button
+                className="w-full text-left px-4 py-3 text-sm text-red-600 
+                hover:bg-red-50 dark:hover:bg-red-900 transition flex items-center gap-2"
                 onClick={handleLogout}
-                className="
-                  w-full text-left px-4 py-2 
-                  text-sm text-red-600 dark:text-red-400 
-                  hover:bg-red-50 dark:hover:bg-red-900/40 transition
-                  font-semibold
-                "
               >
-                Logout
+                <LogOut size={16} /> Logout
               </button>
             </div>
           )}
