@@ -1,6 +1,9 @@
+// File: frontend/src/components/ui/card.jsx
+// Clean, accessible Card components (no dependencies)
+
 import React from "react";
 
-export function Card({ className = "", ...props }) {
+export function Card({ className = "", children, ...props }) {
   return (
     <div
       className={
@@ -8,29 +11,36 @@ export function Card({ className = "", ...props }) {
         className
       }
       {...props}
-    />
+    >
+      {children}
+    </div>
   );
 }
 
-export function CardHeader({ className = "", ...props }) {
+export function CardHeader({ className = "", children, ...props }) {
   return (
     <div
       className={
         "p-4 border-b border-gray-100 dark:border-gray-800 " + className
       }
       {...props}
-    />
+    >
+      {children}
+    </div>
   );
 }
 
-export function CardTitle({ className = "", ...props }) {
+export function CardTitle({ className = "", children, ...props }) {
   return (
-    <h3 className={"text-lg font-semibold " + className} {...props} />
+    <h3
+      className={"text-lg font-semibold leading-tight " + className}
+      {...props}
+    >
+      {children || "Untitled"}
+    </h3>
   );
 }
 
-export function CardContent({ className = "", ...props }) {
-  return (
-    <div className={"p-4 " + className} {...props} />
-  );
+export function CardContent({ className = "", children, ...props }) {
+  return <div className={"p-4 " + className} {...props}>{children}</div>;
 }
