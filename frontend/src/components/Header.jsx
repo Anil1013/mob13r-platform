@@ -1,26 +1,31 @@
-// File: frontend/src/components/Header.jsx
-
-import React, { useEffect, useState } from "react";
-import { Bell, User, Sun, Moon, LogOut, ChevronDown } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Bell, User, Sun, Moon, LogOut, Settings, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 function Header() {
   const navigate = useNavigate();
+  const [dark, setDark] = useState(localStorage.getItem("theme") === "dark");
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef(null);
 
-  const [dark, setDark] = useState(
-    localStorage.getItem("theme") === "dark" || false
-  );
-
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  // Get logged-in admin email
   const adminData = JSON.parse(localStorage.getItem("mob13r_admin") || "{}");
-  const adminEmail = adminData?.email || "Admin";
+  const adminEmail = adminData?.email || "admin";
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
     localStorage.setItem("theme", dark ? "dark" : "light");
   }, [dark]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClick(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("mob13r_token");
@@ -29,99 +34,88 @@ function Header() {
   };
 
   return (
-    <header
-      className="flex items-center justify-between px-6 py-4 
-      bg-white/10 dark:bg-gray-900/80 backdrop-blur-lg 
-      shadow-lg border-b border-white/20 sticky top-0 z-50"
-    >
-      {/* LOGO + TITLE */}
+    <header className="flex items-center justify-between px-6 py-4
+      bg-white dark:bg-gray-900 shadow-md border-b border-gray-200 dark:border-gray-800
+      sticky top-0 z-50 backdrop-blur-md">
+
+      {/* LEFT SIDE – LOGO + TITLE */}
       <div className="flex items-center gap-3">
-        <img
-          src="/logo.png"
-          alt="Mob13r Logo"
-          className="w-12 h-12 drop-shadow-xl"
-        />
+        <img src="/logo.png" alt="logo" className="w-12 h-12" />
+
         <div>
-          <h1 className="text-xl font-semibold text-white tracking-wide">
+          <h1 className="text-xl font-semibold dark:text-white text-gray-900">
             Mob13r Dashboard
           </h1>
-          <p className="text-sm text-gray-300">Welcome, {adminEmail}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Welcome, {adminEmail}
+          </p>
         </div>
       </div>
 
       {/* RIGHT SIDE */}
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-5">
 
         {/* Notifications */}
-        <button className="relative p-2 rounded-full hover:bg-white/10 transition">
-          <Bell size={20} className="text-white" />
+        <button className="relative p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition">
+          <Bell size={20} className="text-gray-700 dark:text-gray-200" />
           <span className="absolute top-1 right-1 inline-flex h-2 w-2 bg-red-500 rounded-full"></span>
         </button>
 
         {/* Theme Toggle */}
         <button
           onClick={() => setDark(!dark)}
-          className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition"
+          className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
         >
           {dark ? (
             <Sun size={20} className="text-yellow-400" />
           ) : (
-            <Moon size={20} className="text-white" />
+            <Moon size={20} className="text-gray-700 dark:text-gray-200" />
           )}
         </button>
 
         {/* PROFILE DROPDOWN */}
-        <div className="relative">
+        <div className="relative" ref={menuRef}>
           <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg 
-            bg-white/20 hover:bg-white/30 transition"
+            onClick={() => setOpen(!open)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800
+                       rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition"
           >
-            <User size={18} className="text-white" />
-            <span className="text-white font-medium text-sm">
+            <User size={18} className="text-gray-700 dark:text-gray-200" />
+            <span className="text-gray-700 dark:text-gray-200 font-medium text-sm">
               {adminEmail.split("@")[0]}
             </span>
-            <ChevronDown
-              size={18}
-              className={`text-white transition-transform ${
-                menuOpen ? "rotate-180" : ""
-              }`}
-            />
+            <ChevronDown size={16} className="text-gray-600 dark:text-gray-300" />
           </button>
 
           {/* DROPDOWN MENU */}
-          {menuOpen && (
-            <div
-              className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 
-              shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 
-              overflow-hidden animate-fadeIn"
-            >
-              <button
-                className="w-full text-left px-4 py-3 text-sm hover:bg-gray-100 
-                dark:hover:bg-gray-700 transition"
-                onClick={() => navigate("/profile")}
-              >
-                My Profile
+          {open && (
+            <div className="absolute right-0 mt-2 w-44 bg-white dark:bg-gray-900
+                            border border-gray-200 dark:border-gray-700
+                            shadow-lg rounded-lg py-2 animate-fadeIn">
+
+              <button className="flex w-full items-center gap-2 px-4 py-2 
+                                 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">
+                <User size={16} /> My Profile
               </button>
 
-              <button
-                className="w-full text-left px-4 py-3 text-sm hover:bg-gray-100 
-                dark:hover:bg-gray-700 transition"
-                onClick={() => navigate("/settings")}
-              >
-                Settings
+              <button className="flex w-full items-center gap-2 px-4 py-2 
+                                 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">
+                <Settings size={16} /> Settings
               </button>
 
+              <hr className="my-2 border-gray-200 dark:border-gray-700" />
+
               <button
-                className="w-full text-left px-4 py-3 text-sm text-red-600 
-                hover:bg-red-50 dark:hover:bg-red-900 transition flex items-center gap-2"
                 onClick={handleLogout}
+                className="flex w-full items-center gap-2 px-4 py-2 text-red-500 
+                           hover:bg-red-50 dark:hover:bg-red-900/20"
               >
                 <LogOut size={16} /> Logout
               </button>
             </div>
           )}
         </div>
+
       </div>
     </header>
   );
