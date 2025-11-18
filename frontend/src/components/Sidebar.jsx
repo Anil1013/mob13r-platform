@@ -1,6 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
-
 import {
   LayoutDashboard,
   Users,
@@ -14,9 +13,14 @@ import {
   Gift,
   Link2,
   Shuffle,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
 } from "lucide-react";
 
 export default function Sidebar() {
+  const [collapsed, setCollapsed] = useState(false);
+
   const menu = [
     { name: "Dashboard", path: "/dashboard", icon: <LayoutDashboard size={18} /> },
     { name: "Advertisers", path: "/advertisers", icon: <Building2 size={18} /> },
@@ -35,53 +39,57 @@ export default function Sidebar() {
 
   return (
     <aside
-      className="
-        w-64 min-h-screen bg-gradient-to-b
-        from-gray-900 via-gray-800 to-gray-900
-        border-r border-white/10 shadow-xl
-        flex flex-col
-      "
+      className={`h-screen sticky top-0 z-30 bg-[#0c0f18]/80 backdrop-blur-xl border-r border-white/10 shadow-xl transition-all duration-300 flex flex-col ${
+        collapsed ? "w-20" : "w-64"
+      }`}
     >
-      {/* Logo Section */}
-      <div className="flex items-center justify-center h-20 border-b border-white/10">
-        <img
-          src="/logo.png"
-          alt="Mob13r Logo"
-          className="w-20 h-auto drop-shadow-xl"
-        />
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-white/10">
+        <div className="flex items-center gap-2">
+          <img
+            src="/logo192.png"
+            alt="logo"
+            className="w-10 h-10 rounded-xl shadow-lg"
+          />
+          {!collapsed && (
+            <span className="text-lg font-semibold tracking-wide text-white">
+              Mob13r
+            </span>
+          )}
+        </div>
+
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="p-2 rounded-lg hover:bg-white/10 transition"
+        >
+          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+        </button>
       </div>
 
       {/* Menu */}
-      <nav className="flex-1 mt-4 overflow-y-auto">
-        <ul className="px-3 space-y-1">
-          {menu.map((item) => (
-            <li key={item.name}>
-              <NavLink
-                to={item.path}
-                className={({ isActive }) =>
-                  `
-                    flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium
-                    transition-all duration-150 text-gray-300
-
-                    ${
-                      isActive
-                        ? "bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-lg"
-                        : "hover:bg-white/10 hover:text-white"
-                    }
-                  `
-                }
-              >
-                {item.icon}
-                <span>{item.name}</span>
-              </NavLink>
-            </li>
-          ))}
-        </ul>
+      <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+        {menu.map((item) => (
+          <NavLink
+            key={item.name}
+            to={item.path}
+            className={({ isActive }) =>
+              `flex items-center gap-3 p-3 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer border border-transparent
+              ${
+                isActive
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg"
+                  : "text-gray-300 hover:bg-white/10 hover:border-white/10"
+              }`
+            }
+          >
+            <span className="text-white/90">{item.icon}</span>
+            {!collapsed && <span>{item.name}</span>}
+          </NavLink>
+        ))}
       </nav>
 
       {/* Footer */}
       <div className="p-4 border-t border-white/10 text-xs text-gray-400 text-center">
-        © {new Date().getFullYear()} Mob13r Digital Media
+        {!collapsed && `© ${new Date().getFullYear()} Mob13r Digital Media`}
       </div>
     </aside>
   );
