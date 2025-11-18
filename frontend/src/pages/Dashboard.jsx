@@ -2,7 +2,7 @@
 // Fully fixed + modernized + CRA compatible
 
 import React, { useEffect, useState } from "react";
-import { Card, CardContent } from "../../components/ui/card";
+import { Card, CardContent } from "../components/ui/card";
 import {
   MousePointerClick,
   Zap,
@@ -10,13 +10,27 @@ import {
   Users,
 } from "lucide-react";
 
+import axios from "axios";
+
 export default function Dashboard() {
-  const [stats, setStats] = useState({
-    clicks: 12450,
-    conversions: 742,
-    revenue: 3567,
-    publishers: 89,
-  });
+  const [stats, setStats] = useState({ clicks: 0, conversions: 0, revenue: 0, publishers: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const res = await axios.get("https://backend.mob13r.com/api/dashboard/stats", {
+          headers: { Authorization: `Bearer ${localStorage.getItem("mob13r_token")}` },
+        });
+        setStats(res.data);
+      } catch (err) {
+        console.error("Failed to load stats", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadStats();
+  }, []);
 
   return (
     <div className="space-y-8">
