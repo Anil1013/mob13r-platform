@@ -1,67 +1,173 @@
-import React from "react";
-import { NavLink } from "react-router-dom";
+import React, { useState } from "react";
 import {
-  LayoutDashboard, Users, MousePointerClick, LineChart, Repeat,
-  Building2, AlertTriangle, FileCode, Layers, Gift, Link2, Shuffle
+  LayoutDashboard,
+  Users,
+  Building2,
+  Gift,
+  FileText,
+  Layers,
+  TrendingUp,
+  MousePointerClick,
+  BarChart3,
+  Repeat,
+  ShieldAlert,
+  ChevronLeft,
+  ChevronRight,
+  Search,
 } from "lucide-react";
+import { NavLink } from "react-router-dom";
 
-function Sidebar() {
-  const menuItems = [
-    { name: "Dashboard", path: "/dashboard", icon: <LayoutDashboard size={18} /> },
-    { name: "Advertisers", path: "/advertisers", icon: <Building2 size={18} /> },
-    { name: "Publishers", path: "/publishers", icon: <Users size={18} /> },
-    { name: "Offers", path: "/offers", icon: <Gift size={18} /> },
-    { name: "Templates", path: "/templates", icon: <FileCode size={18} /> },
-    { name: "Landing Builder", path: "/landing-builder", icon: <Layers size={18} /> },
-    { name: "Tracking", path: "/tracking", icon: <Link2 size={18} /> },
-    { name: "Clicks", path: "/clicks", icon: <MousePointerClick size={18} /> },
-    { name: "Conversions", path: "/conversions", icon: <LineChart size={18} /> },
-    { name: "Postbacks", path: "/postbacks", icon: <Repeat size={18} /> },
-    { name: "Fraud Alerts", path: "/fraud-alerts", icon: <AlertTriangle size={18} /> },
-    { name: "Traffic Distribution", path: "/traffic-distribution", icon: <Shuffle size={18} /> },
-    { name: "API Docs", path: "/api-docs", icon: <FileCode size={18} /> },
-  ];
+const menuSections = [
+  {
+    title: "Overview",
+    items: [{ name: "Dashboard", icon: LayoutDashboard, path: "/" }],
+  },
+  {
+    title: "Management",
+    items: [
+      { name: "Advertisers", icon: Building2, path: "/advertisers" },
+      { name: "Publishers", icon: Users, path: "/publishers" },
+      { name: "Offers", icon: Gift, path: "/offers" },
+      { name: "Templates", icon: FileText, path: "/templates" },
+      { name: "Landing Builder", icon: Layers, path: "/landing-builder" },
+    ],
+  },
+  {
+    title: "Tracking & Analytics",
+    items: [
+      { name: "Tracking", icon: TrendingUp, path: "/tracking" },
+      { name: "Clicks", icon: MousePointerClick, path: "/clicks" },
+      { name: "Conversions", icon: BarChart3, path: "/conversions" },
+      { name: "Postbacks", icon: Repeat, path: "/postbacks" },
+      { name: "Fraud Alerts", icon: ShieldAlert, path: "/fraud-alerts" },
+      { name: "Traffic Distribution", icon: TrendingUp, path: "/traffic-distribution" },
+    ],
+  },
+];
+
+export default function Sidebar() {
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <aside className="w-64 bg-[#1d1f27] dark:bg-[#141621] text-white shadow-xl flex flex-col">
-      
-      {/* Logo Section */}
-      <div className="flex items-center gap-3 px-5 py-6 border-b border-white/10">
-        <img
-          src="/logo.png"
-          alt="Mob13r Logo"
-          className="w-10 h-10 rounded-md object-contain"
-        />
-        <span className="text-xl font-semibold tracking-wide">Mob13r</span>
+    <aside
+      className={`
+        fixed left-0 top-0 h-screen z-50 transition-all duration-300
+        border-r border-white/20 backdrop-blur-xl
+        bg-white/30 dark:bg-gray-900/40 shadow-xl
+        ${collapsed ? "w-20" : "w-72"}
+      `}
+    >
+      {/* TOP AREA */}
+      <div
+        className="
+          flex items-center justify-between px-4 py-4
+          bg-white/40 dark:bg-gray-800/40 backdrop-blur-md
+          border-b border-white/20
+        "
+      >
+        {/* LOGO */}
+        <div className="flex items-center gap-3">
+          <img src="/logo.png" alt="logo" className="w-10 h-10" />
+
+          {!collapsed && (
+            <span className="text-xl font-extrabold text-gray-900 dark:text-white tracking-wide">
+              Mob13r
+            </span>
+          )}
+        </div>
+
+        {/* COLLAPSE BUTTON */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="p-2 rounded-xl bg-white/30 dark:bg-gray-700/30 hover:bg-white/50 dark:hover:bg-gray-700/60 transition shadow-md"
+        >
+          {collapsed ? (
+            <ChevronRight className="text-gray-700 dark:text-gray-200" />
+          ) : (
+            <ChevronLeft className="text-gray-700 dark:text-gray-200" />
+          )}
+        </button>
       </div>
 
-      {/* Menu */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-2">
-        {menuItems.map((item) => (
-          <NavLink
-            key={item.name}
-            to={item.path}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium transition-all ${
-                isActive
-                  ? "bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg"
-                  : "text-gray-300 hover:bg-gray-700/40"
-              }`
-            }
+      {/* SEARCH BAR */}
+      {!collapsed && (
+        <div className="px-4 py-3">
+          <div
+            className="
+              flex items-center px-3 py-2 bg-white/40 dark:bg-gray-800/40
+              backdrop-blur-md rounded-xl border border-white/20
+            "
           >
-            {item.icon}
-            {item.name}
-          </NavLink>
+            <Search className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+            <input
+              placeholder="Search menu..."
+              className="ml-2 w-full bg-transparent outline-none text-gray-800 dark:text-gray-200 text-sm"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* MENU */}
+      <nav className="mt-3 px-2 overflow-y-auto h-[78vh] scrollbar-thin">
+        {menuSections.map((section, index) => (
+          <div key={index} className="mb-6">
+            {!collapsed && (
+              <p className="px-3 mb-2 text-xs font-semibold uppercase text-gray-600 dark:text-gray-400 tracking-widest opacity-70">
+                {section.title}
+              </p>
+            )}
+
+            {section.items.map((item, idx) => {
+              const Icon = item.icon;
+
+              return (
+                <NavLink
+                  key={idx}
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `
+                    group relative flex items-center gap-3 px-3 py-3 rounded-xl mb-1
+                    transition-all duration-200 cursor-pointer select-none
+
+                    ${
+                      isActive
+                        ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg scale-[1.02]"
+                        : "text-gray-800 dark:text-gray-200 bg-white/20 dark:bg-gray-800/20 hover:bg-white/40 dark:hover:bg-gray-700/40"
+                    }
+                  `
+                  }
+                >
+                  <Icon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+
+                  {!collapsed && (
+                    <span className="font-medium text-sm">{item.name}</span>
+                  )}
+
+                  {/* Tooltip in collapsed mode */}
+                  {collapsed && (
+                    <span
+                      className="
+                        absolute left-20 bg-black text-white text-xs
+                        px-3 py-1 rounded-md opacity-0 group-hover:opacity-100
+                        whitespace-nowrap transition pointer-events-none
+                      "
+                    >
+                      {item.name}
+                    </span>
+                  )}
+                </NavLink>
+              );
+            })}
+          </div>
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="px-4 py-4 text-xs text-gray-400 border-t border-white/10">
-        © {new Date().getFullYear()} Mob13r Digital Media
-      </div>
-
+      {/* FOOTER LABEL */}
+      {!collapsed && (
+        <div className="py-4 text-center text-sm text-gray-600 dark:text-gray-400 opacity-70">
+          © 2025 Mob13r Digital Media
+        </div>
+      )}
     </aside>
   );
 }
-
-export default Sidebar;
