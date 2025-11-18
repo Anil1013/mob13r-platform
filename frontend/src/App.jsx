@@ -31,12 +31,14 @@ import Login from "./pages/Login.jsx";
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
+
   const isLoginPage = location.pathname === "/login";
 
   const [isLoggedIn, setIsLoggedIn] = useState(
     Boolean(localStorage.getItem("mob13r_token"))
   );
 
+  // listen for login/logout across tabs
   useEffect(() => {
     const check = () => {
       setIsLoggedIn(Boolean(localStorage.getItem("mob13r_token")));
@@ -45,21 +47,35 @@ export default function App() {
     return () => window.removeEventListener("storage", check);
   }, []);
 
+  // redirect to login if unauthenticated
   useEffect(() => {
     if (!isLoggedIn && !isLoginPage) {
       navigate("/login", { replace: true });
     }
   }, [isLoggedIn, isLoginPage, navigate]);
 
+  // avoid flicker
   if (!isLoggedIn && !isLoginPage) return null;
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
-      {!isLoginPage && <Sidebar />}
+    <div className="relative flex min-h-screen bg-gray-100 dark:bg-gray-900">
 
-      <div className="flex-1 flex flex-col">
+      {/* SIDEBAR (floating) */}
+      {!isLoginPage && (
+        <div className="fixed top-0 left-0 z-50">
+          <Sidebar />
+        </div>
+      )}
+
+      {/* MAIN AREA */}
+      <div
+        className={`flex-1 flex flex-col transition-all duration-300 ease-in-out 
+          ${!isLoginPage ? "pl-24 sm:pl-28 md:pl-[300px]" : ""}`}
+      >
+        {/* HEADER */}
         {!isLoginPage && <Header />}
 
+        {/* CONTENT */}
         <main className="flex-1 overflow-y-auto p-6">
           <Routes>
             <Route path="/login" element={<Login />} />
