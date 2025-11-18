@@ -1,52 +1,36 @@
-// File: frontend/src/pages/Dashboard.jsx
-
 import React, { useEffect, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({
-    totalClicks: 0,
-    totalConversions: 0,
-    totalRevenue: 0,
-  });
-
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const API_URL = "https://backend.mob13r.com/api/stats";
+  const token = localStorage.getItem("mob13r_token");
 
   useEffect(() => {
     async function loadStats() {
       try {
-        const token = localStorage.getItem("mob13r_token");
-
-        if (!token) {
-          console.warn("⚠️ No token found!");
-          setLoading(false);
-          return;
-        }
-
-        const res = await fetch("https://backend.mob13r.com/api/admin/stats", {
-          method: "GET",
+        const res = await fetch(API_URL, {
           headers: {
-            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          credentials: "include",
         });
 
-        if (!res.ok) {
-          console.warn("⚠️ Stats API error:", res.status);
-          setLoading(false);
-          return;
-        }
+        if (!res.ok) throw new Error("Stats fetch failed: " + res.status);
 
         const data = await res.json();
 
         setStats({
-          totalClicks: data.totalClicks || 0,
-          totalConversions: data.totalConversions || 0,
-          totalRevenue: data.totalRevenue || 0,
+          clicks: data.totalClicks || 0,
+          conversions: data.totalConversions || 0,
+          revenue: data.totalRevenue || 0,
         });
       } catch (err) {
-        console.error("⚠️ Stats API failed:", err);
+        console.warn("⚠ Stats API error:", err.message);
+
+        // graceful fallback
+        setStats({ clicks: 0, conversions: 0, revenue: 0 });
       } finally {
         setLoading(false);
       }
@@ -55,45 +39,40 @@ export default function Dashboard() {
     loadStats();
   }, []);
 
+  if (loading) return <div className="text-white p-6">Loading stats...</div>;
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      
-      {/* Total Clicks */}
-      <Card>
+      <Card className="bg-white/20 backdrop-blur-lg text-white">
         <CardHeader>
           <CardTitle>Total Clicks</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold text-blue-600">
-            {loading ? "..." : stats.totalClicks.toLocaleString()}
-          </div>
+          <p className="text-3xl font-bold">{stats.clicks.toLocaleString()}</p>
         </CardContent>
       </Card>
 
-      {/* Total Conversions */}
-      <Card>
+      <Card className="bg-white/20 backdrop-blur-lg text-white">
         <CardHeader>
           <CardTitle>Total Conversions</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold text-green-600">
-            {loading ? "..." : stats.totalConversions.toLocaleString()}
-          </div>
+          <p className="text-3xl font-bold">
+            {stats.conversions.toLocaleString()}
+          </p>
         </CardContent>
       </Card>
 
-      {/* Total Revenue */}
-      <Card>
+      <Card className="bg-white/20 backdrop-blur-lg text-white">
         <CardHeader>
           <CardTitle>Total Revenue</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold text-purple-600">
-            ₹{loading ? "..." : stats.totalRevenue.toLocaleString()}
-          </div>
+          <p className="text-3xl font-bold">
+            ₹{stats.revenue.toLocaleString()}
+          </p>
         </CardContent>
       </Card>
-
     </div>
   );
 }
