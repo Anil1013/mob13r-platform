@@ -1,82 +1,151 @@
-import React, { useEffect, useState } from "react";
+// File: frontend/src/pages/TrafficDistribution.jsx
+
+import React, { useState } from "react";
 import apiClient from "../api/apiClient";
 
 export default function TrafficDistribution() {
   const [pubId, setPubId] = useState("");
-  const [meta, setMeta] = useState(null);
+  const [loading, setLoading] = useState(false);
 
+  const [publisherName, setPublisherName] = useState("");
+  const [geos, setGeos] = useState([]);
+  const [carriers, setCarriers] = useState([]);
+  const [offers, setOffers] = useState([]);
+
+  const [errorMsg, setErrorMsg] = useState("");
+
+  // ------------------------------------------
+  // 🚀 Fetch META for PUB_ID
+  // ------------------------------------------
   const fetchMeta = async () => {
-    if (!pubId) return;
+    if (!pubId.trim()) {
+      alert("⚠️ Please enter a PUB_ID");
+      return;
+    }
+
+    setLoading(true);
+    setErrorMsg("");
 
     try {
-      const res = await apiClient.get(`/distribution/meta?pub_id=${pubId}`);
-      setMeta(res.data);
+      const res = await apiClient.get("/distribution/meta", {
+        params: { pub_id: pubId.trim() },
+      });
+
+      const data = res.data;
+
+      setPublisherName(data.publisher_name || "");
+      setGeos(data.geos || []);
+      setCarriers(data.carriers || []);
+      setOffers(data.offers || []);
+
     } catch (err) {
       console.error("meta fetch failed", err);
-      alert("Failed to load distribution data");
-    }
-  };
 
-  useEffect(() => {
-    fetchMeta();
-  }, [pubId]);
+      if (err?.response?.status === 404) {
+        setErrorMsg(`❌ No tracking found for ${pubId}`);
+      } else {
+        setErrorMsg("⚠️ Failed to load distribution metadata");
+      }
+
+      setPublisherName("");
+      setGeos([]);
+      setCarriers([]);
+      setOffers([]);
+    }
+
+    setLoading(false);
+  };
 
   return (
     <div className="p-6">
-      <h2 className="text-xl font-bold mb-4">Traffic Distribution</h2>
 
-      {/* PUB_ID select */}
-      <input
-        type="text"
-        placeholder="Enter PUB_ID (PUB01)"
-        className="border p-2 rounded mb-4"
-        value={pubId}
-        onChange={(e) => setPubId(e.target.value.toUpperCase())}
-      />
+      <h2 className="text-2xl font-bold mb-6">Traffic Distribution</h2>
 
-      {meta && (
-        <div className="border p-4 rounded bg-white">
-          <h3 className="text-lg font-bold mb-1">
-            Publisher: {meta.publisher_name}
-          </h3>
-          <p className="text-sm text-gray-600">
-            Geo: {meta.geo} • Carrier: {meta.carrier}
-          </p>
+      {/* PUB ID INPUT */}
+      <div className="flex gap-3 mb-4">
+        <input
+          value={pubId}
+          onChange={(e) => setPubId(e.target.value)}
+          placeholder="Enter PUB_ID (e.g. PUB02)"
+          className="border p-3 rounded w-64"
+        />
+        <button
+          onClick={fetchMeta}
+          className="bg-blue-600 text-white px-5 py-3 rounded"
+        >
+          Fetch
+        </button>
+      </div>
 
-          <h4 className="text-md font-semibold mt-4">Offers for this PUB_ID</h4>
+      {loading && <p className="text-gray-600">Loading...</p>}
 
-          <table className="w-full border mt-2 text-sm">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="p-2">Offer</th>
-                <th className="p-2">Type</th>
-                <th className="p-2">Payout</th>
-                <th className="p-2">Tracking</th>
-              </tr>
-            </thead>
+      {errorMsg && (
+        <p className="text-red-600 font-medium mb-4">{errorMsg}</p>
+      )}
 
-            <tbody>
-              {meta.offers.map((o) => (
-                <tr key={o.id} className="border-t">
-                  <td className="p-2">{o.name}</td>
-                  <td className="p-2">{o.type}</td>
-                  <td className="p-2">${o.payout}</td>
-                  <td className="p-2">
-                    {o.type === "INAPP" ? (
-                      <div className="flex flex-col text-xs">
-                        <span>SendPIN: {o.pin_send_url}</span>
-                        <span>VerifyPIN: {o.pin_verify_url}</span>
-                        <span>Status: {o.check_status_url}</span>
-                        <span>Portal: {o.portal_url}</span>
-                      </div>
-                    ) : (
-                      o.tracking_url
-                    )}
-                  </td>
-                </tr>
+      {/* RESULTS */}
+      {!loading && publisherName && (
+        <div className="mt-6">
+
+          {/* Publisher */}
+          <div className="text-lg mb-4">
+            <strong>Publisher:</strong> {publisherName}
+          </div>
+
+          {/* GEO List */}
+          <div className="mb-4">
+            <h3 className="font-semibold mb-1">Geo detected:</h3>
+            <div className="flex gap-2">
+              {geos.map((g, i) => (
+                <span key={i} className="px-3 py-1 rounded bg-gray-200">
+                  {g}
+                </span>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </div>
+
+          {/* Carrier */}
+          <div className="mb-4">
+            <h3 className="font-semibold mb-1">Carriers detected:</h3>
+            <div className="flex gap-2">
+              {carriers.map((c, i) => (
+                <span key={i} className="px-3 py-1 rounded bg-gray-200">
+                  {c}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Offers */}
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-2">Offers Found</h3>
+
+            <table className="min-w-full border text-sm">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="p-2 border">Offer Name</th>
+                  <th className="p-2 border">Geo</th>
+                  <th className="p-2 border">Carrier</th>
+                  <th className="p-2 border">Payout</th>
+                  <th className="p-2 border">Landing Page</th>
+                </tr>
+              </thead>
+              <tbody>
+                {offers.map((o) => (
+                  <tr key={o.offer_id} className="border-t">
+                    <td className="p-2 border">{o.offer_name}</td>
+                    <td className="p-2 border">{o.geo}</td>
+                    <td className="p-2 border">{o.carrier}</td>
+                    <td className="p-2 border">₹{o.payout}</td>
+                    <td className="p-2 border max-w-[250px] truncate">
+                      {o.landing_page_url}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
         </div>
       )}
     </div>
