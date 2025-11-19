@@ -1,89 +1,66 @@
-// backend/routes/distribution.js
 import express from "express";
-import pool from "../db.js"; // your PG pool
+import pool from "../db.js";
+import authJWT from "../middleware/authJWT.js";
+
 const router = express.Router();
 
 /**
- * GET /api/distribution/meta?pub_id=PUB02
- * - pulls unique geos & carriers from tracking_links for the given pub_id
- * - tries to lookup publisher name from publishers table (fallback: from tracking_links)
- * - fetches offers that match those geos/carriers
+ * GET meta data for a PUB_ID
+ * Returns publisher info + geo + carrier + offers
  */
-router.get("/meta", async (req, res) => {
-  const { pub_id } = req.query;
-  if (!pub_id) return res.status(400).json({ error: "pub_id required" });
-
+router.get("/meta", authJWT, async (req, res) => {
   try {
-    // 1) Publisher name: try publishers table first
-    let publisherName = null;
-    try {
-      const pRes = await pool.query(
-        `SELECT name FROM publishers WHERE pub_id = $1 LIMIT 1`,
-        [pub_id]
-      );
-      if (pRes.rows.length) publisherName = pRes.rows[0].name;
-    } catch (e) {
-      // ignore lookup failure, fallback below
+    const { pub_id } = req.query;
+
+    if (!pub_id) {
+      return res.status(400).json({ error: "pub_id is required" });
     }
 
-    // 2) Distinct geos & carriers from tracking_links for this pub_id
-    const geoRes = await pool.query(
-      `SELECT DISTINCT geo FROM tracking_links WHERE pub_id = $1 AND geo IS NOT NULL AND geo <> ''`,
-      [pub_id]
-    );
-    const carrierRes = await pool.query(
-      `SELECT DISTINCT carrier FROM tracking_links WHERE pub_id = $1 AND carrier IS NOT NULL AND carrier <> ''`,
+    const result = await pool.query(
+      `SELECT id, pub_code, publisher_id, publisher_name,
+              geo, carrier, name, type, payout, cap_daily, cap_total,
+              tracking_url, pin_send_url, pin_verify_url, check_status_url, portal_url
+       FROM tracking
+       WHERE pub_code = $1`,
       [pub_id]
     );
 
-    const geos = geoRes.rows.map((r) => r.geo).filter(Boolean);
-    const carriers = carrierRes.rows.map((r) => r.carrier).filter(Boolean);
-
-    // 3) If publisherName still null, try to get from tracking_links (if stored there)
-    if (!publisherName) {
-      const tRes = await pool.query(
-        `SELECT DISTINCT publisher_name FROM tracking_links WHERE pub_id = $1 LIMIT 1`,
-        [pub_id]
-      );
-      if (tRes.rows.length) publisherName = tRes.rows[0].publisher_name || null;
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "PUB_ID not found" });
     }
 
-    // 4) Fetch offers that match these geos/carriers (OR logic; adjust as needed)
-    // If geos/carriers arrays are empty, we'll return an empty offers array.
-    let offers = [];
-    if (geos.length || carriers.length) {
-      // Build dynamic WHERE parts
-      const clauses = [];
-      const params = [];
-      let idx = 1;
-
-      if (geos.length) {
-        clauses.push(`(geo = ANY($${idx}::text[]))`);
-        params.push(geos);
-        idx++;
-      }
-      if (carriers.length) {
-        clauses.push(`(carrier = ANY($${idx}::text[]))`);
-        params.push(carriers);
-        idx++;
-      }
-
-      const where = clauses.length ? `WHERE ${clauses.join(" OR ")}` : "";
-      const q = `SELECT id as offer_id, name, geo, carrier FROM offers ${where} ORDER BY id DESC LIMIT 200`;
-      const offRes = await pool.query(q, params);
-      offers = offRes.rows;
-    }
-
-    return res.json({
-      publisher_name: publisherName || null,
+    res.json({
+      success: true,
       pub_id,
-      geos,
-      carriers,
-      offers,
+      publisher_name: result.rows[0].publisher_name,
+      geo: result.rows[0].geo,
+      carrier: result.rows[0].carrier,
+      offers: result.rows,
     });
+
   } catch (err) {
-    console.error("distribution.meta error:", err);
-    return res.status(500).json({ error: "internal_error", detail: err.message });
+    res.status(500).json({ error: "internal_error", detail: err.message });
+  }
+});
+
+/** Save routing rules */
+router.post("/rules", authJWT, async (req, res) => {
+  try {
+    const { pub_id, rules } = req.body;
+
+    if (!pub_id || !rules) {
+      return res.status(400).json({ error: "pub_id & rules required" });
+    }
+
+    await pool.query(
+      "INSERT INTO traffic_rules (pub_code, rules) VALUES ($1, $2) ON CONFLICT (pub_code) DO UPDATE SET rules=$2",
+      [pub_id, rules]
+    );
+
+    res.json({ success: true });
+
+  } catch (err) {
+    res.status(500).json({ error: "internal_error", detail: err.message });
   }
 });
 
