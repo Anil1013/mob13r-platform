@@ -4,23 +4,27 @@ import authJWT from "../middleware/authJWT.js";
 
 const router = express.Router();
 
-/* ---------------------------------------------------
-   1️⃣  GET META: publisher, geo, carrier, offers
-----------------------------------------------------*/
+/* -----------------------------------------------------
+   GET META DATA FOR PUB_ID
+   Returns:
+   - pub_id
+   - publisher_id
+   - geo, carrier
+   - offers (from publisher_tracking_links)
+----------------------------------------------------- */
 router.get("/meta", authJWT, async (req, res) => {
   try {
-    const { pub_id } = req.query;
-
-    if (!pub_id) {
-      return res.status(400).json({ error: "pub_id required" });
+    const pubId = req.query.pub_id?.toUpperCase();
+    if (!pubId) {
+      return res.status(400).json({ error: "pub_id_missing" });
     }
 
-    // Pull the tracking config for this PUB_ID
-    const meta = await pool.query(
+    // 1) Fetch tracking link by PUB_ID (Correct table)
+    const track = await pool.query(
       `SELECT 
           id AS tracking_id,
           publisher_id,
-          pub_id,
+          pub_code,
           name,
           geo,
           carrier,
@@ -32,106 +36,131 @@ router.get("/meta", authJWT, async (req, res) => {
           pin_verify_url,
           check_status_url,
           portal_url
-       FROM publisher_tracking_links
-       WHERE pub_id = $1`,
-      [pub_id]
+        FROM publisher_tracking_links
+        WHERE pub_code = $1`,
+      [pubId]
     );
 
-    if (meta.rows.length === 0) {
-      return res.status(404).json({ error: "PUB_ID not found" });
+    if (track.rows.length === 0) {
+      return res.status(404).json({ error: "pub_id_not_found" });
     }
 
-    const base = meta.rows[0];
+    const row = track.rows[0];
 
-    res.json({
-      publisher_id: base.publisher_id,
-      pub_id: base.pub_id,
-      geo: base.geo,
-      carrier: base.carrier,
-      offers: meta.rows
+    // 2) Fetch all offers for same publisher + geo + carrier
+    const offers = await pool.query(
+      `SELECT 
+          id AS tracking_id,
+          name,
+          geo,
+          carrier,
+          type,
+          payout,
+          tracking_url,
+          pin_send_url,
+          pin_verify_url,
+          check_status_url,
+          portal_url,
+          landing_page_url
+        FROM publisher_tracking_links
+        WHERE publisher_id = $1
+          AND geo = $2
+          AND carrier = $3
+        ORDER BY id DESC`,
+      [row.publisher_id, row.geo, row.carrier]
+    );
+
+    return res.json({
+      pub_id: pubId,
+      publisher_id: row.publisher_id,
+      geo: row.geo,
+      carrier: row.carrier,
+      offers: offers.rows
     });
 
   } catch (err) {
-    console.error("META ERROR", err);
+    console.error("META ERROR:", err);
     res.status(500).json({ error: "internal_error" });
   }
 });
 
-/* ---------------------------------------------------
-   2️⃣  SAVE TRAFFIC RULE
-----------------------------------------------------*/
+
+/* -----------------------------------------------------
+   GET RULES FOR PUB_ID
+----------------------------------------------------- */
+router.get("/", authJWT, async (req, res) => {
+  try {
+    const pubId = req.query.pub_id?.toUpperCase();
+    if (!pubId) return res.status(400).json({ error: "pub_id_missing" });
+
+    const r = await pool.query(
+      `SELECT 
+          tr.id,
+          tr.pub_id,
+          tr.weight,
+          tr.redirect_url,
+          ptl.name,
+          ptl.geo,
+          ptl.carrier
+        FROM traffic_rules tr
+        JOIN publisher_tracking_links ptl
+          ON tr.offer_tracking_id = ptl.id
+        WHERE tr.pub_id = $1
+        ORDER BY tr.id DESC`,
+      [pubId]
+    );
+
+    res.json(r.rows);
+
+  } catch (err) {
+    console.error("RULE FETCH ERROR:", err);
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+
+/* -----------------------------------------------------
+   ADD NEW RULE
+----------------------------------------------------- */
 router.post("/", authJWT, async (req, res) => {
   try {
     const { pub_id, publisher_id, tracking_id, weight } = req.body;
 
     if (!pub_id || !publisher_id || !tracking_id) {
-      return res.status(400).json({ error: "Missing fields" });
+      return res.status(400).json({ error: "missing_fields" });
     }
 
-    // Fetch redirect URL from tracking links table
-    const offer = await pool.query(
-      `SELECT 
-          tracking_url, 
-          pin_send_url, 
-          pin_verify_url, 
-          check_status_url, 
+    // Fetch redirect URL from tracking table
+    const tr = await pool.query(
+      `SELECT
+          tracking_url,
+          pin_send_url,
+          pin_verify_url,
           portal_url,
+          landing_page_url,
           type
-       FROM publisher_tracking_links
-       WHERE id = $1`,
+        FROM publisher_tracking_links
+        WHERE id = $1`,
       [tracking_id]
     );
 
-    if (offer.rows.length === 0) {
-      return res.status(404).json({ error: "Offer not found" });
-    }
+    const t = tr.rows[0];
 
-    // Choose redirect URL based on tracking type
-    const row = offer.rows[0];
-    let redirect = row.tracking_url;
-
-    if (row.type === "INAPP") {
-      redirect = row.pin_send_url; // Or any other flow you prefer
-    }
+    let redirectUrl =
+      t.type === "INAPP"
+        ? t.portal_url
+        : t.tracking_url;
 
     await pool.query(
       `INSERT INTO traffic_rules
-       (pub_id, publisher_id, tracking_id, geo, carrier, weight, redirect_url)
-       SELECT pub_id, publisher_id, id, geo, carrier, $1, $2
-       FROM publisher_tracking_links
-       WHERE id = $3`,
-      [weight || 100, redirect, tracking_id]
+        (pub_id, publisher_id, offer_tracking_id, weight, redirect_url)
+        VALUES ($1, $2, $3, $4, $5)`,
+      [pub_id, publisher_id, tracking_id, weight, redirectUrl]
     );
 
     res.json({ success: true });
-
   } catch (err) {
-    console.error("SAVE RULE ERROR", err);
-    res.status(500).json({ error: "internal_error" });
-  }
-});
-
-/* ---------------------------------------------------
-   3️⃣  GET RULES LIST
-----------------------------------------------------*/
-router.get("/", authJWT, async (req, res) => {
-  const { pub_id } = req.query;
-
-  try {
-    const rules = await pool.query(
-      `SELECT R.*, T.name, T.geo, T.carrier
-       FROM traffic_rules R
-       JOIN publisher_tracking_links T
-         ON R.tracking_id = T.id
-       WHERE R.pub_id = $1
-       ORDER BY R.id DESC`,
-      [pub_id]
-    );
-
-    res.json(rules.rows);
-
-  } catch (err) {
-    console.error("FETCH RULES ERROR", err);
+    console.error("ADD RULE ERROR:", err);
     res.status(500).json({ error: "internal_error" });
   }
 });
