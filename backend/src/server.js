@@ -15,8 +15,8 @@ import conversionsRoutes from "./routes/conversions.js";
 import statsRoutes from "./routes/stats.js";
 import authRoutes from "./routes/auth.js";
 import analyticsRoutes from "./routes/analytics.js";
-import templateRoutes from "./routes/templates.js"; 
-import publisherTrackingRoutes from "./routes/publisherTracking.js"; // ✅ NEW IMPORT
+import templateRoutes from "./routes/templates.js";
+import publisherTrackingRoutes from "./routes/publisherTracking.js"; 
 import distributionRoutes from "./routes/distribution.js";
 
 /* Middleware */
@@ -59,6 +59,25 @@ app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(bodyParser.json({ limit: "10mb" }));
 
 /* ======================================================
+   ✅ PUBLIC CLICK REDIRECTOR (NEW)  
+   /click → /api/distribution/click
+   Safe for INAPP (pin_send, pin_verify unaffected)
+   ====================================================== */
+app.get("/click", async (req, res) => {
+  const { pub_id, geo, carrier } = req.query;
+
+  if (!pub_id || !geo || !carrier) {
+    return res.status(400).send("Missing parameters");
+  }
+
+  const fullUrl = `/api/distribution/click?pub_id=${encodeURIComponent(pub_id)}&geo=${encodeURIComponent(
+    geo
+  )}&carrier=${encodeURIComponent(carrier)}`;
+
+  return res.redirect(fullUrl);
+});
+
+/* ======================================================
    ✅ HEALTH CHECK
    ====================================================== */
 app.get("/api/health", async (req, res) => {
@@ -83,7 +102,7 @@ app.use("/api/postbacks", authJWT, postbackRoutes);
 app.use("/api/conversions", authJWT, conversionsRoutes);
 app.use("/api/stats", authJWT, statsRoutes);
 app.use("/api/templates", authJWT, templateRoutes);
-app.use("/api/tracking", authJWT, publisherTrackingRoutes); // ✅ NEW TRACKING ROUTE
+app.use("/api/tracking", authJWT, publisherTrackingRoutes);
 app.use("/api/distribution", distributionRoutes);
 app.use("/api", authJWT, analyticsRoutes);
 
