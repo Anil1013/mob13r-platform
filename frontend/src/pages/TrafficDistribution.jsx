@@ -1,267 +1,358 @@
-// frontend/src/pages/TrafficDistribution.jsx
 import React, { useEffect, useState } from "react";
 import apiClient from "../api/apiClient";
 
 export default function TrafficDistribution() {
+  /* ============================
+        STATES
+  ============================ */
   const [pubCode, setPubCode] = useState("");
   const [meta, setMeta] = useState([]);
-  const [selectedTrackingId, setSelectedTrackingId] = useState(null);
   const [publisherDetails, setPublisherDetails] = useState(null);
+
+  const [selectedTracking, setSelectedTracking] = useState("");
   const [offers, setOffers] = useState([]);
   const [rules, setRules] = useState([]);
-  const [selectedOfferId, setSelectedOfferId] = useState("");
-  const [weight, setWeight] = useState(100);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editingRuleId, setEditingRuleId] = useState(null);
-  const [remaining, setRemaining] = useState(100);
-  const [overview, setOverview] = useState([]);
-  const [searchAll, setSearchAll] = useState("");
 
-  useEffect(() => {
-    // load full overview (all pub rules)
-    loadOverview();
-  }, []);
+  const [offerId, setOfferId] = useState("");
+  const [weight, setWeight] = useState(100);
+
+  const [remaining, setRemaining] = useState(100);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editId, setEditId] = useState(null);
+
+  /* ============================
+        GLOBAL OVERVIEW TABLE
+  ============================ */
+  const [overview, setOverview] = useState([]);
+  const [search, setSearch] = useState("");
 
   const loadOverview = async () => {
     try {
       const r = await apiClient.get("/distribution/overview");
       setOverview(r.data || []);
     } catch (err) {
-      console.error("overview fetch failed", err);
+      console.warn("overview error", err);
     }
   };
 
-  const loadRules = async (code) => {
-    if (!code) return;
-    try {
-      const r = await apiClient.get(`/distribution/rules?pub_id=${encodeURIComponent(code)}`);
-      setRules(r.data || []);
-    } catch (err) {
-      console.error("rules fetch failed", err);
-      setRules([]);
-    }
-  };
-
+  /* ============================
+        LOAD META (tracking links)
+  ============================ */
   const loadMeta = async () => {
     if (!pubCode) return alert("Enter PUB_ID");
+
     try {
-      const res = await apiClient.get(`/distribution/meta?pub_id=${encodeURIComponent(pubCode)}`);
+      const res = await apiClient.get(
+        `/distribution/meta?pub_id=${encodeURIComponent(pubCode)}`
+      );
+
       setMeta(res.data || []);
-      if (res.data && res.data.length) {
-        setSelectedTrackingId(res.data[0].tracking_link_id);
+
+      if (res.data.length) {
+        const first = res.data[0];
+
+        setSelectedTracking(first.tracking_link_id);
+
         setPublisherDetails({
-          pub_code: pubCode,
-          publisher_id: res.data[0].publisher_id,
-          publisher_name: res.data[0].publisher_name,
-          combos: res.data.map((d) => `${d.geo || ""}/${d.carrier || ""}`).join(", "),
+          pub_code: first.pub_code,
+          publisher_name: first.publisher_name,
+          publisher_id: first.publisher_id,
+          combos: res.data
+            .map((d) => `${d.geo}/${d.carrier}`)
+            .join(", "),
         });
-      } else {
-        setSelectedTrackingId(null);
-        setPublisherDetails(null);
       }
-      await loadRules(pubCode);
-      const rem = await apiClient.get(`/distribution/rules/remaining?pub_id=${encodeURIComponent(pubCode)}`);
-      setRemaining(rem.data.remaining ?? 100);
+
+      loadRules(pubCode);
+      loadRemaining(pubCode, selectedTracking);
+
     } catch (err) {
-      console.error("meta fetch failed", err);
-      setMeta([]);
-      setPublisherDetails(null);
+      console.log("meta failed", err);
     }
   };
 
+  /* ============================
+        LOAD OFFERS
+  ============================ */
+  const loadOffers = async () => {
+    if (!selectedTracking || !meta.length) return setOffers([]);
+
+    const track = meta.find((m) => m.tracking_link_id === Number(selectedTracking));
+    if (!track) return;
+
+    const exclude = rules
+      .filter((r) => r.tracking_link_id === Number(selectedTracking))
+      .map((r) => r.offer_id)
+      .filter(Boolean)
+      .join(",");
+
+    try {
+      const r = await apiClient.get(
+        `/distribution/offers?geo=${track.geo}&carrier=${track.carrier}&exclude=${exclude}`
+      );
+      setOffers(r.data || []);
+    } catch (err) {
+      console.log("offers error", err);
+    }
+  };
+
+  /* ============================
+        LOAD RULES
+  ============================ */
+  const loadRules = async (code) => {
+    try {
+      const r = await apiClient.get(`/distribution/rules?pub_id=${code}`);
+      setRules(r.data || []);
+    } catch (err) {
+      console.log("rules error", err);
+    }
+  };
+
+  /* ============================
+        REMAINING %
+  ============================ */
+  const loadRemaining = async (pub, track) => {
+    try {
+      const r = await apiClient.get(
+        `/distribution/rules/remaining?pub_id=${pub}&tracking_link_id=${track}`
+      );
+      setRemaining(r.data.remaining);
+    } catch {
+      setRemaining(100);
+    }
+  };
+
+  /* ============================
+        WHEN TRACKING CHANGES
+  ============================ */
   useEffect(() => {
-    const loadOffers = async () => {
-      if (!selectedTrackingId) return setOffers([]);
-      const track = meta.find((m) => m.tracking_link_id === Number(selectedTrackingId));
-      if (!track) return setOffers([]);
-      const geo = track.geo || "";
-      const carrier = track.carrier || "";
-      const excludeIds = rules.filter((r) => r.tracking_link_id === Number(selectedTrackingId)).map((r) => r.offer_id).filter(Boolean);
-      const excludeParam = excludeIds.length ? `&exclude=${excludeIds.join(",")}` : "";
-      try {
-        const res = await apiClient.get(`/distribution/offers?geo=${encodeURIComponent(geo)}&carrier=${encodeURIComponent(carrier)}${excludeParam}`);
-        setOffers(res.data || []);
-      } catch (err) {
-        console.error("offers fetch failed", err);
-        setOffers([]);
-      }
-    };
     loadOffers();
-    if (publisherDetails?.pub_code) {
-      apiClient.get(`/distribution/rules/remaining?pub_id=${encodeURIComponent(publisherDetails.pub_code)}&tracking_link_id=${selectedTrackingId || ""}`)
-        .then(r => setRemaining(r.data.remaining ?? 100))
-        .catch(() => setRemaining(100));
+    if (publisherDetails) {
+      loadRemaining(publisherDetails.pub_code, selectedTracking);
     }
-    // eslint-disable-next-line
-  }, [selectedTrackingId, rules, meta]);
+  }, [selectedTracking, rules, meta]);
 
-  const handleAddRule = async () => {
-    if (!publisherDetails) return alert("Load publisher meta first");
-    if (!selectedTrackingId) return alert("Select a tracking link");
-    if (!selectedOfferId) return alert("Select an offer");
+  /* ============================
+          ADD RULE
+  ============================ */
+  const addRule = async () => {
+    if (!publisherDetails) return alert("Load PUB first");
+    if (!offerId) return alert("Select offer");
 
-    const sum = rules.filter(r => r.pub_id === publisherDetails.pub_code && r.tracking_link_id === Number(selectedTrackingId)).reduce((s,x)=>s + Number(x.weight || 0), 0);
-    if (sum + Number(weight) > 100) {
-      return alert("Weight exceeds remaining percentage");
-    }
+    const offer = offers.find((o) => o.id === Number(offerId));
+    const track = meta.find((m) => m.tracking_link_id === Number(selectedTracking));
 
-    const offer = offers.find(o => Number(o.id) === Number(selectedOfferId));
-    const track = meta.find(m => m.tracking_link_id === Number(selectedTrackingId));
     const payload = {
       pub_id: publisherDetails.pub_code,
       publisher_id: publisherDetails.publisher_id,
       publisher_name: publisherDetails.publisher_name,
-      tracking_link_id: Number(selectedTrackingId),
-      geo: (track?.geo || "").toString(),
-      carrier: (track?.carrier || "").toString(),
-      offer_id: Number(offer.id),
+
+      tracking_link_id: selectedTracking,
+      geo: track.geo,
+      carrier: track.carrier,
+
+      offer_id: offer.id,
       offer_code: offer.offer_id,
       offer_name: offer.offer_name,
       advertiser_name: offer.advertiser_name,
-      redirect_url: offer.tracking_url || track?.tracking_url || null,
-      type: offer.type || track?.type || null,
+
+      redirect_url: offer.tracking_url,
+      type: offer.type,
       weight: Number(weight),
-      created_by: 1
     };
 
     try {
-      if (isEditing && editingRuleId) {
-        await apiClient.put(`/distribution/rules/${editingRuleId}`, payload);
+      if (isEditing && editId) {
+        await apiClient.put(`/distribution/rules/${editId}`, payload);
         setIsEditing(false);
-        setEditingRuleId(null);
+        setEditId(null);
       } else {
         await apiClient.post("/distribution/rules", payload);
       }
-      await loadRules(publisherDetails.pub_code);
-      await loadOverview();
-      setSelectedOfferId("");
+
+      loadRules(publisherDetails.pub_code);
+      setOfferId("");
       setWeight(100);
+
     } catch (err) {
       if (err.response?.status === 409) {
-        alert("That offer is already assigned for this publisher/tracking link.");
-      } else {
-        console.error("add rule failed", err);
-        alert("Failed to add rule");
+        return alert("Duplicate offer detected for this PUB & tracking link!");
       }
+      alert("Failed to save rule");
     }
   };
 
-  const handleEdit = (r) => {
+  /* ============================
+        EDIT RULE
+  ============================ */
+  const editRule = (rule) => {
     setIsEditing(true);
-    setEditingRuleId(r.id);
-    setSelectedTrackingId(r.tracking_link_id);
-    setSelectedOfferId(r.offer_id);
-    setWeight(r.weight || 100);
+    setEditId(rule.id);
+    setSelectedTracking(rule.tracking_link_id);
+    setOfferId(rule.offer_id);
+    setWeight(rule.weight);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete this rule?")) return;
-    try {
-      await apiClient.delete(`/distribution/rules/${id}`);
-      if (publisherDetails) await loadRules(publisherDetails.pub_code);
-      await loadOverview();
-    } catch (err) {
-      console.error("delete failed", err);
-      alert("Failed to delete");
-    }
+  /* ============================
+        DELETE RULE
+  ============================ */
+  const delRule = async (id) => {
+    if (!window.confirm("Delete rule?")) return;
+    await apiClient.delete(`/distribution/rules/${id}`);
+    loadRules(pubCode);
   };
 
+  /* ============================
+        FILTER OVERVIEW (Search)
+  ============================ */
+  const filteredOverview = overview.filter((r) => {
+    const term = search.toLowerCase();
+    return (
+      r.pub_id?.toLowerCase().includes(term) ||
+      r.offer_code?.toLowerCase().includes(term) ||
+      r.offer_name?.toLowerCase().includes(term) ||
+      r.publisher_name?.toLowerCase().includes(term)
+    );
+  });
+
+  /* ============================
+        UI STARTS HERE
+  ============================ */
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Traffic Distribution</h1>
+      <h1 className="text-2xl font-bold mb-5">Traffic Distribution Manager</h1>
 
-      <div className="flex gap-3 mb-6 items-center">
-        <input className="border p-2 rounded w-64" placeholder="PUB_CODE e.g. PUB03" value={pubCode} onChange={(e) => setPubCode(e.target.value.toUpperCase())} />
-        <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={loadMeta}>Load Config</button>
-
-        <input className="border p-2 rounded w-64 ml-6" placeholder="Search overview (live)..." value={searchAll} onChange={(e)=>setSearchAll(e.target.value)} />
-        <button className="bg-gray-200 px-3 py-2 rounded ml-2" onClick={loadOverview}>Refresh Overview</button>
+      {/* PUB SEARCH */}
+      <div className="mb-4 flex gap-3">
+        <input
+          placeholder="Enter PUB_ID (PUB03)"
+          value={pubCode}
+          onChange={(e) => setPubCode(e.target.value.toUpperCase())}
+          className="border p-2 rounded w-64"
+        />
+        <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={loadMeta}>
+          Load Publisher
+        </button>
+        <button className="bg-gray-700 text-white px-4 py-2 rounded" onClick={loadOverview}>
+          Load Overview
+        </button>
       </div>
 
+      {/* Publisher Info */}
       {publisherDetails && (
-        <div className="mb-6">
-          <div><strong>PUB ID:</strong> {publisherDetails.pub_code}</div>
-          <div><strong>Publisher ID:</strong> {publisherDetails.publisher_id}</div>
-          <div><strong>Publisher Name:</strong> {publisherDetails.publisher_name}</div>
-          <div><strong>Combos:</strong> {publisherDetails.combos}</div>
+        <div className="bg-gray-50 p-4 rounded shadow mb-5">
+          <p><strong>PUB:</strong> {publisherDetails.pub_code}</p>
+          <p><strong>Name:</strong> {publisherDetails.publisher_name}</p>
+          <p><strong>Combos:</strong> {publisherDetails.combos}</p>
         </div>
       )}
 
+      {/* Configure Rules */}
       <div className="bg-white p-4 rounded shadow mb-6">
-        <h3 className="font-semibold mb-2">Select Offer for Distribution</h3>
+        <h2 className="font-semibold mb-3">Assign Offer to Traffic</h2>
 
-        <div className="flex gap-3 items-center">
-          <select className="border p-2 rounded w-2/5" value={selectedTrackingId || ""} onChange={(e) => setSelectedTrackingId(Number(e.target.value) || null)}>
-            <option value="">Select tracking link (publisher)</option>
-            {meta.map(m => (<option key={m.tracking_link_id} value={m.tracking_link_id}>{m.pub_code} • {m.geo || "-"} / {m.carrier || "-"} • {m.type || "-"}</option>))}
+        <div className="flex gap-3 mb-3">
+          {/* Tracking */}
+          <select
+            value={selectedTracking}
+            onChange={(e) => setSelectedTracking(Number(e.target.value))}
+            className="border p-2 rounded w-1/3"
+          >
+            <option value="">Select Tracking Link</option>
+            {meta.map((m) => (
+              <option key={m.tracking_link_id} value={m.tracking_link_id}>
+                {m.geo}/{m.carrier} — {m.type}
+              </option>
+            ))}
           </select>
 
-          <select className="border p-2 rounded w-2/5" value={selectedOfferId || ""} onChange={(e) => setSelectedOfferId(Number(e.target.value) || "")}>
+          {/* Offers */}
+          <select
+            value={offerId}
+            onChange={(e) => setOfferId(Number(e.target.value))}
+            className="border p-2 rounded w-1/3"
+          >
             <option value="">Select Offer</option>
-            {offers.map(o => (<option key={o.id} value={o.id}>{o.offer_id} — {o.offer_name} ({o.advertiser_name})</option>))}
+            {offers.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.offer_id} — {o.offer_name} ({o.advertiser_name})
+              </option>
+            ))}
           </select>
 
-          <input type="number" className="border p-2 rounded w-24" value={weight} onChange={(e) => setWeight(Number(e.target.value))} min="1" max="100" />
-          <button className="bg-green-600 text-white px-4 py-2 rounded" onClick={handleAddRule}>{isEditing ? "Update Rule" : "Add Rule"}</button>
+          {/* Weight */}
+          <input
+            type="number"
+            value={weight}
+            min="1"
+            max="100"
+            onChange={(e) => setWeight(Number(e.target.value))}
+            className="border p-2 rounded w-24"
+          />
+
+          {/* Button */}
+          <button className="bg-green-600 text-white px-4 py-2 rounded" onClick={addRule}>
+            {isEditing ? "Update" : "Add"}
+          </button>
         </div>
 
-        <div className="mt-3 text-sm text-gray-600">Remaining percentage (this tracking link): <strong>{remaining}%</strong></div>
+        <p className="text-gray-500 text-sm">Remaining %: <strong>{remaining}</strong></p>
       </div>
 
-      <div className="mt-6">
-        <h3 className="font-semibold mb-2">Active Rules</h3>
-        <table className="min-w-full border text-sm bg-white">
+      {/* Rules Table */}
+      <h2 className="font-semibold mb-2">Current Rules</h2>
+      <table className="min-w-full text-sm bg-white border mb-10">
+        <thead className="bg-gray-100">
+          <tr>
+            <th className="p-2">Offer</th>
+            <th className="p-2">Geo</th>
+            <th className="p-2">Carrier</th>
+            <th className="p-2">Type</th>
+            <th className="p-2">Weight</th>
+            <th className="p-2">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rules.map((r) => (
+            <tr key={r.id} className="border-t">
+              <td className="p-2">{r.offer_code} — {r.offer_name}</td>
+              <td className="p-2">{r.geo}</td>
+              <td className="p-2">{r.carrier}</td>
+              <td className="p-2">{r.type}</td>
+              <td className="p-2">{r.weight}%</td>
+              <td className="p-2">
+                <button className="bg-yellow-500 text-white px-2 py-1 rounded mr-2" onClick={() => editRule(r)}>Edit</button>
+                <button className="bg-red-600 text-white px-2 py-1 rounded" onClick={() => delRule(r.id)}>Delete</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* GLOBAL OVERVIEW SECTION */}
+      <div className="bg-white p-4 rounded shadow">
+        <h2 className="font-semibold mb-3">Global Distribution Overview</h2>
+
+        <input
+          className="border p-2 rounded w-1/2 mb-3"
+          placeholder="Search (PUB, Offer, Advertiser, Publisher)"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+
+        <table className="min-w-full text-sm bg-white border">
           <thead className="bg-gray-100">
             <tr>
-              <th className="p-2">PUB_ID</th>
-              <th className="p-2">Publisher</th>
+              <th className="p-2">PUB</th>
+              <th className="p-2">Offer</th>
+              <th className="p-2">Advertiser</th>
               <th className="p-2">Geo</th>
               <th className="p-2">Carrier</th>
-              <th className="p-2">Offer Code</th>
-              <th className="p-2">Advertiser</th>
-              <th className="p-2">Offer</th>
-              <th className="p-2">Type</th>
               <th className="p-2">Weight</th>
-              <th className="p-2">Action</th>
             </tr>
           </thead>
           <tbody>
-            {rules.length === 0 && (<tr><td colSpan={10} className="p-4 text-center">No rules configured yet</td></tr>)}
-            {rules.map(r => (
-              <tr key={r.id} className="border-t">
-                <td className="p-2">{r.pub_id}</td>
-                <td className="p-2">{r.publisher_name}</td>
-                <td className="p-2">{r.geo}</td>
-                <td className="p-2">{r.carrier}</td>
-                <td className="p-2">{r.offer_code}</td>
-                <td className="p-2">{r.advertiser_name}</td>
-                <td className="p-2">{r.offer_name}</td>
-                <td className="p-2">{r.type}</td>
-                <td className="p-2">{r.weight}%</td>
-                <td className="p-2 flex gap-2">
-                  <button className="px-3 py-1 bg-yellow-500 text-white rounded" onClick={() => handleEdit(r)}>Edit</button>
-                  <button className="px-3 py-1 bg-red-500 text-white rounded" onClick={() => handleDelete(r.id)}>Delete</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="mt-8">
-        <h3 className="font-semibold mb-2">All PUB Traffic Distribution (Overview)</h3>
-        <table className="min-w-full border text-sm bg-white">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="p-2">PUB_ID</th><th className="p-2">Offer</th><th className="p-2">Advertiser</th><th className="p-2">Geo</th><th className="p-2">Carrier</th><th className="p-2">Weight</th><th className="p-2">Redirect</th>
-            </tr>
-          </thead>
-          <tbody>
-            {overview.filter(row => {
-              if (!searchAll) return true;
-              const s = searchAll.toLowerCase();
-              return (row.pub_id || "").toLowerCase().includes(s) || (row.offer_code || "").toLowerCase().includes(s) || (row.offer_name || "").toLowerCase().includes(s) || (row.advertiser_name || "").toLowerCase().includes(s);
-            }).map(r => (
+            {filteredOverview.map((r) => (
               <tr key={r.id} className="border-t">
                 <td className="p-2">{r.pub_id}</td>
                 <td className="p-2">{r.offer_code}</td>
@@ -269,13 +360,11 @@ export default function TrafficDistribution() {
                 <td className="p-2">{r.geo}</td>
                 <td className="p-2">{r.carrier}</td>
                 <td className="p-2">{r.weight}%</td>
-                <td className="p-2 truncate max-w-xs">{r.redirect_url}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
     </div>
   );
 }
