@@ -183,6 +183,25 @@ router.get("/rules/remaining", async (req, res) => {
 });
 
 /* ============================================================
+   GLOBAL OVERVIEW  (FIX FOR 404)
+   ============================================================ */
+router.get("/overview", async (req, res) => {
+  try {
+    const q = `
+      SELECT *
+      FROM traffic_rules
+      ORDER BY pub_id ASC, id ASC
+    `;
+    const { rows } = await pool.query(q);
+    res.json(rows);
+  } catch (err) {
+    console.error("OVERVIEW ERROR:", err);
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+
+/* ============================================================
    ADD RULE
 ============================================================ */
 router.post("/rules", async (req, res) => {
