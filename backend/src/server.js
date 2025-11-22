@@ -26,9 +26,8 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-
 /* ---------------------------------------------------------
-   ✅ GLOBAL CORS (MUST be first)
+   ✅ GLOBAL CORS — MUST BE FIRST
 --------------------------------------------------------- */
 app.use(
   cors({
@@ -41,11 +40,15 @@ app.use(
     credentials: true,
   })
 );
+
 app.options("*", cors());
 
-// Fallback CORS for safety
+// Fallback CORS
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", req.headers.origin || "https://dashboard.mob13r.com");
+  res.header(
+    "Access-Control-Allow-Origin",
+    req.headers.origin || "https://dashboard.mob13r.com"
+  );
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   next();
@@ -57,9 +60,8 @@ app.use((req, res, next) => {
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(bodyParser.json({ limit: "10mb" }));
 
-
 /* ---------------------------------------------------------
-   Health Check
+   HEALTH CHECK
 --------------------------------------------------------- */
 app.get("/api/health", async (req, res) => {
   try {
@@ -71,9 +73,20 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
+/* ---------------------------------------------------------
+   ⭐ PUBLIC CLICK PASSTHROUGH (Fix Cannot GET /click)
+--------------------------------------------------------- */
+app.get("/click", (req, res) => {
+  try {
+    const params = new URLSearchParams(req.query).toString();
+    return res.redirect(`/api/distribution/click?${params}`);
+  } catch (err) {
+    return res.redirect("https://google.com");
+  }
+});
 
 /* ---------------------------------------------------------
-   Routes
+   ALL API ROUTES
 --------------------------------------------------------- */
 app.use("/api/auth", authRoutes);
 app.use("/api/publishers", authJWT, publishersRoutes);
@@ -85,11 +98,14 @@ app.use("/api/conversions", authJWT, conversionsRoutes);
 app.use("/api/stats", authJWT, statsRoutes);
 app.use("/api/templates", authJWT, templateRoutes);
 app.use("/api/tracking", authJWT, publisherTrackingRoutes);
-app.use("/api/distribution", distributionRoutes); // ⬅ NO AUTH (public click)
-
 
 /* ---------------------------------------------------------
-   Start Server
+   🚀 NO AUTH — PUBLIC TRAFFIC DISTRIBUTION
+--------------------------------------------------------- */
+app.use("/api/distribution", distributionRoutes);
+
+/* ---------------------------------------------------------
+   START SERVER
 --------------------------------------------------------- */
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Backend running on port ${PORT}`);
