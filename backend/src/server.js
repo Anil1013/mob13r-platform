@@ -1,3 +1,4 @@
+// backend/src/index.js
 import express from "express";
 import dotenv from "dotenv";
 import helmet from "helmet";
@@ -27,9 +28,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-/* ---------------------------------------------------------
-   GLOBAL CORS
---------------------------------------------------------- */
+/* ======================================================================
+   ✅ CORS — MUST BE FIRST — FIXES LOGIN ISSUE
+====================================================================== */
 app.use(
   cors({
     origin: [
@@ -42,53 +43,47 @@ app.use(
   })
 );
 
+// Allow OPTIONS requests globally
 app.options("*", cors());
 
-app.use((req, res, next) => {
-  res.header(
-    "Access-Control-Allow-Origin",
-    req.headers.origin || "https://dashboard.mob13r.com"
-  );
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  next();
-});
-
-/* ---------------------------------------------------------
-   Security & JSON
---------------------------------------------------------- */
+/* ======================================================================
+   Security + JSON Parser
+====================================================================== */
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(bodyParser.json({ limit: "10mb" }));
 
-/* ---------------------------------------------------------
+/* ======================================================================
    Health Check
---------------------------------------------------------- */
+====================================================================== */
 app.get("/api/health", async (req, res) => {
   try {
     const result = await pool.query("SELECT NOW() AS db_time");
+
     res.setHeader("Access-Control-Allow-Origin", "*");
+
     res.json({ status: "ok", db_time: result.rows[0].db_time });
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
   }
 });
 
-/* ---------------------------------------------------------
-   PUBLIC CLICK → Redirect to distribution click
---------------------------------------------------------- */
+/* ======================================================================
+   Public Click Bridge
+====================================================================== */
 app.get("/click", (req, res) => {
-  try {
-    const params = new URLSearchParams(req.query).toString();
-    return res.redirect(`/api/distribution/click?${params}`);
-  } catch {
-    return res.redirect("https://google.com");
-  }
+  const params = new URLSearchParams(req.query).toString();
+  return res.redirect(`/api/distribution/click?${params}`);
 });
 
-/* ---------------------------------------------------------
+/* ======================================================================
    API ROUTES
---------------------------------------------------------- */
+====================================================================== */
+
+// Public (NO AUTH)
 app.use("/api/auth", authRoutes);
+app.use("/api/distribution", distributionRoutes);
+
+// Protected routes
 app.use("/api/publishers", authJWT, publishersRoutes);
 app.use("/api/advertisers", authJWT, advertisersRoutes);
 app.use("/api/offers", authJWT, offersRoutes);
@@ -98,17 +93,11 @@ app.use("/api/conversions", authJWT, conversionsRoutes);
 app.use("/api/stats", authJWT, statsRoutes);
 app.use("/api/templates", authJWT, templateRoutes);
 app.use("/api/tracking", authJWT, publisherTrackingRoutes);
-
 app.use("/api/fraud", authJWT, fraudRoutes);
 
-/* ---------------------------------------------------------
-   PUBLIC DISTRIBUTION API
---------------------------------------------------------- */
-app.use("/api/distribution", distributionRoutes);
-
-/* ---------------------------------------------------------
-   START SERVER
---------------------------------------------------------- */
+/* ======================================================================
+   Start Server
+====================================================================== */
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Backend running on port ${PORT}`);
 });
