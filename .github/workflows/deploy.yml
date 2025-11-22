@@ -13,25 +13,18 @@ jobs:
       - name: 🧩 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: ⚙️ Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
-      - name: 📦 Install Backend Dependencies
+      - name: 📦 Install ONLY backend dependencies (for packaging)
         working-directory: backend
-        run: npm install
+        run: npm install --production
 
-      - name: 🧠 Run DB Migrations
-        working-directory: backend
+      - name: 🗜️ Create backend deployment bundle (CORRECT STRUCTURE)
         run: |
-          echo "🚀 Running DB migrations before deployment..."
-          node src/migrate.js
-          echo "✅ Migration finished"
+          mkdir deploy
+          cp -r backend deploy/backend
+          cp -r backend/.platform deploy/.platform
+          cp Procfile deploy/Procfile
 
-      - name: 🗜️ Zip Backend for Beanstalk
-        run: |
-          cd backend
+          cd deploy
           zip -r ../backend.zip .
 
       - name: 🚀 Deploy to AWS Elastic Beanstalk
@@ -39,9 +32,9 @@ jobs:
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          region: ap-south-1
           application_name: Mb13r-backend
           environment_name: Mb13r-backend-env
-          region: ap-south-1
           version_label: build-${{ github.run_number }}
           deployment_package: backend.zip
           wait_for_deployment: true
