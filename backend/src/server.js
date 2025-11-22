@@ -17,6 +17,7 @@ import authRoutes from "./routes/auth.js";
 import analyticsRoutes from "./routes/analytics.js";
 import templateRoutes from "./routes/templates.js";
 import publisherTrackingRoutes from "./routes/publisherTracking.js";
+import fraudRoutes from "./routes/fraud.js";
 import distributionRoutes from "./routes/distribution.js";
 
 /* Middleware */
@@ -27,7 +28,7 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 /* ---------------------------------------------------------
-   ✅ GLOBAL CORS — MUST BE FIRST
+   GLOBAL CORS
 --------------------------------------------------------- */
 app.use(
   cors({
@@ -43,7 +44,6 @@ app.use(
 
 app.options("*", cors());
 
-// Fallback CORS
 app.use((req, res, next) => {
   res.header(
     "Access-Control-Allow-Origin",
@@ -55,13 +55,13 @@ app.use((req, res, next) => {
 });
 
 /* ---------------------------------------------------------
-   Security + JSON
+   Security & JSON
 --------------------------------------------------------- */
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(bodyParser.json({ limit: "10mb" }));
 
 /* ---------------------------------------------------------
-   HEALTH CHECK
+   Health Check
 --------------------------------------------------------- */
 app.get("/api/health", async (req, res) => {
   try {
@@ -74,19 +74,19 @@ app.get("/api/health", async (req, res) => {
 });
 
 /* ---------------------------------------------------------
-   ⭐ PUBLIC CLICK PASSTHROUGH (Fix Cannot GET /click)
+   PUBLIC CLICK → Redirect to distribution click
 --------------------------------------------------------- */
 app.get("/click", (req, res) => {
   try {
     const params = new URLSearchParams(req.query).toString();
     return res.redirect(`/api/distribution/click?${params}`);
-  } catch (err) {
+  } catch {
     return res.redirect("https://google.com");
   }
 });
 
 /* ---------------------------------------------------------
-   ALL API ROUTES
+   API ROUTES
 --------------------------------------------------------- */
 app.use("/api/auth", authRoutes);
 app.use("/api/publishers", authJWT, publishersRoutes);
@@ -99,8 +99,10 @@ app.use("/api/stats", authJWT, statsRoutes);
 app.use("/api/templates", authJWT, templateRoutes);
 app.use("/api/tracking", authJWT, publisherTrackingRoutes);
 
+app.use("/api/fraud", authJWT, fraudRoutes);
+
 /* ---------------------------------------------------------
-   🚀 NO AUTH — PUBLIC TRAFFIC DISTRIBUTION
+   PUBLIC DISTRIBUTION API
 --------------------------------------------------------- */
 app.use("/api/distribution", distributionRoutes);
 
