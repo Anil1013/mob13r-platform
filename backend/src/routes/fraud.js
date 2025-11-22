@@ -1,111 +1,169 @@
 // backend/src/routes/fraud.js
+// backend/src/routes/fraud.js
 import express from "express";
 import pool from "../db.js";
-import { Parser } from "json2csv"; // optional: if installed; otherwise fallback to manual CSV
+import { Parser as Json2csvParser } from "json2csv";
+import ExcelJS from "exceljs";
 
 const router = express.Router();
 
-/**
- * GET /api/fraud/alerts
- * Query: ?pub_id=PUB03&limit=100
- */
+/*
+ Routes:
+ GET  /alerts?pub_id=&q=&limit=&offset=
+ POST /alerts/:id/resolve
+ POST /whitelist   { pub_id, note }
+ POST /blacklist   { ip, note }
+ GET  /export?pub_id=&format=csv|xlsx
+*/
+
 router.get("/alerts", async (req, res) => {
   try {
-    const { pub_id, limit = 200 } = req.query;
+    const { pub_id, q, limit = 500, offset = 0 } = req.query;
     const params = [];
-    let q = `SELECT id, pub_id, ip, ua, geo, carrier, reason, severity, meta, resolved, resolved_by, created_at FROM fraud_alerts`;
+    let where = "WHERE 1=1";
+
     if (pub_id) {
-      q += ` WHERE pub_id = $1`;
-      params.push(pub_id);
+      params.push(pub_id.toUpperCase());
+      where += ` AND pub_id = $${params.length}`;
     }
-    q += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`;
-    params.push(Number(limit));
-    const { rows } = await pool.query(q, params);
+
+    if (q) {
+      // simple search across ip, ua, reason, advertiser, etc.
+      params.push(`%${q}%`);
+      where += ` AND (ip ILIKE $${params.length} OR ua ILIKE $${params.length} OR reason ILIKE $${params.length} OR severity ILIKE $${params.length})`;
+    }
+
+    params.push(limit);
+    params.push(offset);
+
+    const qstr = `
+      SELECT id, pub_id, ip, ua, geo, carrier, reason, severity, resolved, resolved_by, meta, created_at, resolved_at
+      FROM fraud_alerts
+      ${where}
+      ORDER BY created_at DESC
+      LIMIT $${params.length - 1} OFFSET $${params.length}
+    `;
+
+    const { rows } = await pool.query(qstr, params);
     res.json(rows);
   } catch (err) {
-    console.error("FRAUD ALERTS FETCH ERROR:", err);
+    console.error("FraudAlerts GET error:", err);
     res.status(500).json({ error: "internal_error" });
   }
 });
 
-/**
- * POST /api/fraud/alerts/resolve
- * body: { id: 123, resolved_by: "admin" }
- */
-router.post("/alerts/resolve", async (req, res) => {
+router.post("/alerts/:id/resolve", async (req, res) => {
   try {
-    const { id, resolved_by } = req.body;
-    if (!id) return res.status(400).json({ error: "id_required" });
-    await pool.query("UPDATE fraud_alerts SET resolved = true, resolved_by = $1, resolved_at = NOW() WHERE id = $2", [resolved_by || null, id]);
-    res.json({ success: true });
+    const id = req.params.id;
+    const user = req.body.resolved_by || "system";
+    const q = `UPDATE fraud_alerts SET resolved = true, resolved_by = $1, resolved_at = NOW() WHERE id = $2 RETURNING *`;
+    const { rows } = await pool.query(q, [user, id]);
+    res.json(rows[0]);
   } catch (err) {
-    console.error("FRAUD RESOLVE ERROR:", err);
+    console.error("Resolve alert error:", err);
     res.status(500).json({ error: "internal_error" });
   }
 });
 
-/**
- * POST /api/fraud/blacklist
- * body: { ip: "1.2.3.4", note: "reason", created_by: 1 }
- */
-router.post("/blacklist", async (req, res) => {
-  try {
-    const { ip, note, created_by } = req.body;
-    if (!ip) return res.status(400).json({ error: "ip_required" });
-    await pool.query("INSERT INTO fraud_blacklist (ip, note, created_by, created_at) VALUES ($1,$2,$3,NOW()) ON CONFLICT DO NOTHING", [ip, note || null, created_by || null]);
-    res.json({ success: true });
-  } catch (err) {
-    console.error("BLACKLIST ERROR:", err);
-    res.status(500).json({ error: "internal_error" });
-  }
-});
-
-/**
- * POST /api/fraud/whitelist
- * body: { pub_id: "PUB03", note: "testing", created_by: 1 }
- */
+// whitelist a pub_id (skip checks)
 router.post("/whitelist", async (req, res) => {
   try {
-    const { pub_id, note, created_by } = req.body;
-    if (!pub_id) return res.status(400).json({ error: "pub_required" });
-    await pool.query("INSERT INTO fraud_whitelist (pub_id, note, created_by, created_at) VALUES ($1,$2,$3,NOW()) ON CONFLICT DO NOTHING", [pub_id, note || null, created_by || null]);
-    res.json({ success: true });
+    const { pub_id, note, created_by = null } = req.body;
+    if (!pub_id) return res.status(400).json({ error: "pub_id_required" });
+
+    const q = `INSERT INTO fraud_whitelist (pub_id, note, created_by, created_at) VALUES ($1,$2,$3,NOW()) ON CONFLICT (pub_id) DO UPDATE SET note = EXCLUDED.note RETURNING *`;
+    const { rows } = await pool.query(q, [pub_id.toUpperCase(), note || null, created_by]);
+    res.json(rows[0]);
   } catch (err) {
-    console.error("WHITELIST ERROR:", err);
+    console.error("whitelist error:", err);
     res.status(500).json({ error: "internal_error" });
   }
 });
 
-/**
- * GET /api/fraud/export?pub_id=PUB03&format=csv
- * Exports alerts for pub (CSV)
- */
+// blacklist an IP
+router.post("/blacklist", async (req, res) => {
+  try {
+    const { ip, note, created_by = null } = req.body;
+    if (!ip) return res.status(400).json({ error: "ip_required" });
+
+    const q = `INSERT INTO fraud_blacklist (ip, note, created_by, created_at) VALUES ($1,$2,$3,NOW()) ON CONFLICT (ip) DO UPDATE SET note = EXCLUDED.note RETURNING *`;
+    const { rows } = await pool.query(q, [ip, note || null, created_by]);
+    res.json(rows[0]);
+  } catch (err) {
+    console.error("blacklist error:", err);
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+// export alerts (CSV or XLSX). query: /export?pub_id=PUB03&format=csv
 router.get("/export", async (req, res) => {
   try {
-    const { pub_id, format = "csv" } = req.query;
+    const { pub_id, format = "csv", q } = req.query;
     const params = [];
-    let q = `SELECT id, pub_id, ip, ua, geo, carrier, reason, severity, meta, resolved, resolved_by, created_at FROM fraud_alerts`;
-    if (pub_id) {
-      q += ` WHERE pub_id = $1`;
-      params.push(pub_id);
-    }
-    q += ` ORDER BY created_at DESC LIMIT 5000`;
-    const { rows } = await pool.query(q, params);
+    let where = "WHERE 1=1";
 
-    if (format === "csv") {
-      const fields = ["id","pub_id","ip","ua","geo","carrier","reason","severity","meta","resolved","resolved_by","created_at"];
-      const parser = new Parser({ fields });
-      const csv = parser.parse(rows);
-      res.header("Content-Type", "text/csv");
-      res.header("Content-Disposition", `attachment; filename="fraud_alerts_${pub_id||'all'}.csv"`);
-      return res.send(csv);
-    } else {
-      // JSON
-      res.header("Content-Type", "application/json");
-      return res.send(JSON.stringify(rows));
+    if (pub_id) {
+      params.push(pub_id.toUpperCase());
+      where += ` AND pub_id = $${params.length}`;
     }
+    if (q) {
+      params.push(`%${q}%`);
+      where += ` AND (ip ILIKE $${params.length} OR ua ILIKE $${params.length} OR reason ILIKE $${params.length})`;
+    }
+
+    const sql = `
+      SELECT id, pub_id, ip, ua, geo, carrier, reason, severity, resolved, resolved_by, meta, created_at, resolved_at
+      FROM fraud_alerts
+      ${where}
+      ORDER BY created_at DESC
+      LIMIT 5000
+    `;
+    const { rows } = await pool.query(sql, params);
+
+    if (format === "xlsx") {
+      // create workbook
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("fraud_alerts");
+      ws.columns = [
+        { header: "id", key: "id", width: 8 },
+        { header: "pub_id", key: "pub_id", width: 12 },
+        { header: "ip", key: "ip", width: 18 },
+        { header: "ua", key: "ua", width: 50 },
+        { header: "geo", key: "geo", width: 8 },
+        { header: "carrier", key: "carrier", width: 18 },
+        { header: "reason", key: "reason", width: 20 },
+        { header: "severity", key: "severity", width: 10 },
+        { header: "resolved", key: "resolved", width: 10 },
+        { header: "resolved_by", key: "resolved_by", width: 20 },
+        { header: "meta", key: "meta", width: 30 },
+        { header: "created_at", key: "created_at", width: 24 },
+        { header: "resolved_at", key: "resolved_at", width: 24 },
+      ];
+
+      rows.forEach((r) => {
+        ws.addRow({
+          ...r,
+          meta: JSON.stringify(r.meta || {}),
+        });
+      });
+
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="fraud_alerts_${pub_id || "all"}.xlsx"`);
+      await wb.xlsx.write(res);
+      return res.end();
+    }
+
+    // default CSV using json2csv
+    const fields = ["id", "pub_id", "ip", "ua", "geo", "carrier", "reason", "severity", "resolved", "resolved_by", "meta", "created_at", "resolved_at"];
+    const parser = new Json2csvParser({ fields });
+    const data = rows.map(r => ({ ...r, meta: JSON.stringify(r.meta || {}) }));
+    const csv = parser.parse(data);
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="fraud_alerts_${pub_id || "all"}.csv"`);
+    res.send(csv);
   } catch (err) {
-    console.error("EXPORT ERROR:", err);
+    console.error("export error:", err);
     res.status(500).json({ error: "internal_error" });
   }
 });
