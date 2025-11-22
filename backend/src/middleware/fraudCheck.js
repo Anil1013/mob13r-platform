@@ -1,118 +1,136 @@
 // backend/src/middleware/fraudCheck.js
 import pool from "../db.js";
+import geoip from "geoip-lite"; // optional: add to package.json if you want server-side geo lookup
 
-/*
-  Advanced fraudCheck middleware
-  - Skips checks if pub_id is whitelisted (fraud_whitelist)
-  - Basic UA / bot checks
-  - IP velocity check (using fraud_alerts table as a simple store)
-  - Blocked IP check via blocked_ips
-  - Logs blocked events into fraud_alerts
-  - FAIL-OPEN: on internal errors it calls next() so APIs don't break
-*/
+// Utility: basic UA suspicious check
+function isSuspiciousUA(ua) {
+  if (!ua) return true;
+  const s = ua.toLowerCase();
+  const suspicious = ["curl", "bot", "spider", "python-requests", "java/", "wget", "httpclient", "libwww-perl"];
+  for (const token of suspicious) if (s.includes(token)) return true;
+  return false;
+}
 
 export default async function fraudCheck(req, res, next) {
   try {
-    const ip =
-      (req.headers["x-forwarded-for"] && req.headers["x-forwarded-for"].split(",")[0].trim()) ||
-      req.socket?.remoteAddress ||
-      req.ip ||
-      "0.0.0.0";
-
+    const ip = (req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
     const ua = req.headers["user-agent"] || "";
     const pub = (req.query.pub_id || req.body?.pub_id || "UNKNOWN").toString();
-    const geo = (req.query.geo || req.body?.geo || "").toString();
+    const geoParam = (req.query.geo || req.body?.geo || "").toString().toUpperCase();
+    const carrierParam = (req.query.carrier || req.body?.carrier || "").toString();
 
-    // Short log for visibility
-    console.log(`🔎 FraudCheck → pub=${pub} ip=${ip} geo=${geo} uaLen=${ua.length}`);
+    console.log(`🔎 FraudCheck → PUB: ${pub} | IP: ${ip} | UA: ${ua} | GEO: ${geoParam} | CARRIER: ${carrierParam}`);
 
-    // 1) Whitelist check
+    // 0) Admin whitelist: if pub in fraud_whitelist -> bypass checks
     try {
-      const wlRes = await pool.query("SELECT 1 FROM fraud_whitelist WHERE pub_id = $1 LIMIT 1", [pub]);
-      if (wlRes.rows.length > 0) {
-        console.log(`🟢 fraudCheck: pub ${pub} is whitelisted — skipping checks`);
+      const wl = await pool.query("SELECT 1 FROM fraud_whitelist WHERE pub_id = $1 LIMIT 1", [pub]);
+      if (wl.rows.length) {
+        req.fraud = { passed: true, reason: "whitelisted_pub" };
         return next();
       }
-    } catch (err) {
-      console.warn("fraudCheck: whitelist lookup failed", err);
-      // continue (do not block on whitelist lookup error)
+    } catch (e) {
+      console.warn("fraudCheck: whitelist db check failed", e?.message);
+      // continue (fail-open)
     }
 
-    // 2) Basic UA validation
-    if (!ua || ua.length < 6) {
-      await logAndBlock(pub, ip, ua, "EMPTY_OR_INVALID_UA", { geo });
+    // 1) Blacklist IP: immediate block
+    try {
+      const bl = await pool.query("SELECT 1 FROM fraud_blacklist WHERE ip = $1 LIMIT 1", [ip]);
+      if (bl.rows.length) {
+        console.log("🚫 FraudCheck → Blocked (blacklisted IP)");
+        await pool.query(
+          `INSERT INTO fraud_alerts (pub_id, ip, ua, geo, carrier, reason, severity, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
+          [pub, ip, ua, geoParam, carrierParam, "blacklisted_ip", "high"]
+        ).catch(() => {});
+        return res.redirect("https://google.com");
+      }
+    } catch (e) {
+      console.warn("fraudCheck: blacklist db check failed", e?.message);
+    }
+
+    // 2) UA checks
+    if (isSuspiciousUA(ua)) {
+      console.log("🚫 FraudCheck → Blocked (suspicious UA)");
+      await pool.query(
+        `INSERT INTO fraud_alerts (pub_id, ip, ua, geo, carrier, reason, severity, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
+        [pub, ip, ua, geoParam, carrierParam, "suspicious_ua", "medium"]
+      ).catch(() => {});
       return res.redirect("https://google.com");
     }
 
-    // 3) Bot/Script pattern detection
-    const botPatterns = ["python", "curl", "wget", "bot", "crawler", "spider", "phantom", "selenium", "headless"];
-    if (botPatterns.some((p) => ua.toLowerCase().includes(p))) {
-      await logAndBlock(pub, ip, ua, "BOT_OR_EMULATOR", { geo });
-      return res.redirect("https://google.com");
-    }
-
-    // 4) Blocked IP check
+    // 3) IP -> GEO mismatch (geo from IP using geoip-lite if available)
     try {
-      const blk = await pool.query("SELECT 1 FROM blocked_ips WHERE ip = $1 LIMIT 1", [ip]);
-      if (blk.rows.length > 0) {
-        await logAndBlock(pub, ip, ua, "BLOCKED_IP", { geo });
+      const geo = geoip?.lookup ? geoip.lookup(ip) : null;
+      const ipCountry = (geo?.country || "").toUpperCase();
+      if (geoParam && ipCountry && ipCountry !== geoParam.toUpperCase()) {
+        // Log alert and block
+        console.log(`🚫 FraudCheck → IP geo mismatch: ipCountry=${ipCountry} vs param=${geoParam}`);
+        await pool.query(
+          `INSERT INTO fraud_alerts (pub_id, ip, ua, geo, carrier, reason, severity, meta, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())`,
+          [pub, ip, ua, geoParam, carrierParam, "ip_geo_mismatch", "high", JSON.stringify({ ipCountry })]
+        ).catch(() => {});
         return res.redirect("https://google.com");
       }
-    } catch (err) {
-      console.warn("fraudCheck: blocked_ips lookup failed", err);
-      // continue
+    } catch (e) {
+      console.warn("fraudCheck: geoip lookup failed", e?.message);
     }
 
-    // 5) Simple click velocity check — count recent fraud_alerts from same IP
+    // 4) Rate / velocity rules using traffic_logs
     try {
-      const velQ = `SELECT COUNT(*)::int AS hits FROM fraud_alerts WHERE ip = $1 AND created_at > NOW() - INTERVAL '30 seconds'`;
-      const vel = await pool.query(velQ, [ip]);
-      const hits = Number(vel.rows[0]?.hits || 0);
-      if (hits > 25) {
-        await logAndBlock(pub, ip, ua, "HIGH_CLICK_VELOCITY", { hits, geo });
+      // hits from same IP in last 60 seconds
+      const v1 = await pool.query(
+        `SELECT COUNT(1) AS c FROM traffic_logs WHERE ip = $1 AND created_at > (NOW() - INTERVAL '60 seconds')`,
+        [ip]
+      );
+      const ipHits = Number(v1.rows[0]?.c || 0);
+      if (ipHits > 30) {
+        console.log("🚫 FraudCheck → Blocked (ip velocity)");
+        await pool.query(
+          `INSERT INTO fraud_alerts (pub_id, ip, ua, geo, carrier, reason, severity, meta, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())`,
+          [pub, ip, ua, geoParam, carrierParam, "ip_velocity", "high", JSON.stringify({ ipHits })]
+        ).catch(() => {});
         return res.redirect("https://google.com");
       }
-    } catch (err) {
-      console.warn("fraudCheck: velocity check failed", err);
-      // continue
-    }
 
-    // 6) Optional Geo/IP heuristic example (customize per your infra)
-    // Example: if geo provided and ip doesn't match a simple prefix heuristic, flag
-    try {
-      if (geo && geo.length === 2) {
-        // Very lightweight heuristic — change to your geo-to-IP logic
-        const geoUpper = geo.toUpperCase();
-        if (geoUpper === "BD" && !ip.startsWith("103.")) {
-          // Block only as an example — comment out if you don't want this heuristic
-          await logAndBlock(pub, ip, ua, "GEO_IP_MISMATCH", { geo });
+      // hits for pub in last 60 seconds
+      if (pub && pub !== "UNKNOWN") {
+        const v2 = await pool.query(
+          `SELECT COUNT(1) AS c FROM traffic_logs WHERE pub_code = $1 AND created_at > (NOW() - INTERVAL '60 seconds')`,
+          [pub]
+        );
+        const pubHits = Number(v2.rows[0]?.c || 0);
+        if (pubHits > 1000) {
+          console.log("🚫 FraudCheck → Blocked (pub velocity)");
+          await pool.query(
+            `INSERT INTO fraud_alerts (pub_id, ip, ua, geo, carrier, reason, severity, meta, created_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())`,
+            [pub, ip, ua, geoParam, carrierParam, "pub_velocity", "high", JSON.stringify({ pubHits })]
+          ).catch(() => {});
           return res.redirect("https://google.com");
         }
       }
-    } catch (err) {
-      console.warn("fraudCheck: geo-ip heuristic failed", err);
-      // continue
+    } catch (e) {
+      console.warn("fraudCheck: velocity checks failed", e?.message);
     }
 
-    // Passed all checks
-    return next();
-  } catch (err) {
-    console.error("fraudCheck ERROR:", err);
-    // Fail open: do not break main flow if middleware errors
-    return next();
-  }
-}
+    // 5) Carrier check - optional: if you maintain carrier->ip mapping, check it.
+    // (Not implemented here unless you add carrier mapping table)
 
-// helper: insert into fraud_alerts
-async function logAndBlock(pub, ip, ua, reason, meta = {}) {
-  try {
-    const insertQ = `
-      INSERT INTO fraud_alerts (pub_id, ip, user_agent, reason, meta, created_at)
-      VALUES ($1,$2,$3,$4,$5,NOW())
-    `;
-    await pool.query(insertQ, [pub, ip, ua, reason, JSON.stringify(meta)]);
-    console.log(`🚫 fraudCheck logged: ${reason} pub=${pub} ip=${ip}`);
+    // 6) Passed all checks -> optionally log that request passed
+    req.fraud = { passed: true };
+    // insert a lightweight log of request for auditing (non-blocking)
+    pool.query(
+      `INSERT INTO fraud_checks_log (pub_id, ip, ua, geo, carrier, passed, created_at) VALUES ($1,$2,$3,$4,$5,$6,NOW())`,
+      [pub, ip, ua, geoParam, carrierParam, true]
+    ).catch(() => {});
+
+    next();
   } catch (err) {
-    console.warn("fraudCheck: failed to log alert", err);
+    console.error("❌ fraudCheck error:", err);
+    next(); // fail-open so we don't break production traffic
   }
 }
