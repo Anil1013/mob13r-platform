@@ -1,60 +1,80 @@
 // backend/src/middleware/fraudCheck.js
 import pool from "../db.js";
 import fetch from "node-fetch";
+import https from "https";
+
+// Fix SSL rejection issues in AWS
+const agent = new https.Agent({
+  rejectUnauthorized: false,
+});
 
 export default async function fraudCheck(req, res, next) {
   try {
-    const ip = (req.headers["x-forwarded-for"] ||
-      req.connection.remoteAddress ||
-      req.ip ||
-      "").split(",")[0].trim();
+    // Extract IP
+    const ip =
+      (req.headers["x-forwarded-for"] ||
+        req.connection?.remoteAddress ||
+        req.ip ||
+        "")
+        .split(",")[0]
+        .trim();
 
     const ua = req.headers["user-agent"] || "";
 
-    const pub = String(req.query.pub_id || req.body?.pub_id || "UNKNOWN").toUpperCase();
+    const pub = String(
+      req.query.pub_id || req.body?.pub_id || "UNKNOWN"
+    ).toUpperCase();
+
     const expectedGeo = (req.query.geo || req.body?.geo || "").toUpperCase();
     const expectedCarrier = (req.query.carrier || req.body?.carrier || "").toUpperCase();
 
     let realGeo = "";
     let realCarrier = "";
 
-    // -------------------------------
-    // 1) AUTO-DETECT GEO + CARRIER
-    // -------------------------------
+    // --------------------------------------
+    // 1) GEO + CARRIER DETECTION (AWS Safe)
+    // --------------------------------------
     try {
-      const lookup = await fetch(`https://ipapi.co/${ip}/json/`);
+      const lookup = await fetch(`https://ipapi.co/${ip}/json/`, { agent });
       const data = await lookup.json();
 
       realGeo = (data.country_code || "").toUpperCase();
-      realCarrier = (data.org || data.asn || "").toUpperCase();
+      realCarrier = ((data.org || data.asn || "").toUpperCase())
+        .replace("AS", "")
+        .replace(/\s+/g, "");
 
-    } catch (e) {
-      console.log("Geo lookup failed", e);
+    } catch (err) {
+      console.log("Geo lookup failed:", err?.message || err);
+      realGeo = "";
+      realCarrier = "";
     }
 
-    // -------------------------------
-    // 2) WHITELIST → auto-pass
-    // -------------------------------
+    // --------------------------------------
+    // 2) WHITELIST CHECK
+    // --------------------------------------
     try {
       const wl = await pool.query(
-        "SELECT id FROM fraud_whitelist WHERE pub_id=$1 LIMIT 1",
+        "SELECT id FROM fraud_whitelist WHERE pub_id = $1 LIMIT 1",
         [pub]
       );
+
       if (wl.rows.length) {
         await pool.query(
           `INSERT INTO fraud_checks_log (pub_id, ip, ua, geo, carrier, passed, meta, created_at)
-          VALUES ($1,$2,$3,$4,$5,true,$6,NOW())`,
+           VALUES ($1,$2,$3,$4,$5,true,$6,NOW())`,
           [pub, ip, ua, realGeo, realCarrier, JSON.stringify({ reason: "whitelist" })]
         );
         return next();
       }
-    } catch (err) {}
+    } catch (err) {
+      console.log("Whitelist lookup error:", err);
+    }
 
     const alerts = [];
 
-    // -------------------------------
-    // 3) BLACKLIST IP → block
-    // -------------------------------
+    // --------------------------------------
+    // 3) IP BLACKLIST
+    // --------------------------------------
     try {
       const bl = await pool.query(
         "SELECT id FROM fraud_blacklist WHERE ip=$1 LIMIT 1",
@@ -64,74 +84,90 @@ export default async function fraudCheck(req, res, next) {
         alerts.push({
           reason: "ip_blacklist",
           severity: "high",
-          detail: "IP blacklisted"
+          detail: "IP is blacklisted",
         });
       }
-    } catch (err) {}
+    } catch (err) {
+      console.log("Blacklist lookup error:", err);
+    }
 
-    // -------------------------------
+    // --------------------------------------
     // 4) GEO MISMATCH
-    // -------------------------------
+    // --------------------------------------
     if (expectedGeo && realGeo && expectedGeo !== realGeo) {
       alerts.push({
         reason: "geo_mismatch",
         severity: "high",
-        detail: `Expected ${expectedGeo}, got ${realGeo} from IP`
+        detail: `Expected ${expectedGeo} but got ${realGeo}`,
       });
     }
 
-    // -------------------------------
+    // --------------------------------------
     // 5) CARRIER MISMATCH
-    // -------------------------------
+    // --------------------------------------
     if (
       expectedCarrier &&
       realCarrier &&
-      !realCarrier.includes(expectedCarrier)
+      !realCarrier.includes(expectedCarrier.toUpperCase())
     ) {
       alerts.push({
         reason: "carrier_mismatch",
         severity: "medium",
-        detail: `Expected ${expectedCarrier}, got ${realCarrier}`
+        detail: `Expected ${expectedCarrier} got ${realCarrier}`,
       });
     }
 
-    // -------------------------------
-    // 6) BOT UA Checks
-    // -------------------------------
+    // --------------------------------------
+    // 6) BOT / INVALID UA
+    // --------------------------------------
     const uaLower = ua.toLowerCase();
-    if (!ua || ua.length < 8)
-      alerts.push({ reason: "invalid_ua", severity: "high" });
-
-    if (
-      uaLower.includes("curl") ||
-      uaLower.includes("bot") ||
-      uaLower.includes("python") ||
-      uaLower.includes("wget")
-    ) {
-      alerts.push({ reason: "bot_ua", severity: "medium" });
+    if (!ua || ua.length < 8) {
+      alerts.push({
+        reason: "invalid_ua",
+        severity: "high",
+        detail: "User-Agent too short",
+      });
     }
 
-    // -------------------------------
-    // 7) Rate limit (per IP)
-    // -------------------------------
+    if (
+      uaLower.includes("bot") ||
+      uaLower.includes("curl") ||
+      uaLower.includes("wget") ||
+      uaLower.includes("python")
+    ) {
+      alerts.push({
+        reason: "bot_ua",
+        severity: "medium",
+        detail: ua,
+      });
+    }
+
+    // --------------------------------------
+    // 7) RATE LIMIT (per IP last 60 sec)
+    // --------------------------------------
     try {
       const r = await pool.query(
-        `SELECT COUNT(*)::int AS c FROM fraud_checks_log
-         WHERE ip=$1 AND created_at > NOW()-INTERVAL '60 seconds'`,
+        `SELECT COUNT(*)::int AS c
+         FROM fraud_checks_log
+         WHERE ip=$1 AND created_at > NOW() - INTERVAL '60 sec'`,
         [ip]
       );
       const c = r.rows[0].c;
+
       if (c > 20)
         alerts.push({ reason: "rate_limit", severity: "high", detail: c });
       else if (c > 8)
         alerts.push({ reason: "rate_high", severity: "medium", detail: c });
-    } catch (err) {}
+    } catch (err) {
+      console.log("Rate limit lookup error:", err);
+    }
 
-    // -------------------------------
-    // 8) Log Check
-    // -------------------------------
+    // --------------------------------------
+    // 8) ALWAYS LOG CHECKS
+    // --------------------------------------
     await pool.query(
-      `INSERT INTO fraud_checks_log (pub_id, ip, ua, geo, carrier, passed, meta, created_at)
+      `INSERT INTO fraud_checks_log
+       (pub_id, ip, ua, geo, carrier, passed, meta, created_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
       [
         pub,
@@ -144,13 +180,14 @@ export default async function fraudCheck(req, res, next) {
       ]
     );
 
-    // -------------------------------
-    // 9) INSERT ALERTS
-    // -------------------------------
+    // --------------------------------------
+    // 9) STORE ALL ALERTS
+    // --------------------------------------
     for (const a of alerts) {
       await pool.query(
-        `INSERT INTO fraud_alerts (pub_id, ip, ua, geo, carrier, reason, severity, meta, resolved, created_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,NOW())`,
+        `INSERT INTO fraud_alerts
+         (pub_id, ip, ua, geo, carrier, reason, severity, meta, resolved, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,NOW())`,
         [
           pub,
           ip,
@@ -165,8 +202,8 @@ export default async function fraudCheck(req, res, next) {
     }
 
     return next();
-  } catch (e) {
-    console.log("fraudCheck error", e);
+  } catch (err) {
+    console.log("fraudCheck crashed:", err);
     return next(); // fail-open
   }
 }
