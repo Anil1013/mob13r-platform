@@ -3,16 +3,24 @@ import React, { useEffect, useState } from "react";
 import apiClient from "../api/apiClient";
 
 export default function FraudAlerts() {
-  const [pub, setPub] = useState("");
   const [alerts, setAlerts] = useState([]);
+  const [pubFilter, setPubFilter] = useState("");
+  const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState(null);
   const [limit, setLimit] = useState(200);
 
-  const load = async (p) => {
+  const load = async () => {
     setLoading(true);
     try {
-      const q = p ? `?pub_id=${encodeURIComponent(p)}&limit=${limit}` : `?limit=${limit}`;
-      const res = await apiClient.get(`/fraud/alerts${q}`);
+      const params = {
+        ...(pubFilter ? { pub_id: pubFilter } : {}),
+        ...(q ? { q } : {}),
+        limit,
+        offset: 0,
+      };
+      const query = new URLSearchParams(params).toString();
+      const res = await apiClient.get(`/fraud/alerts?${query}`);
       setAlerts(res.data || []);
     } catch (err) {
       console.error("Fraud Alerts Load ERROR:", err);
@@ -22,78 +30,162 @@ export default function FraudAlerts() {
     }
   };
 
-  useEffect(() => { load(""); }, []); // load global by default
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line
+  }, []);
 
   const resolveAlert = async (id) => {
     if (!window.confirm("Mark this alert as resolved?")) return;
     try {
-      await apiClient.post("/fraud/alerts/resolve", { id, resolved_by: localStorage.getItem("mob13r_admin") || "ui" });
-      load(pub);
+      await apiClient.post(`/fraud/alerts/${id}/resolve`, { resolved_by: localStorage.getItem("mob13r_admin") || "ui" });
+      load();
     } catch (err) {
       console.error("Resolve error", err);
       alert("Failed to resolve");
     }
   };
 
-  const downloadCSV = () => {
-    const url = `/api/fraud/export?format=csv${pub ? `&pub_id=${encodeURIComponent(pub)}` : ""}`;
-    // using apiClient to include baseURL and auth headers if necessary
-    const full = apiClient.defaults.baseURL ? `${apiClient.defaults.baseURL}${url.replace(/^\/+/, "/")}` : url;
-    window.open(full, "_blank");
+  const addWhitelist = async () => {
+    const pub = selected?.pub_id || pubFilter;
+    if (!pub) return alert("Select a PUB first");
+    if (!window.confirm(`Whitelist PUB ${pub}? This will skip fraud checks for that PUB.`)) return;
+    try {
+      await apiClient.post("/fraud/whitelist", { pub_id: pub, note: "whitelisted from UI", created_by: localStorage.getItem("mob13r_admin_id") || null });
+      alert("Whitelisted");
+      load();
+    } catch (err) {
+      console.error("whitelist error", err);
+      alert("Failed to whitelist");
+    }
+  };
+
+  const addBlacklist = async () => {
+    const ip = selected?.ip;
+    if (!ip) return alert("Select an alert with an IP to blacklist");
+    if (!window.confirm(`Blacklist IP ${ip}? This will block this IP.`)) return;
+    try {
+      await apiClient.post("/fraud/blacklist", { ip, note: "blacklisted from UI", created_by: localStorage.getItem("mob13r_admin_id") || null });
+      alert("Blacklisted");
+      load();
+    } catch (err) {
+      console.error("blacklist error", err);
+      alert("Failed to blacklist");
+    }
+  };
+
+  const exportCSV = async (format = "csv") => {
+    try {
+      const params = new URLSearchParams({
+        ...(pubFilter ? { pub_id: pubFilter } : {}),
+        ...(q ? { q } : {}),
+        format,
+      }).toString();
+      // open file in new tab to download
+      const url = `${apiClient.defaults.baseURL}/fraud/export?${params}`;
+      window.open(url, "_blank");
+    } catch (err) {
+      console.error("export error", err);
+      alert("Failed to export");
+    }
+  };
+
+  const selectRow = (r) => {
+    setSelected(r);
   };
 
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Fraud Alerts</h1>
 
-      <div className="flex gap-2 mb-4">
-        <input className="border p-2 rounded w-64" placeholder="Filter by PUB_ID (optional)" value={pub} onChange={(e)=>setPub(e.target.value.toUpperCase())} />
-        <button className="bg-blue-600 text-white px-3 py-2 rounded" onClick={()=>load(pub)}>Search</button>
-        <button className="bg-gray-700 text-white px-3 py-2 rounded" onClick={()=>{ setPub(""); load(""); }}>Clear</button>
-        <button className="bg-green-600 text-white px-3 py-2 rounded" onClick={downloadCSV}>Download CSV</button>
+      <div className="flex gap-3 items-center mb-4">
+        <input
+          placeholder="Filter by PUB (PUB03)"
+          value={pubFilter}
+          onChange={(e) => setPubFilter(e.target.value.toUpperCase())}
+          className="border p-2 rounded w-48"
+        />
+        <input
+          placeholder="Search (ip, ua, reason...)"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="border p-2 rounded w-72"
+        />
+        <button onClick={load} className="bg-blue-600 text-white px-4 py-2 rounded">Search</button>
+
+        <div className="ml-auto flex gap-2">
+          <button onClick={() => exportCSV("csv")} className="bg-gray-700 text-white px-3 py-2 rounded">Export CSV</button>
+          <button onClick={() => exportCSV("xlsx")} className="bg-gray-700 text-white px-3 py-2 rounded">Export XLSX</button>
+        </div>
       </div>
 
-      {loading ? <div>Loading...</div> : (
-        <table className="min-w-full text-sm bg-white border">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="p-2">ID</th>
-              <th className="p-2">PUB</th>
-              <th className="p-2">IP</th>
-              <th className="p-2">UA</th>
-              <th className="p-2">GEO</th>
-              <th className="p-2">Carrier</th>
-              <th className="p-2">Reason</th>
-              <th className="p-2">Severity</th>
-              <th className="p-2">Resolved</th>
-              <th className="p-2">When</th>
-              <th className="p-2">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {alerts.length === 0 && (
-              <tr><td colSpan={11} className="p-4 text-center">No alerts</td></tr>
+      <div className="grid grid-cols-4 gap-4">
+        <div className="col-span-3">
+          <div className="bg-white rounded shadow">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="p-2">PUB</th>
+                  <th className="p-2">IP</th>
+                  <th className="p-2">Geo</th>
+                  <th className="p-2">Carrier</th>
+                  <th className="p-2">Reason</th>
+                  <th className="p-2">Severity</th>
+                  <th className="p-2">Resolved</th>
+                  <th className="p-2">Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && (
+                  <tr><td colSpan={8} className="p-4 text-center">Loading…</td></tr>
+                )}
+                {!loading && alerts.length === 0 && (
+                  <tr><td colSpan={8} className="p-4 text-center">No alerts</td></tr>
+                )}
+                {!loading && alerts.map((r) => (
+                  <tr key={r.id} className={`border-t cursor-pointer ${selected?.id === r.id ? "bg-yellow-50" : ""}`} onClick={() => selectRow(r)}>
+                    <td className="p-2">{r.pub_id}</td>
+                    <td className="p-2 font-mono">{r.ip}</td>
+                    <td className="p-2">{r.geo}</td>
+                    <td className="p-2">{r.carrier}</td>
+                    <td className="p-2">{r.reason}</td>
+                    <td className="p-2">{r.severity}</td>
+                    <td className="p-2">{r.resolved ? "Yes" : "No"}</td>
+                    <td className="p-2">{new Date(r.created_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* side panel */}
+        <div className="col-span-1">
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Selected Alert</h3>
+            {!selected && <div className="text-sm text-gray-500">Click a row to inspect</div>}
+            {selected && (
+              <>
+                <div className="text-sm"><strong>PUB:</strong> {selected.pub_id}</div>
+                <div className="text-sm"><strong>IP:</strong> {selected.ip}</div>
+                <div className="text-sm"><strong>UA:</strong> <div className="break-words text-xs">{selected.ua}</div></div>
+                <div className="text-sm"><strong>Reason:</strong> {selected.reason}</div>
+                <div className="text-sm"><strong>Severity:</strong> {selected.severity}</div>
+                <div className="text-sm"><strong>Meta:</strong> <pre className="text-xs">{JSON.stringify(selected.meta || {}, null, 2)}</pre></div>
+
+                <div className="mt-3 flex flex-col gap-2">
+                  {!selected.resolved && (
+                    <button onClick={() => resolveAlert(selected.id)} className="bg-green-600 text-white px-3 py-2 rounded">Resolve</button>
+                  )}
+                  <button onClick={addWhitelist} className="bg-blue-600 text-white px-3 py-2 rounded">Whitelist PUB</button>
+                  <button onClick={addBlacklist} className="bg-red-600 text-white px-3 py-2 rounded">Blacklist IP</button>
+                  <button onClick={() => exportCSV("csv")} className="bg-gray-800 text-white px-3 py-2 rounded">Export PUB CSV</button>
+                </div>
+              </>
             )}
-            {alerts.map(a => (
-              <tr key={a.id} className="border-t">
-                <td className="p-2 font-mono">{a.id}</td>
-                <td className="p-2">{a.pub_id}</td>
-                <td className="p-2">{a.ip}</td>
-                <td className="p-2 truncate max-w-xs">{a.ua}</td>
-                <td className="p-2">{a.geo}</td>
-                <td className="p-2">{a.carrier}</td>
-                <td className="p-2">{a.reason}</td>
-                <td className="p-2">{a.severity}</td>
-                <td className="p-2">{a.resolved ? "Yes" : "No"}</td>
-                <td className="p-2">{new Date(a.created_at).toLocaleString()}</td>
-                <td className="p-2">
-                  {!a.resolved && <button className="bg-yellow-500 text-white px-2 py-1 rounded" onClick={()=>resolveAlert(a.id)}>Resolve</button>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
