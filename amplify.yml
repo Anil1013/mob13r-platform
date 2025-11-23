@@ -1,27 +1,20 @@
 version: 1
 applications:
-  - appRoot: .
+  - appRoot: frontend
     frontend:
       phases:
         preBuild:
           commands:
-            - echo "🔍 Printing current directory"
-            - pwd
-            - echo "🔍 Listing root"
-            - ls -al
-            - echo "🔍 Listing one level deep"
-            - ls -alR | head -200
-            - echo "🧹 Installing frontend deps"
+            - echo "📦 Installing frontend dependencies..."
             - npm install
         build:
           commands:
-            - echo "🔍 During build, print structure again"
-            - pwd
-            - ls -al
-            - ls -alR | head -200
-            - echo "⛔ Stopping build intentionally"
-            - exit 1
+            - echo "⚙️ Building Vite frontend..."
+            - npm run build
       artifacts:
         baseDirectory: dist
         files:
           - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
