@@ -5,18 +5,23 @@ applications:
       phases:
         preBuild:
           commands:
+            - echo "🔍 Printing current directory"
+            - pwd
+            - echo "🔍 Listing root"
+            - ls -al
+            - echo "🔍 Listing one level deep"
+            - ls -alR | head -200
             - echo "🧹 Installing frontend deps"
-            - cd frontend
             - npm install
         build:
           commands:
-            - echo "⚙️ Building Vite frontend"
-            - cd frontend
-            - npm run build
+            - echo "🔍 During build, print structure again"
+            - pwd
+            - ls -al
+            - ls -alR | head -200
+            - echo "⛔ Stopping build intentionally"
+            - exit 1
       artifacts:
-        baseDirectory: frontend/dist
+        baseDirectory: dist
         files:
           - '**/*'
-      cache:
-        paths:
-          - frontend/node_modules/**/*
