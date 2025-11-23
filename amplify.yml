@@ -5,11 +5,9 @@ applications:
       phases:
         preBuild:
           commands:
-            - echo "📦 Installing frontend dependencies..."
             - npm ci || npm install
         build:
           commands:
-            - echo "⚙️ Building Vite frontend..."
             - npm run build
       artifacts:
         baseDirectory: dist
