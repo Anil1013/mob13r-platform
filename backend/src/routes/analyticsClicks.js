@@ -1,97 +1,89 @@
 // backend/src/routes/analyticsClicks.js
 import express from "express";
 import pool from "../db.js";
+import authJWT from "../middleware/authJWT.js";
 import { Parser as Json2csvParser } from "json2csv";
 import ExcelJS from "exceljs";
 
 const router = express.Router();
 
-/*
- GET /analytics/clicks
- Query params:
-   from, to (ISO date)
-   pub_id (publisher_id or pub_code)
-   offer_id
-   geo
-   carrier
-   group=hour|day|none
-   limit, offset
-   format=csv|xlsx  (optional - triggers download)
-*/
-
-function buildFilters(q) {
-  const params = [];
-  let where = "WHERE 1=1";
-
-  if (q.from) {
-    params.push(q.from);
-    where += ` AND created_at >= $${params.length}`;
-  }
-  if (q.to) {
-    params.push(q.to);
-    where += ` AND created_at <= $${params.length}`;
-  }
-
-  if (q.pub_id) {
-    // allow numeric id or code
-    if (/^\d+$/.test(q.pub_id)) {
-      params.push(Number(q.pub_id));
-      where += ` AND publisher_id = $${params.length}`;
-    } else {
-      params.push(q.pub_id.toUpperCase());
-      where += ` AND (pub_code = $${params.length} OR publisher_id::text = $${params.length})`;
-    }
-  }
-
-  if (q.offer_id) {
-    if (/^\d+$/.test(q.offer_id)) {
-      params.push(Number(q.offer_id));
-      where += ` AND offer_id = $${params.length}`;
-    } else {
-      params.push(q.offer_id);
-      where += ` AND (offer_code = $${params.length} OR offer_id::text = $${params.length})`;
-    }
-  }
-
-  if (q.geo) {
-    params.push(q.geo.toUpperCase());
-    where += ` AND geo = $${params.length}`;
-  }
-
-  if (q.carrier) {
-    params.push(q.carrier);
-    where += ` AND carrier ILIKE $${params.length}`;
-  }
-
-  if (q.q) {
-    params.push(`%${q.q}%`);
-    where += ` AND (
-      click_id ILIKE $${params.length}
-      OR ip_address ILIKE $${params.length}
-      OR user_agent ILIKE $${params.length}
-      OR CAST(params AS TEXT) ILIKE $${params.length}
-    )`;
-  }
-
-  return { where, params };
-}
-
-router.get("/clicks", async (req, res) => {
+// Protected route
+router.get("/clicks", authJWT, async (req, res) => {
   try {
+    // Query params
     const {
-      format,
-      group = "none",
+      from,
+      to,
+      pub_id,
+      offer_id,
+      geo,
+      carrier,
+      q, // free text
+      group = "none", // none | hour | day
       limit = 200,
       offset = 0,
+      format, // csv | xlsx -> export
     } = req.query;
 
-    const { where, params } = buildFilters(req.query);
+    // Build WHERE + params
+    const params = [];
+    let where = "WHERE 1=1";
 
-    // Base rows (with publisher/offer names if available)
+    if (from) {
+      params.push(from);
+      where += ` AND created_at >= $${params.length}`;
+    }
+    if (to) {
+      params.push(to);
+      where += ` AND created_at <= $${params.length}`;
+    }
+
+    if (pub_id) {
+      // accept numeric id or pub_code string
+      if (/^\d+$/.test(String(pub_id))) {
+        params.push(Number(pub_id));
+        where += ` AND publisher_id = $${params.length}`;
+      } else {
+        params.push(String(pub_id).toUpperCase());
+        where += ` AND (pub_code = $${params.length} OR publisher_id::text = $${params.length})`;
+      }
+    }
+
+    if (offer_id) {
+      if (/^\d+$/.test(String(offer_id))) {
+        params.push(Number(offer_id));
+        where += ` AND offer_id = $${params.length}`;
+      } else {
+        params.push(String(offer_id));
+        where += ` AND (offer_code = $${params.length} OR offer_id::text = $${params.length})`;
+      }
+    }
+
+    if (geo) {
+      params.push(String(geo).toUpperCase());
+      where += ` AND geo = $${params.length}`;
+    }
+
+    if (carrier) {
+      params.push(String(carrier));
+      where += ` AND carrier ILIKE $${params.length}`;
+    }
+
+    if (q) {
+      params.push(`%${q}%`);
+      where += ` AND (
+        click_id ILIKE $${params.length}
+        OR ip_address ILIKE $${params.length}
+        OR user_agent ILIKE $${params.length}
+        OR CAST(params AS TEXT) ILIKE $${params.length}
+      )`;
+    }
+
+    // Basic rows (with publisher/offer names if available)
     const rowsSql = `
       SELECT cl.*,
-             p.name as publisher_name,
-             o.name as offer_name
+             p.name AS publisher_name,
+             o.name AS offer_name
       FROM click_logs cl
       LEFT JOIN publishers p ON p.id = cl.publisher_id
       LEFT JOIN offers o ON o.id = cl.offer_id
@@ -99,17 +91,19 @@ router.get("/clicks", async (req, res) => {
       ORDER BY created_at DESC
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
-
     const rowsParams = params.concat([Number(limit), Number(offset)]);
-    const { rows } = await pool.query(rowsSql, rowsParams);
+    const rowsRes = await pool.query(rowsSql, rowsParams);
+    const rows = rowsRes.rows;
 
-    // Aggregates: total, by_pub, by_offer, hourly (if requested)
+    // Aggregates object
     const agg = {};
 
+    // total count
     const totalSql = `SELECT COUNT(*)::int AS total FROM click_logs ${where}`;
-    const total = await pool.query(totalSql, params);
-    agg.total = total.rows[0].total || 0;
+    const totalRes = await pool.query(totalSql, params);
+    agg.total = totalRes.rows[0]?.total || 0;
 
+    // by publisher (top)
     const byPubSql = `
       SELECT COALESCE(p.name, cl.pub_code, cl.publisher_id::text) AS pub, COUNT(*)::int AS c
       FROM click_logs cl
@@ -119,9 +113,10 @@ router.get("/clicks", async (req, res) => {
       ORDER BY c DESC
       LIMIT 20
     `;
-    const byPub = await pool.query(byPubSql, params);
-    agg.byPub = byPub.rows;
+    const byPubRes = await pool.query(byPubSql, params);
+    agg.byPub = byPubRes.rows;
 
+    // by offer
     const byOfferSql = `
       SELECT COALESCE(o.name, cl.offer_code, cl.offer_id::text) AS offer, COUNT(*)::int AS c
       FROM click_logs cl
@@ -131,36 +126,38 @@ router.get("/clicks", async (req, res) => {
       ORDER BY c DESC
       LIMIT 20
     `;
-    const byOffer = await pool.query(byOfferSql, params);
-    agg.byOffer = byOffer.rows;
+    const byOfferRes = await pool.query(byOfferSql, params);
+    agg.byOffer = byOfferRes.rows;
 
-    // geo/carrier top
+    // by geo
     const byGeoSql = `SELECT COALESCE(geo,'UN') AS geo, COUNT(*)::int AS c FROM click_logs ${where} GROUP BY geo ORDER BY c DESC LIMIT 20`;
-    const byGeo = await pool.query(byGeoSql, params); agg.byGeo = byGeo.rows;
+    const byGeoRes = await pool.query(byGeoSql, params);
+    agg.byGeo = byGeoRes.rows;
 
+    // by carrier
     const byCarrierSql = `SELECT COALESCE(carrier,'-') AS carrier, COUNT(*)::int AS c FROM click_logs ${where} GROUP BY carrier ORDER BY c DESC LIMIT 20`;
-    const byCarrier = await pool.query(byCarrierSql, params); agg.byCarrier = byCarrier.rows;
+    const byCarrierRes = await pool.query(byCarrierSql, params);
+    agg.byCarrier = byCarrierRes.rows;
 
-    // hourly aggregation if requested
+    // hourly or daily groups if requested
     if (group === "hour") {
       const hourlySql = `SELECT date_trunc('hour', created_at) AS period, COUNT(*)::int AS c
                          FROM click_logs ${where}
                          GROUP BY period
                          ORDER BY period`;
-      const hourly = await pool.query(hourlySql, params);
-      agg.hourly = hourly.rows;
+      const hourlyRes = await pool.query(hourlySql, params);
+      agg.hourly = hourlyRes.rows.map(r => ({ period: r.period, count: r.c }));
     } else if (group === "day") {
       const dailySql = `SELECT date_trunc('day', created_at) AS period, COUNT(*)::int AS c
                          FROM click_logs ${where}
                          GROUP BY period
                          ORDER BY period`;
-      const daily = await pool.query(dailySql, params);
-      agg.daily = daily.rows;
+      const dailyRes = await pool.query(dailySql, params);
+      agg.daily = dailyRes.rows.map(r => ({ period: r.period, count: r.c }));
     }
 
-    // If client requested CSV/XLSX export, stream/return file
+    // EXPORT (CSV / XLSX) - return file if requested
     if (format === "xlsx" || format === "csv") {
-      // build export rows (same selection but increase limit)
       const exportSql = `
         SELECT cl.id, cl.publisher_id, cl.pub_code, cl.offer_id, cl.offer_code, cl.click_id,
                cl.ip_address, cl.user_agent, cl.geo, cl.carrier, cl.params, cl.created_at,
@@ -178,6 +175,7 @@ router.get("/clicks", async (req, res) => {
       if (format === "xlsx") {
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet("clicks");
+
         ws.columns = [
           { header: "id", key: "id", width: 8 },
           { header: "publisher_id", key: "publisher_id", width: 12 },
@@ -194,7 +192,9 @@ router.get("/clicks", async (req, res) => {
           { header: "params", key: "params", width: 50 },
           { header: "created_at", key: "created_at", width: 24 },
         ];
+
         exportRows.forEach(r => ws.addRow(r));
+
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="clicks_export.xlsx"`);
         await wb.xlsx.write(res);
@@ -206,16 +206,19 @@ router.get("/clicks", async (req, res) => {
         ];
         const parser = new Json2csvParser({ fields });
         const csv = parser.parse(exportRows);
+
         res.setHeader("Content-Type", "text/csv");
         res.setHeader("Content-Disposition", `attachment; filename="clicks_export.csv"`);
         return res.send(csv);
       }
     }
 
-    // default JSON response
+    // Default JSON response
     res.json({
       rows,
-      aggregates: agg
+      aggregates: agg,
+      limit: Number(limit),
+      offset: Number(offset)
     });
   } catch (err) {
     console.error("GET /analytics/clicks error:", err);
