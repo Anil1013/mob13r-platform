@@ -16,12 +16,13 @@ import {
   ChevronDown,
   User,
 } from "lucide-react";
+
 import { NavLink, useNavigate } from "react-router-dom";
 
 const MENU = [
   {
     title: "Overview",
-    items: [{ label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" }],
+    items: [{ label: "Dashboard", icon: LayoutDashboard, to: "/" }],
   },
   {
     title: "Management",
@@ -41,7 +42,6 @@ const MENU = [
       { label: "Conversions", icon: BarChart3, to: "/conversions" },
       { label: "Postbacks", icon: Repeat, to: "/postbacks" },
       { label: "Fraud Alerts", icon: ShieldAlert, to: "/fraud-alerts" },
-      { label: "Fraud Analytics", icon: ShieldAlert, to: "/fraud-analytics" },
       { label: "Traffic Distribution", icon: TrendingUp, to: "/traffic-distribution" },
     ],
   },
@@ -57,99 +57,20 @@ export default function Sidebar() {
   const initialWidth = Number(localStorage.getItem("sidebarWidth") || 280);
   const [width, setWidth] = useState(initialWidth);
   const [collapsed, setCollapsed] = useState(initialWidth <= 80);
-
   const [openSections, setOpenSections] = useState({
     overview: true,
     management: true,
     analytics: true,
   });
 
-  const [hoverExpand, setHoverExpand] = useState(false);
-
-  const [microStats, setMicroStats] = useState({
-    clicks: 0,
-    conv: 0,
-    rev: 0,
-  });
-
-  useEffect(() => {
-    async function loadStats() {
-      try {
-        const res = await fetch("https://backend.mob13r.com/api/stats", {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("mob13r_token")}`,
-          },
-        });
-
-        const data = await res.json();
-        setMicroStats({
-          clicks: data.totalClicks || 0,
-          conv: data.totalConversions || 0,
-          rev: data.totalRevenue || 0,
-        });
-      } catch (e) {}
-    }
-    loadStats();
-  }, []);
-
-  // Handle resizing
-  useEffect(() => {
-    const onMove = (e) => {
-      if (!dragRef.current) return;
-
-      const startX = dragRef.current.startX;
-      const startW = dragRef.current.startW;
-      const clientX = e.clientX || (e.touches?.[0]?.clientX || 0);
-
-      const newW = Math.max(70, Math.min(520, startW + (clientX - startX)));
-      setWidth(newW);
-    };
-
-    const stop = () => {
-      dragRef.current = null;
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", stop);
-      document.removeEventListener("touchmove", onMove);
-      document.removeEventListener("touchend", stop);
-    };
-
-    const start = (e) => {
-      dragRef.current = {
-        startX: e.clientX || (e.touches?.[0]?.clientX || 0),
-        startW: width,
-      };
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", stop);
-      document.addEventListener("touchmove", onMove);
-      document.addEventListener("touchend", stop);
-    };
-
-    const dragEl = containerRef.current?.querySelector(".drag-bar");
-    dragEl?.addEventListener("mousedown", start);
-    dragEl?.addEventListener("touchstart", start);
-
-    return () => {
-      dragEl?.removeEventListener("mousedown", start);
-      dragEl?.removeEventListener("touchstart", start);
-    };
-  }, [width]);
-
-  useEffect(() => {
-    localStorage.setItem("sidebarWidth", width.toString());
-    setCollapsed(width <= 80);
-  }, [width]);
-
   const toggleSection = (key) =>
-    setOpenSections((p) => ({ ...p, [key]: !p[key] }));
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
 
   return (
     <aside
       ref={containerRef}
-      style={{ width: collapsed && !hoverExpand ? 72 : width }}
-      className="fixed top-4 left-4 h-[92vh] z-50 rounded-2xl shadow-2xl border border-white/10
-        bg-white/30 dark:bg-black/40 backdrop-blur-xl transition-all"
-      onMouseEnter={() => collapsed && setHoverExpand(true)}
-      onMouseLeave={() => collapsed && setHoverExpand(false)}
+      style={{ width: collapsed ? 72 : width }}
+      className="fixed top-4 left-4 h-[92vh] z-50 rounded-2xl shadow-2xl border border-white/10 bg-white/30 dark:bg-black/40 backdrop-blur-xl transition-all flex flex-col"
     >
       {/* HEADER */}
       <div className="px-3 py-3 flex items-center justify-between border-b border-white/10">
@@ -157,12 +78,8 @@ export default function Sidebar() {
           <img src="/logo.png" alt="logo" className="w-10 h-10 rounded-lg" />
           {!collapsed && (
             <div>
-              <div className="font-bold text-lg text-gray-900 dark:text-white">
-                Mob13r
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                Platform
-              </div>
+              <div className="font-bold text-lg dark:text-white text-gray-900">Mob13r</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Platform</div>
             </div>
           )}
         </div>
@@ -175,36 +92,8 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* MICRO STATS */}
-      {!collapsed && (
-        <div className="px-3 py-3 border-b border-white/10">
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="p-2 bg-white/10 rounded-lg">
-              <div className="text-xs text-gray-400">Clicks</div>
-              <div className="font-semibold dark:text-white">
-                {microStats.clicks}
-              </div>
-            </div>
-
-            <div className="p-2 bg-white/10 rounded-lg">
-              <div className="text-xs text-gray-400">Conv</div>
-              <div className="font-semibold dark:text-white">
-                {microStats.conv}
-              </div>
-            </div>
-
-            <div className="p-2 bg-white/10 rounded-lg">
-              <div className="text-xs text-gray-400">Revenue</div>
-              <div className="font-semibold dark:text-white">
-                ₹{microStats.rev}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MENU */}
-      <div className="px-2 py-3 h-[46vh] overflow-y-auto">
+      {/* MENU SCROLLABLE */}
+      <div className="flex-1 overflow-y-auto px-2 py-4">
         {MENU.map((section) => {
           const key = section.title.toLowerCase();
           const isOpen = openSections[key];
@@ -213,7 +102,8 @@ export default function Sidebar() {
             <div key={key} className="mb-4">
               {!collapsed && (
                 <div className="flex items-center justify-between px-2 mb-2 text-xs uppercase text-gray-500 font-semibold">
-                  <span>{section.title}</span>
+                  {section.title}
+
                   <button
                     onClick={() => toggleSection(key)}
                     className="p-1 hover:bg-white/10 rounded-md"
@@ -236,7 +126,7 @@ export default function Sidebar() {
                     key={item.label}
                     to={item.to}
                     className={({ isActive }) =>
-                      `group flex items-center gap-3 px-3 py-2 mb-1 rounded-lg transition-all 
+                      `group flex items-center gap-3 px-3 py-2 mb-1 rounded-lg transition-all
                       ${
                         isActive
                           ? `bg-gradient-to-r ${ACCENT_GRADIENT} text-white`
@@ -245,11 +135,7 @@ export default function Sidebar() {
                     }
                   >
                     <item.icon className="w-5 h-5" />
-                    {!collapsed && (
-                      <span className="text-sm font-medium">
-                        {item.label}
-                      </span>
-                    )}
+                    {!collapsed && <span className="text-sm font-medium">{item.label}</span>}
                   </NavLink>
                 ))}
               </div>
@@ -258,27 +144,22 @@ export default function Sidebar() {
         })}
       </div>
 
-      {/* RESIZE BAR */}
-      <div className="drag-bar absolute right-0 top-0 bottom-0 w-2 cursor-col-resize" />
-
-      {/* USER + LOGOUT */}
-      <div className="px-3 py-3 border-t border-white/10">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-white/80 dark:bg-gray-800 flex items-center justify-center">
-            <User size={18} className="text-gray-900 dark:text-white" />
+      {/* FIXED BOTTOM LOGOUT */}
+      <div className="px-3 pb-4">
+        <div className="flex flex-col items-center">
+          <div className="w-12 h-12 rounded-full bg-white/80 dark:bg-gray-800 flex items-center justify-center mb-3">
+            <User size={20} className="text-gray-900 dark:text-white" />
           </div>
 
-          {!collapsed && (
-            <button
-              onClick={() => {
-                localStorage.clear();
-                navigate("/login");
-              }}
-              className="flex-1 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600"
-            >
-              Logout
-            </button>
-          )}
+          <button
+            onClick={() => {
+              localStorage.clear();
+              navigate("/login");
+            }}
+            className="w-full bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 text-center"
+          >
+            Logout
+          </button>
         </div>
       </div>
     </aside>
