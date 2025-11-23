@@ -1,34 +1,43 @@
 version: 1
+applications:
+  - appRoot: frontend
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - echo "🧹 Installing frontend dependencies..."
+            - npm ci
+        build:
+          commands:
+            - echo "⚙️ Building Vite frontend..."
+            - npm run build
+      artifacts:
+        baseDirectory: dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+    appBase: /frontend
+    environment:
+      - VITE_API_URL=$VITE_API_URL
+      - VITE_APP_NAME=$VITE_APP_NAME
+      - VITE_THEME=$VITE_THEME
 
-backend:
-  phases:
-    preBuild:
-      commands:
-        - echo "🧠 Skipping backend build (Elastic Beanstalk handles backend)"
-    build:
-      commands:
-        - echo "🧩 Checking backend API health..."
-        - curl -I https://backend.mob13r.com/api || echo "⚠️ Backend check failed!"
-        - echo "✅ Backend check complete."
-  artifacts:
-    baseDirectory: backend
-    files:
-      - '**/*'
-
-frontend:
-  phases:
-    preBuild:
-      commands:
-        - echo "🧹 Installing frontend dependencies..."
-        - npm install --prefix frontend
-    build:
-      commands:
-        - echo "⚙️ Building Vite frontend for production..."
-        - npm run build --prefix frontend
-  artifacts:
-    baseDirectory: frontend/dist
-    files:
-      - '**/*'
-  cache:
-    paths:
-      - frontend/node_modules/**/*
+  - appRoot: backend
+    backend:
+      phases:
+        preBuild:
+          commands:
+            - echo "🧱 Installing backend dependencies..."
+            - npm ci
+        build:
+          commands:
+            - echo "🚀 Backend build completed."
+      artifacts:
+        baseDirectory: .
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
