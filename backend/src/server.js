@@ -20,6 +20,7 @@ import templateRoutes from "./routes/templates.js";
 import publisherTrackingRoutes from "./routes/publisherTracking.js";
 import fraudRoutes from "./routes/fraud.js";
 import distributionRoutes from "./routes/distribution.js";
+import analyticsClicks from "./routes/analyticsClicks.js";  // ✅ NEW
 
 /* Middleware */
 import authJWT from "./middleware/authJWT.js";
@@ -43,7 +44,7 @@ app.use(
   })
 );
 
-// Allow OPTIONS requests globally
+// Allow preflight
 app.options("*", cors());
 
 /* ======================================================================
@@ -58,9 +59,7 @@ app.use(bodyParser.json({ limit: "10mb" }));
 app.get("/api/health", async (req, res) => {
   try {
     const result = await pool.query("SELECT NOW() AS db_time");
-
     res.setHeader("Access-Control-Allow-Origin", "*");
-
     res.json({ status: "ok", db_time: result.rows[0].db_time });
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
@@ -68,7 +67,7 @@ app.get("/api/health", async (req, res) => {
 });
 
 /* ======================================================================
-   Public Click Bridge
+   Public Click Router → Distribution Engine
 ====================================================================== */
 app.get("/click", (req, res) => {
   const params = new URLSearchParams(req.query).toString();
@@ -79,11 +78,11 @@ app.get("/click", (req, res) => {
    API ROUTES
 ====================================================================== */
 
-// Public (NO AUTH)
+// Public Routes (NO LOGIN REQUIRED)
 app.use("/api/auth", authRoutes);
 app.use("/api/distribution", distributionRoutes);
 
-// Protected routes
+// Protected Routes (LOGIN REQUIRED)
 app.use("/api/publishers", authJWT, publishersRoutes);
 app.use("/api/advertisers", authJWT, advertisersRoutes);
 app.use("/api/offers", authJWT, offersRoutes);
@@ -94,6 +93,10 @@ app.use("/api/stats", authJWT, statsRoutes);
 app.use("/api/templates", authJWT, templateRoutes);
 app.use("/api/tracking", authJWT, publisherTrackingRoutes);
 app.use("/api/fraud", authJWT, fraudRoutes);
+app.use("/api/analytics", authJWT, analyticsRoutes);
+
+// ✅ NEW CLICK ANALYTICS ROUTER
+app.use("/api/analytics/clicks", authJWT, analyticsClicks);
 
 /* ======================================================================
    Start Server
