@@ -7,13 +7,13 @@ const router = express.Router();
 
 /*
   ===========================================================
-  TRAFFIC DISTRIBUTION ROUTES
+  TRAFFIC DISTRIBUTION + CLICK LOGGING
   ===========================================================
   • META (tracking links)
   • OFFERS
-  • RULES (CRUD)
-  • OVERVIEW (all PUB_ID rules)
-  • CLICK ROTATION (with fraud check + click_id forwarding)
+  • RULES
+  • CLICK ROTATION
+  • CLICK LOG INSERT → analytics_clicks
   ===========================================================
 */
 
@@ -26,16 +26,8 @@ router.get("/meta", async (req, res) => {
     if (!pub_id) return res.status(400).json({ error: "pub_id_required" });
 
     const q = `
-      SELECT 
-        id AS tracking_link_id,
-        pub_code,
-        publisher_id,
-        publisher_name,
-        geo,
-        carrier,
-        type,
-        tracking_url,
-        status
+      SELECT id AS tracking_link_id, pub_code, publisher_id, publisher_name,
+             geo, carrier, type, tracking_url, status
       FROM publisher_tracking_links
       WHERE pub_code = $1
       ORDER BY id ASC
@@ -51,22 +43,15 @@ router.get("/meta", async (req, res) => {
 });
 
 /* ===========================================================
-   OFFERS → return ACTIVE OFFERS
+   ACTIVE OFFERS
    =========================================================== */
 router.get("/offers", async (req, res) => {
   try {
     const { exclude } = req.query;
 
     let q = `
-      SELECT 
-        id,
-        offer_id,
-        name AS offer_name,
-        advertiser_name,
-        type,
-        payout,
-        tracking_url,
-        status
+      SELECT id, offer_id, name AS offer_name, advertiser_name, type,
+             payout, tracking_url, status
       FROM offers
       WHERE status = 'active'
     `;
@@ -99,15 +84,10 @@ router.get("/offers", async (req, res) => {
 router.get("/rules", async (req, res) => {
   try {
     const { pub_id } = req.query;
+
     if (!pub_id) return res.status(400).json({ error: "pub_id_required" });
 
-    const q = `
-      SELECT *
-      FROM traffic_rules
-      WHERE pub_id = $1
-      ORDER BY id ASC
-    `;
-
+    const q = `SELECT * FROM traffic_rules WHERE pub_id = $1 ORDER BY id ASC`;
     const { rows } = await pool.query(q, [pub_id]);
     res.json(rows);
 
@@ -118,54 +98,11 @@ router.get("/rules", async (req, res) => {
 });
 
 /* ===========================================================
-   REMAINING %
-   =========================================================== */
-router.get("/rules/remaining", async (req, res) => {
-  try {
-    const { pub_id, tracking_link_id } = req.query;
-
-    if (!pub_id) return res.status(400).json({ error: "pub_id_required" });
-
-    let q = `
-      SELECT COALESCE(SUM(weight),0) AS sumw
-      FROM traffic_rules
-      WHERE pub_id = $1 AND status='active'
-    `;
-
-    const params = [pub_id];
-
-    if (tracking_link_id) {
-      q = `
-        SELECT COALESCE(SUM(weight),0) AS sumw
-        FROM traffic_rules
-        WHERE pub_id = $1 AND tracking_link_id = $2 AND status='active'
-      `;
-      params.push(tracking_link_id);
-    }
-
-    const { rows } = await pool.query(q, params);
-    const sumw = Number(rows[0]?.sumw || 0);
-
-    res.json({ sum: sumw, remaining: 100 - sumw });
-
-  } catch (err) {
-    console.error("REMAINING ERROR:", err);
-    res.status(500).json({ error: "internal_error" });
-  }
-});
-
-/* ===========================================================
-   GLOBAL OVERVIEW → Show ALL PUB_ID Traffic Distribution
+   GLOBAL OVERVIEW
    =========================================================== */
 router.get("/overview", async (req, res) => {
   try {
-    const q = `
-      SELECT *
-      FROM traffic_rules
-      ORDER BY pub_id ASC, id ASC
-    `;
-
-    const { rows } = await pool.query(q);
+    const { rows } = await pool.query(`SELECT * FROM traffic_rules ORDER BY pub_id ASC, id ASC`);
     res.json(rows);
 
   } catch (err) {
@@ -175,127 +112,7 @@ router.get("/overview", async (req, res) => {
 });
 
 /* ===========================================================
-   ADD RULE
-   =========================================================== */
-router.post("/rules", async (req, res) => {
-  try {
-    const b = req.body;
-    const required = [
-      "pub_id", "publisher_id", "publisher_name",
-      "tracking_link_id", "offer_id", "offer_code",
-      "offer_name", "advertiser_name",
-      "geo", "carrier", "weight"
-    ];
-
-    for (const k of required) {
-      if (!b[k]) return res.status(400).json({ error: `${k}_required` });
-    }
-
-    // Duplicate check
-    const dup = await pool.query(
-      `SELECT id FROM traffic_rules 
-       WHERE pub_id=$1 AND tracking_link_id=$2 AND offer_id=$3 AND status='active'`,
-      [b.pub_id, b.tracking_link_id, b.offer_id]
-    );
-
-    if (dup.rows.length)
-      return res.status(409).json({ error: "duplicate_offer_for_pub" });
-
-    const insert = `
-      INSERT INTO traffic_rules (
-        pub_id, publisher_id, publisher_name,
-        tracking_link_id, geo, carrier,
-        offer_id, offer_code, offer_name, advertiser_name,
-        redirect_url, type, weight, status,
-        created_by, created_at
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'active',$14,NOW())
-      RETURNING *
-    `;
-
-    const params = [
-      b.pub_id, b.publisher_id, b.publisher_name,
-      b.tracking_link_id, b.geo, b.carrier,
-      b.offer_id, b.offer_code, b.offer_name, b.advertiser_name,
-      b.redirect_url, b.type, b.weight,
-      b.created_by || 1
-    ];
-
-    const { rows } = await pool.query(insert, params);
-    res.json(rows[0]);
-
-  } catch (err) {
-    console.error("ADD RULE ERROR:", err);
-    res.status(500).json({ error: "internal_error" });
-  }
-});
-
-/* ===========================================================
-   UPDATE RULE
-   =========================================================== */
-router.put("/rules/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
-    const b = req.body;
-
-    const fields = [
-      "publisher_id", "publisher_name",
-      "tracking_link_id", "geo", "carrier",
-      "offer_id", "offer_code", "offer_name",
-      "advertiser_name", "redirect_url",
-      "type", "weight", "status"
-    ];
-
-    const set = [];
-    const values = [];
-    let i = 1;
-
-    for (const f of fields) {
-      if (b[f] !== undefined) {
-        set.push(`${f}=$${i++}`);
-        values.push(b[f]);
-      }
-    }
-
-    if (!set.length) return res.status(400).json({ error: "nothing_to_update" });
-
-    values.push(id);
-
-    const q = `
-      UPDATE traffic_rules
-      SET ${set.join(", ")}, updated_at = NOW()
-      WHERE id=$${values.length}
-      RETURNING *
-    `;
-
-    const { rows } = await pool.query(q, values);
-    res.json(rows[0]);
-
-  } catch (err) {
-    console.error("UPDATE RULE ERROR:", err);
-    res.status(500).json({ error: "internal_error" });
-  }
-});
-
-/* ===========================================================
-   DELETE RULE
-   =========================================================== */
-router.delete("/rules/:id", async (req, res) => {
-  try {
-    await pool.query("DELETE FROM traffic_rules WHERE id = $1", [
-      req.params.id,
-    ]);
-
-    res.json({ success: true });
-
-  } catch (err) {
-    console.error("DELETE RULE ERROR:", err);
-    res.status(500).json({ error: "internal_error" });
-  }
-});
-
-/* ===========================================================
-   CLICK ROTATION + CLICK_ID SUPPORT + FRAUD CHECK
+   CLICK ROTATION + CLICK LOGGING
    =========================================================== */
 router.get("/click", fraudCheck, async (req, res) => {
   try {
@@ -309,45 +126,64 @@ router.get("/click", fraudCheck, async (req, res) => {
     const q = `
       SELECT *
       FROM traffic_rules
-      WHERE pub_id = $1 AND status='active'
+      WHERE pub_id = $1 AND status = 'active'
     `;
     const { rows } = await pool.query(q, [pub_id]);
 
     if (!rows.length) return res.redirect("https://google.com");
 
-    // Filter by GEO + CARRIER
     const filtered = rows.filter((r) => {
       const geos = (r.geo || "").split(",").map(v => v.trim().toUpperCase());
       const carriers = (r.carrier || "").split(",").map(v => v.trim().toUpperCase());
-      return geos.includes(geo.toUpperCase()) && carriers.includes(carrier.toUpperCase());
+
+      return geos.includes(geo.toUpperCase()) &&
+             carriers.includes(carrier.toUpperCase());
     });
 
     if (!filtered.length) return res.redirect("https://google.com");
 
-    // If INAPP → No rotation
-    if (filtered[0].type === "INAPP") {
-      let url = filtered[0].redirect_url;
-
-      if (click_id) url += (url.includes("?") ? "&" : "?") + `click_id=${click_id}`;
-
-      return res.redirect(url);
-    }
-
-    // Weighted rotation
-    let total = filtered.reduce((a, r) => a + Number(r.weight), 0);
-    let r = Math.random() * total;
-
     let selected = filtered[0];
-    for (const x of filtered) {
-      r -= Number(x.weight);
-      if (r <= 0) {
-        selected = x;
+
+    // ROTATION
+    let total = filtered.reduce((a, r) => a + Number(r.weight), 0);
+    let rnd = Math.random() * total;
+
+    for (const rule of filtered) {
+      rnd -= Number(rule.weight);
+      if (rnd <= 0) {
+        selected = rule;
         break;
       }
     }
 
-    // Append click_id
+    /* ======================================================
+       LOG CLICK INTO analytics_clicks TABLE
+       ====================================================== */
+    try {
+      await pool.query(
+        `INSERT INTO analytics_clicks 
+         (pub_id, offer_id, geo, carrier, ip, ua, referer, params)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [
+          pub_id,
+          selected.offer_id,
+          geo,
+          carrier,
+          req.ip,
+          req.headers["user-agent"],
+          req.headers["referer"] || null,
+          req.query ? JSON.stringify(req.query) : null,
+        ]
+      );
+    } catch (err) {
+      console.error("CLICK LOGGING ERROR:", err);
+    }
+
+    /* ======================================================
+       REDIRECT WITH CLICK_ID
+       ====================================================== */
     let finalUrl = selected.redirect_url;
+
     if (click_id) {
       finalUrl += (finalUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`;
     }
