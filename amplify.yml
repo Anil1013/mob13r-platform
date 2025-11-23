@@ -1,22 +1,39 @@
 version: 1
 applications:
-  - appRoot: mob13r-platform/frontend
+  - appRoot: .
     frontend:
       phases:
         preBuild:
           commands:
             - echo "🧹 Installing frontend deps"
-            - cd mob13r-platform/frontend
+            - cd frontend
             - npm install
         build:
           commands:
             - echo "⚙️ Building frontend"
-            - cd mob13r-platform/frontend
-            - npx vite build
+            - cd frontend
+            - npm run build
       artifacts:
-        baseDirectory: mob13r-platform/frontend/dist
+        baseDirectory: frontend/dist
         files:
           - '**/*'
       cache:
         paths:
-          - mob13r-platform/frontend/node_modules/**/*
+          - frontend/node_modules/**/*
+  - appRoot: backend
+    backend:
+      phases:
+        preBuild:
+          commands:
+            - echo "🧱 Installing backend deps"
+            - npm install
+        build:
+          commands:
+            - echo "🚀 Backend build done"
+      artifacts:
+        baseDirectory: .
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - backend/node_modules/**/*
