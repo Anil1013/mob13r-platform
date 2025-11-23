@@ -5,37 +5,12 @@ applications:
       phases:
         preBuild:
           commands:
-            - echo "🧹 Installing frontend dependencies..."
-            - npm ci
+            - npm ci || npm install
         build:
           commands:
-            - echo "⚙️ Building Vite frontend..."
             - npm run build
       artifacts:
         baseDirectory: dist
-        files:
-          - '**/*'
-      cache:
-        paths:
-          - node_modules/**/*
-    appBase: /frontend
-    environment:
-      - VITE_API_URL=$VITE_API_URL
-      - VITE_APP_NAME=$VITE_APP_NAME
-      - VITE_THEME=$VITE_THEME
-
-  - appRoot: backend
-    backend:
-      phases:
-        preBuild:
-          commands:
-            - echo "🧱 Installing backend dependencies..."
-            - npm ci
-        build:
-          commands:
-            - echo "🚀 Backend build completed."
-      artifacts:
-        baseDirectory: .
         files:
           - '**/*'
       cache:
