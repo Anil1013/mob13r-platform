@@ -84,7 +84,7 @@ app.use("/api/fraud", authJWT, fraudRoutes);
 
 /* ANALYTICS ROUTES */
 app.use("/api/analytics", authJWT, analyticsRoutes);        // OLD analytics
-app.use("/api/analytics/clicks", analyticsClicksRoutes);  // ✅ NEW click analytics route
+app.use("/api/analytics/clicks", analyticsClicks);   // ✅ NEW click analytics route
 
 /* START SERVER */
 app.listen(PORT, "0.0.0.0", () => {
