@@ -15,12 +15,12 @@ import postbackRoutes from "./routes/postbacks.js";
 import conversionsRoutes from "./routes/conversions.js";
 import statsRoutes from "./routes/stats.js";
 import authRoutes from "./routes/auth.js";
-import analyticsRoutes from "./routes/analytics.js";
+import analyticsRoutes from "./routes/analytics.js";      // Fraud / conversions analytics
 import templateRoutes from "./routes/templates.js";
 import publisherTrackingRoutes from "./routes/publisherTracking.js";
 import fraudRoutes from "./routes/fraud.js";
 import distributionRoutes from "./routes/distribution.js";
-import analyticsClicks from "./routes/analyticsClicks.js";  // ✅ NEW
+import analyticsClicks from "./routes/analyticsClicks.js"; // ✅ New Click Analytics
 
 /* Middleware */
 import authJWT from "./middleware/authJWT.js";
@@ -83,8 +83,8 @@ app.use("/api/tracking", authJWT, publisherTrackingRoutes);
 app.use("/api/fraud", authJWT, fraudRoutes);
 
 /* ANALYTICS ROUTES */
-app.use("/api/analytics", authJWT, analyticsRoutes); // old analytics
-app.use("/api/analytics", authJWT, analyticsClicks); // NEW clicks analytics
+app.use("/api/analytics", authJWT, analyticsRoutes);        // OLD analytics
+app.use("/api/analyticsClicks", authJWT, analyticsClicks);  // ✅ NEW click analytics route
 
 /* START SERVER */
 app.listen(PORT, "0.0.0.0", () => {
