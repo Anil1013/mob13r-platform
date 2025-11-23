@@ -1,58 +1,67 @@
+// frontend/src/pages/Clicks.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import apiClient from "../api/apiClient";
 import {
+  ResponsiveContainer,
   LineChart,
   Line,
   XAxis,
   YAxis,
   Tooltip,
   CartesianGrid,
-  ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
   Legend,
 } from "recharts";
 
-const COLORS = [
-  "#4F46E5",
-  "#EF4444",
-  "#10B981",
-  "#F59E0B",
-  "#06B6D4",
-  "#8B5CF6",
-  "#EC4899",
-  "#14B8A6",
-];
+const COLORS = ["#4F46E5", "#EF4444", "#F59E0B", "#10B981", "#06B6D4", "#8B5CF6"];
 
-export default function ClickAnalytics() {
+function saveBlob(blob, filename) {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export default function Clicks() {
   const [loading, setLoading] = useState(false);
   const [clicks, setClicks] = useState([]);
-  const [latest, setLatest] = useState([]);
-
   const [pub, setPub] = useState("");
+  const [offer, setOffer] = useState("");
   const [geo, setGeo] = useState("");
   const [carrier, setCarrier] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [limit, setLimit] = useState(1000);
+  const [offset, setOffset] = useState(0);
+  const [error, setError] = useState("");
 
+  // fetch raw click rows (backend should return rows with created_at, pub_id, offer_id, ip, geo, carrier, click_id, ua)
   const fetchClicks = async () => {
     try {
       setLoading(true);
+      setError("");
+      const params = {};
+      if (pub) params.pub_id = pub;
+      if (offer) params.offer_id = offer;
+      if (geo) params.geo = geo;
+      if (carrier) params.carrier = carrier;
+      if (dateFrom) params.from = dateFrom;
+      if (dateTo) params.to = dateTo;
+      params.limit = limit;
+      params.offset = offset;
 
-      const params = new URLSearchParams();
-      if (pub) params.append("pub_id", pub);
-      if (geo) params.append("geo", geo);
-      if (carrier) params.append("carrier", carrier);
-      if (dateFrom) params.append("from", dateFrom);
-      if (dateTo) params.append("to", dateTo);
-
-      const res = await apiClient.get(`/analytics/clicks?${params.toString()}`);
-
-      setClicks(res.data || []);
-      setLatest((res.data || []).slice(0, 20));
+      const res = await apiClient.get("/analytics/clicks", { params });
+      // expecting res.data = array of click rows
+      setClicks(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.log("clicks error", err);
+      console.error("fetchClicks error", err);
+      setError(err?.response?.data?.error || err.message || "Failed to fetch");
       setClicks([]);
     } finally {
       setLoading(false);
@@ -60,214 +69,224 @@ export default function ClickAnalytics() {
   };
 
   useEffect(() => {
+    // initial fetch
     fetchClicks();
-    const iv = setInterval(fetchClicks, 20000);
-    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------------------------
-  // METRICS
-  // ---------------------------
-
+  // Derived metrics
   const metrics = useMemo(() => {
+    const total = clicks.length;
+    const uniqueIps = new Set(clicks.map((c) => c.ip)).size;
+    const byPub = {};
+    const byOffer = {};
+    const byGeo = {};
+    const byCarrier = {};
+
+    clicks.forEach((c) => {
+      const p = c.pub_id || c.publisher || "UNKNOWN";
+      const o = c.offer_id || c.offer || "UNKNOWN";
+      const g = (c.geo || "UNKNOWN").toUpperCase();
+      const car = (c.carrier || "UNKNOWN").toUpperCase();
+
+      byPub[p] = (byPub[p] || 0) + 1;
+      byOffer[o] = (byOffer[o] || 0) + 1;
+      byGeo[g] = (byGeo[g] || 0) + 1;
+      byCarrier[car] = (byCarrier[car] || 0) + 1;
+    });
+
+    const topPub = Object.entries(byPub).sort((a, b) => b[1] - a[1])[0] || [null, 0];
+    const topOffer = Object.entries(byOffer).sort((a, b) => b[1] - a[1])[0] || [null, 0];
+
     return {
-      total: clicks.length,
-      uniquePub: new Set(clicks.map((c) => c.pub_id)).size,
-      uniqueGeo: new Set(clicks.map((c) => c.geo)).size,
-      uniqueCarrier: new Set(clicks.map((c) => c.carrier)).size,
+      total,
+      uniqueIps,
+      topPub: topPub[0],
+      topPubCount: topPub[1],
+      topOffer: topOffer[0],
+      topOfferCount: topOffer[1],
+      byGeo,
+      byCarrier,
+      byOffer,
+      byPub,
     };
   }, [clicks]);
 
-  // ---------------------------
-  // HOURLY GRAPH
-  // ---------------------------
-  const hourlyData = useMemo(() => {
+  // Timeseries grouped hourly (client-side)
+  const hourly = useMemo(() => {
+    // Use created_at or createdAt; fall back to now
     const map = {};
     clicks.forEach((c) => {
-      const d = new Date(c.created_at);
-      const hour = d.getHours().toString().padStart(2, "0");
-      map[hour] = (map[hour] || 0) + 1;
+      const dt = new Date(c.created_at || c.createdAt || Date.now());
+      // Format: YYYY-MM-DD HH:00
+      const key =
+        dt.getFullYear() +
+        "-" +
+        String(dt.getMonth() + 1).padStart(2, "0") +
+        "-" +
+        String(dt.getDate()).padStart(2, "0") +
+        " " +
+        String(dt.getHours()).padStart(2, "0") +
+        ":00";
+      map[key] = (map[key] || 0) + 1;
     });
-
-    return Object.entries(map).map(([h, v]) => ({
-      hour: `${h}:00`,
-      clicks: v,
-    }));
+    const arr = Object.entries(map)
+      .map(([k, v]) => ({ hour: k, clicks: v }))
+      .sort((a, b) => (a.hour > b.hour ? 1 : -1));
+    return arr;
   }, [clicks]);
 
-  // ---------------------------
-  // GEO PIE
-  // ---------------------------
-  const geoPie = useMemo(() => {
-    const map = {};
-    clicks.forEach((c) => {
-      const g = c.geo || "Unknown";
-      map[g] = (map[g] || 0) + 1;
-    });
+  // Geo pie chart data
+  const geoData = useMemo(() => {
+    return Object.entries(metrics.byGeo)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+  }, [metrics.byGeo]);
 
-    return Object.entries(map).map(([name, value]) => ({ name, value }));
-  }, [clicks]);
+  // Offer breakdown for table
+  const offersList = useMemo(() => {
+    return Object.entries(metrics.byOffer)
+      .map(([offerId, cnt]) => ({ offerId, cnt }))
+      .sort((a, b) => b.cnt - a.cnt);
+  }, [metrics.byOffer]);
 
-  // ---------------------------
-  // CARRIER PIE
-  // ---------------------------
-  const carrierPie = useMemo(() => {
-    const map = {};
-    clicks.forEach((c) => {
-      const op = c.carrier || "Unknown";
-      map[op] = (map[op] || 0) + 1;
-    });
+  // export (csv or xlsx) using axios blob so token is attached
+  const exportClicks = async (format = "csv") => {
+    try {
+      const params = {};
+      if (pub) params.pub_id = pub;
+      if (offer) params.offer_id = offer;
+      if (geo) params.geo = geo;
+      if (carrier) params.carrier = carrier;
+      if (dateFrom) params.from = dateFrom;
+      if (dateTo) params.to = dateTo;
+      params.format = format;
 
-    return Object.entries(map).map(([name, value]) => ({ name, value }));
-  }, [clicks]);
+      const res = await apiClient.get("/analytics/clicks/export", {
+        params,
+        responseType: "blob",
+      });
 
-  // ---------------------------
-  // EXPORT CSV / XLSX
-  // ---------------------------
-  const exportData = (format = "csv") => {
-    const params = new URLSearchParams();
-    if (pub) params.append("pub_id", pub);
-    if (geo) params.append("geo", geo);
-    if (carrier) params.append("carrier", carrier);
-    if (dateFrom) params.append("from", dateFrom);
-    if (dateTo) params.append("to", dateTo);
-    params.append("format", format);
+      const filenameParts = [
+        "clicks",
+        pub || "all",
+        dateFrom ? dateFrom : "",
+        dateTo ? dateTo : "",
+      ].filter(Boolean);
+      const ext = format === "xlsx" ? "xlsx" : "csv";
+      const filename = `${filenameParts.join("_") || "clicks"}.${ext}`;
 
-    const token = localStorage.getItem("mob13r_token");
+      saveBlob(res.data, filename);
+    } catch (err) {
+      console.error("exportClicks error", err);
+      alert("Export failed: " + (err?.response?.data?.error || err.message));
+    }
+  };
 
-    const finalURL = `${apiClient.defaults.baseURL}/analytics/clicks/export?${params.toString()}&token=${token}`;
-
-    window.open(finalURL, "_blank");
+  // simple UI utilities
+  const resetFilters = () => {
+    setPub("");
+    setOffer("");
+    setGeo("");
+    setCarrier("");
+    setDateFrom("");
+    setDateTo("");
+    setLimit(1000);
+    setOffset(0);
+    fetchClicks();
   };
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Click Analytics</h1>
+      <h1 className="text-2xl font-bold mb-4">Clicks Analytics</h1>
 
-      {/* ---------------- Filters ---------------- */}
-      <div className="flex gap-3 mb-4 items-center">
+      {/* Filters */}
+      <div className="flex gap-3 items-center mb-4 flex-wrap">
         <input
-          placeholder="PUB ID"
-          className="border p-2 rounded w-32"
+          placeholder="Publisher (PUB03)"
           value={pub}
           onChange={(e) => setPub(e.target.value.toUpperCase())}
+          className="border p-2 rounded w-40"
         />
-
         <input
-          placeholder="GEO"
-          className="border p-2 rounded w-24"
+          placeholder="Offer ID"
+          value={offer}
+          onChange={(e) => setOffer(e.target.value)}
+          className="border p-2 rounded w-40"
+        />
+        <input
+          placeholder="GEO (IN)"
           value={geo}
           onChange={(e) => setGeo(e.target.value.toUpperCase())}
+          className="border p-2 rounded w-28"
         />
-
         <input
           placeholder="Carrier"
-          className="border p-2 rounded w-32"
           value={carrier}
           onChange={(e) => setCarrier(e.target.value)}
+          className="border p-2 rounded w-36"
         />
-
-        <input
-          type="date"
-          className="border p-2 rounded"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-        />
-
-        <input
-          type="date"
-          className="border p-2 rounded"
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
-        />
-
-        <button
-          onClick={fetchClicks}
-          className="bg-blue-600 text-white px-3 py-2 rounded"
-        >
-          Apply
-        </button>
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="border p-2 rounded" />
+        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="border p-2 rounded" />
+        <input type="number" value={limit} onChange={(e) => setLimit(Number(e.target.value || 100))} className="border p-2 rounded w-24" />
+        <button onClick={fetchClicks} className="bg-blue-600 text-white px-3 py-2 rounded">Apply</button>
+        <button onClick={resetFilters} className="bg-gray-200 px-3 py-2 rounded">Reset</button>
 
         <div className="ml-auto flex gap-2">
-          <button
-            onClick={() => exportData("csv")}
-            className="bg-gray-800 text-white px-3 py-2 rounded"
-          >
-            Export CSV
-          </button>
-          <button
-            onClick={() => exportData("xlsx")}
-            className="bg-gray-800 text-white px-3 py-2 rounded"
-          >
-            Export XLSX
-          </button>
+          <button onClick={() => exportClicks("csv")} className="bg-gray-800 text-white px-3 py-2 rounded">Export CSV</button>
+          <button onClick={() => exportClicks("xlsx")} className="bg-gray-800 text-white px-3 py-2 rounded">Export XLSX</button>
         </div>
       </div>
 
-      {/* ---------------- Metrics Cards ---------------- */}
+      {/* Cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-4 rounded shadow">
           <div className="text-sm text-gray-500">Total Clicks</div>
           <div className="text-2xl font-semibold">{metrics.total}</div>
         </div>
-
         <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-500">Unique PUB</div>
-          <div className="text-2xl font-semibold">{metrics.uniquePub}</div>
+          <div className="text-sm text-gray-500">Unique IPs</div>
+          <div className="text-2xl font-semibold">{metrics.uniqueIps}</div>
         </div>
-
         <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-500">Unique GEO</div>
-          <div className="text-2xl font-semibold">{metrics.uniqueGeo}</div>
+          <div className="text-sm text-gray-500">Top Publisher</div>
+          <div className="text-2xl font-semibold">{metrics.topPub || "—"} <span className="text-sm">({metrics.topPubCount})</span></div>
         </div>
-
         <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-500">Unique Carrier</div>
-          <div className="text-2xl font-semibold">{metrics.uniqueCarrier}</div>
+          <div className="text-sm text-gray-500">Top Offer</div>
+          <div className="text-2xl font-semibold">{metrics.topOffer || "—"} <span className="text-sm">({metrics.topOfferCount})</span></div>
         </div>
       </div>
 
-      {/* ---------------- Charts ---------------- */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* HOURLY CHART */}
+      {/* Charts */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="col-span-2 bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-2">Hourly Clicks</h3>
-          <div style={{ height: 250 }}>
+          <h3 className="font-semibold mb-2">Clicks (hourly)</h3>
+          <div style={{ height: 260 }}>
             <ResponsiveContainer>
-              <LineChart data={hourlyData}>
+              <LineChart data={hourly}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="hour" />
+                <XAxis dataKey="hour" tick={{ fontSize: 11 }} />
                 <YAxis />
                 <Tooltip />
-                <Line
-                  type="monotone"
-                  dataKey="clicks"
-                  stroke="#4F46E5"
-                  strokeWidth={2}
-                />
+                <Line type="monotone" dataKey="clicks" stroke="#4F46E5" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* GEO PIE */}
         <div className="bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-2">GEO Breakdown</h3>
-          <div style={{ height: 250 }}>
+          <h3 className="font-semibold mb-2">Top GEOs</h3>
+          <div style={{ height: 260 }}>
             <ResponsiveContainer>
               <PieChart>
-                <Pie
-                  data={geoPie}
-                  dataKey="value"
-                  nameKey="name"
-                  outerRadius={80}
-                  label
-                >
-                  {geoPie.map((e, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                <Pie data={geoData} dataKey="value" nameKey="name" outerRadius={80} label>
+                  {geoData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Legend />
+                <Legend verticalAlign="bottom" height={36} />
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
@@ -275,73 +294,66 @@ export default function ClickAnalytics() {
         </div>
       </div>
 
-      {/* ---------------- Table + Live Feed ---------------- */}
-      <div className="grid grid-cols-3 gap-6 mt-6">
-        {/* TABLE */}
+      {/* Table + side summary */}
+      <div className="grid grid-cols-3 gap-4">
         <div className="col-span-2 bg-white p-4 rounded shadow">
           <h3 className="font-semibold mb-2">Clicks Table</h3>
-
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-100">
                 <tr>
-                  <th className="p-2">PUB</th>
+                  <th className="p-2">Time</th>
+                  <th className="p-2">Publisher</th>
+                  <th className="p-2">Offer</th>
+                  <th className="p-2">IP</th>
                   <th className="p-2">GEO</th>
                   <th className="p-2">Carrier</th>
-                  <th className="p-2">IP</th>
                   <th className="p-2">Click ID</th>
-                  <th className="p-2">Time</th>
                 </tr>
               </thead>
-
               <tbody>
-                {loading && (
-                  <tr>
-                    <td colSpan={6} className="text-center p-4">
-                      Loading...
-                    </td>
+                {loading && <tr><td colSpan={7} className="p-4 text-center">Loading…</td></tr>}
+                {!loading && clicks.length === 0 && <tr><td colSpan={7} className="p-4 text-center">No clicks</td></tr>}
+                {!loading && clicks.map((c) => (
+                  <tr key={c.click_id || c.id || Math.random()} className="border-t">
+                    <td className="p-2">{new Date(c.created_at || c.createdAt || Date.now()).toLocaleString()}</td>
+                    <td className="p-2">{c.pub_id || c.publisher || "—"}</td>
+                    <td className="p-2">{c.offer_id || c.offer || "—"}</td>
+                    <td className="p-2 font-mono">{c.ip}</td>
+                    <td className="p-2">{(c.geo || "").toUpperCase() || "—"}</td>
+                    <td className="p-2">{c.carrier || "—"}</td>
+                    <td className="p-2 font-mono">{c.click_id || "—"}</td>
                   </tr>
-                )}
-
-                {!loading &&
-                  clicks.map((c) => (
-                    <tr key={c.id} className="border-t">
-                      <td className="p-2">{c.pub_id}</td>
-                      <td className="p-2">{c.geo}</td>
-                      <td className="p-2">{c.carrier}</td>
-                      <td className="p-2">{c.ip}</td>
-                      <td className="p-2">{c.click_id}</td>
-                      <td className="p-2">
-                        {new Date(c.created_at).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
+                ))}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* LIVE FEED */}
         <div className="bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-2">Recent Clicks</h3>
-          <div className="space-y-2 max-h-[400px] overflow-y-auto text-xs">
-            {latest.map((c) => (
-              <div key={c.id} className="p-2 border rounded">
-                <div className="flex justify-between">
-                  <span className="font-mono">{c.ip}</span>
-                  <span className="text-gray-500">
-                    {new Date(c.created_at).toLocaleTimeString()}
-                  </span>
-                </div>
-                <div>
-                  <strong>{c.pub_id}</strong> — {c.geo} ({c.carrier})
-                </div>
-                <div className="break-words text-gray-600">{c.ua}</div>
+          <h3 className="font-semibold mb-2">Summary</h3>
+          <div className="text-sm mb-2"><strong>By Offer</strong></div>
+          <div className="space-y-1 mb-4 max-h-[320px] overflow-y-auto">
+            {offersList.length === 0 && <div className="text-gray-500">No offers</div>}
+            {offersList.map((o) => (
+              <div key={o.offerId} className="flex justify-between text-xs">
+                <div className="truncate pr-2">{o.offerId}</div>
+                <div className="font-semibold">{o.cnt}</div>
               </div>
+            ))}
+          </div>
+
+          <div className="text-sm mb-2"><strong>By Carrier</strong></div>
+          <div className="space-y-1 text-xs">
+            {Object.entries(metrics.byCarrier).length === 0 && <div className="text-gray-500">No carriers</div>}
+            {Object.entries(metrics.byCarrier).map(([k, v]) => (
+              <div key={k} className="flex justify-between"><div className="truncate pr-2">{k}</div><div>{v}</div></div>
             ))}
           </div>
         </div>
       </div>
+
+      {error && <div className="mt-4 text-red-600">Error: {error}</div>}
     </div>
   );
 }
