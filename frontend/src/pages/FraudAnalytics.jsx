@@ -13,16 +13,15 @@ import {
   Cell,
   Legend,
 } from "recharts";
-
 import apiClient from "../api/apiClient";
 
+// Color palette
 const COLORS = ["#4F46E5", "#EF4444", "#F59E0B", "#10B981", "#06B6D4", "#8B5CF6"];
 
 export default function FraudAnalytics() {
   const [loading, setLoading] = useState(false);
   const [alerts, setAlerts] = useState([]);
   const [liveFeed, setLiveFeed] = useState([]);
-
   const [pubFilter, setPubFilter] = useState("");
   const [geoFilter, setGeoFilter] = useState("");
   const [severityFilter, setSeverityFilter] = useState("");
@@ -30,25 +29,30 @@ export default function FraudAnalytics() {
   const [dateTo, setDateTo] = useState("");
   const [limit, setLimit] = useState(500);
 
+  // Build params object for list & export
+  const buildParams = () => {
+    const p = {};
+    if (pubFilter) p.pub_id = pubFilter;
+    if (geoFilter) p.geo = geoFilter;
+    if (severityFilter) p.severity = severityFilter;
+    if (dateFrom) p.from = dateFrom;
+    if (dateTo) p.to = dateTo;
+    if (limit) p.limit = limit;
+    return p;
+  };
+
   const fetchAlerts = async () => {
     try {
       setLoading(true);
-
-      const params = new URLSearchParams();
-      if (pubFilter) params.append("pub_id", pubFilter);
-      if (geoFilter) params.append("geo", geoFilter);
-      if (severityFilter) params.append("severity", severityFilter);
-      if (dateFrom) params.append("from", dateFrom);
-      if (dateTo) params.append("to", dateTo);
-      params.append("limit", limit.toString());
-
-      const res = await apiClient.get(`/fraud/alerts?${params.toString()}`);
-
-      setAlerts(res.data || []);
-      setLiveFeed((res.data || []).slice(0, 20));
+      const params = buildParams();
+      const res = await apiClient.get("/fraud/alerts", { params });
+      const rows = res.data || [];
+      setAlerts(rows);
+      setLiveFeed(rows.slice(0, 20));
     } catch (err) {
       console.error("fetchAlerts error", err);
       setAlerts([]);
+      setLiveFeed([]);
     } finally {
       setLoading(false);
     }
@@ -56,62 +60,51 @@ export default function FraudAnalytics() {
 
   useEffect(() => {
     fetchAlerts();
-    const iv = setInterval(fetchAlerts, 20000);
+    const iv = setInterval(fetchAlerts, 20000); // poll every 20s
     return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Derived metrics
   const metrics = useMemo(() => {
     const total = alerts.length;
-    const high = alerts.filter(
-      (a) => (a.severity || "").toLowerCase() === "high"
-    ).length;
+    const high = alerts.filter((a) => (a.severity || "").toLowerCase() === "high").length;
     const uniqueIps = new Set(alerts.map((a) => a.ip)).size;
-
     const byPub = {};
     alerts.forEach((a) => {
       byPub[a.pub_id] = (byPub[a.pub_id] || 0) + 1;
     });
-
-    const topPub = Object.entries(byPub).sort((a, b) => b[1] - a[1])[0] || [
-      null,
-      0,
-    ];
-
-    return {
-      total,
-      high,
-      uniqueIps,
-      topPub: topPub[0],
-      topPubCount: topPub[1],
-    };
+    const top = Object.entries(byPub).sort((a, b) => b[1] - a[1])[0] || [null, 0];
+    return { total, high, uniqueIps, topPub: top[0], topPubCount: top[1] };
   }, [alerts]);
 
+  // Timeseries (alerts per day)
   const timeseries = useMemo(() => {
     const map = {};
-
     alerts.forEach((a) => {
-      const d = new Date(a.created_at || Date.now());
+      const d = new Date(a.created_at || a.createdAt || Date.now());
+      if (isNaN(d)) return;
       const key = d.toISOString().slice(0, 10);
       map[key] = (map[key] || 0) + 1;
     });
-
     return Object.entries(map)
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([date, alerts]) => ({ date, alerts }));
   }, [alerts]);
 
+  // Reason breakdown
   const reasonData = useMemo(() => {
     const map = {};
     alerts.forEach((a) => {
       const r = a.reason || "unknown";
       map[r] = (map[r] || 0) + 1;
     });
-
     return Object.entries(map)
-      .slice(0, 8)
+      .slice(0, 12)
       .map(([name, value]) => ({ name, value }));
   }, [alerts]);
 
+  // Actions
   const resolveAlert = async (id) => {
     try {
       await apiClient.post(`/fraud/alerts/${id}/resolve`, {
@@ -119,6 +112,7 @@ export default function FraudAnalytics() {
       });
       fetchAlerts();
     } catch (err) {
+      console.error("resolveAlert error", err);
       alert("Resolve failed");
     }
   };
@@ -126,16 +120,15 @@ export default function FraudAnalytics() {
   const whitelistPub = async (pub) => {
     try {
       if (!pub) return alert("No PUB ID");
-
       await apiClient.post("/fraud/whitelist", {
         pub_id: pub,
-        note: "Analytics UI",
+        note: "From analytics UI",
         created_by: localStorage.getItem("mob13r_admin_id") || null,
       });
-
-      alert("PUB Whitelisted");
+      alert("Whitelisted");
       fetchAlerts();
     } catch (err) {
+      console.error("whitelistPub error", err);
       alert("Whitelist failed");
     }
   };
@@ -143,34 +136,66 @@ export default function FraudAnalytics() {
   const blacklistIp = async (ip) => {
     try {
       if (!ip) return alert("No IP");
-
       await apiClient.post("/fraud/blacklist", {
         ip,
-        note: "Analytics UI",
+        note: "From analytics UI",
         created_by: localStorage.getItem("mob13r_admin_id") || null,
       });
-
-      alert("IP Blacklisted");
+      alert("Blacklisted");
       fetchAlerts();
     } catch (err) {
+      console.error("blacklistIp error", err);
       alert("Blacklist failed");
     }
   };
 
-  const exportCSV = (format = "csv") => {
-    const token = localStorage.getItem("mob13r_token");
-    const params = new URLSearchParams();
+  // Export handler — uses apiClient to include Authorization header and fetch blob
+  const exportFile = async (format = "csv") => {
+    try {
+      const params = buildParams();
+      params.format = format;
 
-    if (pubFilter) params.append("pub_id", pubFilter);
-    if (severityFilter) params.append("severity", severityFilter);
-    if (geoFilter) params.append("geo", geoFilter);
+      // We use axios (apiClient) with responseType blob so token header is included
+      const res = await apiClient.get("/fraud/export", {
+        params,
+        responseType: "blob",
+        timeout: 60000,
+      });
 
-    params.append("format", format);
-    params.append("token", token);
+      // Determine filename from content-disposition if present
+      let filename = `fraud_alerts_${params.pub_id || "all"}.${format === "xlsx" ? "xlsx" : "csv"}`;
+      const cd = res.headers && (res.headers["content-disposition"] || res.headers["Content-Disposition"]);
+      if (cd) {
+        const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(cd);
+        if (match && match[1]) {
+          filename = match[1].replace(/['"]/g, "");
+        }
+      }
 
-    const url = `${apiClient.defaults.baseURL}/fraud/export?${params.toString()}`;
-
-    window.open(url, "_blank");
+      const blob = new Blob([res.data], { type: res.data.type || (format === "xlsx" ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "text/csv") });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("exportFile error", err);
+      // If backend returned JSON error as blob, try to read and show it
+      if (err?.response?.data) {
+        try {
+          const text = await err.response.data.text();
+          console.warn("export error payload:", text);
+          alert("Export failed: " + (text || err.message));
+        } catch {
+          alert("Export failed");
+        }
+      } else {
+        alert("Export failed");
+      }
+    }
   };
 
   return (
@@ -178,149 +203,108 @@ export default function FraudAnalytics() {
       <h1 className="text-2xl font-bold mb-4">Fraud Analytics Dashboard</h1>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-5 items-center">
+      <div className="flex gap-3 items-center mb-4">
         <input
-          placeholder="PUB03"
+          placeholder="PUB (e.g. PUB03)"
           value={pubFilter}
           onChange={(e) => setPubFilter(e.target.value.toUpperCase())}
-          className="border p-2 rounded w-32"
+          className="border p-2 rounded w-40"
         />
-
         <input
-          placeholder="GEO"
+          placeholder="GEO (IN)"
           value={geoFilter}
           onChange={(e) => setGeoFilter(e.target.value.toUpperCase())}
-          className="border p-2 rounded w-24"
+          className="border p-2 rounded w-28"
         />
-
         <select
           value={severityFilter}
           onChange={(e) => setSeverityFilter(e.target.value)}
           className="border p-2 rounded"
         >
-          <option value="">All Severity</option>
+          <option value="">All severities</option>
           <option value="high">High</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
         </select>
 
-        <input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-          className="border p-2 rounded"
-        />
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="border p-2 rounded" />
+        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="border p-2 rounded" />
 
-        <input
-          type="date"
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
-          className="border p-2 rounded"
-        />
-
-        <button
-          onClick={fetchAlerts}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-        >
+        <button onClick={fetchAlerts} className="bg-blue-600 text-white px-3 py-2 rounded">
           Apply
         </button>
 
         <div className="ml-auto flex gap-2">
-          <button
-            onClick={() => exportCSV("csv")}
-            className="bg-gray-800 text-white px-4 py-2 rounded"
-          >
+          <button onClick={() => exportFile("csv")} className="bg-gray-800 text-white px-3 py-2 rounded">
             Export CSV
           </button>
-
-          <button
-            onClick={() => exportCSV("xlsx")}
-            className="bg-gray-800 text-white px-4 py-2 rounded"
-          >
+          <button onClick={() => exportFile("xlsx")} className="bg-gray-800 text-white px-3 py-2 rounded">
             Export XLSX
           </button>
         </div>
       </div>
 
-      {/* Cards */}
+      {/* Metric cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-4 rounded shadow">
-          <div>Total Alerts</div>
-          <div className="text-2xl font-bold">{metrics.total}</div>
+          <div className="text-sm text-gray-500">Total Alerts</div>
+          <div className="text-2xl font-semibold">{metrics.total}</div>
         </div>
-
         <div className="bg-white p-4 rounded shadow">
-          <div>High Severity</div>
-          <div className="text-2xl font-bold">{metrics.high}</div>
+          <div className="text-sm text-gray-500">High Severity</div>
+          <div className="text-2xl font-semibold">{metrics.high}</div>
         </div>
-
         <div className="bg-white p-4 rounded shadow">
-          <div>Unique IPs</div>
-          <div className="text-2xl font-bold">{metrics.uniqueIps}</div>
+          <div className="text-sm text-gray-500">Unique IPs</div>
+          <div className="text-2xl font-semibold">{metrics.uniqueIps}</div>
         </div>
-
         <div className="bg-white p-4 rounded shadow">
-          <div>Top PUB</div>
-          <div className="text-xl font-bold">
-            {metrics.topPub || "—"} ({metrics.topPubCount})
+          <div className="text-sm text-gray-500">Top PUB</div>
+          <div className="text-2xl font-semibold">
+            {metrics.topPub || "—"} <span className="text-sm">({metrics.topPubCount})</span>
           </div>
         </div>
       </div>
 
-      {/* Charts + Live Feed */}
+      {/* Charts */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="col-span-2 bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-2">Alerts Trend</h3>
-          <div style={{ height: 240 }}>
+          <h3 className="font-semibold mb-2">Alerts (time series)</h3>
+          <div style={{ height: 260 }}>
             <ResponsiveContainer>
               <LineChart data={timeseries}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis />
                 <Tooltip />
-                <Line
-                  type="monotone"
-                  dataKey="alerts"
-                  stroke="#4F46E5"
-                  strokeWidth={2}
-                />
+                <Line type="monotone" dataKey="alerts" stroke="#4F46E5" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         <div className="bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-2">Reasons Breakdown</h3>
-          <div style={{ height: 240 }}>
+          <h3 className="font-semibold mb-2">Reasons breakdown</h3>
+          <div style={{ height: 260 }}>
             <ResponsiveContainer>
               <PieChart>
-                <Pie
-                  data={reasonData}
-                  dataKey="value"
-                  nameKey="name"
-                  outerRadius={80}
-                  label
-                >
-                  {reasonData.map((entry, i) => (
-                    <Cell
-                      key={i}
-                      fill={COLORS[i % COLORS.length]}
-                    />
+                <Pie data={reasonData} dataKey="value" nameKey="name" outerRadius={80} label>
+                  {reasonData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
+                <Legend verticalAlign="bottom" height={36} />
                 <Tooltip />
-                <Legend />
               </PieChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      {/* Table + Live Feed */}
+      {/* Table + live feed */}
       <div className="grid grid-cols-3 gap-4">
         <div className="col-span-2 bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-3">Alerts Table</h3>
-
+          <h3 className="font-semibold mb-2">Alerts Table</h3>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-100">
@@ -334,7 +318,6 @@ export default function FraudAnalytics() {
                   <th className="p-2">Actions</th>
                 </tr>
               </thead>
-
               <tbody>
                 {loading && (
                   <tr>
@@ -343,16 +326,13 @@ export default function FraudAnalytics() {
                     </td>
                   </tr>
                 )}
-
-                {!loading &&
-                  alerts.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="p-4 text-center">
-                        No alerts
-                      </td>
-                    </tr>
-                  )}
-
+                {!loading && alerts.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="p-4 text-center">
+                      No alerts
+                    </td>
+                  </tr>
+                )}
                 {!loading &&
                   alerts.map((a) => (
                     <tr key={a.id} className="border-t">
@@ -361,32 +341,18 @@ export default function FraudAnalytics() {
                       <td className="p-2">{a.reason}</td>
                       <td className="p-2">{a.severity}</td>
                       <td className="p-2">{a.resolved ? "Yes" : "No"}</td>
-                      <td className="p-2">
-                        {new Date(a.created_at).toLocaleString()}
-                      </td>
-
+                      <td className="p-2">{new Date(a.created_at).toLocaleString()}</td>
                       <td className="p-2 flex gap-2">
                         {!a.resolved && (
-                          <button
-                            onClick={() => resolveAlert(a.id)}
-                            className="bg-green-600 text-white px-2 py-1 rounded text-xs"
-                          >
+                          <button onClick={() => resolveAlert(a.id)} className="bg-green-600 text-white px-2 py-1 rounded text-xs">
                             Resolve
                           </button>
                         )}
-
-                        <button
-                          onClick={() => whitelistPub(a.pub_id)}
-                          className="bg-blue-600 text-white px-2 py-1 rounded text-xs"
-                        >
+                        <button onClick={() => whitelistPub(a.pub_id)} className="bg-blue-600 text-white px-2 py-1 rounded text-xs">
                           Whitelist
                         </button>
-
-                        <button
-                          onClick={() => blacklistIp(a.ip)}
-                          className="bg-red-600 text-white px-2 py-1 rounded text-xs"
-                        >
-                          Blacklist
+                        <button onClick={() => blacklistIp(a.ip)} className="bg-red-600 text-white px-2 py-1 rounded text-xs">
+                          Blacklist IP
                         </button>
                       </td>
                     </tr>
@@ -396,32 +362,22 @@ export default function FraudAnalytics() {
           </div>
         </div>
 
-        {/* Live Feed */}
         <div className="bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-3">Live Feed</h3>
-
+          <h3 className="font-semibold mb-2">Live Feed (recent)</h3>
           <div className="space-y-2 max-h-[420px] overflow-y-auto text-xs">
-            {liveFeed.map((l, i) => (
-              <div key={i} className="p-2 border rounded">
+            {liveFeed.map((l, idx) => (
+              <div key={l.id || idx} className="p-2 border rounded">
                 <div className="flex justify-between">
                   <div className="font-mono">{l.ip}</div>
-                  <div className="text-gray-500">
-                    {new Date(l.created_at).toLocaleTimeString()}
-                  </div>
+                  <div className="text-gray-500">{new Date(l.created_at).toLocaleTimeString()}</div>
                 </div>
-
                 <div className="text-sm">
-                  <strong>{l.pub_id}</strong> — {l.reason}{" "}
-                  <span className="text-gray-500">({l.severity})</span>
+                  <strong>{l.pub_id}</strong> — {l.reason} <span className="text-gray-500">({l.severity})</span>
                 </div>
-
-                <div className="break-words text-xs">{l.ua}</div>
+                <div className="break-words text-xs text-gray-700">{l.ua}</div>
               </div>
             ))}
-
-            {liveFeed.length === 0 && (
-              <div className="text-gray-500">No recent alerts</div>
-            )}
+            {liveFeed.length === 0 && <div className="text-gray-500">No recent alerts</div>}
           </div>
         </div>
       </div>
