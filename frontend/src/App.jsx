@@ -57,6 +57,7 @@ export default function App() {
 
   return (
     <div className="relative flex min-h-screen bg-gray-100 dark:bg-gray-900">
+
       {!isLoginPage && (
         <div className="fixed top-0 left-0 z-50">
           <Sidebar />
@@ -83,13 +84,11 @@ export default function App() {
             <Route path="/templates" element={<Templates />} />
             <Route path="/tracking" element={<PublisherTracking />} />
             <Route path="/api-docs" element={<ApiDocs />} />
-
-            {/* FRAUD SYSTEM */}
             <Route path="/fraud-alerts" element={<FraudAlerts />} />
-            <Route path="/fraud-analytics" element={<FraudAnalytics />} /> {/* ✅ NEW */}
-
+            <Route path="/fraud-analytics" element={<FraudAnalytics />} />   {/* ✅ NEW */}
             <Route path="/landing-builder" element={<LandingBuilder />} />
             <Route path="/traffic-distribution" element={<TrafficDistribution />} />
+
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </main>
