@@ -1,4 +1,4 @@
-// frontend/src/pages/Clicks.jsx
+// mob13r-platform/frontend/src/pages/Clicks.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import apiClient from "../api/apiClient";
 import {
@@ -41,11 +41,12 @@ export default function Clicks() {
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState("");
 
-  // fetch raw click rows (backend should return rows with created_at, pub_id, offer_id, ip, geo, carrier, click_id, ua)
+  // Fetch click logs
   const fetchClicks = async () => {
     try {
       setLoading(true);
       setError("");
+
       const params = {};
       if (pub) params.pub_id = pub;
       if (offer) params.offer_id = offer;
@@ -57,11 +58,10 @@ export default function Clicks() {
       params.offset = offset;
 
       const res = await apiClient.get("/analytics/clicks", { params });
-      // expecting res.data = array of click rows
       setClicks(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("fetchClicks error", err);
-      setError(err?.response?.data?.error || err.message || "Failed to fetch");
+      setError(err?.response?.data?.error || "Failed to fetch clicks");
       setClicks([]);
     } finally {
       setLoading(false);
@@ -69,23 +69,22 @@ export default function Clicks() {
   };
 
   useEffect(() => {
-    // initial fetch
     fetchClicks();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Derived metrics
+  // Metrics
   const metrics = useMemo(() => {
     const total = clicks.length;
     const uniqueIps = new Set(clicks.map((c) => c.ip)).size;
+
     const byPub = {};
     const byOffer = {};
     const byGeo = {};
     const byCarrier = {};
 
     clicks.forEach((c) => {
-      const p = c.pub_id || c.publisher || "UNKNOWN";
-      const o = c.offer_id || c.offer || "UNKNOWN";
+      const p = c.pub_id || "UNKNOWN";
+      const o = c.offer_id || "UNKNOWN";
       const g = (c.geo || "UNKNOWN").toUpperCase();
       const car = (c.carrier || "UNKNOWN").toUpperCase();
 
@@ -95,8 +94,8 @@ export default function Clicks() {
       byCarrier[car] = (byCarrier[car] || 0) + 1;
     });
 
-    const topPub = Object.entries(byPub).sort((a, b) => b[1] - a[1])[0] || [null, 0];
-    const topOffer = Object.entries(byOffer).sort((a, b) => b[1] - a[1])[0] || [null, 0];
+    const topPub = Object.entries(byPub).sort((a, b) => b[1] - a[1])[0] || [];
+    const topOffer = Object.entries(byOffer).sort((a, b) => b[1] - a[1])[0] || [];
 
     return {
       total,
@@ -112,13 +111,11 @@ export default function Clicks() {
     };
   }, [clicks]);
 
-  // Timeseries grouped hourly (client-side)
+  // Hourly timeseries
   const hourly = useMemo(() => {
-    // Use created_at or createdAt; fall back to now
     const map = {};
     clicks.forEach((c) => {
-      const dt = new Date(c.created_at || c.createdAt || Date.now());
-      // Format: YYYY-MM-DD HH:00
+      const dt = new Date(c.created_at || Date.now());
       const key =
         dt.getFullYear() +
         "-" +
@@ -128,30 +125,26 @@ export default function Clicks() {
         " " +
         String(dt.getHours()).padStart(2, "0") +
         ":00";
+
       map[key] = (map[key] || 0) + 1;
     });
-    const arr = Object.entries(map)
-      .map(([k, v]) => ({ hour: k, clicks: v }))
+
+    return Object.entries(map)
+      .map(([hour, clicks]) => ({ hour, clicks }))
       .sort((a, b) => (a.hour > b.hour ? 1 : -1));
-    return arr;
   }, [clicks]);
 
-  // Geo pie chart data
-  const geoData = useMemo(() => {
-    return Object.entries(metrics.byGeo)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-  }, [metrics.byGeo]);
+  // GEO pie data
+  const geoData = useMemo(
+    () =>
+      Object.entries(metrics.byGeo)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 10),
+    [metrics.byGeo]
+  );
 
-  // Offer breakdown for table
-  const offersList = useMemo(() => {
-    return Object.entries(metrics.byOffer)
-      .map(([offerId, cnt]) => ({ offerId, cnt }))
-      .sort((a, b) => b.cnt - a.cnt);
-  }, [metrics.byOffer]);
-
-  // export (csv or xlsx) using axios blob so token is attached
+  // Export CSV/XLSX
   const exportClicks = async (format = "csv") => {
     try {
       const params = {};
@@ -168,33 +161,11 @@ export default function Clicks() {
         responseType: "blob",
       });
 
-      const filenameParts = [
-        "clicks",
-        pub || "all",
-        dateFrom ? dateFrom : "",
-        dateTo ? dateTo : "",
-      ].filter(Boolean);
-      const ext = format === "xlsx" ? "xlsx" : "csv";
-      const filename = `${filenameParts.join("_") || "clicks"}.${ext}`;
-
-      saveBlob(res.data, filename);
+      saveBlob(res.data, `clicks.${format}`);
     } catch (err) {
       console.error("exportClicks error", err);
-      alert("Export failed: " + (err?.response?.data?.error || err.message));
+      alert("Export failed");
     }
-  };
-
-  // simple UI utilities
-  const resetFilters = () => {
-    setPub("");
-    setOffer("");
-    setGeo("");
-    setCarrier("");
-    setDateFrom("");
-    setDateTo("");
-    setLimit(1000);
-    setOffset(0);
-    fetchClicks();
   };
 
   return (
@@ -202,18 +173,18 @@ export default function Clicks() {
       <h1 className="text-2xl font-bold mb-4">Clicks Analytics</h1>
 
       {/* Filters */}
-      <div className="flex gap-3 items-center mb-4 flex-wrap">
+      <div className="flex flex-wrap gap-3 items-center mb-4">
         <input
-          placeholder="Publisher (PUB03)"
+          placeholder="Publisher"
           value={pub}
           onChange={(e) => setPub(e.target.value.toUpperCase())}
-          className="border p-2 rounded w-40"
+          className="border p-2 rounded w-36"
         />
         <input
           placeholder="Offer ID"
           value={offer}
           onChange={(e) => setOffer(e.target.value)}
-          className="border p-2 rounded w-40"
+          className="border p-2 rounded w-36"
         />
         <input
           placeholder="GEO (IN)"
@@ -229,14 +200,16 @@ export default function Clicks() {
         />
         <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="border p-2 rounded" />
         <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="border p-2 rounded" />
-        <input type="number" value={limit} onChange={(e) => setLimit(Number(e.target.value || 100))} className="border p-2 rounded w-24" />
-        <button onClick={fetchClicks} className="bg-blue-600 text-white px-3 py-2 rounded">Apply</button>
-        <button onClick={resetFilters} className="bg-gray-200 px-3 py-2 rounded">Reset</button>
+        <button onClick={fetchClicks} className="bg-blue-600 text-white px-3 py-2 rounded">
+          Apply
+        </button>
 
-        <div className="ml-auto flex gap-2">
-          <button onClick={() => exportClicks("csv")} className="bg-gray-800 text-white px-3 py-2 rounded">Export CSV</button>
-          <button onClick={() => exportClicks("xlsx")} className="bg-gray-800 text-white px-3 py-2 rounded">Export XLSX</button>
-        </div>
+        <button onClick={() => exportClicks("csv")} className="bg-gray-800 text-white px-3 py-2 rounded ml-auto">
+          CSV
+        </button>
+        <button onClick={() => exportClicks("xlsx")} className="bg-gray-800 text-white px-3 py-2 rounded">
+          XLSX
+        </button>
       </div>
 
       {/* Cards */}
@@ -251,18 +224,19 @@ export default function Clicks() {
         </div>
         <div className="bg-white p-4 rounded shadow">
           <div className="text-sm text-gray-500">Top Publisher</div>
-          <div className="text-2xl font-semibold">{metrics.topPub || "—"} <span className="text-sm">({metrics.topPubCount})</span></div>
+          <div className="text-xl font-semibold">{metrics.topPub || "—"}</div>
         </div>
         <div className="bg-white p-4 rounded shadow">
           <div className="text-sm text-gray-500">Top Offer</div>
-          <div className="text-2xl font-semibold">{metrics.topOffer || "—"} <span className="text-sm">({metrics.topOfferCount})</span></div>
+          <div className="text-xl font-semibold">{metrics.topOffer || "—"}</div>
         </div>
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-3 gap-4 mb-6">
+        {/* Hourly */}
         <div className="col-span-2 bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-2">Clicks (hourly)</h3>
+          <h3 className="font-semibold mb-2">Clicks (Hourly)</h3>
           <div style={{ height: 260 }}>
             <ResponsiveContainer>
               <LineChart data={hourly}>
@@ -276,6 +250,7 @@ export default function Clicks() {
           </div>
         </div>
 
+        {/* GEO Pie */}
         <div className="bg-white p-4 rounded shadow">
           <h3 className="font-semibold mb-2">Top GEOs</h3>
           <div style={{ height: 260 }}>
@@ -283,10 +258,10 @@ export default function Clicks() {
               <PieChart>
                 <Pie data={geoData} dataKey="value" nameKey="name" outerRadius={80} label>
                   {geoData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell key={index} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Legend verticalAlign="bottom" height={36} />
+                <Legend />
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
@@ -294,62 +269,44 @@ export default function Clicks() {
         </div>
       </div>
 
-      {/* Table + side summary */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-2">Clicks Table</h3>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-100">
+      {/* Table */}
+      <div className="bg-white p-4 rounded shadow">
+        <h3 className="font-semibold mb-2">Clicks Table</h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="p-2">Time</th>
+                <th className="p-2">Publisher</th>
+                <th className="p-2">Offer</th>
+                <th className="p-2">IP</th>
+                <th className="p-2">GEO</th>
+                <th className="p-2">Carrier</th>
+                <th className="p-2">Click ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && (
                 <tr>
-                  <th className="p-2">Time</th>
-                  <th className="p-2">Publisher</th>
-                  <th className="p-2">Offer</th>
-                  <th className="p-2">IP</th>
-                  <th className="p-2">GEO</th>
-                  <th className="p-2">Carrier</th>
-                  <th className="p-2">Click ID</th>
+                  <td colSpan={7} className="p-4 text-center">
+                    Loading...
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {loading && <tr><td colSpan={7} className="p-4 text-center">Loading…</td></tr>}
-                {!loading && clicks.length === 0 && <tr><td colSpan={7} className="p-4 text-center">No clicks</td></tr>}
-                {!loading && clicks.map((c) => (
-                  <tr key={c.click_id || c.id || Math.random()} className="border-t">
-                    <td className="p-2">{new Date(c.created_at || c.createdAt || Date.now()).toLocaleString()}</td>
-                    <td className="p-2">{c.pub_id || c.publisher || "—"}</td>
-                    <td className="p-2">{c.offer_id || c.offer || "—"}</td>
+              )}
+              {!loading &&
+                clicks.map((c) => (
+                  <tr key={c.click_id || Math.random()} className="border-t">
+                    <td className="p-2">{new Date(c.created_at).toLocaleString()}</td>
+                    <td className="p-2">{c.pub_id}</td>
+                    <td className="p-2">{c.offer_id}</td>
                     <td className="p-2 font-mono">{c.ip}</td>
-                    <td className="p-2">{(c.geo || "").toUpperCase() || "—"}</td>
-                    <td className="p-2">{c.carrier || "—"}</td>
-                    <td className="p-2 font-mono">{c.click_id || "—"}</td>
+                    <td className="p-2">{c.geo}</td>
+                    <td className="p-2">{c.carrier}</td>
+                    <td className="p-2 font-mono">{c.click_id}</td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-2">Summary</h3>
-          <div className="text-sm mb-2"><strong>By Offer</strong></div>
-          <div className="space-y-1 mb-4 max-h-[320px] overflow-y-auto">
-            {offersList.length === 0 && <div className="text-gray-500">No offers</div>}
-            {offersList.map((o) => (
-              <div key={o.offerId} className="flex justify-between text-xs">
-                <div className="truncate pr-2">{o.offerId}</div>
-                <div className="font-semibold">{o.cnt}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="text-sm mb-2"><strong>By Carrier</strong></div>
-          <div className="space-y-1 text-xs">
-            {Object.entries(metrics.byCarrier).length === 0 && <div className="text-gray-500">No carriers</div>}
-            {Object.entries(metrics.byCarrier).map(([k, v]) => (
-              <div key={k} className="flex justify-between"><div className="truncate pr-2">{k}</div><div>{v}</div></div>
-            ))}
-          </div>
+            </tbody>
+          </table>
         </div>
       </div>
 
