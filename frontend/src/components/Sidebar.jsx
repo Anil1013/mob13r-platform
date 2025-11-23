@@ -17,15 +17,14 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  Search,
   User,
-  LogOut,
-  Eye,
-  Sliders,
 } from "lucide-react";
 
 import { NavLink, useNavigate } from "react-router-dom";
 
+/* -------------------------------------------------
+   MAIN MENU CONFIG
+--------------------------------------------------- */
 const MENU = [
   {
     title: "Overview",
@@ -48,13 +47,15 @@ const MENU = [
       { label: "Clicks", icon: MousePointerClick, to: "/clicks" },
       { label: "Conversions", icon: BarChart3, to: "/conversions" },
       { label: "Postbacks", icon: Repeat, to: "/postbacks" },
+
+      // FRAUD SECTION
       { label: "Fraud Alerts", icon: ShieldAlert, to: "/fraud-alerts" },
+      { label: "Fraud Analytics", icon: BarChart3, to: "/fraud-analytics" }, // ⭐ Added
       { label: "Traffic Distribution", icon: TrendingUp, to: "/traffic-distribution" },
     ],
   },
 ];
 
-// Gradients for active menu item
 const ACCENT_GRADIENT = "from-blue-500 to-indigo-600";
 
 export default function Sidebar() {
@@ -62,26 +63,32 @@ export default function Sidebar() {
   const containerRef = useRef(null);
   const dragRef = useRef(null);
 
+  /* -------------------------------------------------
+     Sidebar Width
+  --------------------------------------------------- */
   const initialWidth = Number(localStorage.getItem("sidebarWidth") || 280);
   const [width, setWidth] = useState(initialWidth);
-  const [collapsed, setCollapsed] = useState(width <= 80);
+  const [collapsed, setCollapsed] = useState(initialWidth <= 80);
+  const [hoverExpand, setHoverExpand] = useState(false);
+
+  /* -------------------------------------------------
+     Section Open States
+  --------------------------------------------------- */
   const [openSections, setOpenSections] = useState({
     overview: true,
     management: true,
     analytics: true,
   });
 
+  /* -------------------------------------------------
+     Micro Stats
+  --------------------------------------------------- */
   const [microStats, setMicroStats] = useState({
     clicks: 0,
     conv: 0,
     rev: 0,
   });
 
-  const [hoverExpand, setHoverExpand] = useState(false);
-
-  /* ----------------------------------------------
-     🟦 LOAD MICRO STATS — FIXED 100% WORKING
-  ----------------------------------------------- */
   useEffect(() => {
     async function loadStats() {
       try {
@@ -91,7 +98,7 @@ export default function Sidebar() {
           },
         });
 
-        if (!res.ok) throw new Error("Stats " + res.status);
+        if (!res.ok) throw new Error("Stats fetch error");
 
         const data = await res.json();
 
@@ -101,27 +108,26 @@ export default function Sidebar() {
           rev: data.totalRevenue || 0,
         });
       } catch (err) {
-        console.warn("⚠ Sidebar stats error:", err.message);
+        console.log("Sidebar stats error:", err.message);
       }
     }
 
     loadStats();
   }, []);
 
-  /* ----------------------------------------------
-     🟦 HANDLE RESIZE
-  ----------------------------------------------- */
+  /* -------------------------------------------------
+     Sidebar Resize Drag Logic
+  --------------------------------------------------- */
   useEffect(() => {
     const onMove = (e) => {
       if (!dragRef.current) return;
 
       const startX = dragRef.current.startX;
       const startW = dragRef.current.startW;
-
       const clientX = e.clientX || (e.touches && e.touches[0].clientX);
 
-      let newW = Math.max(70, Math.min(520, startW + (clientX - startX)));
-      setWidth(newW);
+      let newWidth = Math.max(70, Math.min(520, startW + (clientX - startX)));
+      setWidth(newWidth);
     };
 
     const stop = () => {
@@ -137,6 +143,7 @@ export default function Sidebar() {
         startX: e.clientX || (e.touches && e.touches[0].clientX),
         startW: width,
       };
+
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", stop);
       document.addEventListener("touchmove", onMove);
@@ -144,12 +151,16 @@ export default function Sidebar() {
     }
 
     const dragEl = containerRef.current?.querySelector(".drag-bar");
-    dragEl?.addEventListener("mousedown", start);
-    dragEl?.addEventListener("touchstart", start, { passive: true });
+    if (dragEl) {
+      dragEl.addEventListener("mousedown", start);
+      dragEl.addEventListener("touchstart", start, { passive: true });
+    }
 
     return () => {
-      dragEl?.removeEventListener("mousedown", start);
-      dragEl?.removeEventListener("touchstart", start);
+      if (dragEl) {
+        dragEl.removeEventListener("mousedown", start);
+        dragEl.removeEventListener("touchstart", start);
+      }
     };
   }, [width]);
 
@@ -158,27 +169,28 @@ export default function Sidebar() {
     setCollapsed(width <= 80);
   }, [width]);
 
-  /* ----------------------------------------------
-     🟦 SECTION TOGGLE
-  ----------------------------------------------- */
+  /* -------------------------------------------------
+     Section Toggle
+  --------------------------------------------------- */
   const toggleSection = (key) =>
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
 
-  /* ----------------------------------------------
-     🟦 RENDER UI
-  ----------------------------------------------- */
+  /* -------------------------------------------------
+     Render SIDEBAR
+  --------------------------------------------------- */
   return (
     <aside
       ref={containerRef}
       style={{ width: collapsed && !hoverExpand ? 72 : width }}
-      className="fixed top-4 left-4 h-[92vh] z-50 rounded-2xl shadow-2xl border border-white/10 bg-white/30 dark:bg-black/40 backdrop-blur-xl transition-all"
+      className="fixed top-4 left-4 h-[92vh] rounded-2xl shadow-2xl border border-white/10 bg-white/30 dark:bg-black/40 backdrop-blur-xl transition-all z-50"
       onMouseEnter={() => collapsed && setHoverExpand(true)}
       onMouseLeave={() => collapsed && setHoverExpand(false)}
     >
       {/* HEADER */}
       <div className="px-3 py-3 flex items-center justify-between border-b border-white/10">
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="logo" className="w-10 h-10 rounded-lg" />
+          <img src="/logo.png" className="w-10 h-10 rounded-lg" alt="logo" />
+
           {!collapsed && (
             <div>
               <div className="font-bold text-lg dark:text-white text-gray-900">
@@ -260,7 +272,7 @@ export default function Sidebar() {
                     key={item.label}
                     to={item.to}
                     className={({ isActive }) =>
-                      `group flex items-center gap-3 px-3 py-2 mb-1 rounded-lg transition-all
+                      `group flex items-center gap-3 px-3 py-2 mb-1 rounded-lg transition-all 
                       ${
                         isActive
                           ? `bg-gradient-to-r ${ACCENT_GRADIENT} text-white`
@@ -269,13 +281,11 @@ export default function Sidebar() {
                     }
                   >
                     <item.icon className="w-5 h-5" />
+
                     {!collapsed && (
-                      <span className="text-sm font-medium">
-                        {item.label}
-                      </span>
+                      <span className="text-sm font-medium">{item.label}</span>
                     )}
 
-                    {/* Tooltip when collapsed */}
                     {collapsed && (
                       <span className="absolute left-20 bg-black text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 pointer-events-none">
                         {item.label}
@@ -289,10 +299,10 @@ export default function Sidebar() {
         })}
       </div>
 
-      {/* RESIZE DRAG BAR */}
+      {/* DRAG BAR */}
       <div className="drag-bar absolute right-0 top-0 bottom-0 w-2 cursor-col-resize" />
 
-      {/* BOTTOM PROFILE */}
+      {/* LOGOUT */}
       <div className="px-3 py-3 border-t border-white/10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-white/80 dark:bg-gray-800 flex items-center justify-center">
