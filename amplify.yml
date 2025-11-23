@@ -1,4 +1,5 @@
 version: 1
+
 backend:
   phases:
     preBuild:
@@ -19,14 +20,13 @@ frontend:
     preBuild:
       commands:
         - echo "🧹 Installing frontend dependencies..."
-        - npm install --prefix frontend --include=dev
-        - npm install react-scripts --prefix frontend
+        - npm install --prefix frontend
     build:
       commands:
-        - echo "⚙️ Building frontend for production..."
+        - echo "⚙️ Building Vite frontend for production..."
         - npm run build --prefix frontend
   artifacts:
-    baseDirectory: frontend/build
+    baseDirectory: frontend/dist
     files:
       - '**/*'
   cache:
