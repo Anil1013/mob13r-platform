@@ -3,8 +3,12 @@ import express from "express";
 import pool from "../db.js";
 import { Parser as Json2csvParser } from "json2csv";
 import ExcelJS from "exceljs";
+import authJWT from "../middleware/authJWT.js";   // ✅ ADD
 
 const router = express.Router();
+
+// ✅ Protect ALL fraud routes (login नहीं, सिर्फ fraud)
+router.use(authJWT);
 
 /*
  ROUTES:
@@ -19,11 +23,6 @@ const router = express.Router();
 
 /* ---------------------------------------
    GET /fraud/alerts
-   Filters:
-    - pub_id
-    - q (ip, ua, reason, severity, geo, carrier, meta)
-    - limit
-    - offset
 --------------------------------------- */
 router.get("/alerts", async (req, res) => {
   try {
@@ -96,7 +95,6 @@ router.post("/alerts/:id/resolve", async (req, res) => {
 
 /* ---------------------------------------
    POST /fraud/whitelist
-   Body: { pub_id, note }
 --------------------------------------- */
 router.post("/whitelist", async (req, res) => {
   try {
@@ -127,7 +125,6 @@ router.post("/whitelist", async (req, res) => {
 
 /* ---------------------------------------
    POST /fraud/blacklist
-   Body: { ip, note }
 --------------------------------------- */
 router.post("/blacklist", async (req, res) => {
   try {
@@ -153,7 +150,6 @@ router.post("/blacklist", async (req, res) => {
 
 /* ---------------------------------------
    GET /fraud/export
-   Query: pub_id=PUB03&format=csv|xlsx&q=term
 --------------------------------------- */
 router.get("/export", async (req, res) => {
   try {
@@ -191,7 +187,7 @@ router.get("/export", async (req, res) => {
 
     const { rows } = await pool.query(sql, params);
 
-    /* ---------- XLSX EXPORT ---------- */
+    /* XLSX Export */
     if (format === "xlsx") {
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet("fraud_alerts");
@@ -232,7 +228,7 @@ router.get("/export", async (req, res) => {
       return res.end();
     }
 
-    /* ---------- CSV EXPORT ---------- */
+    /* CSV Export */
     const parser = new Json2csvParser({
       fields: [
         "id",
