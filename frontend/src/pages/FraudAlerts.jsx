@@ -8,7 +8,7 @@ export default function FraudAlerts() {
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(null);
-  const [limit, setLimit] = useState(200);
+  const [limit] = useState(200);
 
   const load = async () => {
     setLoading(true);
@@ -19,9 +19,8 @@ export default function FraudAlerts() {
         limit,
         offset: 0,
       };
-      const query = new URLSearchParams(params).toString();
 
-      const res = await apiClient.get(`/fraud/alerts?${query}`);
+      const res = await apiClient.get(`/fraud/alerts`, { params });
       setAlerts(res.data || []);
     } catch (err) {
       console.error("Fraud Alerts Load ERROR:", err);
@@ -37,7 +36,6 @@ export default function FraudAlerts() {
 
   const resolveAlert = async (id) => {
     if (!window.confirm("Mark this alert as resolved?")) return;
-
     try {
       await apiClient.post(`/fraud/alerts/${id}/resolve`, {
         resolved_by: localStorage.getItem("mob13r_admin") || "ui",
@@ -53,7 +51,12 @@ export default function FraudAlerts() {
     const pub = selected?.pub_id || pubFilter;
     if (!pub) return alert("Select a PUB first");
 
-    if (!window.confirm(`Whitelist PUB ${pub}?`)) return;
+    if (
+      !window.confirm(
+        `Whitelist PUB ${pub}? This will skip fraud checks for that PUB.`
+      )
+    )
+      return;
 
     try {
       await apiClient.post("/fraud/whitelist", {
@@ -61,6 +64,7 @@ export default function FraudAlerts() {
         note: "whitelisted from UI",
         created_by: localStorage.getItem("mob13r_admin_id") || null,
       });
+
       alert("Whitelisted");
       load();
     } catch (err) {
@@ -71,9 +75,9 @@ export default function FraudAlerts() {
 
   const addBlacklist = async () => {
     const ip = selected?.ip;
-    if (!ip) return alert("Select alert with IP");
+    if (!ip) return alert("Select an alert with an IP to blacklist");
 
-    if (!window.confirm(`Blacklist IP ${ip}?`)) return;
+    if (!window.confirm(`Blacklist IP ${ip}? This will block this IP.`)) return;
 
     try {
       await apiClient.post("/fraud/blacklist", {
@@ -81,6 +85,7 @@ export default function FraudAlerts() {
         note: "blacklisted from UI",
         created_by: localStorage.getItem("mob13r_admin_id") || null,
       });
+
       alert("Blacklisted");
       load();
     } catch (err) {
@@ -89,44 +94,45 @@ export default function FraudAlerts() {
     }
   };
 
-  // 🔥 FIXED EXPORT — Authorization header included
+  // -----------------------------------------------------------
+  // ✔ FIXED CSV / XLSX export (with JWT auth & file download)
+  // -----------------------------------------------------------
   const exportCSV = async (format = "csv") => {
     try {
-      const token = localStorage.getItem("mob13r_token");
-      if (!token) return alert("Login expired — token missing.");
-
       const params = new URLSearchParams({
         ...(pubFilter ? { pub_id: pubFilter } : {}),
         ...(q ? { q } : {}),
         format,
-      });
+      }).toString();
 
-      const url = `${apiClient.defaults.baseURL}/fraud/export?${params}`;
+      const token = localStorage.getItem("mob13r_token");
 
-      const res = await fetch(url, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(
+        `${apiClient.defaults.baseURL}/fraud/export?${params}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-      if (!res.ok) {
-        const txt = await res.text();
-        console.error("Export error:", txt);
-        return alert("Export failed: " + txt);
+      if (!response.ok) {
+        console.error("Export failed:", response.status);
+        return alert("Export failed");
       }
 
-      const blob = await res.blob();
-      const fileUrl = window.URL.createObjectURL(blob);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
 
       const a = document.createElement("a");
-      a.href = fileUrl;
-      a.download = `fraud_export.${format}`;
+      a.href = url;
+      a.download = `fraud_alerts.${format}`;
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
+      a.remove();
 
-      window.URL.revokeObjectURL(fileUrl);
+      window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error("export error", err);
       alert("Failed to export");
@@ -137,6 +143,7 @@ export default function FraudAlerts() {
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Fraud Alerts</h1>
 
+      {/* Filters */}
       <div className="flex gap-3 items-center mb-4">
         <input
           placeholder="Filter by PUB (PUB03)"
@@ -172,6 +179,7 @@ export default function FraudAlerts() {
         </div>
       </div>
 
+      {/* Table + Side panel */}
       <div className="grid grid-cols-4 gap-4">
         {/* Table */}
         <div className="col-span-3">
@@ -211,10 +219,10 @@ export default function FraudAlerts() {
                   alerts.map((r) => (
                     <tr
                       key={r.id}
-                      onClick={() => setSelected(r)}
                       className={`border-t cursor-pointer ${
                         selected?.id === r.id ? "bg-yellow-50" : ""
                       }`}
+                      onClick={() => setSelected(r)}
                     >
                       <td className="p-2">{r.pub_id}</td>
                       <td className="p-2 font-mono">{r.ip}</td>
@@ -223,7 +231,9 @@ export default function FraudAlerts() {
                       <td className="p-2">{r.reason}</td>
                       <td className="p-2">{r.severity}</td>
                       <td className="p-2">{r.resolved ? "Yes" : "No"}</td>
-                      <td className="p-2">{new Date(r.created_at).toLocaleString()}</td>
+                      <td className="p-2">
+                        {new Date(r.created_at).toLocaleString()}
+                      </td>
                     </tr>
                   ))}
               </tbody>
@@ -231,13 +241,15 @@ export default function FraudAlerts() {
           </div>
         </div>
 
-        {/* Side panel */}
+        {/* Side Panel */}
         <div className="col-span-1">
           <div className="bg-white p-4 rounded shadow">
             <h3 className="font-semibold mb-2">Selected Alert</h3>
 
             {!selected && (
-              <div className="text-sm text-gray-500">Click a row to inspect</div>
+              <div className="text-sm text-gray-500">
+                Click a row to inspect
+              </div>
             )}
 
             {selected && (
