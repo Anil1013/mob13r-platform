@@ -3,12 +3,8 @@ import express from "express";
 import pool from "../db.js";
 import { Parser as Json2csvParser } from "json2csv";
 import ExcelJS from "exceljs";
-import authJWT from "../middleware/authJWT.js";   // ✅ ADD
 
 const router = express.Router();
-
-// ✅ Protect ALL fraud routes (login नहीं, सिर्फ fraud)
-router.use(authJWT);
 
 /*
  ROUTES:
@@ -23,16 +19,45 @@ router.use(authJWT);
 
 /* ---------------------------------------
    GET /fraud/alerts
+   Filters:
+    - pub_id
+    - q (ip, ua, reason, severity, geo, carrier, meta)
+    - severity
+    - geo
+    - from (YYYY-MM-DD)
+    - to   (YYYY-MM-DD)
+    - limit
+    - offset
 --------------------------------------- */
 router.get("/alerts", async (req, res) => {
   try {
-    const { pub_id, q, limit = 500, offset = 0 } = req.query;
+    const {
+      pub_id,
+      q,
+      limit = 500,
+      offset = 0,
+      severity,
+      geo,
+      from,
+      to,
+    } = req.query;
+
     const params = [];
     let where = "WHERE 1=1";
 
     if (pub_id) {
       params.push(pub_id.toUpperCase());
       where += ` AND pub_id = $${params.length}`;
+    }
+
+    if (severity) {
+      params.push(severity);
+      where += ` AND LOWER(severity) = LOWER($${params.length})`;
+    }
+
+    if (geo) {
+      params.push(geo.toUpperCase());
+      where += ` AND geo = $${params.length}`;
     }
 
     if (q) {
@@ -46,6 +71,18 @@ router.get("/alerts", async (req, res) => {
           OR severity ILIKE $${params.length}
           OR CAST(meta AS TEXT) ILIKE $${params.length}
       )`;
+    }
+
+    // date range filters
+    if (from) {
+      // created_at >= from::date
+      params.push(from);
+      where += ` AND created_at >= $${params.length}::date`;
+    }
+    if (to) {
+      // created_at < (to::date + 1 day) to include whole 'to' day
+      params.push(to);
+      where += ` AND created_at < ($${params.length}::date + INTERVAL '1 day')`;
     }
 
     params.push(limit);
@@ -95,6 +132,7 @@ router.post("/alerts/:id/resolve", async (req, res) => {
 
 /* ---------------------------------------
    POST /fraud/whitelist
+   Body: { pub_id, note }
 --------------------------------------- */
 router.post("/whitelist", async (req, res) => {
   try {
@@ -125,6 +163,7 @@ router.post("/whitelist", async (req, res) => {
 
 /* ---------------------------------------
    POST /fraud/blacklist
+   Body: { ip, note }
 --------------------------------------- */
 router.post("/blacklist", async (req, res) => {
   try {
@@ -150,10 +189,19 @@ router.post("/blacklist", async (req, res) => {
 
 /* ---------------------------------------
    GET /fraud/export
+   Query: pub_id=PUB03&format=csv|xlsx&q=term&from=YYYY-MM-DD&to=YYYY-MM-DD&severity=high&geo=IN
 --------------------------------------- */
 router.get("/export", async (req, res) => {
   try {
-    const { pub_id, format = "csv", q } = req.query;
+    const {
+      pub_id,
+      format = "csv",
+      q,
+      severity,
+      geo,
+      from,
+      to,
+    } = req.query;
 
     const params = [];
     let where = "WHERE 1=1";
@@ -161,6 +209,16 @@ router.get("/export", async (req, res) => {
     if (pub_id) {
       params.push(pub_id.toUpperCase());
       where += ` AND pub_id = $${params.length}`;
+    }
+
+    if (severity) {
+      params.push(severity);
+      where += ` AND LOWER(severity) = LOWER($${params.length})`;
+    }
+
+    if (geo) {
+      params.push(geo.toUpperCase());
+      where += ` AND geo = $${params.length}`;
     }
 
     if (q) {
@@ -176,6 +234,15 @@ router.get("/export", async (req, res) => {
       )`;
     }
 
+    if (from) {
+      params.push(from);
+      where += ` AND created_at >= $${params.length}::date`;
+    }
+    if (to) {
+      params.push(to);
+      where += ` AND created_at < ($${params.length}::date + INTERVAL '1 day')`;
+    }
+
     const sql = `
       SELECT id, pub_id, ip, ua, geo, carrier, reason, severity,
              resolved, resolved_by, meta, created_at, resolved_at
@@ -187,7 +254,7 @@ router.get("/export", async (req, res) => {
 
     const { rows } = await pool.query(sql, params);
 
-    /* XLSX Export */
+    /* ---------- XLSX EXPORT ---------- */
     if (format === "xlsx") {
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet("fraud_alerts");
@@ -224,11 +291,12 @@ router.get("/export", async (req, res) => {
         `attachment; filename="fraud_alerts_${pub_id || "all"}.xlsx"`
       );
 
+      // Write to response stream
       await wb.xlsx.write(res);
       return res.end();
     }
 
-    /* CSV Export */
+    /* ---------- CSV EXPORT ---------- */
     const parser = new Json2csvParser({
       fields: [
         "id",
