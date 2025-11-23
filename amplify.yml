@@ -10,7 +10,7 @@ applications:
             - npm install
         build:
           commands:
-            - echo "⚙️ Building frontend"
+            - echo "⚙️ Building Vite frontend"
             - cd frontend
             - npm run build
       artifacts:
@@ -20,20 +20,3 @@ applications:
       cache:
         paths:
           - frontend/node_modules/**/*
-  - appRoot: backend
-    backend:
-      phases:
-        preBuild:
-          commands:
-            - echo "🧱 Installing backend deps"
-            - npm install
-        build:
-          commands:
-            - echo "🚀 Backend build done"
-      artifacts:
-        baseDirectory: .
-        files:
-          - '**/*'
-      cache:
-        paths:
-          - backend/node_modules/**/*
