@@ -30,7 +30,7 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 /* ======================================================================
-   ✅ CORS — MUST BE FIRST — FIXES LOGIN ISSUE
+   CORS
 ====================================================================== */
 app.use(
   cors({
@@ -43,19 +43,13 @@ app.use(
     credentials: true,
   })
 );
-
-// Allow preflight
 app.options("*", cors());
 
-/* ======================================================================
-   Security + JSON Parser
-====================================================================== */
+/* SECURITY + PARSER */
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(bodyParser.json({ limit: "10mb" }));
 
-/* ======================================================================
-   Health Check
-====================================================================== */
+/* HEALTH CHECK */
 app.get("/api/health", async (req, res) => {
   try {
     const result = await pool.query("SELECT NOW() AS db_time");
@@ -66,23 +60,17 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-/* ======================================================================
-   Public Click Router → Distribution Engine
-====================================================================== */
+/* PUBLIC CLICK REDIRECT */
 app.get("/click", (req, res) => {
   const params = new URLSearchParams(req.query).toString();
   return res.redirect(`/api/distribution/click?${params}`);
 });
 
-/* ======================================================================
-   API ROUTES
-====================================================================== */
-
-// Public Routes (NO LOGIN REQUIRED)
+/* PUBLIC ROUTES */
 app.use("/api/auth", authRoutes);
 app.use("/api/distribution", distributionRoutes);
 
-// Protected Routes (LOGIN REQUIRED)
+/* PROTECTED ROUTES */
 app.use("/api/publishers", authJWT, publishersRoutes);
 app.use("/api/advertisers", authJWT, advertisersRoutes);
 app.use("/api/offers", authJWT, offersRoutes);
@@ -93,14 +81,12 @@ app.use("/api/stats", authJWT, statsRoutes);
 app.use("/api/templates", authJWT, templateRoutes);
 app.use("/api/tracking", authJWT, publisherTrackingRoutes);
 app.use("/api/fraud", authJWT, fraudRoutes);
-app.use("/api/analytics", authJWT, analyticsRoutes);
 
-// ✅ NEW CLICK ANALYTICS ROUTER
-app.use("/api/analytics/clicks", authJWT, analyticsClicks);
+/* ANALYTICS ROUTES */
+app.use("/api/analytics", authJWT, analyticsRoutes); // old analytics
+app.use("/api/analytics", authJWT, analyticsClicks); // NEW clicks analytics
 
-/* ======================================================================
-   Start Server
-====================================================================== */
+/* START SERVER */
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Backend running on port ${PORT}`);
 });
