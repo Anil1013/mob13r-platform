@@ -15,6 +15,7 @@ import {
   ChevronRight,
   ChevronDown,
   User,
+  AlertTriangle,
 } from "lucide-react";
 
 import { NavLink, useNavigate } from "react-router-dom";
@@ -42,6 +43,10 @@ const MENU = [
       { label: "Conversions", icon: BarChart3, to: "/conversions" },
       { label: "Postbacks", icon: Repeat, to: "/postbacks" },
       { label: "Fraud Alerts", icon: ShieldAlert, to: "/fraud-alerts" },
+
+      // ✅ NEW FRAUD ANALYTICS ENTRY
+      { label: "Fraud Analytics", icon: AlertTriangle, to: "/fraud-analytics" },
+
       { label: "Traffic Distribution", icon: TrendingUp, to: "/traffic-distribution" },
     ],
   },
@@ -78,8 +83,12 @@ export default function Sidebar() {
           <img src="/logo.png" alt="logo" className="w-10 h-10 rounded-lg" />
           {!collapsed && (
             <div>
-              <div className="font-bold text-lg dark:text-white text-gray-900">Mob13r</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">Platform</div>
+              <div className="font-bold text-lg dark:text-white text-gray-900">
+                Mob13r
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                Platform
+              </div>
             </div>
           )}
         </div>
@@ -110,7 +119,9 @@ export default function Sidebar() {
                   >
                     <ChevronDown
                       size={14}
-                      className={`transition-all ${isOpen ? "rotate-180" : ""}`}
+                      className={`transition-all ${
+                        isOpen ? "rotate-180" : ""
+                      }`}
                     />
                   </button>
                 </div>
@@ -127,15 +138,19 @@ export default function Sidebar() {
                     to={item.to}
                     className={({ isActive }) =>
                       `group flex items-center gap-3 px-3 py-2 mb-1 rounded-lg transition-all
-                      ${
-                        isActive
-                          ? `bg-gradient-to-r ${ACCENT_GRADIENT} text-white`
-                          : "text-gray-800 dark:text-gray-200 hover:bg-white/10"
-                      }`
+                    ${
+                      isActive
+                        ? `bg-gradient-to-r ${ACCENT_GRADIENT} text-white`
+                        : "text-gray-800 dark:text-gray-200 hover:bg-white/10"
+                    }`
                     }
                   >
                     <item.icon className="w-5 h-5" />
-                    {!collapsed && <span className="text-sm font-medium">{item.label}</span>}
+                    {!collapsed && (
+                      <span className="text-sm font-medium">
+                        {item.label}
+                      </span>
+                    )}
                   </NavLink>
                 ))}
               </div>
