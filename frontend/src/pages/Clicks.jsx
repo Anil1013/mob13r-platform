@@ -24,6 +24,7 @@ export default function ClicksPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      const token = localStorage.getItem("token");
 
       const params = {
         pub_id: pubId || undefined,
@@ -38,7 +39,12 @@ export default function ClicksPage() {
         offset,
       };
 
-      const { data } = await axios.get(API, { params });
+      const { data } = await axios.get(API, {
+        params,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       setRows(data.rows || []);
       setTotal(data.total || 0);
@@ -62,6 +68,8 @@ export default function ClicksPage() {
   // EXPORT CSV
   const exportCsv = async () => {
     try {
+      const token = localStorage.getItem("token");
+
       const params = {
         pub_id: pubId || undefined,
         offer_id: offerId || undefined,
@@ -79,6 +87,9 @@ export default function ClicksPage() {
       const resp = await axios.get(API, {
         params,
         responseType: "blob",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       const blob = new Blob([resp.data], { type: "text/csv;charset=utf-8;" });
@@ -96,7 +107,6 @@ export default function ClicksPage() {
     }
   };
 
-  // Styles
   const thStyle = { textAlign: "center", padding: "10px 6px", background: "#f3f4f6" };
   const tdStyle = { textAlign: "center", padding: "10px 6px" };
 
@@ -134,7 +144,6 @@ export default function ClicksPage() {
             </div>
           </div>
 
-          {/* TABLE */}
           <div style={{ overflowX: "auto" }}>
             <table className="w-full border-collapse" style={{ minWidth: 1300 }}>
               <thead>
@@ -181,7 +190,6 @@ export default function ClicksPage() {
             </table>
           </div>
 
-          {/* Pagination */}
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
             <div>
               <button
