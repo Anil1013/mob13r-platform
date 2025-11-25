@@ -1,4 +1,4 @@
-// backend/src/index.js
+// backend/src/server.js
 import express from "express";
 import dotenv from "dotenv";
 import helmet from "helmet";
@@ -15,29 +15,22 @@ import postbackRoutes from "./routes/postbacks.js";
 import conversionsRoutes from "./routes/conversions.js";
 import statsRoutes from "./routes/stats.js";
 import authRoutes from "./routes/auth.js";
-import analyticsRoutes from "./routes/analytics.js";      // Fraud / conversions analytics
+import analyticsRoutes from "./routes/analytics.js";
 import templateRoutes from "./routes/templates.js";
 import publisherTrackingRoutes from "./routes/publisherTracking.js";
 import fraudRoutes from "./routes/fraud.js";
 import distributionRoutes from "./routes/distribution.js";
-import analyticsClicks from "./routes/analyticsClicks.js"; // ✅ New Click Analytics
+import analyticsClicks from "./routes/analyticsClicks.js";
 
-/* Middleware */
 import authJWT from "./middleware/authJWT.js";
 
 dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-/* ======================================================================
-   CORS
-====================================================================== */
 app.use(
   cors({
-    origin: [
-      "https://dashboard.mob13r.com",
-      "http://localhost:3000",
-    ],
+    origin: ["https://dashboard.mob13r.com", "http://localhost:3000"],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
@@ -45,22 +38,14 @@ app.use(
 );
 app.options("*", cors());
 
-/* SECURITY + PARSER */
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(bodyParser.json({ limit: "10mb" }));
 
-/* HEALTH CHECK */
 app.get("/api/health", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT NOW() AS db_time");
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.json({ status: "ok", db_time: result.rows[0].db_time });
-  } catch (err) {
-    res.status(500).json({ status: "error", message: err.message });
-  }
+  const result = await pool.query("SELECT NOW() AS db_time");
+  res.json({ status: "ok", db_time: result.rows[0].db_time });
 });
 
-/* PUBLIC CLICK REDIRECT */
 app.get("/click", (req, res) => {
   const params = new URLSearchParams(req.query).toString();
   return res.redirect(`/api/distribution/click?${params}`);
@@ -82,11 +67,10 @@ app.use("/api/templates", authJWT, templateRoutes);
 app.use("/api/tracking", authJWT, publisherTrackingRoutes);
 app.use("/api/fraud", authJWT, fraudRoutes);
 
-/* ANALYTICS ROUTES */
-app.use("/api/analytics", authJWT, analyticsRoutes);        // OLD analytics
-app.use("/api/analytics/clicks", authJWT, analyticsClicks);   // ✅ NEW click analytics route
+/* ANALYTICS */
+app.use("/api/analytics", authJWT, analyticsRoutes);
+app.use("/api/analytics/clicks", authJWT, analyticsClicks);
 
-/* START SERVER */
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Backend running on port ${PORT}`);
+  console.log(`Backend running on port ${PORT}`);
 });
