@@ -1,7 +1,7 @@
 // frontend/src/pages/Clicks.jsx
 import React, { useEffect, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card.jsx";
-import apiClient from "../api/apiClient";       // <<----- IMPORTANT
+import apiClient from "../api/apiClient";
 import { format } from "date-fns";
 
 export default function ClicksPage() {
@@ -9,6 +9,7 @@ export default function ClicksPage() {
   const [group, setGroup] = useState("none");
   const [limit, setLimit] = useState(200);
   const [offset, setOffset] = useState(0);
+
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [pubId, setPubId] = useState("");
@@ -19,7 +20,7 @@ export default function ClicksPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // IMPORTANT — NO HARDCODE URL, NO /api prefix
+  // backend route (through apiClient)
   const API = "/analytics/clicks";
 
   const fetchData = async () => {
@@ -39,14 +40,13 @@ export default function ClicksPage() {
         offset,
       };
 
-      // <<----- USE apiClient SAME AS FRAUD ANALYTICS
       const { data } = await apiClient.get(API, { params });
 
       setRows(data.rows || []);
       setTotal(data.total || 0);
     } catch (err) {
       console.error("fetchData error", err);
-      alert("Failed to fetch clicks. Check console.");
+      alert("Failed to fetch clicks");
     } finally {
       setLoading(false);
     }
@@ -84,12 +84,14 @@ export default function ClicksPage() {
 
       const blob = new Blob([resp.data], { type: "text/csv;charset=utf-8;" });
       const url = window.URL.createObjectURL(blob);
+
       const a = document.createElement("a");
       a.href = url;
       a.download = `clicks-${format(new Date(), "yyyy-MM-dd")}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
+
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error("exportCsv error:", err);
@@ -140,10 +142,7 @@ export default function ClicksPage() {
                 <tr>
                   <th style={thStyle}>Time</th>
                   <th style={thStyle}>Publisher</th>
-                  <th style={thStyle}>Publisher Name</th>
                   <th style={thStyle}>Offer</th>
-                  <th style={thStyle}>Offer Name</th>
-                  <th style={thStyle}>Advertiser</th>
                   <th style={thStyle}>IP</th>
                   <th style={thStyle}>Click ID</th>
                   <th style={thStyle}>GEO</th>
@@ -158,23 +157,28 @@ export default function ClicksPage() {
                 ) : rows.length === 0 ? (
                   <tr><td colSpan={12} style={tdStyle}>No Data</td></tr>
                 ) : (
-                  rows.map((r) => (
-                    <tr key={r.id} style={{ borderTop: "1px solid #e5e7eb" }}>
-                      <td style={tdStyle}>{new Date(r.created_at).toLocaleString()}</td>
-                      <td style={tdStyle}>{r.pub_code || r.publisher_id}</td>
-                      <td style={tdStyle}>{r.publisher_name}</td>
-                      <td style={tdStyle}>{r.offer_id || r.offer_code}</td>
-                      <td style={tdStyle}>{r.offer_name}</td>
-                      <td style={tdStyle}>{r.advertiser_name}</td>
-                      <td style={tdStyle}>{r.ip_address}</td>
-                      <td style={tdStyle}>{r.click_id}</td>
-                      <td style={tdStyle}>{r.geo}</td>
-                      <td style={tdStyle}>{r.carrier}</td>
-                      <td style={{ ...tdStyle, maxWidth: 300, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {r.user_agent}
-                      </td>
-                    </tr>
-                  ))
+                  rows.map((r) => {
+                    let clickId =
+                      r.params?.click_id ||
+                      r.params?.cid ||
+                      r.params?.clickID ||
+                      "-";
+
+                    return (
+                      <tr key={r.id} style={{ borderTop: "1px solid #e5e7eb" }}>
+                        <td style={tdStyle}>{new Date(r.created_at).toLocaleString()}</td>
+                        <td style={tdStyle}>{r.pub_id}</td>
+                        <td style={tdStyle}>{r.offer_id}</td>
+                        <td style={tdStyle}>{r.ip}</td>
+                        <td style={tdStyle}>{clickId}</td>
+                        <td style={tdStyle}>{r.geo}</td>
+                        <td style={tdStyle}>{r.carrier}</td>
+                        <td style={{ ...tdStyle, maxWidth: 300, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {r.ua}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
