@@ -4,6 +4,11 @@ import axios from "axios";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card.jsx";
 import { format } from "date-fns";
 
+// ------------------------------------
+// 🔥 BACKEND API (FIXED)
+// ------------------------------------
+const API = "https://backend.mob13r.com/api/analytics/clicks";
+
 export default function ClicksPage() {
   const [rows, setRows] = useState([]);
   const [group, setGroup] = useState("none");
@@ -19,12 +24,10 @@ export default function ClicksPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  const API = "/api/analytics/clicks";
-
+  // Load clicks data
   const fetchData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem("token");
 
       const params = {
         pub_id: pubId || undefined,
@@ -41,16 +44,14 @@ export default function ClicksPage() {
 
       const { data } = await axios.get(API, {
         params,
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        withCredentials: true,
       });
 
       setRows(data.rows || []);
       setTotal(data.total || 0);
     } catch (err) {
       console.error("fetchData error", err);
-      alert("Failed to fetch clicks. See console.");
+      alert("Failed to fetch clicks. Check console.");
     } finally {
       setLoading(false);
     }
@@ -65,11 +66,9 @@ export default function ClicksPage() {
     fetchData();
   };
 
-  // EXPORT CSV
+  // Export CSV
   const exportCsv = async () => {
     try {
-      const token = localStorage.getItem("token");
-
       const params = {
         pub_id: pubId || undefined,
         offer_id: offerId || undefined,
@@ -87,9 +86,7 @@ export default function ClicksPage() {
       const resp = await axios.get(API, {
         params,
         responseType: "blob",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        withCredentials: true,
       });
 
       const blob = new Blob([resp.data], { type: "text/csv;charset=utf-8;" });
