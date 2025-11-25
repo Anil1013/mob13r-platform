@@ -1,13 +1,8 @@
 // frontend/src/pages/Clicks.jsx
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card.jsx";
+import apiClient from "../api/apiClient";       // <<----- IMPORTANT
 import { format } from "date-fns";
-
-// ------------------------------------
-// 🔥 BACKEND API (FIXED)
-// ------------------------------------
-const API = "https://backend.mob13r.com/api/analytics/clicks";
 
 export default function ClicksPage() {
   const [rows, setRows] = useState([]);
@@ -24,7 +19,9 @@ export default function ClicksPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // Load clicks data
+  // IMPORTANT — NO HARDCODE URL, NO /api prefix
+  const API = "/analytics/clicks";
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -42,10 +39,8 @@ export default function ClicksPage() {
         offset,
       };
 
-      const { data } = await axios.get(API, {
-        params,
-        withCredentials: true,
-      });
+      // <<----- USE apiClient SAME AS FRAUD ANALYTICS
+      const { data } = await apiClient.get(API, { params });
 
       setRows(data.rows || []);
       setTotal(data.total || 0);
@@ -66,7 +61,6 @@ export default function ClicksPage() {
     fetchData();
   };
 
-  // Export CSV
   const exportCsv = async () => {
     try {
       const params = {
@@ -83,10 +77,9 @@ export default function ClicksPage() {
         format: "csv",
       };
 
-      const resp = await axios.get(API, {
+      const resp = await apiClient.get(API, {
         params,
         responseType: "blob",
-        withCredentials: true,
       });
 
       const blob = new Blob([resp.data], { type: "text/csv;charset=utf-8;" });
@@ -114,8 +107,8 @@ export default function ClicksPage() {
           <CardTitle>Clicks Analytics</CardTitle>
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-            <input placeholder="PUB (PUB03 or id)" value={pubId} onChange={(e) => setPubId(e.target.value)} className="border rounded p-2" />
-            <input placeholder="OFFER (OFF02 or id)" value={offerId} onChange={(e) => setOfferId(e.target.value)} className="border rounded p-2" />
+            <input placeholder="PUB" value={pubId} onChange={(e) => setPubId(e.target.value)} className="border rounded p-2" />
+            <input placeholder="OFFER" value={offerId} onChange={(e) => setOfferId(e.target.value)} className="border rounded p-2" />
             <input placeholder="GEO" value={geo} onChange={(e) => setGeo(e.target.value)} className="border rounded p-2" />
             <input placeholder="Carrier" value={carrier} onChange={(e) => setCarrier(e.target.value)} className="border rounded p-2" />
 
@@ -128,8 +121,8 @@ export default function ClicksPage() {
               <option value="day">Daily</option>
             </select>
 
-            <button onClick={onApply} className="bg-blue-600 text-white px-4 py-2 rounded"> Apply </button>
-            <button onClick={exportCsv} className="bg-black text-white px-4 py-2 rounded"> Export CSV </button>
+            <button onClick={onApply} className="bg-blue-600 text-white px-4 py-2 rounded">Apply</button>
+            <button onClick={exportCsv} className="bg-black text-white px-4 py-2 rounded">Export CSV</button>
           </div>
         </CardHeader>
 
@@ -146,9 +139,9 @@ export default function ClicksPage() {
               <thead>
                 <tr>
                   <th style={thStyle}>Time</th>
-                  <th style={thStyle}>Publisher (Code/ID)</th>
+                  <th style={thStyle}>Publisher</th>
                   <th style={thStyle}>Publisher Name</th>
-                  <th style={thStyle}>Offer (ID/Code)</th>
+                  <th style={thStyle}>Offer</th>
                   <th style={thStyle}>Offer Name</th>
                   <th style={thStyle}>Advertiser</th>
                   <th style={thStyle}>IP</th>
