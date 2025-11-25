@@ -1,7 +1,5 @@
-// file: frontend/src/pages/Clicks.jsx
-// local path (use this as file URL): frontend/src/pages/Clicks.jsx
-
-import React, { useEffect, useMemo, useState } from "react";
+// frontend/src/pages/Clicks.jsx
+import React, { useEffect, useState } from "react";
 import {
   LineChart,
   Line,
@@ -10,105 +8,76 @@ import {
   Tooltip,
   CartesianGrid,
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  Legend,
 } from "recharts";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card.jsx";
 import apiClient from "../api/apiClient";
-import { format, parseISO } from "date-fns";
+import { format } from "date-fns";
 
 export default function ClicksPage() {
+  // ---------- State ----------
   const [rows, setRows] = useState([]);
+  const [series, setSeries] = useState([]);
   const [group, setGroup] = useState("none");
   const [limit, setLimit] = useState(200);
   const [offset, setOffset] = useState(0);
 
-  // Filters
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [from, setFrom] = useState(todayStr);
+  const [to, setTo] = useState(todayStr);
+
   const [pubId, setPubId] = useState("");
   const [offerId, setOfferId] = useState("");
   const [geo, setGeo] = useState("");
   const [carrier, setCarrier] = useState("");
-  const [ip, setIp] = useState("");
-  const [clickId, setClickId] = useState("");
-  const [ua, setUa] = useState("");
-  const [fraudFlag, setFraudFlag] = useState(""); // "", "true", "false"
-
-  const [q, setQ] = useState(""); // general search box
+  const [q, setQ] = useState("");
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [chartType, setChartType] = useState("line"); // line or bar
 
   const API = "/analytics/clicks";
 
-  // Helper: return today's date string yyyy-MM-dd
-  const todayStr = () => format(new Date(), "yyyy-MM-dd");
-
-  // Build params - if date fields blank then default to today
-  const buildParams = () => {
-    const params = {};
-
-    params.pub_id = pubId || undefined;
-    params.offer_id = offerId || undefined;
-    params.geo = geo || undefined;
-    params.carrier = carrier || undefined;
-
-    // Advanced fields combined into 'q' search when backend supports it
-    // We also add specific params which backend may use if implemented
-    const parts = [];
-    if (q) parts.push(q);
-    if (ip) { parts.push(ip); params.ip = ip; }
-    if (clickId) { parts.push(clickId); params.click_id = clickId; }
-    if (ua) { parts.push(ua); params.ua = ua; }
-    if (parts.length) params.q = parts.join(" ");
-
-    if (fraudFlag) params.fraud_flag = fraudFlag; // backend may handle this
-
-    // Date logic: if either from/to empty, default both to today (so UI shows current date data)
-    const f = from || todayStr();
-    const t = to || todayStr();
-
-    // Use full day boundaries — backend may expect date string; we pass as YYYY-MM-DD
-    params.from = f;
-    params.to = t;
-
-    params.group = group || "none";
-    params.limit = limit;
-    params.offset = offset;
-
-    return params;
-  };
-
-  const fetchData = async () => {
+  // ---------- Fetch ----------
+  const fetchData = async (opts = {}) => {
     try {
       setLoading(true);
-      const params = buildParams();
+
+      let fromVal = opts.from ?? from;
+      let toVal = opts.to ?? to;
+
+      // if user cleared dates, fallback to today
+      if (!fromVal && !toVal) {
+        fromVal = todayStr;
+        toVal = todayStr;
+      } else if (fromVal && !toVal) {
+        toVal = fromVal;
+      } else if (!fromVal && toVal) {
+        fromVal = toVal;
+      }
+
+      // update state so inputs show actual range used
+      setFrom(fromVal);
+      setTo(toVal);
+
+      const params = {
+        pub_id: pubId || undefined,
+        offer_id: offerId || undefined,
+        geo: geo || undefined,
+        carrier: carrier || undefined,
+        q: q || undefined,
+        from: fromVal,
+        to: toVal,
+        group,
+        limit,
+        offset,
+      };
+
       const { data } = await apiClient.get(API, { params });
 
-      // Backends can return different shapes — try to be resilient
-      if (data) {
-        // If backend returns { rows, total }
-        if (Array.isArray(data.rows)) {
-          setRows(data.rows);
-          setTotal(data.total || 0);
-        } else if (Array.isArray(data)) {
-          // older backends may return rows directly
-          setRows(data);
-          setTotal(data.length);
-        } else if (Array.isArray(data.rows || data.data)) {
-          setRows((data.rows || data.data) ?? []);
-          setTotal(data.total || (data.rows || data.data)?.length || 0);
-        } else {
-          // fallback: try data.rows
-          setRows(data.rows || []);
-          setTotal(data.total || 0);
-        }
-      }
+      setRows(data.rows || []);
+      setTotal(data.total || 0);
+      setSeries(data.series || []);
     } catch (err) {
       console.error("fetchData error", err);
-      alert("Failed to fetch clicks. See console for details.");
+      alert("Failed to fetch clicks");
     } finally {
       setLoading(false);
     }
@@ -121,201 +90,199 @@ export default function ClicksPage() {
 
   const onApply = () => {
     setOffset(0);
-    fetchData();
+    fetchData({ from, to });
   };
 
-  // CSV Export: request backend with format=csv so server builds proper fields and order
+  // ---------- CSV Export ----------
   const exportCsv = async () => {
     try {
-      const params = { ...buildParams(), format: "csv" };
-      const resp = await apiClient.get(API, { params, responseType: "blob", timeout: 60000 });
+      let fromVal = from;
+      let toVal = to;
 
-      const blob = new Blob([resp.data], { type: resp.data.type || "text/csv;charset=utf-8;" });
-      const filename = `clicks_${params.pub_id || "all"}_${format(new Date(), "yyyy-MM-dd")}.csv`;
+      if (!fromVal && !toVal) {
+        fromVal = todayStr;
+        toVal = todayStr;
+      } else if (fromVal && !toVal) {
+        toVal = fromVal;
+      } else if (!fromVal && toVal) {
+        fromVal = toVal;
+      }
+
+      const params = {
+        pub_id: pubId || undefined,
+        offer_id: offerId || undefined,
+        geo: geo || undefined,
+        carrier: carrier || undefined,
+        q: q || undefined,
+        from: fromVal,
+        to: toVal,
+        group,
+        format: "csv",
+      };
+
+      const resp = await apiClient.get(API, {
+        params,
+        responseType: "blob",
+      });
+
+      const blob = new Blob([resp.data], { type: "text/csv;charset=utf-8;" });
       const url = window.URL.createObjectURL(blob);
+
       const a = document.createElement("a");
       a.href = url;
-      a.download = filename;
+      a.download = `clicks-${format(new Date(), "yyyy-MM-dd")}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
+
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("exportCsv error", err);
+      console.error("exportCsv error:", err);
       alert("Failed to export CSV.");
     }
   };
 
-  // Build timeseries (hourly or daily) from rows if user requested grouping or chart
-  const timeseries = useMemo(() => {
-    if (!rows || rows.length === 0) return [];
-
-    const map = new Map();
-
-    rows.forEach((r) => {
-      const created = r.created_at || r.createdAt || r.createdAt;
-      let d;
-      try {
-        d = typeof created === "string" ? parseISO(created) : new Date(created);
-      } catch {
-        d = new Date();
-      }
-      if (isNaN(d)) return;
-
-      let key;
-      if (group === "hour") {
-        // yyyy-MM-dd HH:00
-        key = `${format(d, "yyyy-MM-dd HH")}:00`;
-      } else if (group === "day") {
-        key = format(d, "yyyy-MM-dd");
-      } else {
-        // default to day grouping for chart view
-        key = format(d, "yyyy-MM-dd");
-      }
-
-      map.set(key, (map.get(key) || 0) + 1);
-    });
-
-    return Array.from(map.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([k, v]) => ({ period: k, count: v }));
-  }, [rows, group]);
-
-  // CSV-friendly row formatter for client-side export if needed
-  // (we prefer server-side export, but keep client fallback)
-  const clientCsvDownload = () => {
-    if (!rows || rows.length === 0) return alert("No rows to export");
-
-    const headers = [
-      "id",
-      "created_at",
-      "pub_id",
-      "publisher_name",
-      "offer_id",
-      "offer_name",
-      "advertiser_name",
-      "ip",
-      "click_id",
-      "geo",
-      "carrier",
-      "ua",
-      "params",
-    ];
-
-    const csvRows = [headers.join(",")];
-
-    rows.forEach((r) => {
-      const clickId = r.click_id || r.params?.click_id || r.params?.cid || "";
-      const row = [
-        r.id,
-        r.created_at,
-        r.pub_id || r.pub_code || r.publisher_id || "",
-        r.publisher_name || "",
-        r.offer_id || r.offer_code || "",
-        r.offer_name || "",
-        r.advertiser_name || "",
-        r.ip || r.ip_address || "",
-        `"${clickId}"`,
-        r.geo || "",
-        r.carrier || "",
-        `"${(r.ua || r.user_agent || "").replace(/"/g, '""') }"`,
-        `"${JSON.stringify(r.params || {})}"`,
-      ];
-
-      csvRows.push(row.join(","));
-    });
-
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const filename = `clicks_client_${format(new Date(), "yyyy-MM-dd")}.csv`;
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(url);
+  // ---------- Helpers ----------
+  const thStyle = {
+    textAlign: "center",
+    padding: "10px 6px",
+    background: "#f3f4f6",
+    whiteSpace: "nowrap",
   };
-
-  const thStyle = { textAlign: "center", padding: "10px 6px", background: "#f3f4f6" };
   const tdStyle = { textAlign: "center", padding: "10px 6px" };
 
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const currentPage = Math.floor(offset / limit) + 1;
+
+  // ---------- Render ----------
   return (
     <div className="p-6">
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>Clicks Analytics</CardTitle>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-            <input placeholder="PUB (PUB03)" value={pubId} onChange={(e) => setPubId(e.target.value.toUpperCase())} className="border rounded p-2" />
-            <input placeholder="OFFER" value={offerId} onChange={(e) => setOfferId(e.target.value)} className="border rounded p-2" />
-            <input placeholder="GEO" value={geo} onChange={(e) => setGeo(e.target.value.toUpperCase())} className="border rounded p-2" />
-            <input placeholder="Carrier" value={carrier} onChange={(e) => setCarrier(e.target.value)} className="border rounded p-2" />
+          {/* Filters */}
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              marginTop: 12,
+              alignItems: "center",
+            }}
+          >
+            <input
+              placeholder="PUB (e.g. PUB03)"
+              value={pubId}
+              onChange={(e) => setPubId(e.target.value.toUpperCase())}
+              className="border rounded p-2"
+            />
+            <input
+              placeholder="OFFER ID"
+              value={offerId}
+              onChange={(e) => setOfferId(e.target.value)}
+              className="border rounded p-2"
+            />
+            <input
+              placeholder="GEO (IN)"
+              value={geo}
+              onChange={(e) => setGeo(e.target.value.toUpperCase())}
+              className="border rounded p-2"
+            />
+            <input
+              placeholder="Carrier"
+              value={carrier}
+              onChange={(e) => setCarrier(e.target.value)}
+              className="border rounded p-2"
+            />
 
-            <input placeholder="IP" value={ip} onChange={(e) => setIp(e.target.value)} className="border rounded p-2" />
-            <input placeholder="Click ID" value={clickId} onChange={(e) => setClickId(e.target.value)} className="border rounded p-2" />
-            <input placeholder="UA (search)" value={ua} onChange={(e) => setUa(e.target.value)} className="border rounded p-2" />
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="border rounded p-2"
+            />
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="border rounded p-2"
+            />
 
-            <select value={fraudFlag} onChange={(e) => setFraudFlag(e.target.value)} className="border rounded p-2">
-              <option value="">Fraud (any)</option>
-              <option value="true">Fraud: Yes</option>
-              <option value="false">Fraud: No</option>
-            </select>
+            <input
+              placeholder="Search IP / UA / params"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="border rounded p-2 min-w-[200px]"
+            />
 
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="border rounded p-2" />
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="border rounded p-2" />
-
-            <select value={group} onChange={(e) => setGroup(e.target.value)} className="border rounded p-2">
+            <select
+              value={group}
+              onChange={(e) => setGroup(e.target.value)}
+              className="border rounded p-2"
+            >
               <option value="none">No Group</option>
               <option value="hour">Hourly</option>
               <option value="day">Daily</option>
             </select>
 
-            <select value={chartType} onChange={(e) => setChartType(e.target.value)} className="border rounded p-2">
-              <option value="line">Line Chart</option>
-              <option value="bar">Bar Chart</option>
-            </select>
-
-            <button onClick={onApply} className="bg-blue-600 text-white px-4 py-2 rounded">Apply</button>
-            <button onClick={exportCsv} className="bg-black text-white px-4 py-2 rounded">Export CSV (server)</button>
-            <button onClick={clientCsvDownload} className="bg-gray-700 text-white px-4 py-2 rounded">Export CSV (client fallback)</button>
+            <button
+              onClick={onApply}
+              className="bg-blue-600 text-white px-4 py-2 rounded"
+            >
+              Apply
+            </button>
+            <button
+              onClick={exportCsv}
+              className="bg-black text-white px-4 py-2 rounded"
+            >
+              Export CSV
+            </button>
           </div>
         </CardHeader>
 
         <CardContent>
-          <div style={{ display: "flex", textAlign: "center", marginBottom: 20 }}>
+          {/* Top Stats */}
+          <div
+            style={{
+              display: "flex",
+              textAlign: "center",
+              marginBottom: 20,
+              gap: 16,
+            }}
+          >
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12 }}>Total Clicks</div>
               <div style={{ fontSize: 28, fontWeight: 700 }}>{total}</div>
             </div>
           </div>
 
-          {/* Chart */}
-          <div style={{ height: 260, marginBottom: 16 }}>
-            <ResponsiveContainer>
-              {chartType === "line" ? (
-                <LineChart data={timeseries}>
+          {/* Time-series Chart */}
+          {(group === "hour" || group === "day") && (
+            <div className="mb-6" style={{ height: 260 }}>
+              <ResponsiveContainer>
+                <LineChart data={series}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="period" />
-                  <YAxis />
+                  <XAxis dataKey="bucket" />
+                  <YAxis allowDecimals={false} />
                   <Tooltip />
-                  <Line type="monotone" dataKey="count" stroke="#4F46E5" strokeWidth={2} />
+                  <Line
+                    type="monotone"
+                    dataKey="clicks"
+                    stroke="#4F46E5"
+                    strokeWidth={2}
+                  />
                 </LineChart>
-              ) : (
-                <BarChart data={timeseries}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="period" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="count" />
-                </BarChart>
-              )}
-            </ResponsiveContainer>
-          </div>
+              </ResponsiveContainer>
+            </div>
+          )}
 
           {/* Table */}
           <div style={{ overflowX: "auto" }}>
-            <table className="w-full border-collapse" style={{ minWidth: 1200 }}>
+            <table
+              className="w-full border-collapse"
+              style={{ minWidth: 1300 }}
+            >
               <thead>
                 <tr>
                   <th style={thStyle}>Time</th>
@@ -334,37 +301,55 @@ export default function ClicksPage() {
 
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={11} style={tdStyle}>Loading...</td></tr>
+                  <tr>
+                    <td colSpan={11} style={tdStyle}>
+                      Loading...
+                    </td>
+                  </tr>
                 ) : rows.length === 0 ? (
-                  <tr><td colSpan={11} style={tdStyle}>No Data</td></tr>
+                  <tr>
+                    <td colSpan={11} style={tdStyle}>
+                      No Data
+                    </td>
+                  </tr>
                 ) : (
                   rows.map((r) => {
-                    // normalize different back-end shapes
-                    const created = r.created_at || r.createdAt || r.createdAt || new Date().toISOString();
-                    const pubDisplay = r.pub_code || r.pub_id || r.publisher_id || "";
-                    const publisherName = r.publisher_name || r.publisher || "";
-                    const offerDisplay = r.offer_code || r.offer_id || "";
-                    const offerName = r.offer_name || r.offer || "";
-                    const advertiser = r.advertiser_name || r.advertiser || "";
-                    const ipVal = r.ip || r.ip_address || r.ipAddress || "";
-
-                    const clickIdVal = r.click_id || r.params?.click_id || r.params?.cid || r.params?.clickID || "";
-                    const uaVal = r.ua || r.user_agent || r.userAgent || "";
+                    const params = r.params || {};
+                    const clickId =
+                      params.click_id ||
+                      params.cid ||
+                      params.clickID ||
+                      params.clickid ||
+                      "-";
 
                     return (
-                      <tr key={r.id} style={{ borderTop: "1px solid #e5e7eb" }}>
-                        <td style={tdStyle}>{new Date(created).toLocaleString()}</td>
-                        <td style={tdStyle}>{pubDisplay}</td>
-                        <td style={tdStyle}>{publisherName}</td>
-                        <td style={tdStyle}>{offerDisplay}</td>
-                        <td style={tdStyle}>{offerName}</td>
-                        <td style={tdStyle}>{advertiser}</td>
-                        <td style={tdStyle}>{ipVal}</td>
-                        <td style={tdStyle}>{clickIdVal}</td>
+                      <tr
+                        key={r.id}
+                        style={{ borderTop: "1px solid #e5e7eb" }}
+                      >
+                        <td style={tdStyle}>
+                          {new Date(r.created_at).toLocaleString()}
+                        </td>
+                        <td style={tdStyle}>{r.pub_id}</td>
+                        <td style={tdStyle}>{r.publisher_name || "-"}</td>
+                        <td style={tdStyle}>{r.offer_id}</td>
+                        <td style={tdStyle}>{r.offer_name || "-"}</td>
+                        <td style={tdStyle}>{r.advertiser_name || "-"}</td>
+                        <td style={tdStyle}>{r.ip}</td>
+                        <td style={tdStyle}>{clickId}</td>
                         <td style={tdStyle}>{r.geo}</td>
                         <td style={tdStyle}>{r.carrier}</td>
-                        <td style={{ ...tdStyle, maxWidth: 300, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {uaVal}
+                        <td
+                          style={{
+                            ...tdStyle,
+                            maxWidth: 350,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                          title={r.ua}
+                        >
+                          {r.ua}
                         </td>
                       </tr>
                     );
@@ -374,31 +359,56 @@ export default function ClicksPage() {
             </table>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
+          {/* Pagination */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginTop: 16,
+              alignItems: "center",
+            }}
+          >
             <div>
               <button
                 onClick={() => {
-                  setOffset(Math.max(0, offset - limit));
-                  fetchData();
+                  const newOffset = Math.max(0, offset - limit);
+                  setOffset(newOffset);
+                  fetchData({ from, to, offset: newOffset });
                 }}
-                className="border rounded px-3 py-1 mr-2"
+                disabled={offset === 0}
+                className="border rounded px-3 py-1 mr-2 disabled:opacity-50"
               >
                 Prev
               </button>
 
               <button
                 onClick={() => {
-                  setOffset(offset + limit);
-                  fetchData();
+                  const newOffset = offset + limit;
+                  setOffset(newOffset);
+                  fetchData({ from, to, offset: newOffset });
                 }}
-                className="border rounded px-3 py-1"
+                disabled={currentPage >= totalPages}
+                className="border rounded px-3 py-1 disabled:opacity-50"
               >
                 Next
               </button>
+
+              <span className="ml-3 text-sm text-gray-600">
+                Page {currentPage} of {totalPages}
+              </span>
             </div>
 
             <div>
-              <select value={limit} onChange={(e) => setLimit(Number(e.target.value))} className="border rounded p-2">
+              <select
+                value={limit}
+                onChange={(e) => {
+                  const newLimit = Number(e.target.value);
+                  setLimit(newLimit);
+                  setOffset(0);
+                  fetchData({ from, to, offset: 0 });
+                }}
+                className="border rounded p-2"
+              >
                 <option value={50}>50</option>
                 <option value={100}>100</option>
                 <option value={200}>200</option>
