@@ -13,49 +13,34 @@ import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card.
 import apiClient from "../api/apiClient";
 import { format } from "date-fns";
 
+const getToday = () => format(new Date(), "yyyy-MM-dd");
+
 export default function ClicksPage() {
-  // ---------- State ----------
   const [rows, setRows] = useState([]);
-  const [series, setSeries] = useState([]);
+  const [chartData, setChartData] = useState([]);
   const [group, setGroup] = useState("none");
+
   const [limit, setLimit] = useState(200);
   const [offset, setOffset] = useState(0);
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const [from, setFrom] = useState(todayStr);
-  const [to, setTo] = useState(todayStr);
+  const [from, setFrom] = useState(""); // UI can be empty; backend will default to today
+  const [to, setTo] = useState("");
 
   const [pubId, setPubId] = useState("");
   const [offerId, setOfferId] = useState("");
   const [geo, setGeo] = useState("");
   const [carrier, setCarrier] = useState("");
   const [q, setQ] = useState("");
+
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  // backend route (through apiClient -> /api prefix)
   const API = "/analytics/clicks";
 
-  // ---------- Fetch ----------
-  const fetchData = async (opts = {}) => {
+  const fetchData = async (nextOffset = offset, nextLimit = limit) => {
     try {
       setLoading(true);
-
-      let fromVal = opts.from ?? from;
-      let toVal = opts.to ?? to;
-
-      // if user cleared dates, fallback to today
-      if (!fromVal && !toVal) {
-        fromVal = todayStr;
-        toVal = todayStr;
-      } else if (fromVal && !toVal) {
-        toVal = fromVal;
-      } else if (!fromVal && toVal) {
-        fromVal = toVal;
-      }
-
-      // update state so inputs show actual range used
-      setFrom(fromVal);
-      setTo(toVal);
 
       const params = {
         pub_id: pubId || undefined,
@@ -63,18 +48,28 @@ export default function ClicksPage() {
         geo: geo || undefined,
         carrier: carrier || undefined,
         q: q || undefined,
-        from: fromVal,
-        to: toVal,
+        from: from || undefined,
+        to: to || undefined,
         group,
-        limit,
-        offset,
+        limit: nextLimit,
+        offset: nextOffset,
       };
 
       const { data } = await apiClient.get(API, { params });
 
       setRows(data.rows || []);
       setTotal(data.total || 0);
-      setSeries(data.series || []);
+      setChartData((data.chart || []).map((c) => ({
+        time: new Date(c.bucket || c.t).toLocaleString(),
+        clicks: c.clicks,
+      })));
+
+      // keep backend dates (in case it defaulted to today)
+      if (!from && data.from) setFrom(data.from.slice(0, 10));
+      if (!to && data.to) setTo(data.to.slice(0, 10));
+
+      setOffset(nextOffset);
+      setLimit(nextLimit);
     } catch (err) {
       console.error("fetchData error", err);
       alert("Failed to fetch clicks");
@@ -84,38 +79,25 @@ export default function ClicksPage() {
   };
 
   useEffect(() => {
-    fetchData();
+    // initial load – backend will default to today's date if from/to empty
+    fetchData(0, limit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onApply = () => {
-    setOffset(0);
-    fetchData({ from, to });
+    fetchData(0, limit);
   };
 
-  // ---------- CSV Export ----------
   const exportCsv = async () => {
     try {
-      let fromVal = from;
-      let toVal = to;
-
-      if (!fromVal && !toVal) {
-        fromVal = todayStr;
-        toVal = todayStr;
-      } else if (fromVal && !toVal) {
-        toVal = fromVal;
-      } else if (!fromVal && toVal) {
-        fromVal = toVal;
-      }
-
       const params = {
         pub_id: pubId || undefined,
         offer_id: offerId || undefined,
         geo: geo || undefined,
         carrier: carrier || undefined,
         q: q || undefined,
-        from: fromVal,
-        to: toVal,
+        from: from || undefined,
+        to: to || undefined,
         group,
         format: "csv",
       };
@@ -134,7 +116,6 @@ export default function ClicksPage() {
       document.body.appendChild(a);
       a.click();
       a.remove();
-
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error("exportCsv error:", err);
@@ -142,19 +123,19 @@ export default function ClicksPage() {
     }
   };
 
-  // ---------- Helpers ----------
-  const thStyle = {
-    textAlign: "center",
-    padding: "10px 6px",
-    background: "#f3f4f6",
-    whiteSpace: "nowrap",
-  };
+  const thStyle = { textAlign: "center", padding: "10px 6px", background: "#f3f4f6" };
   const tdStyle = { textAlign: "center", padding: "10px 6px" };
 
-  const totalPages = Math.max(1, Math.ceil(total / limit));
-  const currentPage = Math.floor(offset / limit) + 1;
+  const handlePrev = () => {
+    const newOffset = Math.max(0, offset - limit);
+    fetchData(newOffset, limit);
+  };
 
-  // ---------- Render ----------
+  const handleNext = () => {
+    const newOffset = offset + limit;
+    fetchData(newOffset, limit);
+  };
+
   return (
     <div className="p-6">
       <Card className="mb-6">
@@ -162,37 +143,35 @@ export default function ClicksPage() {
           <CardTitle>Clicks Analytics</CardTitle>
 
           {/* Filters */}
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8,
-              marginTop: 12,
-              alignItems: "center",
-            }}
-          >
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
             <input
-              placeholder="PUB (e.g. PUB03)"
+              placeholder="PUB ID"
               value={pubId}
-              onChange={(e) => setPubId(e.target.value.toUpperCase())}
+              onChange={(e) => setPubId(e.target.value)}
               className="border rounded p-2"
             />
             <input
-              placeholder="OFFER ID"
+              placeholder="Offer ID"
               value={offerId}
               onChange={(e) => setOfferId(e.target.value)}
               className="border rounded p-2"
             />
             <input
-              placeholder="GEO (IN)"
+              placeholder="GEO"
               value={geo}
-              onChange={(e) => setGeo(e.target.value.toUpperCase())}
+              onChange={(e) => setGeo(e.target.value)}
               className="border rounded p-2"
             />
             <input
               placeholder="Carrier"
               value={carrier}
               onChange={(e) => setCarrier(e.target.value)}
+              className="border rounded p-2"
+            />
+            <input
+              placeholder="Search IP / UA"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
               className="border rounded p-2"
             />
 
@@ -207,13 +186,6 @@ export default function ClicksPage() {
               value={to}
               onChange={(e) => setTo(e.target.value)}
               className="border rounded p-2"
-            />
-
-            <input
-              placeholder="Search IP / UA / params"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              className="border rounded p-2 min-w-[200px]"
             />
 
             <select
@@ -232,6 +204,24 @@ export default function ClicksPage() {
             >
               Apply
             </button>
+
+            <button
+              onClick={() => {
+                setPubId("");
+                setOfferId("");
+                setGeo("");
+                setCarrier("");
+                setQ("");
+                setFrom("");
+                setTo("");
+                setGroup("none");
+                fetchData(0, limit);
+              }}
+              className="bg-gray-500 text-white px-4 py-2 rounded"
+            >
+              Reset
+            </button>
+
             <button
               onClick={exportCsv}
               className="bg-black text-white px-4 py-2 rounded"
@@ -242,35 +232,29 @@ export default function ClicksPage() {
         </CardHeader>
 
         <CardContent>
-          {/* Top Stats */}
-          <div
-            style={{
-              display: "flex",
-              textAlign: "center",
-              marginBottom: 20,
-              gap: 16,
-            }}
-          >
+          {/* Metric card */}
+          <div style={{ display: "flex", textAlign: "center", marginBottom: 20 }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12 }}>Total Clicks</div>
               <div style={{ fontSize: 28, fontWeight: 700 }}>{total}</div>
             </div>
           </div>
 
-          {/* Time-series Chart */}
-          {(group === "hour" || group === "day") && (
+          {/* Chart */}
+          {group !== "none" && chartData.length > 0 && (
             <div className="mb-6" style={{ height: 260 }}>
               <ResponsiveContainer>
-                <LineChart data={series}>
+                <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="bucket" />
-                  <YAxis allowDecimals={false} />
+                  <XAxis dataKey="time" />
+                  <YAxis />
                   <Tooltip />
                   <Line
                     type="monotone"
                     dataKey="clicks"
                     stroke="#4F46E5"
                     strokeWidth={2}
+                    dot={false}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -279,10 +263,7 @@ export default function ClicksPage() {
 
           {/* Table */}
           <div style={{ overflowX: "auto" }}>
-            <table
-              className="w-full border-collapse"
-              style={{ minWidth: 1300 }}
-            >
+            <table className="w-full border-collapse" style={{ minWidth: 1300 }}>
               <thead>
                 <tr>
                   <th style={thStyle}>Time</th>
@@ -319,20 +300,16 @@ export default function ClicksPage() {
                       params.click_id ||
                       params.cid ||
                       params.clickID ||
-                      params.clickid ||
-                      "-";
+                      "{click_id}";
 
                     return (
-                      <tr
-                        key={r.id}
-                        style={{ borderTop: "1px solid #e5e7eb" }}
-                      >
+                      <tr key={r.id} style={{ borderTop: "1px solid #e5e7eb" }}>
                         <td style={tdStyle}>
                           {new Date(r.created_at).toLocaleString()}
                         </td>
                         <td style={tdStyle}>{r.pub_id}</td>
                         <td style={tdStyle}>{r.publisher_name || "-"}</td>
-                        <td style={tdStyle}>{r.offer_id}</td>
+                        <td style={tdStyle}>{r.offer_code || r.offer_id}</td>
                         <td style={tdStyle}>{r.offer_name || "-"}</td>
                         <td style={tdStyle}>{r.advertiser_name || "-"}</td>
                         <td style={tdStyle}>{r.ip}</td>
@@ -342,7 +319,7 @@ export default function ClicksPage() {
                         <td
                           style={{
                             ...tdStyle,
-                            maxWidth: 350,
+                            maxWidth: 300,
                             whiteSpace: "nowrap",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
@@ -361,41 +338,19 @@ export default function ClicksPage() {
 
           {/* Pagination */}
           <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginTop: 16,
-              alignItems: "center",
-            }}
+            style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}
           >
             <div>
               <button
-                onClick={() => {
-                  const newOffset = Math.max(0, offset - limit);
-                  setOffset(newOffset);
-                  fetchData({ from, to, offset: newOffset });
-                }}
-                disabled={offset === 0}
-                className="border rounded px-3 py-1 mr-2 disabled:opacity-50"
+                onClick={handlePrev}
+                className="border rounded px-3 py-1 mr-2"
               >
                 Prev
               </button>
 
-              <button
-                onClick={() => {
-                  const newOffset = offset + limit;
-                  setOffset(newOffset);
-                  fetchData({ from, to, offset: newOffset });
-                }}
-                disabled={currentPage >= totalPages}
-                className="border rounded px-3 py-1 disabled:opacity-50"
-              >
+              <button onClick={handleNext} className="border rounded px-3 py-1">
                 Next
               </button>
-
-              <span className="ml-3 text-sm text-gray-600">
-                Page {currentPage} of {totalPages}
-              </span>
             </div>
 
             <div>
@@ -404,8 +359,7 @@ export default function ClicksPage() {
                 onChange={(e) => {
                   const newLimit = Number(e.target.value);
                   setLimit(newLimit);
-                  setOffset(0);
-                  fetchData({ from, to, offset: 0 });
+                  fetchData(0, newLimit);
                 }}
                 className="border rounded p-2"
               >
