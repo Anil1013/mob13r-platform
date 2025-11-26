@@ -8,13 +8,19 @@ const router = express.Router();
 
 /**
  * CLICK ANALYTICS
- * -------------------------------
- * JSON mode  : default
- * CSV export : ?format=csv  (no pagination, all filtered rows)
- * Supports filters:
- *   from, to (YYYY-MM-DD)
- *   pub_id, offer_id, geo, carrier, q
- *   group = none | hour | day  (for chart series)
+ * GET /api/analytics/clicks
+ *
+ * Query params:
+ *  - pub_id
+ *  - offer_id
+ *  - geo
+ *  - carrier
+ *  - q (search in ip / ua)
+ *  - from (YYYY-MM-DD)
+ *  - to   (YYYY-MM-DD)
+ *  - group = none | hour | day
+ *  - limit, offset
+ *  - format = csv   → exports CSV
  */
 router.get("/", authJWT, async (req, res) => {
   try {
@@ -32,29 +38,29 @@ router.get("/", authJWT, async (req, res) => {
       format,
     } = req.query;
 
-    // ---- DATE FALLBACKS (if user leaves empty, default to today) ----
-    const todayStr = new Date().toISOString().slice(0, 10);
-    if (!from && !to) {
-      from = todayStr;
-      to = todayStr;
-    } else if (from && !to) {
-      to = from;
-    } else if (!from && to) {
-      from = to;
-    }
+    limit = Number(limit) || 200;
+    offset = Number(offset) || 0;
 
-    // ---- BASE WHERE + PARAMS ----
+    // ---------------------------
+    // DATE DEFAULTS (today)
+    // ---------------------------
+    const today = new Date().toISOString().slice(0, 10); // yyyy-mm-dd
+
+    const finalFrom = from || today;
+    const finalTo = to || today;
+
     const params = [];
     let where = "WHERE 1=1";
 
-    if (from) {
-      params.push(from);
+    // created_at BETWEEN [from, to+1day)
+    if (finalFrom) {
+      params.push(finalFrom);
       where += ` AND ac.created_at >= $${params.length}::date`;
     }
 
-    if (to) {
-      params.push(to);
-      // include full day
+    if (finalTo) {
+      params.push(finalTo);
+      // include whole "to" day
       where += ` AND ac.created_at < ($${params.length}::date + INTERVAL '1 day')`;
     }
 
@@ -80,150 +86,131 @@ router.get("/", authJWT, async (req, res) => {
 
     if (q) {
       params.push(`%${q}%`);
-      where += ` AND (
-        ac.ip ILIKE $${params.length}
-        OR ac.ua ILIKE $${params.length}
-        OR CAST(ac.params AS TEXT) ILIKE $${params.length}
-      )`;
+      where += ` AND (ac.ip ILIKE $${params.length} OR ac.ua ILIKE $${params.length})`;
     }
 
-    // -------------------------------------------------
-    // CSV EXPORT MODE  (no pagination, full dataset)
-    // -------------------------------------------------
+    // ---------------------------
+    // BASE SELECT (with joins)
+    // ---------------------------
+    const baseSelect = `
+      SELECT
+        ac.id,
+        ac.pub_id,
+        COALESCE(ptl.publisher_name, p.name) AS publisher_name,
+        ac.offer_id,
+        o.offer_id AS offer_code,
+        o.name AS offer_name,
+        o.advertiser_name,
+        ac.geo,
+        ac.carrier,
+        ac.ip,
+        ac.ua,
+        ac.referer,
+        ac.params,
+        ac.created_at
+      FROM analytics_clicks ac
+      LEFT JOIN publisher_tracking_links ptl
+        ON ptl.pub_code = ac.pub_id
+      LEFT JOIN publishers p
+        ON p.id = ptl.publisher_id
+      LEFT JOIN offers o
+        ON o.id = ac.offer_id
+      ${where}
+    `;
+
+    // ---------------------------
+    // CSV EXPORT (no pagination)
+    // ---------------------------
     if (format === "csv") {
-      const exportSQL = `
-        SELECT 
-          ac.id,
-          ac.created_at,
-          ac.pub_id,
-          p.name AS publisher_name,
-          ac.offer_id,
-          o.name AS offer_name,
-          COALESCE(a.name, o.advertiser_name) AS advertiser_name,
-          ac.geo,
-          ac.carrier,
-          ac.ip,
-          ac.ua,
-          ac.referer,
-          ac.params->>'click_id' AS click_id,
-          ac.params
-        FROM analytics_clicks ac
-        LEFT JOIN publishers p ON ac.pub_id = p.code
-        LEFT JOIN offers o ON ac.offer_id = o.id
-        LEFT JOIN advertisers a ON o.advertiser_id = a.id
-        ${where}
+      const csvSQL = `
+        ${baseSelect}
         ORDER BY ac.created_at DESC
         LIMIT 10000
       `;
+      const csvRes = await pool.query(csvSQL, params);
+      const csvRows = csvRes.rows || [];
 
-      const { rows: exportRows } = await pool.query(exportSQL, params);
+      const fields = [
+        "created_at",
+        "pub_id",
+        "publisher_name",
+        "offer_code",
+        "offer_name",
+        "advertiser_name",
+        "ip",
+        "geo",
+        "carrier",
+        "params",
+        "ua",
+      ];
 
-      const parser = new Json2csvParser({
-        fields: [
-          "id",
-          "created_at",
-          "pub_id",
-          "publisher_name",
-          "offer_id",
-          "offer_name",
-          "advertiser_name",
-          "geo",
-          "carrier",
-          "ip",
-          "click_id",
-          "ua",
-          "referer",
-          "params",
-        ],
-      });
-
-      const csv = parser.parse(
-        exportRows.map((r) => ({
-          ...r,
-          params: JSON.stringify(r.params || {}),
-        }))
-      );
+      const parser = new Json2csvParser({ fields });
+      const csv = parser.parse(csvRows);
 
       res.setHeader("Content-Type", "text/csv");
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="clicks_${todayStr}.csv"`
+        `attachment; filename="clicks_${today}.csv"`
       );
       return res.send(csv);
     }
 
-    // -------------------------------------------------
-    // NORMAL JSON MODE (with pagination & chart series)
-    // -------------------------------------------------
-
-    // Main rows with joins for names
+    // ---------------------------
+    // MAIN ROWS (with pagination)
+    // ---------------------------
     const rowsSQL = `
-      SELECT 
-        ac.*,
-        p.name AS publisher_name,
-        o.name AS offer_name,
-        COALESCE(a.name, o.advertiser_name) AS advertiser_name
-      FROM analytics_clicks ac
-      LEFT JOIN publishers p ON ac.pub_id = p.code
-      LEFT JOIN offers o ON ac.offer_id = o.id
-      LEFT JOIN advertisers a ON o.advertiser_id = a.id
-      ${where}
+      ${baseSelect}
       ORDER BY ac.created_at DESC
-      LIMIT $${params.length + 1}
-      OFFSET $${params.length + 2}
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
-
     const rowsRes = await pool.query(rowsSQL, [...params, limit, offset]);
-    const rows = rowsRes.rows;
+    const rows = rowsRes.rows || [];
 
-    // Total count
+    // ---------------------------
+    // TOTAL COUNT
+    // ---------------------------
     const countSQL = `
       SELECT COUNT(*)::int AS total
       FROM analytics_clicks ac
-      LEFT JOIN publishers p ON ac.pub_id = p.code
-      LEFT JOIN offers o ON ac.offer_id = o.id
-      LEFT JOIN advertisers a ON o.advertiser_id = a.id
       ${where}
     `;
-    const totalRes = await pool.query(countSQL, params);
-    const total = totalRes.rows[0].total;
+    const countRes = await pool.query(countSQL, params);
+    const total = countRes.rows[0]?.total || 0;
 
-    // Optional time-series aggregation
-    let series = [];
+    // ---------------------------
+    // CHART DATA (hour/day group)
+    // ---------------------------
+    let chart = [];
     if (group === "hour" || group === "day") {
-      const bucketExpr =
-        group === "hour"
-          ? "to_char(date_trunc('hour', ac.created_at), 'YYYY-MM-DD HH24:00')"
-          : "to_char(date_trunc('day', ac.created_at), 'YYYY-MM-DD')";
-
-      const seriesSQL = `
-        SELECT 
-          ${bucketExpr} AS bucket,
+      const bucket = group === "hour" ? "hour" : "day";
+      const chartSQL = `
+        SELECT
+          date_trunc('${bucket}', ac.created_at) AS bucket,
           COUNT(*)::int AS clicks
         FROM analytics_clicks ac
         ${where}
         GROUP BY bucket
-        ORDER BY bucket ASC
+        ORDER BY bucket
       `;
-      const seriesRes = await pool.query(seriesSQL, params);
-      series = seriesRes.rows;
+      const chartRes = await pool.query(chartSQL, params);
+      chart = chartRes.rows || [];
     }
 
+    // ---------------------------
+    // RESPONSE
+    // ---------------------------
     return res.json({
       rows,
+      chart,
       total,
-      limit: Number(limit),
-      offset: Number(offset),
-      series,
-      meta: {
-        from,
-        to,
-        group,
-      },
+      limit,
+      offset,
+      from: finalFrom,
+      to: finalTo,
     });
   } catch (err) {
     console.error("GET /analytics/clicks ERROR:", err);
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "internal_error" });
   }
 });
 
