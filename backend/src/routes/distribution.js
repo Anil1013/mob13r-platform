@@ -196,4 +196,30 @@ router.get("/click", fraudCheck, async (req, res) => {
   }
 });
 
+/* ===========================================================
+   DELETE TRAFFIC RULE
+   DELETE /distribution/rules/:id
+   =========================================================== */
+router.delete("/rules/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) return res.status(400).json({ error: "rule_id_required" });
+
+    const q = `DELETE FROM traffic_rules WHERE id = $1 RETURNING id`;
+    const { rows } = await pool.query(q, [id]);
+
+    if (!rows.length) {
+      return res.status(404).json({ error: "rule_not_found" });
+    }
+
+    res.json({ success: true, deleted_id: rows[0].id });
+
+  } catch (err) {
+    console.error("DELETE RULE ERROR:", err);
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+
 export default router;
