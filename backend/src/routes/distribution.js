@@ -6,20 +6,24 @@ import fraudCheck from "../middleware/fraudCheck.js";
 const router = express.Router();
 
 /*
-  ===========================================================
-  TRAFFIC DISTRIBUTION + CLICK LOGGING
-  ===========================================================
+===========================================================
+ TRAFFIC DISTRIBUTION MODULE (FINAL STABLE VERSION)
+===========================================================
   • META (tracking links)
-  • OFFERS
-  • RULES
-  • CLICK ROTATION
-  • CLICK LOG INSERT → analytics_clicks
-  ===========================================================
+  • Offers list
+  • Rules list
+  • Create rule
+  • Update rule
+  • Delete rule
+  • Click rotation
+  • Click logging → analytics_clicks
+===========================================================
 */
 
+
 /* ===========================================================
-   META  → Load Publisher Tracking Links
-   =========================================================== */
+   1) META → Publisher Tracking Links
+=========================================================== */
 router.get("/meta", async (req, res) => {
   try {
     const { pub_id } = req.query;
@@ -42,9 +46,10 @@ router.get("/meta", async (req, res) => {
   }
 });
 
+
 /* ===========================================================
-   ACTIVE OFFERS
-   =========================================================== */
+   2) ACTIVE OFFERS
+=========================================================== */
 router.get("/offers", async (req, res) => {
   try {
     const { exclude } = req.query;
@@ -78,9 +83,10 @@ router.get("/offers", async (req, res) => {
   }
 });
 
+
 /* ===========================================================
-   RULES LIST
-   =========================================================== */
+   3) RULES LIST
+=========================================================== */
 router.get("/rules", async (req, res) => {
   try {
     const { pub_id } = req.query;
@@ -92,37 +98,122 @@ router.get("/rules", async (req, res) => {
     res.json(rows);
 
   } catch (err) {
-    console.error("RULES ERROR:", err);
+    console.error("RULES LIST ERROR:", err);
     res.status(500).json({ error: "internal_error" });
   }
 });
 
+
 /* ===========================================================
-   GLOBAL OVERVIEW
-   =========================================================== */
-router.get("/overview", async (req, res) => {
+   4) CREATE RULE
+=========================================================== */
+router.post("/rules", async (req, res) => {
   try {
-    const { rows } = await pool.query(`SELECT * FROM traffic_rules ORDER BY pub_id ASC, id ASC`);
-    res.json(rows);
+    const { pub_id, offer_id, geo, carrier, weight, redirect_url, status } = req.body;
+
+    if (!pub_id || !offer_id || !geo || !carrier)
+      return res.status(400).json({ error: "missing_params" });
+
+    const q = `
+      INSERT INTO traffic_rules (pub_id, offer_id, geo, carrier, weight, redirect_url, status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      RETURNING *
+    `;
+
+    const { rows } = await pool.query(q, [
+      pub_id,
+      offer_id,
+      geo,
+      carrier,
+      weight || 1,
+      redirect_url,
+      status || "active"
+    ]);
+
+    res.json({ success: true, rule: rows[0] });
 
   } catch (err) {
-    console.error("OVERVIEW ERROR:", err);
+    console.error("CREATE RULE ERROR:", err);
     res.status(500).json({ error: "internal_error" });
   }
 });
 
+
 /* ===========================================================
-   CLICK ROTATION + CLICK LOGGING
-   =========================================================== */
+   5) UPDATE RULE
+=========================================================== */
+router.put("/rules/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { offer_id, geo, carrier, weight, redirect_url, status } = req.body;
+
+    const q = `
+      UPDATE traffic_rules
+      SET offer_id = $1,
+          geo = $2,
+          carrier = $3,
+          weight = $4,
+          redirect_url = $5,
+          status = $6
+      WHERE id = $7
+      RETURNING *
+    `;
+
+    const { rows } = await pool.query(q, [
+      offer_id,
+      geo,
+      carrier,
+      weight,
+      redirect_url,
+      status,
+      id
+    ]);
+
+    if (!rows.length) return res.status(404).json({ error: "rule_not_found" });
+
+    res.json({ success: true, rule: rows[0] });
+
+  } catch (err) {
+    console.error("UPDATE RULE ERROR:", err);
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+
+/* ===========================================================
+   6) DELETE RULE (FINAL FIXED VERSION)
+=========================================================== */
+router.delete("/rules/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const q = `DELETE FROM traffic_rules WHERE id = $1 RETURNING id`;
+    const { rows } = await pool.query(q, [id]);
+
+    if (!rows.length)
+      return res.status(404).json({ error: "rule_not_found" });
+
+    res.json({ success: true, deleted_id: rows[0].id });
+
+  } catch (err) {
+    console.error("DELETE RULE ERROR:", err);
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+
+/* ===========================================================
+   7) CLICK ROTATION + CLICK LOGGING
+=========================================================== */
 router.get("/click", fraudCheck, async (req, res) => {
   try {
     const { pub_id, geo, carrier, click_id } = req.query;
 
-    if (!pub_id || !geo || !carrier) {
-      return res.status(400).send("missing params");
-    }
+    if (!pub_id || !geo || !carrier)
+      return res.status(400).send("missing_params");
 
-    // Fetch rules
+    // Load rules
     const q = `
       SELECT *
       FROM traffic_rules
@@ -132,22 +223,20 @@ router.get("/click", fraudCheck, async (req, res) => {
 
     if (!rows.length) return res.redirect("https://google.com");
 
+    // Filter rules by geo + carrier
     const filtered = rows.filter((r) => {
       const geos = (r.geo || "").split(",").map(v => v.trim().toUpperCase());
       const carriers = (r.carrier || "").split(",").map(v => v.trim().toUpperCase());
-
-      return geos.includes(geo.toUpperCase()) &&
-             carriers.includes(carrier.toUpperCase());
+      return geos.includes(geo.toUpperCase()) && carriers.includes(carrier.toUpperCase());
     });
 
     if (!filtered.length) return res.redirect("https://google.com");
 
+    // Weighted rotation
+    let totalWeight = filtered.reduce((sum, r) => sum + Number(r.weight), 0);
+    let rnd = Math.random() * totalWeight;
+
     let selected = filtered[0];
-
-    // ROTATION
-    let total = filtered.reduce((a, r) => a + Number(r.weight), 0);
-    let rnd = Math.random() * total;
-
     for (const rule of filtered) {
       rnd -= Number(rule.weight);
       if (rnd <= 0) {
@@ -156,9 +245,7 @@ router.get("/click", fraudCheck, async (req, res) => {
       }
     }
 
-    /* ======================================================
-       LOG CLICK INTO analytics_clicks TABLE
-       ====================================================== */
+    // Log click
     try {
       await pool.query(
         `INSERT INTO analytics_clicks 
@@ -172,52 +259,23 @@ router.get("/click", fraudCheck, async (req, res) => {
           req.ip,
           req.headers["user-agent"],
           req.headers["referer"] || null,
-          req.query ? JSON.stringify(req.query) : null,
+          JSON.stringify(req.query)
         ]
       );
     } catch (err) {
       console.error("CLICK LOGGING ERROR:", err);
     }
 
-    /* ======================================================
-       REDIRECT WITH CLICK_ID
-       ====================================================== */
+    // Redirect final offer URL
     let finalUrl = selected.redirect_url;
-
-    if (click_id) {
+    if (click_id)
       finalUrl += (finalUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`;
-    }
 
     return res.redirect(finalUrl);
 
   } catch (err) {
     console.error("CLICK ERROR:", err);
     return res.redirect("https://google.com");
-  }
-});
-
-/* ===========================================================
-   DELETE TRAFFIC RULE
-   DELETE /distribution/rules/:id
-   =========================================================== */
-router.delete("/rules/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    if (!id) return res.status(400).json({ error: "rule_id_required" });
-
-    const q = `DELETE FROM traffic_rules WHERE id = $1 RETURNING id`;
-    const { rows } = await pool.query(q, [id]);
-
-    if (!rows.length) {
-      return res.status(404).json({ error: "rule_not_found" });
-    }
-
-    res.json({ success: true, deleted_id: rows[0].id });
-
-  } catch (err) {
-    console.error("DELETE RULE ERROR:", err);
-    res.status(500).json({ error: "internal_error" });
   }
 });
 
