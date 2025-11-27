@@ -141,7 +141,7 @@ router.get("/rules/remaining", async (req, res) => {
 });
 
 /* ===========================================================
-   GLOBAL OVERVIEW
+   OVERVIEW
    =========================================================== */
 router.get("/overview", async (req, res) => {
   try {
@@ -177,7 +177,7 @@ router.post("/rules", async (req, res) => {
       if (!b[k]) return res.status(400).json({ error: `${k}_required` });
     }
 
-    // Duplicate check
+    // Check duplicate
     const dup = await pool.query(
       `SELECT id FROM traffic_rules 
        WHERE pub_id=$1 AND tracking_link_id=$2 AND offer_id=$3 AND status='active'`,
@@ -218,7 +218,7 @@ router.post("/rules", async (req, res) => {
 });
 
 /* ===========================================================
-   UPDATE RULE
+   UPDATE RULE (WEIGHT UPDATE FIXED)
    =========================================================== */
 router.put("/rules/:id", async (req, res) => {
   try {
@@ -266,7 +266,7 @@ router.put("/rules/:id", async (req, res) => {
 });
 
 /* ===========================================================
-   DELETE RULE (FIXED)
+   DELETE RULE
    =========================================================== */
 router.delete("/rules/:id", async (req, res) => {
   try {
@@ -280,7 +280,7 @@ router.delete("/rules/:id", async (req, res) => {
 });
 
 /* ===========================================================
-   CLICK ROTATION + CLICK LOG
+   CLICK ROTATION + CLICK LOG (FULLY FIXED)
    =========================================================== */
 router.get("/click", fraudCheck, async (req, res) => {
   try {
@@ -290,14 +290,16 @@ router.get("/click", fraudCheck, async (req, res) => {
       return res.redirect("https://google.com");
     }
 
-    const rules = await pool.query(
+    const rulesRes = await pool.query(
       `SELECT * FROM traffic_rules WHERE pub_id=$1 AND status='active'`,
       [pub_id]
     );
 
-    if (!rules.rows.length) return res.redirect("https://google.com");
+    const rules = rulesRes.rows;
+    if (!rules.length) return res.redirect("https://google.com");
 
-    const filtered = rules.rows.filter(r => {
+    // Match geo+carrier
+    const filtered = rules.filter(r => {
       const g = (r.geo || "").toUpperCase().split(",").map(v => v.trim());
       const c = (r.carrier || "").toUpperCase().split(",").map(v => v.trim());
       return g.includes(geo.toUpperCase()) && c.includes(carrier.toUpperCase());
@@ -305,7 +307,7 @@ router.get("/click", fraudCheck, async (req, res) => {
 
     if (!filtered.length) return res.redirect("https://google.com");
 
-    // INAPP no rotation
+    // INAPP rule: no rotation
     if (filtered[0].type === "INAPP") {
       let url = filtered[0].redirect_url;
       if (click_id)
@@ -314,20 +316,27 @@ router.get("/click", fraudCheck, async (req, res) => {
     }
 
     // Weighted rotation
-    let total = filtered.reduce((s, r) => s + Number(r.weight), 0);
-    let r = Math.random() * total;
+    const total = filtered.reduce((a, r) => a + Number(r.weight), 0);
+    let rnd = Math.random() * total;
     let selected = filtered[0];
 
-    for (const rule of filtered) {
-      r -= Number(rule.weight);
-      if (r <= 0) {
-        selected = rule;
+    for (const r of filtered) {
+      rnd -= Number(r.weight);
+      if (rnd <= 0) {
+        selected = r;
         break;
       }
     }
 
-    /* CLICK LOG */
+    /* ===============================
+       CLICK LOGGING — FIXED
+    ================================ */
     try {
+      const ip =
+        req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
+        req.socket.remoteAddress ||
+        null;
+
       await pool.query(
         `
         INSERT INTO analytics_clicks 
@@ -339,18 +348,21 @@ router.get("/click", fraudCheck, async (req, res) => {
           selected.offer_id,
           geo,
           carrier,
-          req.ip,
-          req.headers["user-agent"],
+          ip,
+          req.headers["user-agent"] || null,
           req.headers["referer"] || null,
-          JSON.stringify(req.query)
+          JSON.stringify(req.query || {})
         ]
       );
-    } catch (err) {
-      console.error("CLICK LOGGING ERROR:", err);
+    } catch (logErr) {
+      console.error("CLICK LOGGING ERROR:", logErr);
     }
 
-    // Redirect
+    /* ===============================
+       REDIRECT
+    ================================ */
     let finalUrl = selected.redirect_url;
+
     if (click_id)
       finalUrl += (finalUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`;
 
