@@ -7,12 +7,13 @@ const router = express.Router();
 
 /* ===========================================================
    SHARED CLICK LOG FUNCTION
+   - Logs every click into analytics_clicks
 =========================================================== */
 async function logClick(req, pub_id, offer_id, geo, carrier) {
   try {
     const ip =
       req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-      req.socket.remoteAddress ||
+      req.socket?.remoteAddress ||
       null;
 
     await pool.query(
@@ -29,7 +30,7 @@ async function logClick(req, pub_id, offer_id, geo, carrier) {
         ip,
         req.headers["user-agent"] || null,
         req.headers["referer"] || null,
-        JSON.stringify(req.query || {})
+        JSON.stringify(req.query || {}),
       ]
     );
   } catch (err) {
@@ -38,7 +39,42 @@ async function logClick(req, pub_id, offer_id, geo, carrier) {
 }
 
 /* ===========================================================
-   MAIN CLICK HANDLER
+   HELPERS: CAPS (HARD CAP using analytics_clicks + POD table)
+=========================================================== */
+
+// Get daily/hourly usage for a list of offers for a PUB
+async function getOfferUsage(pub_id, offerIds = []) {
+  if (!offerIds.length) return {};
+
+  const sql = `
+    SELECT 
+      offer_id,
+      COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE) AS day_count,
+      COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 hour') AS hour_count
+    FROM analytics_clicks
+    WHERE pub_id = $1
+      AND offer_id = ANY($2)
+    GROUP BY offer_id
+  `;
+
+  try {
+    const { rows } = await pool.query(sql, [pub_id, offerIds]);
+    const map = {};
+    for (const r of rows) {
+      map[r.offer_id] = {
+        day_count: Number(r.day_count || 0),
+        hour_count: Number(r.hour_count || 0),
+      };
+    }
+    return map;
+  } catch (err) {
+    console.error("OFFER USAGE ERROR:", err);
+    return {};
+  }
+}
+
+/* ===========================================================
+   MAIN CLICK HANDLER (HARD CAP LOGIC)
 =========================================================== */
 async function clickHandler(req, res) {
   try {
@@ -48,75 +84,221 @@ async function clickHandler(req, res) {
       return res.redirect("https://example.com");
     }
 
-    /* 1) Fetch all active rules */
+    const pub = String(pub_id).toUpperCase();
+    const geoUp = String(geo).toUpperCase();
+    const carrierUp = String(carrier).toUpperCase();
+
+    /* 1) Fetch all active rules + caps (via publisher_offer_distribution) */
     const rulesRes = await pool.query(
-      `SELECT * FROM traffic_rules WHERE pub_id = $1 AND status='active'`,
-      [pub_id]
+      `
+      SELECT 
+        tr.*,
+        pod.daily_cap,
+        pod.hourly_cap
+      FROM traffic_rules tr
+      LEFT JOIN publisher_offer_distribution pod
+        ON pod.pub_id = tr.pub_id
+       AND pod.offer_id = tr.offer_id
+      WHERE tr.pub_id = $1
+        AND tr.status = 'active'
+      `,
+      [pub]
     );
 
-    let rules = rulesRes.rows;
+    let rules = rulesRes.rows || [];
 
     /* 2) If NO RULES → fallback to publisher tracking link */
     if (!rules.length) {
-      const pubRes = await pool.query(
-        `SELECT tracking_url 
-         FROM publisher_tracking_links 
-         WHERE pub_code = $1 LIMIT 1`,
-        [pub_id]
+      // Prefer matching geo/carrier tracking link
+      let fallbackUrl = null;
+
+      const specific = await pool.query(
+        `
+        SELECT tracking_url
+        FROM publisher_tracking_links
+        WHERE pub_code = $1
+          AND (geo IS NULL OR geo = '' OR UPPER(geo) = UPPER($2))
+          AND (carrier IS NULL OR carrier = '' OR UPPER(carrier) = UPPER($3))
+        ORDER BY id ASC
+        LIMIT 1
+        `,
+        [pub, geoUp, carrierUp]
       );
 
-      let fallbackUrl = pubRes.rows[0]?.tracking_url || "https://example.com";
-
-      if (click_id) {
-        fallbackUrl += (fallbackUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+      if (specific.rows.length) {
+        fallbackUrl = specific.rows[0].tracking_url;
+      } else {
+        const anyRow = await pool.query(
+          `
+          SELECT tracking_url
+          FROM publisher_tracking_links
+          WHERE pub_code = $1
+          ORDER BY id ASC
+          LIMIT 1
+          `,
+          [pub]
+        );
+        fallbackUrl = anyRow.rows[0]?.tracking_url || "https://example.com";
       }
 
-      await logClick(req, pub_id, null, geo, carrier);
+      if (click_id) {
+        fallbackUrl +=
+          (fallbackUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+      }
 
+      await logClick(req, pub, null, geoUp, carrierUp);
       return res.redirect(fallbackUrl);
     }
 
-    /* 3) GEO + CARRIER filter */
-    const filtered = rules.filter(r => {
-      const geos = (r.geo || "").toUpperCase().split(",").map(v => v.trim());
-      const carr = (r.carrier || "").toUpperCase().split(",").map(v => v.trim());
-      return geos.includes(geo.toUpperCase()) && carr.includes(carrier.toUpperCase());
+    /* 3) GEO + CARRIER filter (robust) */
+    const filteredByGeoCarrier = rules.filter((r) => {
+      const geos = (r.geo || "")
+        .toUpperCase()
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean);
+      const carriers = (r.carrier || "")
+        .toUpperCase()
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean);
+
+      const geoMatch =
+        !geos.length || geos.includes(geoUp); // if empty, treat as "all"
+      const carrierMatch =
+        !carriers.length || carriers.includes(carrierUp); // if empty, treat as "all"
+
+      return geoMatch && carrierMatch;
     });
 
-    let selected;
+    // If nothing matches exact geo/carrier, fall back to "any rule"
+    let candidateRules = filteredByGeoCarrier.length ? filteredByGeoCarrier : rules;
 
-    /* 4) If no exact geo/carrier match → highest weight rule */
-    if (!filtered.length) {
-      selected = rules.reduce((max, r) =>
-        Number(r.weight) > Number(max.weight) ? r : max
+    /* 4) HARD CAP FILTER (Option A) */
+    // Collect caps from publisher_offer_distribution
+    const cappedOfferIds = candidateRules
+      .map((r) => Number(r.offer_id))
+      .filter(Boolean);
+
+    const usageMap = await getOfferUsage(pub, cappedOfferIds);
+
+    candidateRules = candidateRules.filter((r) => {
+      const offerId = Number(r.offer_id);
+      if (!offerId) return false;
+
+      const dailyCap = Number(r.daily_cap || 0); // 0 = no cap
+      const hourlyCap = Number(r.hourly_cap || 0);
+
+      const usage = usageMap[offerId] || { day_count: 0, hour_count: 0 };
+
+      // HARD CAP: if cap > 0 AND usage >= cap → block
+      if (dailyCap > 0 && usage.day_count >= dailyCap) {
+        return false;
+      }
+      if (hourlyCap > 0 && usage.hour_count >= hourlyCap) {
+        return false;
+      }
+
+      return true;
+    });
+
+    // After caps, maybe no candidate rule left
+    if (!candidateRules.length) {
+      // Fallback to tracking link as in step 2
+      let fallbackUrl = null;
+
+      const specific = await pool.query(
+        `
+        SELECT tracking_url
+        FROM publisher_tracking_links
+        WHERE pub_code = $1
+          AND (geo IS NULL OR geo = '' OR UPPER(geo) = UPPER($2))
+          AND (carrier IS NULL OR carrier = '' OR UPPER(carrier) = UPPER($3))
+        ORDER BY id ASC
+        LIMIT 1
+        `,
+        [pub, geoUp, carrierUp]
       );
-    } else {
-      /* 5) Weighted rotation */
-      const total = filtered.reduce((sum, r) => sum + Number(r.weight), 0);
-      let rnd = Math.random() * total;
 
-      selected = filtered[0];
-      for (const r of filtered) {
-        rnd -= Number(r.weight);
-        if (rnd <= 0) {
-          selected = r;
-          break;
-        }
+      if (specific.rows.length) {
+        fallbackUrl = specific.rows[0].tracking_url;
+      } else {
+        const anyRow = await pool.query(
+          `
+          SELECT tracking_url
+          FROM publisher_tracking_links
+          WHERE pub_code = $1
+          ORDER BY id ASC
+          LIMIT 1
+          `,
+          [pub]
+        );
+        fallbackUrl = anyRow.rows[0]?.tracking_url || "https://example.com";
+      }
+
+      if (click_id) {
+        fallbackUrl +=
+          (fallbackUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+      }
+
+      await logClick(req, pub, null, geoUp, carrierUp);
+      return res.redirect(fallbackUrl);
+    }
+
+    /* 5) WEIGHTED ROTATION among candidateRules */
+    const totalWeight = candidateRules.reduce(
+      (sum, r) => sum + Number(r.weight || 0),
+      0
+    );
+
+    if (totalWeight <= 0) {
+      // No valid weights → fallback
+      let fallbackUrl = "https://example.com";
+
+      const fb = await pool.query(
+        `
+        SELECT tracking_url
+        FROM publisher_tracking_links
+        WHERE pub_code = $1
+        ORDER BY id ASC
+        LIMIT 1
+        `,
+        [pub]
+      );
+      if (fb.rows.length) fallbackUrl = fb.rows[0].tracking_url;
+
+      if (click_id) {
+        fallbackUrl +=
+          (fallbackUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+      }
+
+      await logClick(req, pub, null, geoUp, carrierUp);
+      return res.redirect(fallbackUrl);
+    }
+
+    let rnd = Math.random() * totalWeight;
+    let selected = candidateRules[0];
+
+    for (const r of candidateRules) {
+      rnd -= Number(r.weight || 0);
+      if (rnd <= 0) {
+        selected = r;
+        break;
       }
     }
 
     /* 6) CLICK LOGGING */
-    await logClick(req, pub_id, selected.offer_id, geo, carrier);
+    await logClick(req, pub, selected.offer_id, geoUp, carrierUp);
 
-    /* 7) REDIRECT */
-    let finalUrl = selected.redirect_url;
+    /* 7) FINAL REDIRECT URL (with click_id if present) */
+    let finalUrl = selected.redirect_url || "https://example.com";
 
     if (click_id) {
-      finalUrl += (finalUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+      finalUrl +=
+        (finalUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`;
     }
 
     return res.redirect(finalUrl);
-
   } catch (err) {
     console.error("CLICK ERROR:", err);
     return res.redirect("https://example.com");
@@ -127,14 +309,8 @@ async function clickHandler(req, res) {
    CLICK ROUTES
 =========================================================== */
 
-// Dashboard route
+// API route (nginx rewrites /click -> /api/distribution/click)
 router.get("/click", fraudCheck, clickHandler);
-
-// Publisher direct route (root level)
-router.get("/../../../../click", fraudCheck, clickHandler);
-router.get("/../../click", fraudCheck, clickHandler);
-router.get("/../../../click", fraudCheck, clickHandler);
-router.get("/click", fraudCheck, clickHandler);  // final ensured
 
 /* ===========================================================
    META ROUTE
@@ -153,7 +329,6 @@ router.get("/meta", async (req, res) => {
 
     const { rows } = await pool.query(q, [pub_id]);
     res.json(rows);
-
   } catch (err) {
     console.error("META ERROR:", err);
     res.status(500).json({ error: "internal_error" });
@@ -177,7 +352,10 @@ router.get("/offers", async (req, res) => {
     const params = [];
 
     if (exclude) {
-      const ids = exclude.split(",").map(Number).filter(Boolean);
+      const ids = exclude
+        .split(",")
+        .map((n) => Number(n))
+        .filter(Boolean);
       if (ids.length) {
         const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
         q += ` AND id NOT IN (${placeholders})`;
@@ -189,7 +367,6 @@ router.get("/offers", async (req, res) => {
 
     const { rows } = await pool.query(q, params);
     res.json(rows);
-
   } catch (err) {
     console.error("OFFERS ERROR:", err);
     res.status(500).json({ error: "internal_error" });
@@ -204,10 +381,8 @@ router.get("/rules", async (req, res) => {
     const { pub_id } = req.query;
 
     const q = `SELECT * FROM traffic_rules WHERE pub_id=$1 ORDER BY id ASC`;
-
     const { rows } = await pool.query(q, [pub_id]);
     res.json(rows);
-
   } catch (err) {
     console.error("RULES ERROR:", err);
     res.status(500).json({ error: "internal_error" });
@@ -215,7 +390,7 @@ router.get("/rules", async (req, res) => {
 });
 
 /* ===========================================================
-   REMAINING %
+   REMAINING % (JUST % LOGIC, IGNORING CAP)
 =========================================================== */
 router.get("/rules/remaining", async (req, res) => {
   try {
@@ -242,9 +417,8 @@ router.get("/rules/remaining", async (req, res) => {
 
     res.json({
       sum: sumw,
-      remaining: 100 - sumw
+      remaining: 100 - sumw,
     });
-
   } catch (err) {
     console.error("REMAINING ERROR:", err);
     res.status(500).json({ error: "internal_error" });
@@ -263,7 +437,6 @@ router.get("/overview", async (req, res) => {
     `);
 
     res.json(rows);
-
   } catch (err) {
     console.error("OVERVIEW ERROR:", err);
     res.status(500).json({ error: "internal_error" });
@@ -278,10 +451,17 @@ router.post("/rules", async (req, res) => {
     const b = req.body;
 
     const required = [
-      "pub_id", "publisher_id", "publisher_name",
-      "tracking_link_id", "offer_id", "offer_code",
-      "offer_name", "advertiser_name",
-      "geo", "carrier", "weight"
+      "pub_id",
+      "publisher_id",
+      "publisher_name",
+      "tracking_link_id",
+      "offer_id",
+      "offer_code",
+      "offer_name",
+      "advertiser_name",
+      "geo",
+      "carrier",
+      "weight",
     ];
 
     for (const key of required) {
@@ -310,16 +490,24 @@ router.post("/rules", async (req, res) => {
     `;
 
     const params = [
-      b.pub_id, b.publisher_id, b.publisher_name,
-      b.tracking_link_id, b.geo, b.carrier,
-      b.offer_id, b.offer_code, b.offer_name, b.advertiser_name,
-      b.redirect_url, b.type, b.weight,
-      b.created_by || 1
+      b.pub_id,
+      b.publisher_id,
+      b.publisher_name,
+      b.tracking_link_id,
+      b.geo,
+      b.carrier,
+      b.offer_id,
+      b.offer_code,
+      b.offer_name,
+      b.advertiser_name,
+      b.redirect_url,
+      b.type,
+      b.weight,
+      b.created_by || 1,
     ];
 
     const { rows } = await pool.query(q, params);
     res.json(rows[0]);
-
   } catch (err) {
     console.error("ADD RULE ERROR:", err);
     res.status(500).json({ error: "internal_error" });
@@ -335,10 +523,19 @@ router.put("/rules/:id", async (req, res) => {
     const b = req.body;
 
     const fields = [
-      "publisher_id", "publisher_name",
-      "tracking_link_id", "geo", "carrier",
-      "offer_id", "offer_code", "offer_name",
-      "advertiser_name", "redirect_url", "type", "weight", "status"
+      "publisher_id",
+      "publisher_name",
+      "tracking_link_id",
+      "geo",
+      "carrier",
+      "offer_id",
+      "offer_code",
+      "offer_name",
+      "advertiser_name",
+      "redirect_url",
+      "type",
+      "weight",
+      "status",
     ];
 
     const set = [];
@@ -367,7 +564,6 @@ router.put("/rules/:id", async (req, res) => {
 
     const { rows } = await pool.query(q, values);
     res.json(rows[0]);
-
   } catch (err) {
     console.error("UPDATE RULE ERROR:", err);
     res.status(500).json({ error: "internal_error" });
@@ -379,9 +575,10 @@ router.put("/rules/:id", async (req, res) => {
 =========================================================== */
 router.delete("/rules/:id", async (req, res) => {
   try {
-    await pool.query("DELETE FROM traffic_rules WHERE id=$1", [req.params.id]);
+    await pool.query("DELETE FROM traffic_rules WHERE id=$1", [
+      req.params.id,
+    ]);
     res.json({ success: true });
-
   } catch (err) {
     console.error("DELETE RULE ERROR:", err);
     res.status(500).json({ error: "internal_error" });
