@@ -1,260 +1,300 @@
 // frontend/src/pages/FraudAlerts.jsx
 import React, { useEffect, useState } from "react";
 import apiClient from "../api/apiClient";
-import dayjs from "dayjs";
 
 export default function FraudAlerts() {
-  /* =======================
-      STATE
-  ======================= */
-  const today = dayjs().format("YYYY-MM-DD");
-
-  const [pubId, setPubId] = useState("");
-  const [severity, setSeverity] = useState("");
-  const [geo, setGeo] = useState("");
-  const [search, setSearch] = useState("");
-
-  const [from, setFrom] = useState(today);
-  const [to, setTo] = useState(today);
-
   const [alerts, setAlerts] = useState([]);
+  const [pubFilter, setPubFilter] = useState("");
+  const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState(null);
 
-  const [limit] = useState(50);
-  const [offset, setOffset] = useState(0);
+  const limit = 200;
 
-  const [hasMore, setHasMore] = useState(false);
+  // Safe localStorage getter
+  const getLS = (key) => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(key);
+  };
 
-  /* =======================
-      LOAD ALERTS
-  ======================= */
-  const loadAlerts = async (resetOffset = false) => {
+  const load = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-
-      const currentOffset = resetOffset ? 0 : offset;
-
-      const q = new URLSearchParams({
-        pub_id: pubId || "",
-        q: search || "",
-        severity: severity || "",
-        geo: geo || "",
-        from,
-        to,
+      const params = {
+        ...(pubFilter ? { pub_id: pubFilter.toUpperCase() } : {}),
+        ...(q ? { q } : {}),
         limit,
-        offset: currentOffset,
-      }).toString();
+        offset: 0,
+      };
 
-      const res = await apiClient.get(`/fraud/alerts?${q}`);
-      const rows = res.data || [];
-
-      setAlerts(resetOffset ? rows : [...alerts, ...rows]);
-
-      setHasMore(rows.length === limit);
-      setOffset(currentOffset + limit);
+      const res = await apiClient.get(`/fraud/alerts`, { params });
+      setAlerts(res.data || []);
     } catch (err) {
-      console.error("loadAlerts error", err);
+      console.error("Fraud Alerts Load ERROR:", err);
+      setAlerts([]);
     } finally {
       setLoading(false);
     }
   };
 
-  /* =======================
-      RESOLVE ALERT
-  ======================= */
+  useEffect(() => {
+    load();
+  }, []);
+
   const resolveAlert = async (id) => {
-    if (!window.confirm("Resolve this alert?")) return;
+    if (!window.confirm("Mark this alert as resolved?")) return;
+
     try {
       await apiClient.post(`/fraud/alerts/${id}/resolve`, {
-        resolved_by: "admin",
+        resolved_by: getLS("mob13r_admin") || "ui",
       });
-      loadAlerts(true);
+      load();
     } catch (err) {
-      console.error("resolve error", err);
+      console.error("Resolve error:", err);
+      alert("Failed to resolve alert.");
     }
   };
 
-  /* =======================
-      EXPORT
-  ======================= */
-  const exportData = (type) => {
-    const q = new URLSearchParams({
-      pub_id: pubId || "",
-      q: search || "",
-      severity: severity || "",
-      geo: geo || "",
-      from,
-      to,
-      format: type,
-    }).toString();
+  const addWhitelist = async () => {
+    const pub = selected?.pub_id || pubFilter;
+    if (!pub) return alert("Select a PUB ID first");
 
-    window.open(`/fraud/export?${q}`, "_blank");
+    if (!window.confirm(`Whitelist PUB ${pub}?`)) return;
+
+    try {
+      await apiClient.post("/fraud/whitelist", {
+        pub_id: pub.toUpperCase(),
+        note: "whitelisted from UI",
+        created_by: getLS("mob13r_admin_id") || null,
+      });
+
+      alert("PUB Whitelisted");
+      load();
+    } catch (err) {
+      console.error("Whitelist error:", err);
+      alert("Whitelist failed");
+    }
   };
 
-  /* =======================
-      AUTORELOAD ON FILTER CHANGE
-  ======================= */
-  const applyFilters = () => loadAlerts(true);
+  const addBlacklist = async () => {
+    const ip = selected?.ip;
+    if (!ip) return alert("Select an alert with an IP");
 
-  /* =======================
-      UI
-  ======================= */
+    if (!window.confirm(`Blacklist IP ${ip}?`)) return;
+
+    try {
+      await apiClient.post("/fraud/blacklist", {
+        ip,
+        note: "blacklisted from UI",
+        created_by: getLS("mob13r_admin_id") || null,
+      });
+
+      alert("IP Blacklisted");
+      load();
+    } catch (err) {
+      console.error("Blacklist error:", err);
+      alert("Failed to blacklist IP.");
+    }
+  };
+
+  // Safe export with token
+  const exportCSV = async (format = "csv") => {
+    try {
+      const params = new URLSearchParams({
+        ...(pubFilter ? { pub_id: pubFilter.toUpperCase() } : {}),
+        ...(q ? { q } : {}),
+        format,
+      }).toString();
+
+      const token = getLS("mob13r_token");
+
+      const response = await fetch(
+        `${apiClient.defaults.baseURL}/fraud/export?${params}`,
+        {
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        return alert("Export failed");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `fraud_alerts.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("export error", err);
+      alert("Export failed");
+    }
+  };
+
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-6">Fraud Alerts</h1>
 
       {/* Filters */}
-      <div className="bg-white p-4 rounded shadow mb-6 grid grid-cols-6 gap-4">
+      <div className="flex gap-3 mb-4">
         <input
-          className="border p-2 rounded"
-          placeholder="PUB ID (e.g. PUB03)"
-          value={pubId}
-          onChange={(e) => setPubId(e.target.value.toUpperCase())}
-        />
-
-        <select
-          className="border p-2 rounded"
-          value={severity}
-          onChange={(e) => setSeverity(e.target.value)}
-        >
-          <option value="">Severity</option>
-          <option value="low">Low</option>
-          <option value="medium">Medium</option>
-          <option value="high">High</option>
-        </select>
-
-        <input
-          className="border p-2 rounded"
-          placeholder="GEO (IN, BD...)"
-          value={geo}
-          onChange={(e) => setGeo(e.target.value.toUpperCase())}
+          placeholder="PUB (PUB03)"
+          value={pubFilter}
+          onChange={(e) => setPubFilter(e.target.value.toUpperCase())}
+          className="border p-2 rounded w-40"
         />
 
         <input
-          className="border p-2 rounded col-span-2"
-          placeholder="Search (IP / UA / Reason...)"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-
-        <input
-          type="date"
-          className="border p-2 rounded"
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-        />
-
-        <input
-          type="date"
-          className="border p-2 rounded"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
+          placeholder="Search IP/UA/Reason..."
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="border p-2 rounded w-60"
         />
 
         <button
-          className="bg-blue-600 text-white p-2 rounded"
-          onClick={() => applyFilters()}
+          onClick={load}
+          className="bg-blue-600 text-white px-4 py-2 rounded"
         >
-          Apply
+          Search
         </button>
 
-        <button
-          className="bg-gray-700 text-white p-2 rounded"
-          onClick={() => {
-            setPubId("");
-            setSeverity("");
-            setGeo("");
-            setSearch("");
-            setFrom(today);
-            setTo(today);
-            loadAlerts(true);
-          }}
-        >
-          Reset
-        </button>
+        <div className="ml-auto flex gap-2">
+          <button
+            onClick={() => exportCSV("csv")}
+            className="bg-gray-700 text-white px-3 py-2 rounded"
+          >
+            Export CSV
+          </button>
 
-        <button
-          className="bg-green-600 text-white p-2 rounded"
-          onClick={() => exportData("csv")}
-        >
-          Export CSV
-        </button>
-
-        <button
-          className="bg-green-700 text-white p-2 rounded"
-          onClick={() => exportData("xlsx")}
-        >
-          Export XLSX
-        </button>
+          <button
+            onClick={() => exportCSV("xlsx")}
+            className="bg-gray-700 text-white px-3 py-2 rounded"
+          >
+            Export XLSX
+          </button>
+        </div>
       </div>
 
-      {/* Alert Table */}
-      <div className="bg-white p-4 rounded shadow">
-        <div className="overflow-x-auto">
+      {/* Main Grid */}
+      <div className="grid grid-cols-4 gap-4">
+        {/* Table */}
+        <div className="col-span-3 bg-white rounded shadow">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-100">
               <tr>
-                <th className="p-2">Time</th>
                 <th className="p-2">PUB</th>
                 <th className="p-2">IP</th>
                 <th className="p-2">Geo</th>
                 <th className="p-2">Carrier</th>
                 <th className="p-2">Reason</th>
                 <th className="p-2">Severity</th>
-                <th className="p-2">UA</th>
-                <th className="p-2">Actions</th>
+                <th className="p-2">Resolved</th>
+                <th className="p-2">Time</th>
               </tr>
             </thead>
 
             <tbody>
-              {alerts.length === 0 && (
+              {loading && (
                 <tr>
-                  <td colSpan="9" className="p-4 text-center text-gray-500">
-                    No alerts found
+                  <td colSpan={8} className="p-4 text-center">
+                    Loading...
                   </td>
                 </tr>
               )}
 
-              {alerts.map((a) => (
-                <tr key={a.id} className="border-t">
-                  <td className="p-2">{dayjs(a.created_at).format("DD-MM-YYYY HH:mm")}</td>
-                  <td className="p-2">{a.pub_id}</td>
-                  <td className="p-2">{a.ip}</td>
-                  <td className="p-2">{a.geo}</td>
-                  <td className="p-2">{a.carrier}</td>
-                  <td className="p-2">{a.reason}</td>
-                  <td className="p-2">{a.severity}</td>
-                  <td className="p-2 truncate max-w-xs">{a.ua}</td>
-                  <td className="p-2">
-                    {!a.resolved ? (
-                      <button
-                        className="bg-green-600 text-white px-2 py-1 rounded"
-                        onClick={() => resolveAlert(a.id)}
-                      >
-                        Resolve
-                      </button>
-                    ) : (
-                      <span className="text-green-600 font-semibold">Resolved</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {!loading &&
+                alerts.map((r) => (
+                  <tr
+                    key={r.id}
+                    className={`border-t cursor-pointer ${
+                      selected?.id === r.id ? "bg-yellow-50" : ""
+                    }`}
+                    onClick={() => setSelected(r)}
+                  >
+                    <td className="p-2">{r.pub_id}</td>
+                    <td className="p-2 font-mono">{r.ip}</td>
+                    <td className="p-2">{r.geo}</td>
+                    <td className="p-2">{r.carrier}</td>
+                    <td className="p-2">{r.reason}</td>
+                    <td className="p-2">{r.severity}</td>
+                    <td className="p-2">{r.resolved ? "Yes" : "No"}</td>
+                    <td className="p-2">
+                      {new Date(r.created_at).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
+        </div>
 
-          {loading && (
-            <div className="text-center p-4 text-gray-600">Loading...</div>
-          )}
+        {/* Side Panel */}
+        <div className="bg-white p-4 rounded shadow">
+          <h3 className="font-semibold mb-2">Selected Alert</h3>
 
-          {hasMore && !loading && (
-            <div className="text-center py-4">
-              <button
-                onClick={() => loadAlerts(false)}
-                className="bg-blue-600 text-white px-4 py-2 rounded"
-              >
-                Load More
-              </button>
-            </div>
+          {!selected && <div className="text-sm text-gray-500">Select a row</div>}
+
+          {selected && (
+            <>
+              <div className="text-sm mb-1">
+                <strong>PUB:</strong> {selected.pub_id}
+              </div>
+
+              <div className="text-sm mb-1">
+                <strong>IP:</strong> {selected.ip}
+              </div>
+
+              <div className="text-sm mb-1">
+                <strong>UA:</strong>
+                <div className="text-xs break-all">{selected.ua}</div>
+              </div>
+
+              <div className="text-sm mb-1">
+                <strong>Reason:</strong> {selected.reason}
+              </div>
+
+              <div className="text-sm mb-1">
+                <strong>Severity:</strong> {selected.severity}
+              </div>
+
+              <div className="text-sm mb-1">
+                <strong>Meta:</strong>
+                <pre className="text-xs bg-gray-100 p-2 rounded">
+                  {JSON.stringify(selected.meta || {}, null, 2)}
+                </pre>
+              </div>
+
+              <div className="flex flex-col gap-2 mt-3">
+                {!selected.resolved && (
+                  <button
+                    onClick={() => resolveAlert(selected.id)}
+                    className="bg-green-600 text-white px-3 py-2 rounded"
+                  >
+                    Resolve
+                  </button>
+                )}
+
+                <button
+                  onClick={addWhitelist}
+                  className="bg-blue-600 text-white px-3 py-2 rounded"
+                >
+                  Whitelist PUB
+                </button>
+
+                <button
+                  onClick={addBlacklist}
+                  className="bg-red-600 text-white px-3 py-2 rounded"
+                >
+                  Blacklist IP
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>
