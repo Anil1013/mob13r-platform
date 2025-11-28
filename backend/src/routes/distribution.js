@@ -6,75 +6,109 @@ import fraudCheck from "../middleware/fraudCheck.js";
 const router = express.Router();
 
 /* ===========================================================
-   COMMON CLICK HANDLER (used by both /click and /api/distribution/click)
-   =========================================================== */
-async function handleClick(req, res) {
+   SHARED CLICK LOG FUNCTION
+=========================================================== */
+async function logClick(req, pub_id, offer_id, geo, carrier) {
+  try {
+    const ip =
+      req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+      req.socket.remoteAddress ||
+      null;
+
+    await pool.query(
+      `
+      INSERT INTO analytics_clicks
+      (pub_id, offer_id, geo, carrier, ip, ua, referer, params)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `,
+      [
+        pub_id,
+        offer_id,
+        geo,
+        carrier,
+        ip,
+        req.headers["user-agent"] || null,
+        req.headers["referer"] || null,
+        JSON.stringify(req.query || {})
+      ]
+    );
+  } catch (err) {
+    console.error("CLICK LOGGING ERROR:", err);
+  }
+}
+
+/* ===========================================================
+   MAIN CLICK HANDLER
+=========================================================== */
+async function clickHandler(req, res) {
   try {
     const { pub_id, geo, carrier, click_id } = req.query;
 
     if (!pub_id || !geo || !carrier) {
-      return res.redirect("https://google.com");
+      return res.redirect("https://example.com");
     }
 
+    /* 1) Fetch all active rules */
     const rulesRes = await pool.query(
-      `SELECT * FROM traffic_rules WHERE pub_id=$1 AND status='active'`,
+      `SELECT * FROM traffic_rules WHERE pub_id = $1 AND status='active'`,
       [pub_id]
     );
 
-    const rules = rulesRes.rows;
-    if (!rules.length) return res.redirect("https://google.com");
+    let rules = rulesRes.rows;
 
-    // match geo + carrier
+    /* 2) If NO RULES → fallback to publisher tracking link */
+    if (!rules.length) {
+      const pubRes = await pool.query(
+        `SELECT tracking_url 
+         FROM publisher_tracking_links 
+         WHERE pub_code = $1 LIMIT 1`,
+        [pub_id]
+      );
+
+      let fallbackUrl = pubRes.rows[0]?.tracking_url || "https://example.com";
+
+      if (click_id) {
+        fallbackUrl += (fallbackUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+      }
+
+      await logClick(req, pub_id, null, geo, carrier);
+
+      return res.redirect(fallbackUrl);
+    }
+
+    /* 3) GEO + CARRIER filter */
     const filtered = rules.filter(r => {
-      const g = (r.geo || "").toUpperCase().split(",").map(v => v.trim());
-      const c = (r.carrier || "").toUpperCase().split(",").map(v => v.trim());
-      return g.includes(geo.toUpperCase()) && c.includes(carrier.toUpperCase());
+      const geos = (r.geo || "").toUpperCase().split(",").map(v => v.trim());
+      const carr = (r.carrier || "").toUpperCase().split(",").map(v => v.trim());
+      return geos.includes(geo.toUpperCase()) && carr.includes(carrier.toUpperCase());
     });
 
-    if (!filtered.length) return res.redirect("https://google.com");
+    let selected;
 
-    // weighted rotation
-    let selected = filtered[0];
-    const total = filtered.reduce((a, r) => a + Number(r.weight), 0);
-    let rnd = Math.random() * total;
+    /* 4) If no exact geo/carrier match → highest weight rule */
+    if (!filtered.length) {
+      selected = rules.reduce((max, r) =>
+        Number(r.weight) > Number(max.weight) ? r : max
+      );
+    } else {
+      /* 5) Weighted rotation */
+      const total = filtered.reduce((sum, r) => sum + Number(r.weight), 0);
+      let rnd = Math.random() * total;
 
-    for (const r of filtered) {
-      rnd -= Number(r.weight);
-      if (rnd <= 0) {
-        selected = r;
-        break;
+      selected = filtered[0];
+      for (const r of filtered) {
+        rnd -= Number(r.weight);
+        if (rnd <= 0) {
+          selected = r;
+          break;
+        }
       }
     }
 
-    // CLICK LOGGING
-    try {
-      const ip =
-        req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-        req.socket.remoteAddress ||
-        null;
+    /* 6) CLICK LOGGING */
+    await logClick(req, pub_id, selected.offer_id, geo, carrier);
 
-      await pool.query(
-        `
-        INSERT INTO analytics_clicks
-        (pub_id, offer_id, geo, carrier, ip, ua, referer, params)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-      `,
-        [
-          pub_id,
-          selected.offer_id,
-          geo,
-          carrier,
-          ip,
-          req.headers["user-agent"] || null,
-          req.headers["referer"] || null,
-          JSON.stringify(req.query || {})
-        ]
-      );
-    } catch (err) {
-      console.error("CLICK LOGGING ERROR:", err);
-    }
-
-    // REDIRECT
+    /* 7) REDIRECT */
     let finalUrl = selected.redirect_url;
 
     if (click_id) {
@@ -85,59 +119,29 @@ async function handleClick(req, res) {
 
   } catch (err) {
     console.error("CLICK ERROR:", err);
-    return res.redirect("https://google.com");
+    return res.redirect("https://example.com");
   }
 }
 
 /* ===========================================================
-   CLICK ROUTE (original API)
-   =========================================================== */
-router.get("/click", fraudCheck, handleClick);
+   CLICK ROUTES
+=========================================================== */
+
+// Dashboard route
+router.get("/click", fraudCheck, clickHandler);
+
+// Publisher direct route (root level)
+router.get("/../../../../click", fraudCheck, clickHandler);
+router.get("/../../click", fraudCheck, clickHandler);
+router.get("/../../../click", fraudCheck, clickHandler);
+router.get("/click", fraudCheck, clickHandler);  // final ensured
 
 /* ===========================================================
-   CLICK ROUTE ALIAS (DIRECT: /click)
-   =========================================================== */
-router.get("/../../click", fraudCheck, handleClick);
-router.get("/../../../click", fraudCheck, handleClick);
-router.get("/../../../../click", fraudCheck, handleClick);
-
-// MOST IMPORTANT DIRECT ROUTE
-router.get("/../../../../../../click", fraudCheck, handleClick);
-
-
-// REAL direct route → /click
-router.get("/click-direct-alias", fraudCheck, handleClick);
-
-// *** FINAL WORKING DIRECT ROUTE ***
-router.get("/../../../..", fraudCheck, handleClick);
-
-// Actually: true direct route:
-router.get("/../../", fraudCheck, handleClick);
-
-// Final working alias:
-router.get("/../../../../../", fraudCheck, handleClick);
-
-router.get("/../../click", fraudCheck, handleClick);
-
-// REAL FINAL ALIAS BELOW:
-router.get("/../../../../../click", fraudCheck, handleClick);
-
-// Perfect final simple alias:
-router.get("/../../../../click", fraudCheck, handleClick);
-
-// REAL CLEAN DIRECT ALIAS → /click
-router.get("/../../click", fraudCheck, handleClick);
-
-// Override and finalize
-router.get("/click", fraudCheck, handleClick);
-
-/* ===========================================================
-   META (tracking links)
-   =========================================================== */
+   META ROUTE
+=========================================================== */
 router.get("/meta", async (req, res) => {
   try {
     const { pub_id } = req.query;
-    if (!pub_id) return res.status(400).json({ error: "pub_id_required" });
 
     const q = `
       SELECT id AS tracking_link_id, pub_code, publisher_id, publisher_name,
@@ -148,7 +152,7 @@ router.get("/meta", async (req, res) => {
     `;
 
     const { rows } = await pool.query(q, [pub_id]);
-    return res.json(rows);
+    res.json(rows);
 
   } catch (err) {
     console.error("META ERROR:", err);
@@ -157,8 +161,8 @@ router.get("/meta", async (req, res) => {
 });
 
 /* ===========================================================
-   OFFERS
-   =========================================================== */
+   OFFERS ROUTE
+=========================================================== */
 router.get("/offers", async (req, res) => {
   try {
     const { exclude } = req.query;
@@ -167,7 +171,7 @@ router.get("/offers", async (req, res) => {
       SELECT id, offer_id, name AS offer_name, advertiser_name,
              type, payout, tracking_url, status
       FROM offers
-      WHERE status='active'
+      WHERE status = 'active'
     `;
 
     const params = [];
@@ -184,7 +188,7 @@ router.get("/offers", async (req, res) => {
     q += " ORDER BY id ASC";
 
     const { rows } = await pool.query(q, params);
-    return res.json(rows);
+    res.json(rows);
 
   } catch (err) {
     console.error("OFFERS ERROR:", err);
@@ -194,15 +198,15 @@ router.get("/offers", async (req, res) => {
 
 /* ===========================================================
    RULES LIST
-   =========================================================== */
+=========================================================== */
 router.get("/rules", async (req, res) => {
   try {
     const { pub_id } = req.query;
-    if (!pub_id) return res.status(400).json({ error: "pub_id_required" });
 
     const q = `SELECT * FROM traffic_rules WHERE pub_id=$1 ORDER BY id ASC`;
+
     const { rows } = await pool.query(q, [pub_id]);
-    return res.json(rows);
+    res.json(rows);
 
   } catch (err) {
     console.error("RULES ERROR:", err);
@@ -212,19 +216,16 @@ router.get("/rules", async (req, res) => {
 
 /* ===========================================================
    REMAINING %
-   =========================================================== */
+=========================================================== */
 router.get("/rules/remaining", async (req, res) => {
   try {
     const { pub_id, tracking_link_id } = req.query;
-
-    if (!pub_id) return res.status(400).json({ error: "pub_id_required" });
 
     let q = `
       SELECT COALESCE(SUM(weight),0) AS sumw
       FROM traffic_rules
       WHERE pub_id=$1 AND status='active'
     `;
-
     const params = [pub_id];
 
     if (tracking_link_id) {
@@ -239,7 +240,10 @@ router.get("/rules/remaining", async (req, res) => {
     const { rows } = await pool.query(q, params);
     const sumw = Number(rows[0]?.sumw || 0);
 
-    return res.json({ sum: sumw, remaining: 100 - sumw });
+    res.json({
+      sum: sumw,
+      remaining: 100 - sumw
+    });
 
   } catch (err) {
     console.error("REMAINING ERROR:", err);
@@ -249,7 +253,7 @@ router.get("/rules/remaining", async (req, res) => {
 
 /* ===========================================================
    OVERVIEW
-   =========================================================== */
+=========================================================== */
 router.get("/overview", async (req, res) => {
   try {
     const { rows } = await pool.query(`
@@ -258,7 +262,7 @@ router.get("/overview", async (req, res) => {
       ORDER BY pub_id ASC, id ASC
     `);
 
-    return res.json(rows);
+    res.json(rows);
 
   } catch (err) {
     console.error("OVERVIEW ERROR:", err);
@@ -268,7 +272,7 @@ router.get("/overview", async (req, res) => {
 
 /* ===========================================================
    ADD RULE
-   =========================================================== */
+=========================================================== */
 router.post("/rules", async (req, res) => {
   try {
     const b = req.body;
@@ -280,8 +284,8 @@ router.post("/rules", async (req, res) => {
       "geo", "carrier", "weight"
     ];
 
-    for (const k of required) {
-      if (!b[k]) return res.status(400).json({ error: `${k}_required` });
+    for (const key of required) {
+      if (!b[key]) return res.status(400).json({ error: `${key}_required` });
     }
 
     const dup = await pool.query(
@@ -293,7 +297,7 @@ router.post("/rules", async (req, res) => {
     if (dup.rows.length)
       return res.status(409).json({ error: "duplicate_offer_for_pub" });
 
-    const insert = `
+    const q = `
       INSERT INTO traffic_rules (
         pub_id, publisher_id, publisher_name,
         tracking_link_id, geo, carrier,
@@ -313,8 +317,8 @@ router.post("/rules", async (req, res) => {
       b.created_by || 1
     ];
 
-    const { rows } = await pool.query(insert, params);
-    return res.json(rows[0]);
+    const { rows } = await pool.query(q, params);
+    res.json(rows[0]);
 
   } catch (err) {
     console.error("ADD RULE ERROR:", err);
@@ -324,7 +328,7 @@ router.post("/rules", async (req, res) => {
 
 /* ===========================================================
    UPDATE RULE
-   =========================================================== */
+=========================================================== */
 router.put("/rules/:id", async (req, res) => {
   try {
     const id = req.params.id;
@@ -343,8 +347,9 @@ router.put("/rules/:id", async (req, res) => {
 
     for (const f of fields) {
       if (b[f] !== undefined) {
-        set.push(`${f}=$${i++}`);
+        set.push(`${f}=$${i}`);
         values.push(b[f]);
+        i++;
       }
     }
 
@@ -355,13 +360,13 @@ router.put("/rules/:id", async (req, res) => {
 
     const q = `
       UPDATE traffic_rules
-      SET ${set.join(", ")}, updated_at = NOW()
+      SET ${set.join(", ")}, updated_at=NOW()
       WHERE id=$${values.length}
       RETURNING *
     `;
 
     const { rows } = await pool.query(q, values);
-    return res.json(rows[0]);
+    res.json(rows[0]);
 
   } catch (err) {
     console.error("UPDATE RULE ERROR:", err);
@@ -371,14 +376,11 @@ router.put("/rules/:id", async (req, res) => {
 
 /* ===========================================================
    DELETE RULE
-   =========================================================== */
+=========================================================== */
 router.delete("/rules/:id", async (req, res) => {
   try {
-    await pool.query("DELETE FROM traffic_rules WHERE id=$1", [
-      req.params.id,
-    ]);
-
-    return res.json({ success: true });
+    await pool.query("DELETE FROM traffic_rules WHERE id=$1", [req.params.id]);
+    res.json({ success: true });
 
   } catch (err) {
     console.error("DELETE RULE ERROR:", err);
