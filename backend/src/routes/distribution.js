@@ -1,5 +1,5 @@
 import express from "express";
-import pool from "../config/db.js";
+import pool from "../db.js";
 
 const router = express.Router();
 
@@ -51,8 +51,8 @@ router.post("/rules", async (req, res) => {
     const result = await pool.query(
       `
       INSERT INTO traffic_rules (
-        pub_id, publisher_name, tracking_link_id, geo, carrier, 
-        offer_id, offer_name, advertiser_name, redirect_url, 
+        pub_id, publisher_name, tracking_link_id, geo, carrier,
+        offer_id, offer_name, advertiser_name, redirect_url,
         type, weight, status
       )
       VALUES (
@@ -119,9 +119,12 @@ router.put("/rules/:id", async (req, res) => {
     values.push(id);
 
     const result = await pool.query(
-      `UPDATE traffic_rules SET ${updates.join(", ")}
-       WHERE id = $${index}
-       RETURNING *`,
+      `
+      UPDATE traffic_rules 
+      SET ${updates.join(", ")}
+      WHERE id = $${index}
+      RETURNING *
+      `,
       values
     );
 
@@ -149,7 +152,7 @@ router.delete("/rules/:id", async (req, res) => {
 });
 
 /* ==========================
-   CHECK REMAINING WEIGHT
+   CHECK REMAINING WEIGHT (%)
 ============================= */
 router.get("/rules/remaining", async (req, res) => {
   try {
@@ -167,11 +170,7 @@ router.get("/rules/remaining", async (req, res) => {
     const used = parseInt(result.rows[0].total_weight);
     const remaining = 100 - used;
 
-    res.json({
-      success: true,
-      used,
-      remaining,
-    });
+    res.json({ success: true, used, remaining });
   } catch (err) {
     console.error("Error checking weight:", err);
     res.status(500).json({ success: false });
@@ -179,12 +178,15 @@ router.get("/rules/remaining", async (req, res) => {
 });
 
 /* ==========================
-   FETCH LISTS FOR FRONTEND
+   FETCH PUBLISHERS
 ============================= */
-
 router.get("/publishers", async (req, res) => {
   try {
-    const result = await pool.query(`SELECT pub_id, publisher_name FROM publishers`);
+    const result = await pool.query(`
+      SELECT pub_id, publisher_name 
+      FROM publishers
+    `);
+
     res.json({ success: true, publishers: result.rows });
   } catch (err) {
     console.error("Error fetching publishers:", err);
@@ -192,9 +194,16 @@ router.get("/publishers", async (req, res) => {
   }
 });
 
+/* ==========================
+   FETCH OFFERS
+============================= */
 router.get("/offers", async (req, res) => {
   try {
-    const result = await pool.query(`SELECT offer_id, name FROM offers`);
+    const result = await pool.query(`
+      SELECT offer_id, name 
+      FROM offers
+    `);
+
     res.json({ success: true, offers: result.rows });
   } catch (err) {
     console.error("Error fetching offers:", err);
@@ -202,6 +211,9 @@ router.get("/offers", async (req, res) => {
   }
 });
 
+/* ==========================
+   FETCH TRACKING LINKS
+============================= */
 router.get("/tracking-links", async (req, res) => {
   try {
     const result = await pool.query(`
