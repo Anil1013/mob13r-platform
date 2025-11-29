@@ -1,231 +1,133 @@
 import express from "express";
-import pool from "../db.js";
+import db from "../db.js";   // 🔥 Correct path
+import authMiddleware from "../middleware/auth.js";
 
 const router = express.Router();
 
-/* ==========================
-   GET ALL TRAFFIC RULES
-============================= */
-router.get("/rules", async (req, res) => {
+// --------------------------
+// GET META
+// --------------------------
+router.get("/meta", authMiddleware, async (req, res) => {
   try {
-    const { pub_id, tracking_link_id } = req.query;
+    const { pub_id } = req.query;
 
-    const result = await pool.query(
-      `
-      SELECT *
-      FROM traffic_rules
-      WHERE pub_id = $1
-        AND tracking_link_id = $2
-      ORDER BY weight DESC, id DESC
-      `,
-      [pub_id, tracking_link_id]
+    const publisher = await db.oneOrNone(
+      `SELECT * FROM publishers WHERE pub_id = $1`,
+      [pub_id]
     );
 
-    res.json({ success: true, rules: result.rows });
-  } catch (err) {
-    console.error("Error fetching rules:", err);
-    res.status(500).json({ success: false, message: "Server Error" });
-  }
-});
-
-/* ==========================
-   CREATE NEW RULE
-============================= */
-router.post("/rules", async (req, res) => {
-  try {
-    const {
-      pub_id,
-      publisher_name,
-      tracking_link_id,
-      geo,
-      carrier,
-      offer_id,
-      offer_name,
-      advertiser_name,
-      redirect_url,
-      type,
-      weight,
-      status,
-    } = req.body;
-
-    const result = await pool.query(
-      `
-      INSERT INTO traffic_rules (
-        pub_id, publisher_name, tracking_link_id, geo, carrier,
-        offer_id, offer_name, advertiser_name, redirect_url,
-        type, weight, status
-      )
-      VALUES (
-        $1,$2,$3,$4,$5,
-        $6,$7,$8,$9,
-        $10,$11,$12
-      )
-      RETURNING *
-      `,
-      [
-        pub_id,
-        publisher_name,
-        tracking_link_id,
-        geo,
-        carrier,
-        offer_id,
-        offer_name,
-        advertiser_name,
-        redirect_url,
-        type,
-        weight,
-        status,
-      ]
-    );
-
-    res.json({ success: true, rule: result.rows[0] });
-  } catch (err) {
-    console.error("Error creating rule:", err);
-    res.status(500).json({ success: false, message: "Insert failed" });
-  }
-});
-
-/* ==========================
-   UPDATE RULE
-============================= */
-router.put("/rules/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const fields = [
-      "geo",
-      "carrier",
-      "offer_id",
-      "offer_name",
-      "advertiser_name",
-      "redirect_url",
-      "type",
-      "weight",
-      "status",
-    ];
-
-    const updates = [];
-    const values = [];
-    let index = 1;
-
-    for (let field of fields) {
-      if (req.body[field] !== undefined) {
-        updates.push(`${field} = $${index}`);
-        values.push(req.body[field]);
-        index++;
-      }
+    if (!publisher) {
+      return res.status(404).json({ error: "Publisher not found" });
     }
 
-    values.push(id);
-
-    const result = await pool.query(
-      `
-      UPDATE traffic_rules 
-      SET ${updates.join(", ")}
-      WHERE id = $${index}
-      RETURNING *
-      `,
-      values
+    const trackingLinks = await db.manyOrNone(
+      `SELECT id, link_name FROM tracking_links WHERE pub_id = $1`,
+      [pub_id]
     );
 
-    res.json({ success: true, rule: result.rows[0] });
+    const offers = await db.manyOrNone(
+      `SELECT offer_id, offer_name FROM offers`
+    );
+
+    res.json({
+      publisher,
+      trackingLinks,
+      offers
+    });
   } catch (err) {
-    console.error("Error updating rule:", err);
-    res.status(500).json({ success: false });
+    console.error("META Error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-/* ==========================
-   DELETE RULE
-============================= */
-router.delete("/rules/:id", async (req, res) => {
+// --------------------------
+// GET RULES
+// --------------------------
+router.get("/rules", authMiddleware, async (req, res) => {
+  try {
+    const { pub_id } = req.query;
+
+    const rules = await db.manyOrNone(
+      `SELECT * FROM traffic_rules WHERE pub_id = $1 ORDER BY id DESC`,
+      [pub_id]
+    );
+
+    res.json(rules);
+  } catch (err) {
+    console.error("Get Rules Error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// --------------------------
+// GET REMAINING OFFERS
+// --------------------------
+router.get("/rules/remaining", authMiddleware, async (req, res) => {
+  try {
+    const { pub_id } = req.query;
+
+    const usedOffers = await db.manyOrNone(
+      `SELECT offer_id FROM traffic_rules WHERE pub_id = $1`,
+      [pub_id]
+    );
+
+    const usedOfferIds = usedOffers.map(o => o.offer_id);
+
+    const remaining = await db.manyOrNone(
+      `SELECT offer_id, offer_name FROM offers WHERE offer_id NOT IN ($1:list)`,
+      [usedOfferIds.length ? usedOfferIds : ["NONE"]]
+    );
+
+    res.json(remaining);
+  } catch (err) {
+    console.error("Remaining Error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// --------------------------
+// GET OFFERS (Exclude)
+// --------------------------
+router.get("/offers", authMiddleware, async (req, res) => {
+  try {
+    const exclude = req.query.exclude;
+
+    const offers = await db.manyOrNone(
+      `SELECT offer_id, offer_name FROM offers WHERE offer_id != $1`,
+      [exclude]
+    );
+
+    res.json(offers);
+  } catch (err) {
+    console.error("Offers Error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// --------------------------
+// UPDATE RULE
+// --------------------------
+router.put("/rules/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
+    const {
+      geo, carrier, offer_id, type, weight, status,
+      redirect_url
+    } = req.body;
 
-    await pool.query(`DELETE FROM traffic_rules WHERE id = $1`, [id]);
-
-    res.json({ success: true, message: "Rule deleted" });
-  } catch (err) {
-    console.error("Error deleting rule:", err);
-    res.status(500).json({ success: false });
-  }
-});
-
-/* ==========================
-   CHECK REMAINING WEIGHT (%)
-============================= */
-router.get("/rules/remaining", async (req, res) => {
-  try {
-    const { pub_id, tracking_link_id } = req.query;
-
-    const result = await pool.query(
-      `
-      SELECT COALESCE(SUM(weight),0) AS total_weight
-      FROM traffic_rules
-      WHERE pub_id = $1 AND tracking_link_id = $2
-      `,
-      [pub_id, tracking_link_id]
+    const updated = await db.one(
+      `UPDATE traffic_rules 
+       SET geo=$1, carrier=$2, offer_id=$3, type=$4, weight=$5, status=$6, redirect_url=$7 
+       WHERE id=$8 RETURNING *`,
+      [geo, carrier, offer_id, type, weight, status, redirect_url, id]
     );
 
-    const used = parseInt(result.rows[0].total_weight);
-    const remaining = 100 - used;
-
-    res.json({ success: true, used, remaining });
+    res.json(updated);
   } catch (err) {
-    console.error("Error checking weight:", err);
-    res.status(500).json({ success: false });
+    console.error("Update Rule Error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
-/* ==========================
-   FETCH PUBLISHERS
-============================= */
-router.get("/publishers", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT pub_id, publisher_name 
-      FROM publishers
-    `);
-
-    res.json({ success: true, publishers: result.rows });
-  } catch (err) {
-    console.error("Error fetching publishers:", err);
-    res.status(500).json({ success: false });
-  }
-});
-
-/* ==========================
-   FETCH OFFERS
-============================= */
-router.get("/offers", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT offer_id, name 
-      FROM offers
-    `);
-
-    res.json({ success: true, offers: result.rows });
-  } catch (err) {
-    console.error("Error fetching offers:", err);
-    res.status(500).json({ success: false });
-  }
-});
-
-/* ==========================
-   FETCH TRACKING LINKS
-============================= */
-router.get("/tracking-links", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT id, publisher_id, tracking_id, url
-      FROM publisher_tracking_links
-    `);
-
-    res.json({ success: true, links: result.rows });
-  } catch (err) {
-    console.error("Error fetching tracking links:", err);
-    res.status(500).json({ success: false });
-  }
-});
-
+// --------------------------
 export default router;
