@@ -1,99 +1,109 @@
 import express from "express";
 import pool from "../db.js";
-import authJWT from "../middleware/authJWT.js";  // correct middleware path
+import authJWT from "../middleware/authJWT.js";
 
 const router = express.Router();
 
-/* ==========================
-      META (Protected)
-============================ */
+/* ==============================
+   GET META → publisher + offers + tracking links
+============================== */
 router.get("/meta", authJWT, async (req, res) => {
   try {
     const { pub_id } = req.query;
-    if (!pub_id) return res.status(400).json({ error: "pub_id is required" });
+    if (!pub_id) {
+      return res.status(400).json({ error: "pub_id is required" });
+    }
 
+    // correct column = publisher_id
     const publisher = await pool.query(
-      "SELECT * FROM publishers WHERE pub_id = $1",
+      "SELECT * FROM publishers WHERE publisher_id = $1",
       [pub_id]
     );
 
+    // correct table = publisher_tracking_links
     const trackingLinks = await pool.query(
-      "SELECT * FROM tracking_links WHERE pub_id = $1 ORDER BY id ASC",
+      "SELECT * FROM publisher_tracking_links WHERE publisher_id = $1 ORDER BY id ASC",
       [pub_id]
     );
 
     const offers = await pool.query(
-      "SELECT offer_id, offer_name, advertiser_name FROM offers ORDER BY offer_id ASC"
+      "SELECT offer_id, name AS offer_name, advertiser_name FROM offers ORDER BY offer_id ASC"
     );
 
-    res.json({
+    return res.json({
       publisher: publisher.rows[0] || null,
       tracking_links: trackingLinks.rows,
       offers: offers.rows,
     });
   } catch (error) {
     console.error("META Error:", error);
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
-/* ==========================
-      GET RULES (Protected)
-============================ */
+/* ==============================
+   GET RULES BY PUB
+============================== */
 router.get("/rules", authJWT, async (req, res) => {
   try {
     const { pub_id } = req.query;
-    if (!pub_id) return res.status(400).json({ error: "pub_id is required" });
 
-    const rules = await pool.query(
-      "SELECT * FROM traffic_rules WHERE pub_id = $1 ORDER BY id ASC",
+    const result = await pool.query(
+      `SELECT *
+       FROM traffic_rules
+       WHERE pub_id = $1
+       ORDER BY id ASC`,
       [pub_id]
     );
 
-    res.json(rules.rows);
+    res.json(result.rows);
   } catch (error) {
     console.error("RULES Error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-/* ==========================
-   REMAINING OFFERS (Protected)
-============================ */
+/* ==============================
+   GET REMAINING OFFERS (NOT IN RULES)
+============================== */
 router.get("/rules/remaining", authJWT, async (req, res) => {
   try {
     const { pub_id } = req.query;
 
-    const remaining = await pool.query(
-      `SELECT offer_id, offer_name, advertiser_name
-       FROM offers
-       WHERE offer_id NOT IN (
-         SELECT offer_id FROM traffic_rules WHERE pub_id = $1
-       )
-       ORDER BY offer_id ASC`,
+    const usedOffers = await pool.query(
+      "SELECT offer_id FROM traffic_rules WHERE pub_id = $1",
       [pub_id]
+    );
+
+    const usedIds = usedOffers.rows.map((x) => x.offer_id);
+
+    const remaining = await pool.query(
+      `SELECT offer_id, name AS offer_name, advertiser_name
+       FROM offers
+       WHERE offer_id NOT IN (${usedIds.length ? usedIds.join(",") : "0"})
+       ORDER BY offer_id ASC`
     );
 
     res.json(remaining.rows);
   } catch (error) {
-    console.error("Remaining Error:", error);
+    console.error("REMAINING Error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-/* ==========================
-       OFFER LIST (Protected)
-============================ */
+/* ==============================
+   GET OFFERS FOR SELECT DROPDOWN
+============================== */
 router.get("/offers", authJWT, async (req, res) => {
   try {
-    const { exclude } = req.query;
+    const exclude = req.query.exclude;
 
     const offers = await pool.query(
-      `SELECT offer_id, offer_name, advertiser_name
+      `SELECT offer_id, name AS offer_name, advertiser_name
        FROM offers
-       WHERE ($1::text IS NULL OR offer_id != $1)
+       WHERE offer_id != $1
        ORDER BY offer_id ASC`,
-      [exclude || null]
+      [exclude]
     );
 
     res.json(offers.rows);
@@ -103,9 +113,59 @@ router.get("/offers", authJWT, async (req, res) => {
   }
 });
 
-/* ==========================
-      CREATE RULE (Protected)
-============================ */
+/* ==============================
+   UPDATE RULE BY ID
+============================== */
+router.put("/rules/:id", authJWT, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const {
+      pub_id,
+      tracking_link_id,
+      geo,
+      carrier,
+      offer_id,
+      offer_name,
+      advertiser_name,
+      redirect_url,
+      type,
+      weight,
+      status,
+    } = req.body;
+
+    const update = await pool.query(
+      `UPDATE traffic_rules
+       SET pub_id=$1, tracking_link_id=$2, geo=$3, carrier=$4,
+           offer_id=$5, offer_name=$6, advertiser_name=$7,
+           redirect_url=$8, type=$9, weight=$10, status=$11
+       WHERE id = $12
+       RETURNING *`,
+      [
+        pub_id,
+        tracking_link_id,
+        geo,
+        carrier,
+        offer_id,
+        offer_name,
+        advertiser_name,
+        redirect_url,
+        type,
+        weight,
+        status,
+        id,
+      ]
+    );
+
+    res.json(update.rows[0]);
+  } catch (error) {
+    console.error("UPDATE RULE Error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ==============================
+   CREATE NEW RULE
+============================== */
 router.post("/rules", authJWT, async (req, res) => {
   try {
     const {
@@ -124,20 +184,14 @@ router.post("/rules", authJWT, async (req, res) => {
     } = req.body;
 
     const result = await pool.query(
-      `
-      INSERT INTO traffic_rules (
-        pub_id, publisher_name,
-        tracking_link_id, geo, carrier,
-        offer_id, offer_name, advertiser_name,
-        redirect_url, type, weight, status
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-      RETURNING *
-      `,
+      `INSERT INTO traffic_rules 
+        (pub_id, publisher_name, tracking_link_id, geo, carrier, offer_id, offer_name, advertiser_name, redirect_url, type, weight, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       RETURNING *`,
       [
         pub_id,
         publisher_name,
-       tracking_link_id,
+        tracking_link_id,
         geo,
         carrier,
         offer_id,
@@ -153,78 +207,6 @@ router.post("/rules", authJWT, async (req, res) => {
     res.json(result.rows[0]);
   } catch (error) {
     console.error("CREATE RULE Error:", error);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/* ==========================
-     UPDATE RULE (Protected)
-============================ */
-router.put("/rules/:id", authJWT, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const {
-      tracking_link_id,
-      geo,
-      carrier,
-      offer_id,
-      offer_name,
-      advertiser_name,
-      redirect_url,
-      type,
-      weight,
-      status,
-    } = req.body;
-
-    const updateQuery = `
-      UPDATE traffic_rules
-      SET tracking_link_id = $1,
-          geo = $2,
-          carrier = $3,
-          offer_id = $4::varchar,   -- FIX: OFF02 stays string
-          offer_name = $5,
-          advertiser_name = $6,
-          redirect_url = $7,
-          type = $8,
-          weight = $9,
-          status = $10
-      WHERE id = $11
-      RETURNING *
-    `;
-
-    const updated = await pool.query(updateQuery, [
-      tracking_link_id,
-      geo,
-      carrier,
-      offer_id,
-      offer_name,
-      advertiser_name,
-      redirect_url,
-      type,
-      weight,
-      status,
-      id,
-    ]);
-
-    res.json(updated.rows[0]);
-  } catch (error) {
-    console.error("UPDATE RULE Error:", error);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/* ==========================
-     DELETE RULE (Protected)
-============================ */
-router.delete("/rules/:id", authJWT, async (req, res) => {
-  try {
-    await pool.query("DELETE FROM traffic_rules WHERE id = $1", [
-      req.params.id,
-    ]);
-    res.json({ success: true });
-  } catch (error) {
-    console.error("DELETE RULE Error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
