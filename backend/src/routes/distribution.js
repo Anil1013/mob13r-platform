@@ -46,6 +46,7 @@ async function logClick(req, pub_id, offer_id, geo, carrier) {
 async function getOfferUsage(pub_id, offerIds = []) {
   if (!offerIds.length) return {};
 
+  // ⬇️ IMPORTANT FIX: offer_id::text = ANY($2)
   const sql = `
     SELECT 
       offer_id,
@@ -53,12 +54,15 @@ async function getOfferUsage(pub_id, offerIds = []) {
       COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 hour') AS hour_count
     FROM analytics_clicks
     WHERE pub_id = $1
-      AND offer_id = ANY($2)
+      AND offer_id::text = ANY($2)
     GROUP BY offer_id
   `;
 
   try {
-    const { rows } = await pool.query(sql, [pub_id, offerIds]);
+    // make sure we pass ARRAY OF STRINGS (text[])
+    const offerIdTexts = offerIds.map((id) => String(id));
+
+    const { rows } = await pool.query(sql, [pub_id, offerIdTexts]);
     const map = {};
     for (const r of rows) {
       map[r.offer_id] = {
@@ -97,8 +101,8 @@ async function clickHandler(req, res) {
         pod.hourly_cap
       FROM traffic_rules tr
       LEFT JOIN publisher_offer_distribution pod
-        ON pod.pub_id = tr.pub_id
-       AND pod.offer_id = tr.offer_id
+        ON pod.pub_id::text  = tr.pub_id::text
+       AND pod.offer_id::text = tr.offer_id::text
       WHERE tr.pub_id = $1
         AND tr.status = 'active'
       `,
@@ -174,22 +178,21 @@ async function clickHandler(req, res) {
     // If nothing matches exact geo/carrier, fall back to "any rule"
     let candidateRules = filteredByGeoCarrier.length ? filteredByGeoCarrier : rules;
 
-    /* 4) HARD CAP FILTER (Option A) */
-    // Collect caps from publisher_offer_distribution
+    /* 4) HARD CAP FILTER */
     const cappedOfferIds = candidateRules
-      .map((r) => Number(r.offer_id))
-      .filter(Boolean);
+      .map((r) => r.offer_id) // keep as-is, we'll stringify inside helper
+      .filter((id) => id !== null && id !== undefined);
 
     const usageMap = await getOfferUsage(pub, cappedOfferIds);
 
     candidateRules = candidateRules.filter((r) => {
-      const offerId = Number(r.offer_id);
-      if (!offerId) return false;
+      const offerIdKey = r.offer_id;
+      if (offerIdKey === null || offerIdKey === undefined) return false;
 
       const dailyCap = Number(r.daily_cap || 0); // 0 = no cap
       const hourlyCap = Number(r.hourly_cap || 0);
 
-      const usage = usageMap[offerId] || { day_count: 0, hour_count: 0 };
+      const usage = usageMap[offerIdKey] || { day_count: 0, hour_count: 0 };
 
       // HARD CAP: if cap > 0 AND usage >= cap → block
       if (dailyCap > 0 && usage.day_count >= dailyCap) {
