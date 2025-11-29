@@ -1,249 +1,297 @@
-// FINAL CLEAN & BUILD-READY TrafficDistribution.jsx
-// With correct payload, no offer_code, clean logic,
-// 100% syntax-error free & AWS Amplify safe.
-
+// frontend/src/pages/TrafficDistribution.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import apiClient from "../api/apiClient";
 
 export default function TrafficDistribution() {
+  /* --------------------------
+      STATE
+  -------------------------- */
   const [pubCode, setPubCode] = useState("");
   const [meta, setMeta] = useState([]);
   const [publisher, setPublisher] = useState(null);
-  const [selectedTracking, setSelectedTracking] = useState("");
-
-  const [offers, setOffers] = useState([]);
   const [rules, setRules] = useState([]);
+  const [offers, setOffers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [remaining, setRemaining] = useState([]);
 
-  const [offerId, setOfferId] = useState("");
-  const [weight, setWeight] = useState(100);
-  const [remaining, setRemaining] = useState(100);
-
-  const [isEditing, setIsEditing] = useState(false);
-  const [editId, setEditId] = useState(null);
-  const [editingRule, setEditingRule] = useState(null);
-
-  const [overview, setOverview] = useState([]);
-  const [search, setSearch] = useState("");
-
-  // ------------------------ LOADERS ------------------------
-
-  const loadOverview = async () => {
-    try {
-      const r = await apiClient.get("/distribution/overview");
-      setOverview(r.data || []);
-    } catch {
-      setOverview([]);
-    }
-  };
-
+  /* --------------------------
+      LOAD META (TRACKING LINKS)
+  -------------------------- */
   const loadMeta = async () => {
-    if (!pubCode) return alert("Enter PUB ID");
-
+    if (!pubCode) return;
     try {
       const res = await apiClient.get(`/distribution/meta?pub_id=${pubCode}`);
-      const rows = res.data || [];
-      setMeta(rows);
-
-      if (rows.length) {
-        const f = rows[0];
-        setSelectedTracking(f.tracking_link_id);
-        setPublisher({
-          pub_id: f.pub_code,
-          publisher_id: f.publisher_id,
-          publisher_name: f.publisher_name,
-          combos: rows.map((x) => `${x.geo}/${x.carrier}`).join(", ")
-        });
-
-        await loadRules(f.pub_code);
-        await loadRemaining(f.pub_code, f.tracking_link_id);
-      } else {
-        setPublisher(null);
-        setRules([]);
-        setSelectedTracking("");
-        setRemaining(100);
-      }
+      setMeta(res.data);
+      setPublisher(res.data?.[0] || null);
     } catch (err) {
-      console.error("Meta load failed", err);
-      alert("Failed to load publisher data");
+      console.error("META ERR:", err);
     }
   };
 
-  const loadOffers = async (trackingId = selectedTracking) => {
-    if (!trackingId || !meta.length) return;
+  /* --------------------------
+      LOAD RULES
+  -------------------------- */
+  const loadRules = async () => {
+    if (!pubCode) return;
+    try {
+      const res = await apiClient.get(`/distribution/rules?pub_id=${pubCode}`);
+      setRules(res.data);
+    } catch (err) {
+      console.error("RULES ERR:", err);
+    }
+  };
 
-    const exclude = rules
-      .filter((r) => r.tracking_link_id === trackingId)
-      .map((r) => r.offer_id)
-      .join(",");
+  /* --------------------------
+      LOAD OFFERS (EXCLUDE Already Used)
+  -------------------------- */
+  const loadOffers = async () => {
+    try {
+      const exclude = rules.map((r) => r.offer_id).join(",");
+      const res = await apiClient.get(`/distribution/offers?exclude=${exclude}`);
+      setOffers(res.data);
+    } catch (err) {
+      console.error("OFFERS ERR:", err);
+    }
+  };
 
+  /* --------------------------
+      REMAINING CAPS
+  -------------------------- */
+  const loadRemaining = async () => {
+    if (!pubCode) return;
     try {
       const res = await apiClient.get(
-        `/distribution/offers${exclude ? `?exclude=${exclude}` : ""}`
+        `/distribution/rules/remaining?pub_id=${pubCode}`
       );
-      setOffers(res.data || []);
-    } catch {
-      setOffers([]);
-    }
-  };
-
-  const loadRules = async (pub) => {
-    try {
-      const res = await apiClient.get(`/distribution/rules?pub_id=${pub}`);
-      setRules(res.data || []);
-    } catch {
-      setRules([]);
-    }
-  };
-
-  const loadRemaining = async (pub, tracking) => {
-    try {
-      const res = await apiClient.get(
-        `/distribution/rules/remaining?pub_id=${pub}${tracking ? `&tracking_link_id=${tracking}` : ""}`
-      );
-      setRemaining(res.data?.remaining ?? 100);
-    } catch {
-      setRemaining(100);
-    }
-  };
-
-  // ------------------------ EFFECTS ------------------------
-
-  useEffect(() => {
-    loadOverview();
-  }, []);
-
-  useEffect(() => {
-    if (publisher?.pub_id && selectedTracking) {
-      loadOffers(selectedTracking);
-      loadRemaining(publisher.pub_id, selectedTracking);
-    }
-  }, [selectedTracking, rules.length]);
-
-  // ------------------------ HELPERS ------------------------
-
-  const resetForm = () => {
-    setOfferId("");
-    setWeight(100);
-    setIsEditing(false);
-    setEditId(null);
-    setEditingRule(null);
-  };
-
-  const getRulesForCurrentCombo = () => {
-    if (!selectedTracking) return [];
-    return rules.filter((r) => r.tracking_link_id === selectedTracking);
-  };
-
-  // ------------------------ ACTIONS ------------------------
-
-  const addOrUpdateRule = async () => {
-    if (!publisher) return alert("Load publisher first");
-    if (!selectedTracking) return alert("Select combo first");
-
-    let offer;
-    if (isEditing && editingRule) {
-      offer = editingRule;
-    } else {
-      if (!offerId) return alert("Select an offer");
-      offer = offers.find((o) => o.id === Number(offerId));
-    }
-
-    if (!offer) return alert("Offer not found");
-
-    const rulesForCombo = getRulesForCurrentCombo();
-    const newWeight = Number(weight) || 0;
-
-    if (newWeight <= 0 || newWeight > 100)
-      return alert("Weight must be between 1 and 100");
-
-    let currentSum = 0;
-    if (isEditing && editingRule) {
-      currentSum = rulesForCombo
-        .filter((r) => r.id !== editingRule.id)
-        .reduce((s, r) => s + Number(r.weight || 0), 0);
-    } else {
-      currentSum = rulesForCombo.reduce((s, r) => s + Number(r.weight || 0), 0);
-    }
-
-    if (currentSum + newWeight > 100) {
-      const available = 100 - currentSum;
-      return alert(`Weight exceeds limit. Available: ${available}%`);
-    }
-
-    const track = meta.find((m) => m.tracking_link_id === selectedTracking);
-
-    const payload = {
-      pub_id: publisher.pub_id,
-      publisher_id: publisher.publisher_id,
-      publisher_name: publisher.publisher_name,
-      tracking_link_id: selectedTracking,
-      geo: track?.geo,
-      carrier: track?.carrier,
-
-      offer_id: offer.id,
-      offer_name: offer.offer_name,
-      advertiser_name: offer.advertiser_name,
-      redirect_url: offer.tracking_url,
-      type: offer.type,
-      weight: newWeight,
-      created_by: 1
-    };
-
-    try {
-      if (isEditing && editId) {
-        await apiClient.put(`/distribution/rules/${editId}`, payload);
-      } else {
-        await apiClient.post(`/distribution/rules`, payload);
-      }
-
-      await loadRules(publisher.pub_id);
-      await loadRemaining(publisher.pub_id, selectedTracking);
-      await loadOverview();
-      resetForm();
+      setRemaining(res.data);
     } catch (err) {
-      console.error(err);
-      alert(err?.response?.data?.error || "Failed to save rule");
+      console.error("REMAINING ERR:", err);
     }
   };
 
-  const editRule = (r) => {
-    setIsEditing(true);
-    setEditId(r.id);
-    setEditingRule(r);
-    setSelectedTracking(r.tracking_link_id);
-    setOfferId(r.offer_id);
-    setWeight(r.weight);
+  /* --------------------------
+      LOAD ALL WHEN PUB ENTERED
+  -------------------------- */
+  useEffect(() => {
+    if (!pubCode) return;
+    loadMeta();
+    loadRules();
+    loadRemaining();
+  }, [pubCode]);
+
+  useEffect(() => {
+    loadOffers();
+  }, [rules]);
+
+  /* --------------------------
+      HANDLERS
+  -------------------------- */
+  const updateRule = async (id, field, value) => {
+    try {
+      const payload = {
+        ...rules.find((r) => r.id === id),
+        [field]: value,
+      };
+
+      await apiClient.put(`/distribution/rules/${id}`, payload);
+      loadRules();
+      loadRemaining();
+    } catch (err) {
+      console.error("UPDATE ERR:", err);
+    }
   };
 
-  const removeRule = async (id) => {
-    if (!window.confirm("Delete this rule?")) return;
-
+  const deleteRule = async (id) => {
+    if (!window.confirm("Delete rule?")) return;
     try {
       await apiClient.delete(`/distribution/rules/${id}`);
-      await loadRules(publisher.pub_id);
-      await loadRemaining(publisher.pub_id, selectedTracking);
-      loadOverview();
-    } catch {
-      alert("Delete failed");
+      loadRules();
+      loadRemaining();
+    } catch (err) {
+      console.error("DELETE ERR:", err);
     }
   };
 
-  // ------------------------ SEARCH FILTER ------------------------
+  /* --------------------------
+      ADD RULE
+  -------------------------- */
+  const addRule = async () => {
+    if (!publisher) return alert("Select publisher!");
 
-  const filteredOverview = useMemo(() => {
-    if (!search) return overview;
-    const q = search.toLowerCase();
+    const offer = offers[0];
+    if (!offer) return alert("No offers available");
 
-    return overview.filter((r) =>
-      r.pub_id?.toLowerCase().includes(q) ||
-      r.publisher_name?.toLowerCase().includes(q) ||
-      r.offer_name?.toLowerCase().includes(q) ||
-      r.advertiser_name?.toLowerCase().includes(q) ||
-      r.geo?.toLowerCase().includes(q) ||
-      r.carrier?.toLowerCase().includes(q)
-    );
-  }, [overview, search]);
+    try {
+      const payload = {
+        pub_id: pubCode,
+        publisher_id: publisher.publisher_id,
+        publisher_name: publisher.publisher_name,
+        tracking_link_id: publisher.tracking_link_id,
+        geo: publisher.geo || "",
+        carrier: publisher.carrier || "",
+        offer_id: offer.offer_id,
+        offer_code: offer.offer_id, // not used but required
+        offer_name: offer.offer_name,
+        advertiser_name: offer.advertiser_name,
+        redirect_url: offer.tracking_url,
+        type: offer.type,
+        weight: 10,
+        created_by: 1,
+      };
 
-  // ------------------------ URL BUILDER ------------------------
+      await apiClient.post(`/distribution/rules`, payload);
+      loadRules();
+      loadRemaining();
+    } catch (err) {
+      console.error("ADD RULE ERR:", err);
+    }
+  };
 
-  const buildPubUrl
+  /* --------------------------
+      UI RENDER
+  -------------------------- */
+  return (
+    <div className="p-5">
+      <h2 className="text-xl font-bold mb-3">Traffic Distribution</h2>
+
+      {/* PUB INPUT */}
+      <div>
+        <input
+          value={pubCode}
+          onChange={(e) => setPubCode(e.target.value.toUpperCase())}
+          placeholder="PUB01"
+          className="border p-2"
+        />
+        <button
+          onClick={() => {
+            loadMeta();
+            loadRules();
+            loadRemaining();
+          }}
+          className="ml-2 bg-blue-600 text-white px-4 py-2 rounded"
+        >
+          Load
+        </button>
+      </div>
+
+      {/* TRACKING LINK INFO */}
+      {publisher && (
+        <div className="mt-4 p-3 border rounded bg-gray-50">
+          <b>Publisher:</b> {publisher.publisher_name} <br />
+          <b>Geo:</b> {publisher.geo} <br />
+          <b>Carrier:</b> {publisher.carrier}
+        </div>
+      )}
+
+      {/* RULES TABLE */}
+      <div className="mt-5">
+        <h3 className="font-bold mb-2">Rules</h3>
+        <button
+          onClick={addRule}
+          className="mb-2 bg-green-600 text-white px-4 py-2 rounded"
+        >
+          + Add Rule
+        </button>
+
+        <table className="w-full border">
+          <thead className="bg-gray-100">
+            <tr>
+              <th>ID</th>
+              <th>Offer</th>
+              <th>Weight</th>
+              <th>Geo</th>
+              <th>Carrier</th>
+              <th>Daily Cap</th>
+              <th>Hour Cap</th>
+              <th>Redirect</th>
+              <th>Delete</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {rules.map((r) => (
+              <tr key={r.id} className="border">
+                <td>{r.id}</td>
+                <td>{r.offer_name}</td>
+
+                <td>
+                  <input
+                    value={r.weight}
+                    onChange={(e) =>
+                      updateRule(r.id, "weight", Number(e.target.value))
+                    }
+                    className="border p-1 w-20"
+                    type="number"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    value={r.geo}
+                    onChange={(e) => updateRule(r.id, "geo", e.target.value)}
+                    className="border p-1 w-28"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    value={r.carrier}
+                    onChange={(e) => updateRule(r.id, "carrier", e.target.value)}
+                    className="border p-1 w-28"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    type="number"
+                    value={r.daily_cap || 0}
+                    onChange={(e) =>
+                      updateRule(r.id, "daily_cap", Number(e.target.value))
+                    }
+                    className="border p-1 w-20"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    type="number"
+                    value={r.hourly_cap || 0}
+                    onChange={(e) =>
+                      updateRule(r.id, "hourly_cap", Number(e.target.value))
+                    }
+                    className="border p-1 w-20"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    value={r.redirect_url || ""}
+                    onChange={(e) =>
+                      updateRule(r.id, "redirect_url", e.target.value)
+                    }
+                    className="border p-1 w-60"
+                  />
+                </td>
+
+                <td>
+                  <button
+                    onClick={() => deleteRule(r.id)}
+                    className="bg-red-600 text-white px-3 py-1 rounded"
+                  >
+                    X
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* REMAINING INFO */}
+        <div className="mt-4 p-3 border bg-gray-50">
+          <b>Remaining (Daily / Hourly):</b>
+          <pre>{JSON.stringify(remaining, null, 2)}</pre>
+        </div>
+      </div>
+    </div>
+  );
+}
