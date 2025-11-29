@@ -1,19 +1,16 @@
 import express from "express";
 import pool from "../db.js";
-import authJWT from "../middleware/authJWT.js";   // ✔ correct protected middleware
+import authJWT from "../middleware/authJWT.js";  // correct middleware path
 
 const router = express.Router();
 
 /* ==========================
-    GET META (Protected)
+      META (Protected)
 ============================ */
 router.get("/meta", authJWT, async (req, res) => {
   try {
     const { pub_id } = req.query;
-
-    if (!pub_id) {
-      return res.status(400).json({ error: "pub_id is required" });
-    }
+    if (!pub_id) return res.status(400).json({ error: "pub_id is required" });
 
     const publisher = await pool.query(
       "SELECT * FROM publishers WHERE pub_id = $1",
@@ -34,7 +31,6 @@ router.get("/meta", authJWT, async (req, res) => {
       tracking_links: trackingLinks.rows,
       offers: offers.rows,
     });
-
   } catch (error) {
     console.error("META Error:", error);
     res.status(500).json({ error: "Server error" });
@@ -42,23 +38,19 @@ router.get("/meta", authJWT, async (req, res) => {
 });
 
 /* ==========================
-    GET RULES (Protected)
+      GET RULES (Protected)
 ============================ */
 router.get("/rules", authJWT, async (req, res) => {
   try {
     const { pub_id } = req.query;
-
-    if (!pub_id) {
-      return res.status(400).json({ error: "pub_id is required" });
-    }
+    if (!pub_id) return res.status(400).json({ error: "pub_id is required" });
 
     const rules = await pool.query(
-      `SELECT * FROM traffic_rules WHERE pub_id = $1 ORDER BY id ASC`,
+      "SELECT * FROM traffic_rules WHERE pub_id = $1 ORDER BY id ASC",
       [pub_id]
     );
 
     res.json(rules.rows);
-
   } catch (error) {
     console.error("RULES Error:", error);
     res.status(500).json({ error: "Server error" });
@@ -66,15 +58,11 @@ router.get("/rules", authJWT, async (req, res) => {
 });
 
 /* ==========================
-    GET REMAINING OFFERS (Protected)
+   REMAINING OFFERS (Protected)
 ============================ */
 router.get("/rules/remaining", authJWT, async (req, res) => {
   try {
     const { pub_id } = req.query;
-
-    if (!pub_id) {
-      return res.status(400).json({ error: "pub_id required" });
-    }
 
     const remaining = await pool.query(
       `SELECT offer_id, offer_name, advertiser_name
@@ -87,15 +75,14 @@ router.get("/rules/remaining", authJWT, async (req, res) => {
     );
 
     res.json(remaining.rows);
-
   } catch (error) {
-    console.error("Remaining Offers Error:", error);
+    console.error("Remaining Error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 /* ==========================
-    GET OFFERS (Protected)
+       OFFER LIST (Protected)
 ============================ */
 router.get("/offers", authJWT, async (req, res) => {
   try {
@@ -110,7 +97,6 @@ router.get("/offers", authJWT, async (req, res) => {
     );
 
     res.json(offers.rows);
-
   } catch (error) {
     console.error("OFFERS Error:", error);
     res.status(500).json({ error: "Server error" });
@@ -118,7 +104,7 @@ router.get("/offers", authJWT, async (req, res) => {
 });
 
 /* ==========================
-    CREATE RULE (Protected)
+      CREATE RULE (Protected)
 ============================ */
 router.post("/rules", authJWT, async (req, res) => {
   try {
@@ -151,7 +137,7 @@ router.post("/rules", authJWT, async (req, res) => {
       [
         pub_id,
         publisher_name,
-        tracking_link_id,
+       tracking_link_id,
         geo,
         carrier,
         offer_id,
@@ -165,7 +151,6 @@ router.post("/rules", authJWT, async (req, res) => {
     );
 
     res.json(result.rows[0]);
-
   } catch (error) {
     console.error("CREATE RULE Error:", error);
     res.status(500).json({ error: "Server error" });
@@ -173,7 +158,7 @@ router.post("/rules", authJWT, async (req, res) => {
 });
 
 /* ==========================
-    UPDATE RULE (Protected + offer_id fix)
+     UPDATE RULE (Protected)
 ============================ */
 router.put("/rules/:id", authJWT, async (req, res) => {
   try {
@@ -197,7 +182,7 @@ router.put("/rules/:id", authJWT, async (req, res) => {
       SET tracking_link_id = $1,
           geo = $2,
           carrier = $3,
-          offer_id = $4::varchar,    -- FIX: forces OFF02 not 2
+          offer_id = $4::varchar,   -- FIX: OFF02 stays string
           offer_name = $5,
           advertiser_name = $6,
           redirect_url = $7,
@@ -223,7 +208,6 @@ router.put("/rules/:id", authJWT, async (req, res) => {
     ]);
 
     res.json(updated.rows[0]);
-
   } catch (error) {
     console.error("UPDATE RULE Error:", error);
     res.status(500).json({ error: "Server error" });
@@ -231,16 +215,14 @@ router.put("/rules/:id", authJWT, async (req, res) => {
 });
 
 /* ==========================
-    DELETE RULE (Protected)
+     DELETE RULE (Protected)
 ============================ */
 router.delete("/rules/:id", authJWT, async (req, res) => {
   try {
     await pool.query("DELETE FROM traffic_rules WHERE id = $1", [
       req.params.id,
     ]);
-
     res.json({ success: true });
-
   } catch (error) {
     console.error("DELETE RULE Error:", error);
     res.status(500).json({ error: "Server error" });
