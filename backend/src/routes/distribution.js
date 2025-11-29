@@ -171,9 +171,8 @@ async function clickHandler(req, res) {
     });
 
     // If nothing matches exact geo/carrier, fall back to "any rule"
-    let candidateRules = filteredByGeoCarrier.length
-      ? filteredByGeoCarrier
-      : rules;
+    let candidateRules =
+      filteredByGeoCarrier.length > 0 ? filteredByGeoCarrier : rules;
 
     /* 4) HARD CAP FILTER */
     const cappedOfferIds = candidateRules
@@ -191,20 +190,14 @@ async function clickHandler(req, res) {
 
       const usage = usageMap[offerId] || { day_count: 0, hour_count: 0 };
 
-      // HARD CAP: if cap > 0 AND usage >= cap → block
-      if (dailyCap > 0 && usage.day_count >= dailyCap) {
-        return false;
-      }
-      if (hourlyCap > 0 && usage.hour_count >= hourlyCap) {
-        return false;
-      }
+      if (dailyCap > 0 && usage.day_count >= dailyCap) return false;
+      if (hourlyCap > 0 && usage.hour_count >= hourlyCap) return false;
 
       return true;
     });
 
     // After caps, maybe no candidate rule left
     if (!candidateRules.length) {
-      // Fallback to tracking link as in step 2
       let fallbackUrl = null;
 
       const specific = await pool.query(
@@ -252,7 +245,6 @@ async function clickHandler(req, res) {
     );
 
     if (totalWeight <= 0) {
-      // No valid weights → fallback
       let fallbackUrl = "https://example.com";
 
       const fb = await pool.query(
@@ -292,7 +284,6 @@ async function clickHandler(req, res) {
 
     /* 7) FINAL REDIRECT URL (with click_id if present) */
     let finalUrl = selected.redirect_url || "https://example.com";
-
     if (click_id) {
       finalUrl +=
         (finalUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`;
@@ -343,8 +334,13 @@ router.get("/offers", async (req, res) => {
     const { exclude } = req.query;
 
     let q = `
-      SELECT id, offer_id, name AS offer_name, advertiser_name,
-             type, payout, tracking_url, status
+      SELECT id,
+             offer_id,
+             name AS offer_name,
+             advertiser_name,
+             type,
+             tracking_url,
+             status
       FROM offers
       WHERE status = 'active'
     `;
@@ -426,30 +422,29 @@ router.get("/rules/remaining", async (req, res) => {
 });
 
 /* ===========================================================
-   OVERVIEW (GLOBAL VIEW with Publisher / Offer / Advertiser)
+   OVERVIEW
 =========================================================== */
 router.get("/overview", async (req, res) => {
   try {
-    const q = `
-      SELECT 
-        tr.id,
-        tr.pub_id,
-        tr.publisher_name,
-        tr.offer_id,
-        tr.offer_code,
-        tr.offer_name,
-        tr.advertiser_name,
-        tr.geo,
-        tr.carrier,
-        tr.weight,
-        ptl.tracking_url AS base_url
-      FROM traffic_rules tr
-      LEFT JOIN publisher_tracking_links ptl 
-        ON ptl.id = tr.tracking_link_id
-      ORDER BY tr.pub_id ASC, tr.id ASC
-    `;
+    const { rows } = await pool.query(`
+      SELECT
+        id,
+        pub_id,
+        publisher_name,
+        tracking_link_id,
+        geo,
+        carrier,
+        offer_id,
+        offer_code,
+        offer_name,
+        advertiser_name,
+        redirect_url,
+        weight,
+        status
+      FROM traffic_rules
+      ORDER BY pub_id ASC, id ASC
+    `);
 
-    const { rows } = await pool.query(q);
     res.json(rows);
   } catch (err) {
     console.error("OVERVIEW ERROR:", err);
