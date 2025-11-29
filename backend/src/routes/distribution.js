@@ -46,7 +46,9 @@ async function logClick(req, pub_id, offer_id, geo, carrier) {
 async function getOfferUsage(pub_id, offerIds = []) {
   if (!offerIds.length) return {};
 
-  // ⬇️ IMPORTANT FIX: offer_id::text = ANY($2)
+  // convert everything to string -> compare as text
+  const strIds = offerIds.map((id) => String(id));
+
   const sql = `
     SELECT 
       offer_id,
@@ -59,13 +61,11 @@ async function getOfferUsage(pub_id, offerIds = []) {
   `;
 
   try {
-    // make sure we pass ARRAY OF STRINGS (text[])
-    const offerIdTexts = offerIds.map((id) => String(id));
-
-    const { rows } = await pool.query(sql, [pub_id, offerIdTexts]);
+    const { rows } = await pool.query(sql, [pub_id, strIds]);
     const map = {};
     for (const r of rows) {
-      map[r.offer_id] = {
+      const key = String(r.offer_id);
+      map[key] = {
         day_count: Number(r.day_count || 0),
         hour_count: Number(r.hour_count || 0),
       };
@@ -101,8 +101,8 @@ async function clickHandler(req, res) {
         pod.hourly_cap
       FROM traffic_rules tr
       LEFT JOIN publisher_offer_distribution pod
-        ON pod.pub_id::text  = tr.pub_id::text
-       AND pod.offer_id::text = tr.offer_id::text
+        ON pod.pub_id = tr.pub_id
+       AND pod.offer_id = tr.offer_id
       WHERE tr.pub_id = $1
         AND tr.status = 'active'
       `,
@@ -113,7 +113,6 @@ async function clickHandler(req, res) {
 
     /* 2) If NO RULES → fallback to publisher tracking link */
     if (!rules.length) {
-      // Prefer matching geo/carrier tracking link
       let fallbackUrl = null;
 
       const specific = await pool.query(
@@ -167,47 +166,41 @@ async function clickHandler(req, res) {
         .map((v) => v.trim())
         .filter(Boolean);
 
-      const geoMatch =
-        !geos.length || geos.includes(geoUp); // if empty, treat as "all"
-      const carrierMatch =
-        !carriers.length || carriers.includes(carrierUp); // if empty, treat as "all"
+      const geoMatch = !geos.length || geos.includes(geoUp);
+      const carrierMatch = !carriers.length || carriers.includes(carrierUp);
 
       return geoMatch && carrierMatch;
     });
 
     // If nothing matches exact geo/carrier, fall back to "any rule"
-    let candidateRules = filteredByGeoCarrier.length ? filteredByGeoCarrier : rules;
+    let candidateRules = filteredByGeoCarrier.length
+      ? filteredByGeoCarrier
+      : rules;
 
     /* 4) HARD CAP FILTER */
     const cappedOfferIds = candidateRules
-      .map((r) => r.offer_id) // keep as-is, we'll stringify inside helper
-      .filter((id) => id !== null && id !== undefined);
+      .map((r) => r.offer_id)
+      .filter((v) => v !== null && v !== undefined);
 
     const usageMap = await getOfferUsage(pub, cappedOfferIds);
 
     candidateRules = candidateRules.filter((r) => {
-      const offerIdKey = r.offer_id;
-      if (offerIdKey === null || offerIdKey === undefined) return false;
+      const offerKey = String(r.offer_id);
+      if (!offerKey) return false;
 
       const dailyCap = Number(r.daily_cap || 0); // 0 = no cap
       const hourlyCap = Number(r.hourly_cap || 0);
 
-      const usage = usageMap[offerIdKey] || { day_count: 0, hour_count: 0 };
+      const usage = usageMap[offerKey] || { day_count: 0, hour_count: 0 };
 
-      // HARD CAP: if cap > 0 AND usage >= cap → block
-      if (dailyCap > 0 && usage.day_count >= dailyCap) {
-        return false;
-      }
-      if (hourlyCap > 0 && usage.hour_count >= hourlyCap) {
-        return false;
-      }
+      if (dailyCap > 0 && usage.day_count >= dailyCap) return false;
+      if (hourlyCap > 0 && usage.hour_count >= hourlyCap) return false;
 
       return true;
     });
 
     // After caps, maybe no candidate rule left
     if (!candidateRules.length) {
-      // Fallback to tracking link as in step 2
       let fallbackUrl = null;
 
       const specific = await pool.query(
@@ -255,7 +248,6 @@ async function clickHandler(req, res) {
     );
 
     if (totalWeight <= 0) {
-      // No valid weights → fallback
       let fallbackUrl = "https://example.com";
 
       const fb = await pool.query(
@@ -312,7 +304,7 @@ async function clickHandler(req, res) {
    CLICK ROUTES
 =========================================================== */
 
-// API route (nginx rewrites /click -> /api/distribution/click)
+// nginx rewrites /click -> /api/distribution/click
 router.get("/click", fraudCheck, clickHandler);
 
 /* ===========================================================
@@ -339,7 +331,7 @@ router.get("/meta", async (req, res) => {
 });
 
 /* ===========================================================
-   OFFERS ROUTE
+   OFFERS ROUTE (for Add Rule dropdown)
 =========================================================== */
 router.get("/offers", async (req, res) => {
   try {
@@ -377,7 +369,7 @@ router.get("/offers", async (req, res) => {
 });
 
 /* ===========================================================
-   RULES LIST
+   RULES LIST (for Current Rules of a PUB)
 =========================================================== */
 router.get("/rules", async (req, res) => {
   try {
@@ -429,14 +421,29 @@ router.get("/rules/remaining", async (req, res) => {
 });
 
 /* ===========================================================
-   OVERVIEW
+   GLOBAL OVERVIEW (with Publisher + Offer + Advertiser names)
 =========================================================== */
 router.get("/overview", async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT *
-      FROM traffic_rules
-      ORDER BY pub_id ASC, id ASC
+      SELECT 
+        tr.id,
+        tr.pub_id,
+        p.name AS publisher_name,
+        tr.offer_id,
+        o.offer_id AS offer_code,
+        o.name AS offer_name,
+        a.name AS advertiser_name,
+        tr.geo,
+        tr.carrier,
+        tr.weight,
+        tr.redirect_url,
+        tr.type
+      FROM traffic_rules tr
+      LEFT JOIN publishers p ON p.pub_code = tr.pub_id
+      LEFT JOIN offers o ON o.id = tr.offer_id
+      LEFT JOIN advertisers a ON a.id = o.advertiser_id
+      ORDER BY tr.pub_id ASC, tr.id ASC
     `);
 
     res.json(rows);
@@ -499,7 +506,7 @@ router.post("/rules", async (req, res) => {
       b.tracking_link_id,
       b.geo,
       b.carrier,
-      b.offer_id,
+      b.offer_id, // this should be offers.id
       b.offer_code,
       b.offer_name,
       b.advertiser_name,
