@@ -78,9 +78,7 @@ export default function TrafficDistribution() {
       .join(",");
 
     try {
-      const res = await apiClient.get(
-        `/distribution/offers${exclude ? `?exclude=${exclude}` : ""}`
-      );
+      const res = await apiClient.get(`/distribution/offers${exclude ? `?exclude=${exclude}` : ""}`);
       setOffers(res.data || []);
     } catch {
       setOffers([]);
@@ -99,9 +97,7 @@ export default function TrafficDistribution() {
   const loadRemaining = async (pub, tracking) => {
     try {
       const res = await apiClient.get(
-        `/distribution/rules/remaining?pub_id=${pub}${
-          tracking ? `&tracking_link_id=${tracking}` : ""
-        }`
+        `/distribution/rules/remaining?pub_id=${pub}${tracking ? `&tracking_link_id=${tracking}` : ""}`
       );
       setRemaining(res.data?.remaining ?? 100);
     } catch {
@@ -122,7 +118,6 @@ export default function TrafficDistribution() {
       loadOffers(selectedTracking);
       loadRemaining(publisher.pub_id, selectedTracking);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTracking, rules]);
 
   /* --------------------------
@@ -142,12 +137,7 @@ export default function TrafficDistribution() {
     if (!offerId) return alert("Select offer");
 
     const track = meta.find((m) => m.tracking_link_id === selectedTracking);
-    const offer =
-      offers.find((o) => o.id === offerId) || rules.find((x) => x.id === editId);
-
-    if (!track || !offer) {
-      return alert("Invalid tracking or offer");
-    }
+    const offer = offers.find((o) => o.id === offerId) || rules.find((x) => x.id === editId);
 
     const payload = {
       pub_id: publisher.pub_id,
@@ -211,17 +201,13 @@ export default function TrafficDistribution() {
     if (!search) return overview;
     const q = search.toLowerCase();
 
-    return overview.filter((r) => {
-      return (
-        r.pub_id?.toLowerCase().includes(q) ||
-        r.publisher_name?.toLowerCase().includes(q) ||
+    return overview.filter(
+      (r) =>
+        r.pub_id.toLowerCase().includes(q) ||
         r.offer_code?.toLowerCase().includes(q) ||
         r.offer_name?.toLowerCase().includes(q) ||
-        r.advertiser_name?.toLowerCase().includes(q) ||
-        r.geo?.toLowerCase().includes(q) ||
-        r.carrier?.toLowerCase().includes(q)
-      );
-    });
+        r.advertiser_name?.toLowerCase().includes(q)
+    );
   }, [overview, search]);
 
   /* --------------------------
@@ -231,10 +217,6 @@ export default function TrafficDistribution() {
     const backend = window.location.origin.replace("dashboard.", "backend.");
     return `${backend}/click?pub_id=${pub}&geo=${geo}&carrier=${carrier}&click_id=${click}`;
   };
-
-  const currentTracking = meta.find(
-    (m) => m.tracking_link_id === selectedTracking
-  );
 
   /* --------------------------
       UI
@@ -251,16 +233,10 @@ export default function TrafficDistribution() {
           className="border p-2 rounded"
           placeholder="PUB03"
         />
-        <button
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-          onClick={loadMeta}
-        >
+        <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={loadMeta}>
           Load
         </button>
-        <button
-          className="bg-gray-700 text-white px-4 py-2 rounded"
-          onClick={loadOverview}
-        >
+        <button className="bg-gray-700 text-white px-4 py-2 rounded" onClick={loadOverview}>
           Refresh Overview
         </button>
       </div>
@@ -268,14 +244,10 @@ export default function TrafficDistribution() {
       {/* Publisher Info */}
       {publisher && (
         <div className="bg-gray-100 p-3 rounded mb-5">
-          <div className="font-semibold">
-            PUB: {publisher.pub_id} &nbsp; | &nbsp; Publisher:{" "}
-            {publisher.publisher_name} &nbsp; | &nbsp; Combos:{" "}
-            {publisher.combos}
-          </div>
-          <div>
-            <b>Remaining:</b> {remaining}%
-          </div>
+          <div><b>PUB:</b> {publisher.pub_id}</div>
+          <div><b>Publisher:</b> {publisher.publisher_name}</div>
+          <div><b>Combos:</b> {publisher.combos}</div>
+          <div><b>Remaining:</b> {remaining}%</div>
           <div className="text-xs mt-2 font-mono bg-white p-2">
             {buildPubUrl(publisher.pub_id, meta[0].geo, meta[0].carrier)}
           </div>
@@ -287,7 +259,7 @@ export default function TrafficDistribution() {
         <div className="bg-white p-4 shadow rounded mb-6">
           <h2 className="font-semibold mb-2">Add Rule</h2>
 
-          <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex gap-3 items-center">
             <select
               value={selectedTracking}
               onChange={(e) => setSelectedTracking(Number(e.target.value))}
@@ -295,7 +267,7 @@ export default function TrafficDistribution() {
             >
               {meta.map((m) => (
                 <option key={m.tracking_link_id} value={m.tracking_link_id}>
-                  {m.pub_code} | {m.publisher_name} | {m.geo}/{m.carrier}
+                  {m.geo}/{m.carrier}
                 </option>
               ))}
             </select>
@@ -303,16 +275,12 @@ export default function TrafficDistribution() {
             <select
               value={offerId}
               onChange={(e) => setOfferId(Number(e.target.value))}
-              className="border p-2 rounded min-w-[260px]"
+              className="border p-2 rounded"
             >
               <option value="">Select Offer</option>
               {offers.map((o) => (
                 <option key={o.id} value={o.id}>
-                  {/* OFF03, OFF02 visible + name + advertiser + geo/carrier */}
-                  {o.offer_id} — {o.offer_name} — {o.advertiser_name}
-                  {currentTracking
-                    ? ` — ${currentTracking.geo}/${currentTracking.carrier}`
-                    : ""}
+                  {o.offer_id} — {o.offer_name} ({o.advertiser_name})
                 </option>
               ))}
             </select>
@@ -326,10 +294,7 @@ export default function TrafficDistribution() {
               className="border p-2 rounded w-20"
             />
 
-            <button
-              className="bg-green-600 text-white px-4 py-2 rounded"
-              onClick={addOrUpdateRule}
-            >
+            <button className="bg-green-600 text-white px-4 py-2 rounded" onClick={addOrUpdateRule}>
               Add
             </button>
           </div>
@@ -341,25 +306,27 @@ export default function TrafficDistribution() {
         <div className="bg-yellow-50 p-4 rounded shadow mb-6">
           <h2 className="font-semibold mb-2">Edit Rule</h2>
 
-          <div className="flex flex-wrap gap-3 items-center">
-            <select
-              value={selectedTracking}
-              disabled
-              className="border p-2 rounded bg-gray-200"
-            >
+          <div className="flex gap-3 items-center">
+            <select value={selectedTracking} disabled className="border p-2 rounded bg-gray-200">
               {meta.map((m) => (
                 <option key={m.tracking_link_id} value={m.tracking_link_id}>
-                  {m.pub_code} | {m.publisher_name} | {m.geo}/{m.carrier}
+                  {m.geo}/{m.carrier}
                 </option>
               ))}
             </select>
 
-            <select
-              value={offerId}
-              disabled
-              className="border p-2 rounded bg-gray-200"
-            >
-              <option>{offerId}</option>
+            {/* FIXED LABEL HERE */}
+            <select disabled className="border p-2 rounded bg-gray-200 min-w-[260px]">
+              <option>
+                {(() => {
+                  const o =
+                    offers.find((x) => x.id === offerId) ||
+                    rules.find((x) => x.offer_id === offerId);
+
+                  if (!o) return offerId;
+                  return `${o.offer_id} — ${o.offer_name} (${o.advertiser_name})`;
+                })()}
+              </option>
             </select>
 
             <input
@@ -371,10 +338,7 @@ export default function TrafficDistribution() {
               className="border p-2 rounded w-20"
             />
 
-            <button
-              className="bg-green-600 text-white px-4 py-2 rounded"
-              onClick={addOrUpdateRule}
-            >
+            <button className="bg-green-600 text-white px-4 py-2 rounded" onClick={addOrUpdateRule}>
               Update
             </button>
 
@@ -454,6 +418,7 @@ export default function TrafficDistribution() {
               <th className="p-2">Sample URL</th>
             </tr>
           </thead>
+
           <tbody>
             {filteredOverview.map((r) => (
               <tr key={r.id} className="border-t">
