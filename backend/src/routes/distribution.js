@@ -52,6 +52,7 @@ async function getUsage(pub, offerIds) {
 
   const { rows } = await pool.query(q, [pub, offerIds]);
   const out = {};
+
   rows.forEach((r) => {
     out[r.offer_id] = {
       day: Number(r.day_count || 0),
@@ -135,13 +136,16 @@ async function clickHandler(req, res) {
         .split(",")
         .map((x) => x.trim())
         .filter(Boolean);
+
       const carr = (r.carrier || "")
         .toUpperCase()
         .split(",")
         .map((x) => x.trim())
         .filter(Boolean);
+
       const gm = !geos.length || geos.includes(g);
       const cm = !carr.length || carr.includes(c);
+
       return gm && cm;
     });
 
@@ -224,7 +228,7 @@ router.get("/meta", async (req, res) => {
 });
 
 /* ---------------------------------------
-   OFFERS
+   OFFERS  (FIXED)
 ---------------------------------------- */
 router.get("/offers", async (req, res) => {
   try {
@@ -242,17 +246,19 @@ router.get("/offers", async (req, res) => {
       WHERE status='active'
     `;
 
-    const params = [];
+    let params = [];
 
     if (exclude) {
       const ids = exclude.split(",").map(Number).filter(Boolean);
-      params.push(ids);
-      q += ` AND offer_id NOT IN (SELECT UNNEST($1::int[]))`;
+
+      q += ` AND offer_id != ALL($1::int[])`;
+      params = [ids];
     }
 
     const { rows } = await pool.query(q, params);
     res.json(rows);
   } catch (err) {
+    console.log("OFFERS ERROR:", err);
     res.status(500).json({ error: "internal_error" });
   }
 });
@@ -329,7 +335,7 @@ router.put("/rules/:id", async (req, res) => {
 ---------------------------------------- */
 router.get("/rules/remaining", async (req, res) => {
   try {
-    const { pub_id, tracking_link_id } = req.query;
+    const { pub_id } = req.query;
 
     const { rows } = await pool.query(
       `
@@ -361,7 +367,4 @@ router.get("/rules/remaining", async (req, res) => {
   }
 });
 
-/* ---------------------------------------
-   EXPORT
----------------------------------------- */
 export default router;
