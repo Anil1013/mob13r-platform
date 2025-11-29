@@ -76,6 +76,7 @@ async function getOfferUsage(pub_id, offerIds = []) {
    PUBLISHER TRACKING FALLBACK
 =========================================================== */
 async function getPublisherFallbackUrl(pub, geoUp, carrierUp) {
+  // Try specific geo+carrier (or ANY) for this pub
   const specific = await pool.query(
     `
     SELECT tracking_url
@@ -92,6 +93,7 @@ async function getPublisherFallbackUrl(pub, geoUp, carrierUp) {
 
   if (specific.rows.length) return specific.rows[0].tracking_url;
 
+  // Otherwise any active tracking link for this pub
   const anyRow = await pool.query(
     `
     SELECT tracking_url
@@ -113,14 +115,15 @@ async function clickHandler(req, res) {
   try {
     const { pub_id, geo, carrier, click_id } = req.query;
 
-    if (!pub_id || !geo || !carrier)
+    if (!pub_id || !geo || !carrier) {
       return res.redirect("https://example.com");
+    }
 
     const pub = pub_id.toUpperCase();
     const geoUp = geo.toUpperCase();
     const carrierUp = carrier.toUpperCase();
 
-    /* 1) All active rules */
+    /* 1) All active rules for this publisher */
     const rulesRes = await pool.query(
       `
       SELECT 
@@ -141,16 +144,18 @@ async function clickHandler(req, res) {
 
     let rules = rulesRes.rows || [];
 
-    /* 2) If no rules → fallback */
+    /* 2) If no rules → publisher fallback link */
     if (!rules.length) {
       let fb = await getPublisherFallbackUrl(pub, geoUp, carrierUp);
       if (!fb) fb = "https://example.com";
-      if (click_id) fb += (fb.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+      if (click_id) {
+        fb += (fb.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+      }
       await logClick(req, pub, null, geoUp, carrierUp);
       return res.redirect(fb);
     }
 
-    /* 3) GEO + CARRIER match */
+    /* 3) GEO + CARRIER match (supports comma-separated lists) */
     const filtered = rules.filter((r) => {
       const g = (r.geo || "")
         .toUpperCase()
@@ -172,7 +177,7 @@ async function clickHandler(req, res) {
 
     let candidate = filtered.length ? filtered : rules;
 
-    /* 4) CAP FILTERS */
+    /* 4) CAP FILTERS (publisher + offer level) */
     const offerIds = candidate.map((r) => Number(r.offer_id));
     const usage = await getOfferUsage(pub, offerIds);
 
@@ -197,26 +202,36 @@ async function clickHandler(req, res) {
       return true;
     });
 
+    /* If all capped → fallback */
     if (!candidate.length) {
       let fb = await getPublisherFallbackUrl(pub, geoUp, carrierUp);
       if (!fb) fb = "https://example.com";
-      if (click_id) fb += (fb.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+      if (click_id) {
+        fb += (fb.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+      }
       await logClick(req, pub, null, geoUp, carrierUp);
       return res.redirect(fb);
     }
 
     /* 5) Weighted rotation */
-    const totalW = candidate.reduce((s, r) => s + Number(r.weight || 0), 0);
+    const totalW = candidate.reduce(
+      (s, r) => s + Number(r.weight || 0),
+      0
+    );
+
     if (totalW <= 0) {
       let fb = await getPublisherFallbackUrl(pub, geoUp, carrierUp);
       if (!fb) fb = "https://example.com";
-      if (click_id) fb += (fb.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+      if (click_id) {
+        fb += (fb.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+      }
       await logClick(req, pub, null, geoUp, carrierUp);
       return res.redirect(fb);
     }
 
     let rnd = Math.random() * totalW;
     let selected = candidate[0];
+
     for (const r of candidate) {
       rnd -= Number(r.weight || 0);
       if (rnd <= 0) {
@@ -228,8 +243,9 @@ async function clickHandler(req, res) {
     /* 6) Log click */
     await logClick(req, pub, selected.offer_id, geoUp, carrierUp);
 
-    /* 7) Redirect */
+    /* 7) Final redirect URL */
     let final = selected.redirect_url;
+
     if (!final) {
       const off = await pool.query(
         `SELECT tracking_url FROM offers WHERE id=$1 LIMIT 1`,
@@ -238,8 +254,9 @@ async function clickHandler(req, res) {
       final = off.rows[0]?.tracking_url || "https://example.com";
     }
 
-    if (click_id)
+    if (click_id) {
       final += (final.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+    }
 
     return res.redirect(final);
   } catch (err) {
@@ -254,7 +271,7 @@ async function clickHandler(req, res) {
 router.get("/click", fraudCheck, clickHandler);
 
 /* ===========================================================
-   META: publisher combos
+   META: publisher tracking combos
 =========================================================== */
 router.get("/meta", async (req, res) => {
   try {
@@ -284,7 +301,7 @@ router.get("/meta", async (req, res) => {
 });
 
 /* ===========================================================
-   OFFERS
+   OFFERS LIST
 =========================================================== */
 router.get("/offers", async (req, res) => {
   try {
@@ -292,7 +309,7 @@ router.get("/offers", async (req, res) => {
     let q = `
       SELECT 
         id,
-        offer_id, 
+        offer_id,
         name AS offer_name,
         advertiser_name,
         type,
@@ -309,6 +326,7 @@ router.get("/offers", async (req, res) => {
         .split(",")
         .map((x) => Number(x))
         .filter(Boolean);
+
       if (ids.length) {
         const p = ids.map((_, i) => `$${i + 1}`).join(",");
         q += ` AND id NOT IN (${p})`;
@@ -327,7 +345,7 @@ router.get("/offers", async (req, res) => {
 });
 
 /* ===========================================================
-   RULES LIST
+   RULES LIST (by publisher)
 =========================================================== */
 router.get("/rules", async (req, res) => {
   try {
@@ -343,7 +361,7 @@ router.get("/rules", async (req, res) => {
 });
 
 /* ===========================================================
-   REMAINING %
+   REMAINING % WEIGHT
 =========================================================== */
 router.get("/rules/remaining", async (req, res) => {
   try {
@@ -379,7 +397,7 @@ router.get("/rules/remaining", async (req, res) => {
 });
 
 /* ===========================================================
-   OVERVIEW
+   OVERVIEW (all rules)
 =========================================================== */
 router.get("/overview", async (req, res) => {
   try {
@@ -395,6 +413,7 @@ router.get("/overview", async (req, res) => {
         offer_name,
         advertiser_name,
         redirect_url,
+        type,
         weight,
         status
       FROM traffic_rules
@@ -409,7 +428,7 @@ router.get("/overview", async (req, res) => {
 });
 
 /* ===========================================================
-   ADD RULE  (offer_code removed)
+   ADD RULE (no offer_code)
 =========================================================== */
 router.post("/rules", async (req, res) => {
   try {
@@ -420,7 +439,7 @@ router.post("/rules", async (req, res) => {
       "publisher_id",
       "publisher_name",
       "tracking_link_id",
-      "offer_id",       // numeric PK
+      "offer_id", // numeric PK from offers.id
       "offer_name",
       "advertiser_name",
       "geo",
@@ -431,10 +450,12 @@ router.post("/rules", async (req, res) => {
     ];
 
     for (const k of required) {
-      if (!b[k]) return res.status(400).json({ error: `${k}_required` });
+      if (!b[k]) {
+        return res.status(400).json({ error: `${k}_required` });
+      }
     }
 
-    /* No duplicate for same pub + tracking + offer */
+    // prevent duplicate offer for same pub + tracking + offer
     const dup = await pool.query(
       `
       SELECT id FROM traffic_rules
@@ -443,10 +464,11 @@ router.post("/rules", async (req, res) => {
       [b.pub_id, b.tracking_link_id, b.offer_id]
     );
 
-    if (dup.rows.length)
+    if (dup.rows.length) {
       return res.status(409).json({ error: "duplicate_offer_for_pub" });
+    }
 
-    /* Weight validation */
+    // weight validation (per pub+tracking+geo+carrier)
     const wRow = await pool.query(
       `
       SELECT COALESCE(SUM(weight),0) AS sumw
@@ -471,7 +493,7 @@ router.post("/rules", async (req, res) => {
       });
     }
 
-    /* Insert rule - removed offer_code */
+    // Insert rule
     const q = `
       INSERT INTO traffic_rules (
         pub_id, publisher_id, publisher_name,
@@ -491,7 +513,7 @@ router.post("/rules", async (req, res) => {
       b.tracking_link_id,
       b.geo,
       b.carrier,
-      b.offer_id, // numeric
+      b.offer_id,
       b.offer_name,
       b.advertiser_name,
       b.redirect_url,
@@ -509,7 +531,7 @@ router.post("/rules", async (req, res) => {
 });
 
 /* ===========================================================
-   UPDATE RULE (offer_code removed)
+   UPDATE RULE (no offer_code)
 =========================================================== */
 router.put("/rules/:id", async (req, res) => {
   try {
@@ -522,8 +544,9 @@ router.put("/rules/:id", async (req, res) => {
     );
 
     const existing = existingRes.rows[0];
-    if (!existing)
+    if (!existing) {
       return res.status(404).json({ error: "rule_not_found" });
+    }
 
     const fields = [
       "publisher_id",
@@ -552,10 +575,11 @@ router.put("/rules/:id", async (req, res) => {
       }
     }
 
-    if (!set.length)
+    if (!set.length) {
       return res.status(400).json({ error: "nothing_to_update" });
+    }
 
-    /* Weight check */
+    // Weight check with new value
     const newWeight =
       b.weight !== undefined ? Number(b.weight) : Number(existing.weight);
 
