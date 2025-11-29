@@ -4,9 +4,9 @@ import fraudCheck from "../middleware/fraudCheck.js";
 
 const router = express.Router();
 
-/* ========================================================
+/* ---------------------------------------
    CLICK LOG
-======================================================== */
+---------------------------------------- */
 async function logClick(req, pub, offer, geo, carrier) {
   try {
     const ip =
@@ -32,85 +32,94 @@ async function logClick(req, pub, offer, geo, carrier) {
       ]
     );
   } catch (err) {
-    console.log("LOG CLICK ERROR:", err);
+    console.error("logClick error:", err.message);
   }
 }
 
-/* ========================================================
-   USAGE (DAY + HOUR)
-======================================================== */
+/* ---------------------------------------
+   OFFER CAP COUNTS
+---------------------------------------- */
 async function getUsage(pub, offerIds) {
-  if (!offerIds.length) return {};
+  try {
+    if (!offerIds || !offerIds.length) return {};
 
-  const q = `
-    SELECT 
-      offer_id,
-      COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE) AS day_count,
-      COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 hour') AS hour_count
-    FROM analytics_clicks
-    WHERE pub_id = $1 AND offer_id = ANY($2)
-    GROUP BY offer_id
-  `;
+    const q = `
+      SELECT 
+        offer_id,
+        COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE) AS day_count,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 hour') AS hour_count
+      FROM analytics_clicks
+      WHERE pub_id = $1 AND offer_id = ANY($2)
+      GROUP BY offer_id
+    `;
 
-  const { rows } = await pool.query(q, [pub, offerIds]);
+    const { rows } = await pool.query(q, [pub, offerIds]);
+    const out = {};
+    rows.forEach((r) => {
+      out[r.offer_id] = {
+        day: Number(r.day_count || 0),
+        hour: Number(r.hour_count || 0),
+      };
+    });
 
-  const out = {};
-  rows.forEach((r) => {
-    out[r.offer_id] = {
-      day: Number(r.day_count || 0),
-      hour: Number(r.hour_count || 0),
-    };
-  });
-
-  return out;
+    return out;
+  } catch (err) {
+    console.error("getUsage error:", err.message);
+    return {};
+  }
 }
 
-/* ========================================================
+/* ---------------------------------------
    FALLBACK URL
-======================================================== */
+---------------------------------------- */
 async function getFallback(pub, geo, carrier) {
-  const q1 = await pool.query(
-    `
-    SELECT tracking_url 
-    FROM publisher_tracking_links
-    WHERE pub_code = $1
-      AND (geo IS NULL OR geo='' OR UPPER(geo)=UPPER($2))
-      AND (carrier IS NULL OR carrier='' OR UPPER(carrier)=UPPER($3))
-    ORDER BY id ASC LIMIT 1
-  `,
-    [pub, geo, carrier]
-  );
+  try {
+    const q1 = await pool.query(
+      `
+      SELECT tracking_url 
+      FROM publisher_tracking_links
+      WHERE pub_code = $1
+        AND (geo IS NULL OR geo='' OR UPPER(geo)=UPPER($2))
+        AND (carrier IS NULL OR carrier='' OR UPPER(carrier)=UPPER($3))
+      ORDER BY id ASC LIMIT 1
+    `,
+      [pub, geo, carrier]
+    );
 
-  if (q1.rows.length) return q1.rows[0].tracking_url;
+    if (q1.rows.length) return q1.rows[0].tracking_url;
 
-  const q2 = await pool.query(
-    `
-    SELECT tracking_url 
-    FROM publisher_tracking_links
-    WHERE pub_code = $1
-    ORDER BY id ASC LIMIT 1
-  `,
-    [pub]
-  );
+    const q2 = await pool.query(
+      `
+      SELECT tracking_url 
+      FROM publisher_tracking_links
+      WHERE pub_code = $1
+      ORDER BY id ASC LIMIT 1
+    `,
+      [pub]
+    );
 
-  return q2.rows[0]?.tracking_url || "https://example.com";
+    return q2.rows[0]?.tracking_url || "https://example.com";
+  } catch (err) {
+    console.error("getFallback error:", err.message);
+    return "https://example.com";
+  }
 }
 
-/* ========================================================
+/* ---------------------------------------
    CLICK HANDLER
-======================================================== */
+---------------------------------------- */
 async function clickHandler(req, res) {
   try {
     const { pub_id, geo, carrier, click_id } = req.query;
 
-    if (!pub_id || !geo || !carrier)
+    if (!pub_id || !geo || !carrier) {
       return res.redirect("https://example.com");
+    }
 
     const pub = pub_id.toUpperCase();
     const g = geo.toUpperCase();
     const c = carrier.toUpperCase();
 
-    /* ---- LOAD RULES ---- */
     const { rows: rules } = await pool.query(
       `
       SELECT 
@@ -125,38 +134,37 @@ async function clickHandler(req, res) {
       [pub]
     );
 
-    /* ---- NO RULES => FALLBACK ---- */
+    // No rules → fallback
     if (!rules.length) {
       let fb = await getFallback(pub, g, c);
-      if (click_id)
+      if (click_id) {
         fb += (fb.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+      }
       await logClick(req, pub, null, g, c);
       return res.redirect(fb);
     }
 
-    /* ---- GEO + CARRIER FILTER ---- */
+    // GEO / Carrier filter
     let filtered = rules.filter((r) => {
       const geos = (r.geo || "")
         .toUpperCase()
         .split(",")
         .map((x) => x.trim())
         .filter(Boolean);
-
-      const carrs = (r.carrier || "")
+      const carr = (r.carrier || "")
         .toUpperCase()
         .split(",")
         .map((x) => x.trim())
         .filter(Boolean);
 
       const gm = !geos.length || geos.includes(g);
-      const cm = !carrs.length || carrs.includes(c);
-
+      const cm = !carr.length || carr.includes(c);
       return gm && cm;
     });
 
     if (!filtered.length) filtered = rules;
 
-    /* ---- CAP CHECK ---- */
+    // Cap check
     const offerIds = filtered.map((r) => Number(r.offer_id));
     const usage = await getUsage(pub, offerIds);
 
@@ -167,31 +175,27 @@ async function clickHandler(req, res) {
 
       if (d > 0 && u.day >= d) return false;
       if (h > 0 && u.hour >= h) return false;
-
       return true;
     });
 
-    /* ---- IF ALL CAPPED => FALLBACK ---- */
+    // All capped → fallback
     if (!filtered.length) {
       let fb = await getFallback(pub, g, c);
-      if (click_id)
+      if (click_id) {
         fb += (fb.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+      }
       await logClick(req, pub, null, g, c);
       return res.redirect(fb);
     }
 
-    /* ---- WEIGHT ROTATION ---- */
-    const totalWeight = filtered.reduce(
-      (sum, r) => sum + Number(r.weight || 0),
-      0
-    );
-
-    let random = Math.random() * totalWeight;
+    // Weighted random
+    const total = filtered.reduce((s, r) => s + Number(r.weight || 0), 0);
+    let rnd = Math.random() * total;
     let selected = filtered[0];
 
     for (const r of filtered) {
-      random -= Number(r.weight || 0);
-      if (random <= 0) {
+      rnd -= Number(r.weight || 0);
+      if (rnd <= 0) {
         selected = r;
         break;
       }
@@ -199,24 +203,23 @@ async function clickHandler(req, res) {
 
     await logClick(req, pub, selected.offer_id, g, c);
 
-    /* ---- FINAL REDIRECT ---- */
     let url = selected.redirect_url || "https://example.com";
-
-    if (click_id)
+    if (click_id) {
       url += (url.includes("?") ? "&" : "?") + `click_id=${click_id}`;
+    }
 
     return res.redirect(url);
   } catch (err) {
-    console.log("CLICK ERROR:", err);
+    console.error("CLICK ERROR:", err);
     return res.redirect("https://example.com");
   }
 }
 
 router.get("/click", fraudCheck, clickHandler);
 
-/* ========================================================
-   META ENDPOINT
-======================================================== */
+/* ---------------------------------------
+   META
+---------------------------------------- */
 router.get("/meta", async (req, res) => {
   try {
     const { pub_id } = req.query;
@@ -239,14 +242,14 @@ router.get("/meta", async (req, res) => {
 
     res.json(rows);
   } catch (err) {
-    console.log("META ERROR:", err);
+    console.error("META ERROR:", err.message);
     res.status(500).json({ error: "internal_error" });
   }
 });
 
-/* ========================================================
-   OFFERS (500 FIXED)
-======================================================== */
+/* ---------------------------------------
+   OFFERS  (FIXED 500)
+---------------------------------------- */
 router.get("/offers", async (req, res) => {
   try {
     const { exclude } = req.query;
@@ -254,7 +257,7 @@ router.get("/offers", async (req, res) => {
     let q = `
       SELECT 
         id,
-        offer_id,
+        id AS offer_id,          -- rules.offer_id usually references this
         name AS offer_name,
         advertiser_name,
         type,
@@ -263,25 +266,32 @@ router.get("/offers", async (req, res) => {
       WHERE status='active'
     `;
 
-    let params = [];
+    const params = [];
 
+    // If exclude is present, filter by id
     if (exclude) {
-      const ids = exclude.split(",").map(Number).filter(Boolean);
-      q += ` AND offer_id NOT IN (SELECT UNNEST($1::int[]))`;
-      params = [ids];
+      const ids = exclude
+        .split(",")
+        .map((v) => parseInt(v, 10))
+        .filter((v) => !Number.isNaN(v));
+
+      if (ids.length) {
+        params.push(ids);
+        q += ` AND id != ALL($1::int[])`;
+      }
     }
 
     const { rows } = await pool.query(q, params);
     res.json(rows);
   } catch (err) {
-    console.log("OFFERS ERROR:", err);
+    console.error("OFFERS ERROR:", err.message);
     res.status(500).json({ error: "internal_error" });
   }
 });
 
-/* ========================================================
+/* ---------------------------------------
    RULES LIST
-======================================================== */
+---------------------------------------- */
 router.get("/rules", async (req, res) => {
   try {
     const { pub_id } = req.query;
@@ -298,18 +308,17 @@ router.get("/rules", async (req, res) => {
 
     res.json(rows);
   } catch (err) {
-    console.log("RULES LIST ERROR:", err);
+    console.error("RULES LIST ERROR:", err.message);
     res.status(500).json({ error: "internal_error" });
   }
 });
 
-/* ========================================================
+/* ---------------------------------------
    RULES UPDATE
-======================================================== */
+---------------------------------------- */
 router.put("/rules/:id", async (req, res) => {
   try {
     const { id } = req.params;
-
     const {
       geo,
       carrier,
@@ -343,14 +352,14 @@ router.put("/rules/:id", async (req, res) => {
 
     res.json(rows[0]);
   } catch (err) {
-    console.log("RULE UPDATE ERROR:", err);
+    console.error("RULE UPDATE ERROR:", err.message);
     res.status(500).json({ error: "internal_error" });
   }
 });
 
-/* ========================================================
-   REMAINING COUNTS
-======================================================== */
+/* ---------------------------------------
+   REMAINING COUNTS (FIXED 500)
+---------------------------------------- */
 router.get("/rules/remaining", async (req, res) => {
   try {
     const { pub_id } = req.query;
@@ -358,32 +367,38 @@ router.get("/rules/remaining", async (req, res) => {
     const { rows } = await pool.query(
       `
       SELECT 
-        offer_id,
-        daily_cap,
-        hourly_cap
-      FROM traffic_rules
-      WHERE pub_id=$1
+        tr.offer_id,
+        tr.daily_cap,
+        tr.hourly_cap
+      FROM traffic_rules tr
+      WHERE tr.pub_id=$1
     `,
       [pub_id]
     );
 
-    const offerIds = rows.map((r) => r.offer_id);
+    const offerIds = rows.map((r) => Number(r.offer_id)).filter(Boolean);
     const usage = await getUsage(pub_id, offerIds);
 
-    const result = rows.map((r) => ({
-      offer_id: r.offer_id,
-      day_remaining: (r.daily_cap || 0) - (usage[r.offer_id]?.day || 0),
-      hour_remaining: (r.hourly_cap || 0) - (usage[r.offer_id]?.hour || 0),
-    }));
+    const response = rows.map((r) => {
+      const u = usage[r.offer_id] || { day: 0, hour: 0 };
+      const dayCap = Number(r.daily_cap || 0);
+      const hourCap = Number(r.hourly_cap || 0);
 
-    res.json(result);
+      return {
+        offer_id: r.offer_id,
+        day_remaining: dayCap > 0 ? dayCap - u.day : null,
+        hour_remaining: hourCap > 0 ? hourCap - u.hour : null,
+      };
+    });
+
+    res.json(response);
   } catch (err) {
-    console.log("REMAINING ERROR:", err);
+    console.error("REMAINING ERROR:", err.message);
     res.status(500).json({ error: "internal_error" });
   }
 });
 
-/* ========================================================
+/* ---------------------------------------
    EXPORT
-======================================================== */
+---------------------------------------- */
 export default router;
