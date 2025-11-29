@@ -127,13 +127,11 @@ router.put("/rules/:id", async (req, res) => {
 
 /* -------------------------------------------------------------------
    DISTRIBUTION CLICK HANDLER
-   (geo + carrier → weighted random selection → fallback handling)
 ------------------------------------------------------------------- */
 router.get("/click", async (req, res) => {
   try {
     const { pub_id, geo, carrier } = req.query;
 
-    // Fetch matching rules
     const rules = await pool.query(
       `SELECT offer_code, percentage 
        FROM traffic_rules
@@ -143,9 +141,6 @@ router.get("/click", async (req, res) => {
 
     let list = rules.rows;
 
-    // --------------------------
-    // Fallback #1 – geo match only
-    // --------------------------
     if (list.length === 0) {
       const geoOnly = await pool.query(
         `SELECT offer_code, percentage FROM traffic_rules
@@ -155,9 +150,6 @@ router.get("/click", async (req, res) => {
       list = geoOnly.rows;
     }
 
-    // --------------------------
-    // Fallback #2 – pub_id only
-    // --------------------------
     if (list.length === 0) {
       const pubOnly = await pool.query(
         `SELECT offer_code, percentage FROM traffic_rules
@@ -167,14 +159,10 @@ router.get("/click", async (req, res) => {
       list = pubOnly.rows;
     }
 
-    // --------------------------
-    // Fallback #3 – No rules → stop
-    // --------------------------
     if (list.length === 0) {
       return res.status(404).json({ error: "No distribution rules found" });
     }
 
-    // Weighted random selection
     let total = 0;
     const weighted = list.map((r) => {
       total += r.percentage;
@@ -184,7 +172,6 @@ router.get("/click", async (req, res) => {
     const rand = Math.random() * total;
     const selected = weighted.find((x) => rand <= x.weight);
 
-    // Fetch offer URL
     const offer = await pool.query(
       "SELECT url FROM offers WHERE offer_code=$1 LIMIT 1",
       [selected.offer_code]
