@@ -142,19 +142,20 @@ export default function TrafficDistribution() {
     if (!offerId) return alert("Select offer");
 
     const track = meta.find((m) => m.tracking_link_id === selectedTracking);
-    // For add: from offers list; for edit: from rules list
     const offer =
-      offers.find((o) => o.id === offerId) ||
-      rules.find((x) => x.id === editId) ||
-      {};
+      offers.find((o) => o.id === offerId) || rules.find((x) => x.id === editId);
+
+    if (!track || !offer) {
+      return alert("Invalid tracking or offer");
+    }
 
     const payload = {
       pub_id: publisher.pub_id,
       publisher_id: publisher.publisher_id,
       publisher_name: publisher.publisher_name,
       tracking_link_id: selectedTracking,
-      geo: track?.geo,
-      carrier: track?.carrier,
+      geo: track.geo,
+      carrier: track.carrier,
       offer_id: offer.id,
       offer_code: offer.offer_id,
       offer_name: offer.offer_name,
@@ -203,24 +204,24 @@ export default function TrafficDistribution() {
   };
 
   /* --------------------------
-      SEARCH FILTER (GLOBAL OVERVIEW)
+      SEARCH FILTER
   -------------------------- */
 
   const filteredOverview = useMemo(() => {
     if (!search) return overview;
-
     const q = search.toLowerCase();
 
-    return overview.filter(
-      (r) =>
-        (r.publisher_name || "").toLowerCase().includes(q) ||
-        (r.pub_id || "").toLowerCase().includes(q) ||
-        (r.offer_code || "").toLowerCase().includes(q) ||
-        (r.offer_name || "").toLowerCase().includes(q) ||
-        (r.advertiser_name || "").toLowerCase().includes(q) ||
-        (r.geo || "").toLowerCase().includes(q) ||
-        (r.carrier || "").toLowerCase().includes(q)
-    );
+    return overview.filter((r) => {
+      return (
+        r.pub_id?.toLowerCase().includes(q) ||
+        r.publisher_name?.toLowerCase().includes(q) ||
+        r.offer_code?.toLowerCase().includes(q) ||
+        r.offer_name?.toLowerCase().includes(q) ||
+        r.advertiser_name?.toLowerCase().includes(q) ||
+        r.geo?.toLowerCase().includes(q) ||
+        r.carrier?.toLowerCase().includes(q)
+      );
+    });
   }, [overview, search]);
 
   /* --------------------------
@@ -231,16 +232,13 @@ export default function TrafficDistribution() {
     return `${backend}/click?pub_id=${pub}&geo=${geo}&carrier=${carrier}&click_id=${click}`;
   };
 
+  const currentTracking = meta.find(
+    (m) => m.tracking_link_id === selectedTracking
+  );
+
   /* --------------------------
       UI
   -------------------------- */
-  // For Add Rule dropdown label: GEO/CARRIER of selected tracking
-  const selectedTrackRow = meta.find(
-    (m) => m.tracking_link_id === selectedTracking
-  );
-  const selectedGeo = selectedTrackRow?.geo || "-";
-  const selectedCarrier = selectedTrackRow?.carrier || "-";
-
   return (
     <div className="p-6">
       <h1 className="text-xl font-bold mb-4">Traffic Distribution</h1>
@@ -270,14 +268,10 @@ export default function TrafficDistribution() {
       {/* Publisher Info */}
       {publisher && (
         <div className="bg-gray-100 p-3 rounded mb-5">
-          <div>
-            <b>PUB:</b> {publisher.pub_id}
-          </div>
-          <div>
-            <b>Publisher:</b> {publisher.publisher_name}
-          </div>
-          <div>
-            <b>Combos:</b> {publisher.combos}
+          <div className="font-semibold">
+            PUB: {publisher.pub_id} &nbsp; | &nbsp; Publisher:{" "}
+            {publisher.publisher_name} &nbsp; | &nbsp; Combos:{" "}
+            {publisher.combos}
           </div>
           <div>
             <b>Remaining:</b> {remaining}%
@@ -293,7 +287,7 @@ export default function TrafficDistribution() {
         <div className="bg-white p-4 shadow rounded mb-6">
           <h2 className="font-semibold mb-2">Add Rule</h2>
 
-          <div className="flex gap-3 items-center flex-wrap">
+          <div className="flex flex-wrap gap-3 items-center">
             <select
               value={selectedTracking}
               onChange={(e) => setSelectedTracking(Number(e.target.value))}
@@ -301,7 +295,7 @@ export default function TrafficDistribution() {
             >
               {meta.map((m) => (
                 <option key={m.tracking_link_id} value={m.tracking_link_id}>
-                  {m.geo}/{m.carrier}
+                  {m.pub_code} | {m.publisher_name} | {m.geo}/{m.carrier}
                 </option>
               ))}
             </select>
@@ -312,15 +306,15 @@ export default function TrafficDistribution() {
               className="border p-2 rounded min-w-[260px]"
             >
               <option value="">Select Offer</option>
-              {offers
-                .slice()
-                .sort((a, b) => a.offer_name.localeCompare(b.offer_name))
-                .map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.offer_name} — {o.advertiser_name} — {selectedGeo} —{" "}
-                    {selectedCarrier}
-                  </option>
-                ))}
+              {offers.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {/* OFF03, OFF02 visible + name + advertiser + geo/carrier */}
+                  {o.offer_id} — {o.offer_name} — {o.advertiser_name}
+                  {currentTracking
+                    ? ` — ${currentTracking.geo}/${currentTracking.carrier}`
+                    : ""}
+                </option>
+              ))}
             </select>
 
             <input
@@ -347,7 +341,7 @@ export default function TrafficDistribution() {
         <div className="bg-yellow-50 p-4 rounded shadow mb-6">
           <h2 className="font-semibold mb-2">Edit Rule</h2>
 
-          <div className="flex gap-3 items-center flex-wrap">
+          <div className="flex flex-wrap gap-3 items-center">
             <select
               value={selectedTracking}
               disabled
@@ -355,7 +349,7 @@ export default function TrafficDistribution() {
             >
               {meta.map((m) => (
                 <option key={m.tracking_link_id} value={m.tracking_link_id}>
-                  {m.geo}/{m.carrier}
+                  {m.pub_code} | {m.publisher_name} | {m.geo}/{m.carrier}
                 </option>
               ))}
             </select>
@@ -363,7 +357,7 @@ export default function TrafficDistribution() {
             <select
               value={offerId}
               disabled
-              className="border p-2 rounded bg-gray-200 min-w-[260px]"
+              className="border p-2 rounded bg-gray-200"
             >
               <option>{offerId}</option>
             </select>
@@ -409,7 +403,7 @@ export default function TrafficDistribution() {
               {rules.map((r) => (
                 <tr key={r.id} className="border-t">
                   <td className="p-2">
-                    {r.offer_code} — {r.offer_name}
+                    {r.offer_code} — {r.offer_name} ({r.advertiser_name})
                   </td>
                   <td className="p-2">{r.geo}</td>
                   <td className="p-2">{r.carrier}</td>
@@ -449,6 +443,7 @@ export default function TrafficDistribution() {
         <table className="w-full bg-white text-xs border">
           <thead className="bg-gray-100">
             <tr>
+              <th className="p-2">PUB</th>
               <th className="p-2">Publisher</th>
               <th className="p-2">Offer Code</th>
               <th className="p-2">Offer Name</th>
@@ -462,6 +457,7 @@ export default function TrafficDistribution() {
           <tbody>
             {filteredOverview.map((r) => (
               <tr key={r.id} className="border-t">
+                <td className="p-2">{r.pub_id}</td>
                 <td className="p-2">{r.publisher_name}</td>
                 <td className="p-2">{r.offer_code}</td>
                 <td className="p-2">{r.offer_name}</td>
