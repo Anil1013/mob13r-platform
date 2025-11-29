@@ -180,4 +180,34 @@ export default function TrafficDistribution() {
                     setRules(updated);
                   }}/></td>
 
-                <td><input type
+                <td><input type="text"
+                  className="border w-48"
+                  value={r.redirect_url}
+                  onChange={(e) => {
+                    const updated = [...rules];
+                    updated[idx].redirect_url = e.target.value;
+                    setRules(updated);
+                  }}/></td>
+
+                <td>
+                  <button className="bg-green-500 text-white px-2 py-1 rounded"
+                    onClick={() => updateRule(r)}>
+                    Save
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {/* Remaining caps */}
+      {remaining.length > 0 && (
+        <div className="mt-3 text-sm p-3 border rounded bg-gray-50">
+          <strong>Remaining (Daily / Hourly):</strong>
+          <pre>{JSON.stringify(remaining, null, 2)}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
