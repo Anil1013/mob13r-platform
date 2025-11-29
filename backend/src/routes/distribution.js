@@ -58,6 +58,7 @@ async function getUsage(pub, offerIds) {
       hour: Number(r.hour_count || 0),
     };
   });
+
   return out;
 }
 
@@ -76,6 +77,7 @@ async function getFallback(pub, geo, carrier) {
   `,
     [pub, geo, carrier]
   );
+
   if (q1.rows.length) return q1.rows[0].tracking_url;
 
   const q2 = await pool.query(
@@ -87,6 +89,7 @@ async function getFallback(pub, geo, carrier) {
   `,
     [pub]
   );
+
   return q2.rows[0]?.tracking_url || "https://example.com";
 }
 
@@ -96,6 +99,7 @@ async function getFallback(pub, geo, carrier) {
 async function clickHandler(req, res) {
   try {
     const { pub_id, geo, carrier, click_id } = req.query;
+
     if (!pub_id || !geo || !carrier)
       return res.redirect("https://example.com");
 
@@ -103,7 +107,6 @@ async function clickHandler(req, res) {
     const g = geo.toUpperCase();
     const c = carrier.toUpperCase();
 
-    // LOAD RULES
     const { rows: rules } = await pool.query(
       `
       SELECT 
@@ -126,7 +129,6 @@ async function clickHandler(req, res) {
       return res.redirect(fb);
     }
 
-    // GEO/CARRIER FILTER
     let filtered = rules.filter((r) => {
       const geos = (r.geo || "")
         .toUpperCase()
@@ -145,7 +147,6 @@ async function clickHandler(req, res) {
 
     if (!filtered.length) filtered = rules;
 
-    // CAP FILTER
     const offerIds = filtered.map((r) => Number(r.offer_id));
     const usage = await getUsage(pub, offerIds);
 
@@ -156,6 +157,7 @@ async function clickHandler(req, res) {
 
       if (d > 0 && u.day >= d) return false;
       if (h > 0 && u.hour >= h) return false;
+
       return true;
     });
 
@@ -167,7 +169,6 @@ async function clickHandler(req, res) {
       return res.redirect(fb);
     }
 
-    // WEIGHTED ROTATION
     const total = filtered.reduce((s, r) => s + Number(r.weight || 0), 0);
     let rnd = Math.random() * total;
     let selected = filtered[0];
@@ -228,6 +229,7 @@ router.get("/meta", async (req, res) => {
 router.get("/offers", async (req, res) => {
   try {
     const { exclude } = req.query;
+
     let q = `
       SELECT 
         id,
@@ -239,15 +241,13 @@ router.get("/offers", async (req, res) => {
       FROM offers
       WHERE status='active'
     `;
+
     const params = [];
 
     if (exclude) {
       const ids = exclude.split(",").map(Number).filter(Boolean);
-      if (ids.length) {
-        const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
-        q += ` AND id NOT IN (${placeholders})`;
-        params.push(...ids);
-      }
+      params.push(ids);
+      q += ` AND offer_id NOT IN (SELECT UNNEST($1::int[]))`;
     }
 
     const { rows } = await pool.query(q, params);
@@ -258,15 +258,22 @@ router.get("/offers", async (req, res) => {
 });
 
 /* ---------------------------------------
-   RULE LIST
+   RULES LIST
 ---------------------------------------- */
 router.get("/rules", async (req, res) => {
   try {
     const { pub_id } = req.query;
+
     const { rows } = await pool.query(
-      `SELECT * FROM traffic_rules WHERE pub_id=$1 ORDER BY id ASC`,
+      `
+      SELECT *
+      FROM traffic_rules
+      WHERE pub_id=$1
+      ORDER BY id ASC
+    `,
       [pub_id]
     );
+
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: "internal_error" });
@@ -274,214 +281,87 @@ router.get("/rules", async (req, res) => {
 });
 
 /* ---------------------------------------
-   REMAINING %
+   RULES UPDATE
+---------------------------------------- */
+router.put("/rules/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      geo,
+      carrier,
+      offer_id,
+      weight,
+      redirect_url,
+      status,
+      daily_cap,
+      hourly_cap,
+    } = req.body;
+
+    const q = `
+      UPDATE traffic_rules
+      SET geo=$1, carrier=$2, offer_id=$3, weight=$4, redirect_url=$5,
+          status=$6, daily_cap=$7, hourly_cap=$8
+      WHERE id=$9
+      RETURNING *
+    `;
+
+    const { rows } = await pool.query(q, [
+      geo,
+      carrier,
+      offer_id,
+      weight,
+      redirect_url,
+      status,
+      daily_cap,
+      hourly_cap,
+      id,
+    ]);
+
+    res.json(rows[0]);
+  } catch (err) {
+    console.log("RULE UPDATE ERROR:", err);
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+/* ---------------------------------------
+   REMAINING COUNTS
 ---------------------------------------- */
 router.get("/rules/remaining", async (req, res) => {
   try {
     const { pub_id, tracking_link_id } = req.query;
 
-    let q = `
-      SELECT COALESCE(SUM(weight),0) AS sumw
-      FROM traffic_rules
-      WHERE pub_id=$1 AND status='active'
-    `;
-    const params = [pub_id];
-
-    if (tracking_link_id) {
-      q = `
-        SELECT COALESCE(SUM(weight),0) AS sumw
-        FROM traffic_rules
-        WHERE pub_id=$1 AND tracking_link_id=$2 AND status='active'
-      `;
-      params.push(tracking_link_id);
-    }
-
-    const { rows } = await pool.query(q, params);
-    const sumw = Number(rows[0]?.sumw || 0);
-
-    res.json({
-      sum: sumw,
-      remaining: 100 - sumw,
-    });
-  } catch (err) {
-    res.status(500).json({ error: "internal_error" });
-  }
-});
-
-/* ---------------------------------------
-   OVERVIEW
----------------------------------------- */
-router.get("/overview", async (req, res) => {
-  try {
     const { rows } = await pool.query(
       `
-      SELECT
-        id,
-        pub_id,
-        publisher_name,
-        tracking_link_id,
-        geo,
-        carrier,
-        offer_id,
-        offer_name,
-        advertiser_name,
-        redirect_url,
-        weight,
-        status
-      FROM traffic_rules
-      ORDER BY pub_id ASC, id ASC
-    `
-    );
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: "internal_error" });
-  }
-});
-
-/* ---------------------------------------
-   ADD RULE
----------------------------------------- */
-router.post("/rules", async (req, res) => {
-  try {
-    const b = req.body;
-
-    const required = [
-      "pub_id",
-      "publisher_id",
-      "publisher_name",
-      "tracking_link_id",
-      "offer_id",
-      "offer_name",
-      "advertiser_name",
-      "geo",
-      "carrier",
-      "redirect_url",
-      "type",
-      "weight",
-    ];
-
-    for (const k of required) {
-      if (!b[k]) return res.status(400).json({ error: `${k}_required` });
-    }
-
-    const dup = await pool.query(
-      `
-      SELECT id FROM traffic_rules
-      WHERE pub_id=$1 AND tracking_link_id=$2 AND offer_id=$3 AND status='active'
+      SELECT 
+        tr.offer_id,
+        tr.daily_cap,
+        tr.hourly_cap
+      FROM traffic_rules tr
+      WHERE tr.pub_id=$1
     `,
-      [b.pub_id, b.tracking_link_id, b.offer_id]
+      [pub_id]
     );
 
-    if (dup.rows.length)
-      return res.status(409).json({ error: "duplicate_offer_for_pub" });
+    const offerIds = rows.map((r) => r.offer_id);
+    const usage = await getUsage(pub_id, offerIds);
 
-    const q = `
-      INSERT INTO traffic_rules (
-        pub_id, publisher_id, publisher_name,
-        tracking_link_id, geo, carrier,
-        offer_id, offer_name, advertiser_name,
-        redirect_url, type, weight, status,
-        created_by, created_at
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'active',$13,NOW())
-      RETURNING *
-    `;
+    const response = rows.map((r) => {
+      const u = usage[r.offer_id] || { day: 0, hour: 0 };
+      return {
+        offer_id: r.offer_id,
+        day_remaining: (r.daily_cap || 0) - u.day,
+        hour_remaining: (r.hourly_cap || 0) - u.hour,
+      };
+    });
 
-    const params = [
-      b.pub_id,
-      b.publisher_id,
-      b.publisher_name,
-      b.tracking_link_id,
-      b.geo,
-      b.carrier,
-      b.offer_id,
-      b.offer_name,
-      b.advertiser_name,
-      b.redirect_url,
-      b.type,
-      b.weight,
-      b.created_by || 1,
-    ];
-
-    const { rows } = await pool.query(q, params);
-    res.json(rows[0]);
+    res.json(response);
   } catch (err) {
     res.status(500).json({ error: "internal_error" });
   }
 });
 
 /* ---------------------------------------
-   UPDATE RULE
+   EXPORT
 ---------------------------------------- */
-router.put("/rules/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
-    const b = req.body;
-
-    const existingRes = await pool.query(
-      `SELECT * FROM traffic_rules WHERE id=$1`,
-      [id]
-    );
-    const existing = existingRes.rows[0];
-    if (!existing)
-      return res.status(404).json({ error: "rule_not_found" });
-
-    const fields = [
-      "publisher_id",
-      "publisher_name",
-      "tracking_link_id",
-      "geo",
-      "carrier",
-      "offer_id",
-      "offer_name",
-      "advertiser_name",
-      "redirect_url",
-      "type",
-      "weight",
-      "status",
-    ];
-
-    const set = [];
-    const values = [];
-    let i = 1;
-
-    for (const f of fields) {
-      if (b[f] !== undefined) {
-        set.push(`${f}=$${i}`);
-        values.push(b[f]);
-        i++;
-      }
-    }
-
-    if (!set.length)
-      return res.status(400).json({ error: "nothing_to_update" });
-
-    values.push(id);
-
-    const q = `
-      UPDATE traffic_rules
-      SET ${set.join(", ")}, updated_at=NOW()
-      WHERE id=$${values.length}
-      RETURNING *
-    `;
-
-    const { rows } = await pool.query(q, values);
-    res.json(rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: "internal_error" });
-  }
-});
-
-/* ---------------------------------------
-   DELETE RULE
----------------------------------------- */
-router.delete("/rules/:id", async (req, res) => {
-  try {
-    await pool.query(`DELETE FROM traffic_rules WHERE id=$1`, [req.params.id]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: "internal_error" });
-  }
-});
-
 export default router;
