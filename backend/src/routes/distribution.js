@@ -4,9 +4,9 @@ import fraudCheck from "../middleware/fraudCheck.js";
 
 const router = express.Router();
 
-/* ---------------------------------------
+/* ========================================================
    CLICK LOG
----------------------------------------- */
+======================================================== */
 async function logClick(req, pub, offer, geo, carrier) {
   try {
     const ip =
@@ -31,12 +31,14 @@ async function logClick(req, pub, offer, geo, carrier) {
         JSON.stringify(req.query || {}),
       ]
     );
-  } catch (_) {}
+  } catch (err) {
+    console.log("LOG CLICK ERROR:", err);
+  }
 }
 
-/* ---------------------------------------
-   OFFER CAP COUNTS
----------------------------------------- */
+/* ========================================================
+   USAGE (DAY + HOUR)
+======================================================== */
 async function getUsage(pub, offerIds) {
   if (!offerIds.length) return {};
 
@@ -51,8 +53,8 @@ async function getUsage(pub, offerIds) {
   `;
 
   const { rows } = await pool.query(q, [pub, offerIds]);
-  const out = {};
 
+  const out = {};
   rows.forEach((r) => {
     out[r.offer_id] = {
       day: Number(r.day_count || 0),
@@ -63,9 +65,9 @@ async function getUsage(pub, offerIds) {
   return out;
 }
 
-/* ---------------------------------------
+/* ========================================================
    FALLBACK URL
----------------------------------------- */
+======================================================== */
 async function getFallback(pub, geo, carrier) {
   const q1 = await pool.query(
     `
@@ -94,9 +96,9 @@ async function getFallback(pub, geo, carrier) {
   return q2.rows[0]?.tracking_url || "https://example.com";
 }
 
-/* ---------------------------------------
+/* ========================================================
    CLICK HANDLER
----------------------------------------- */
+======================================================== */
 async function clickHandler(req, res) {
   try {
     const { pub_id, geo, carrier, click_id } = req.query;
@@ -108,6 +110,7 @@ async function clickHandler(req, res) {
     const g = geo.toUpperCase();
     const c = carrier.toUpperCase();
 
+    /* ---- LOAD RULES ---- */
     const { rows: rules } = await pool.query(
       `
       SELECT 
@@ -122,6 +125,7 @@ async function clickHandler(req, res) {
       [pub]
     );
 
+    /* ---- NO RULES => FALLBACK ---- */
     if (!rules.length) {
       let fb = await getFallback(pub, g, c);
       if (click_id)
@@ -130,6 +134,7 @@ async function clickHandler(req, res) {
       return res.redirect(fb);
     }
 
+    /* ---- GEO + CARRIER FILTER ---- */
     let filtered = rules.filter((r) => {
       const geos = (r.geo || "")
         .toUpperCase()
@@ -137,20 +142,21 @@ async function clickHandler(req, res) {
         .map((x) => x.trim())
         .filter(Boolean);
 
-      const carr = (r.carrier || "")
+      const carrs = (r.carrier || "")
         .toUpperCase()
         .split(",")
         .map((x) => x.trim())
         .filter(Boolean);
 
       const gm = !geos.length || geos.includes(g);
-      const cm = !carr.length || carr.includes(c);
+      const cm = !carrs.length || carrs.includes(c);
 
       return gm && cm;
     });
 
     if (!filtered.length) filtered = rules;
 
+    /* ---- CAP CHECK ---- */
     const offerIds = filtered.map((r) => Number(r.offer_id));
     const usage = await getUsage(pub, offerIds);
 
@@ -165,6 +171,7 @@ async function clickHandler(req, res) {
       return true;
     });
 
+    /* ---- IF ALL CAPPED => FALLBACK ---- */
     if (!filtered.length) {
       let fb = await getFallback(pub, g, c);
       if (click_id)
@@ -173,13 +180,18 @@ async function clickHandler(req, res) {
       return res.redirect(fb);
     }
 
-    const total = filtered.reduce((s, r) => s + Number(r.weight || 0), 0);
-    let rnd = Math.random() * total;
+    /* ---- WEIGHT ROTATION ---- */
+    const totalWeight = filtered.reduce(
+      (sum, r) => sum + Number(r.weight || 0),
+      0
+    );
+
+    let random = Math.random() * totalWeight;
     let selected = filtered[0];
 
     for (const r of filtered) {
-      rnd -= Number(r.weight || 0);
-      if (rnd <= 0) {
+      random -= Number(r.weight || 0);
+      if (random <= 0) {
         selected = r;
         break;
       }
@@ -187,7 +199,9 @@ async function clickHandler(req, res) {
 
     await logClick(req, pub, selected.offer_id, g, c);
 
+    /* ---- FINAL REDIRECT ---- */
     let url = selected.redirect_url || "https://example.com";
+
     if (click_id)
       url += (url.includes("?") ? "&" : "?") + `click_id=${click_id}`;
 
@@ -200,12 +214,13 @@ async function clickHandler(req, res) {
 
 router.get("/click", fraudCheck, clickHandler);
 
-/* ---------------------------------------
-   META
----------------------------------------- */
+/* ========================================================
+   META ENDPOINT
+======================================================== */
 router.get("/meta", async (req, res) => {
   try {
     const { pub_id } = req.query;
+
     const { rows } = await pool.query(
       `
       SELECT 
@@ -221,15 +236,17 @@ router.get("/meta", async (req, res) => {
     `,
       [pub_id]
     );
+
     res.json(rows);
   } catch (err) {
+    console.log("META ERROR:", err);
     res.status(500).json({ error: "internal_error" });
   }
 });
 
-/* ---------------------------------------
-   OFFERS  (FIXED)
----------------------------------------- */
+/* ========================================================
+   OFFERS (500 FIXED)
+======================================================== */
 router.get("/offers", async (req, res) => {
   try {
     const { exclude } = req.query;
@@ -250,8 +267,7 @@ router.get("/offers", async (req, res) => {
 
     if (exclude) {
       const ids = exclude.split(",").map(Number).filter(Boolean);
-
-      q += ` AND offer_id != ALL($1::int[])`;
+      q += ` AND offer_id NOT IN (SELECT UNNEST($1::int[]))`;
       params = [ids];
     }
 
@@ -263,9 +279,9 @@ router.get("/offers", async (req, res) => {
   }
 });
 
-/* ---------------------------------------
+/* ========================================================
    RULES LIST
----------------------------------------- */
+======================================================== */
 router.get("/rules", async (req, res) => {
   try {
     const { pub_id } = req.query;
@@ -282,16 +298,18 @@ router.get("/rules", async (req, res) => {
 
     res.json(rows);
   } catch (err) {
+    console.log("RULES LIST ERROR:", err);
     res.status(500).json({ error: "internal_error" });
   }
 });
 
-/* ---------------------------------------
+/* ========================================================
    RULES UPDATE
----------------------------------------- */
+======================================================== */
 router.put("/rules/:id", async (req, res) => {
   try {
     const { id } = req.params;
+
     const {
       geo,
       carrier,
@@ -330,9 +348,9 @@ router.put("/rules/:id", async (req, res) => {
   }
 });
 
-/* ---------------------------------------
+/* ========================================================
    REMAINING COUNTS
----------------------------------------- */
+======================================================== */
 router.get("/rules/remaining", async (req, res) => {
   try {
     const { pub_id } = req.query;
@@ -340,11 +358,11 @@ router.get("/rules/remaining", async (req, res) => {
     const { rows } = await pool.query(
       `
       SELECT 
-        tr.offer_id,
-        tr.daily_cap,
-        tr.hourly_cap
-      FROM traffic_rules tr
-      WHERE tr.pub_id=$1
+        offer_id,
+        daily_cap,
+        hourly_cap
+      FROM traffic_rules
+      WHERE pub_id=$1
     `,
       [pub_id]
     );
@@ -352,19 +370,20 @@ router.get("/rules/remaining", async (req, res) => {
     const offerIds = rows.map((r) => r.offer_id);
     const usage = await getUsage(pub_id, offerIds);
 
-    const response = rows.map((r) => {
-      const u = usage[r.offer_id] || { day: 0, hour: 0 };
-      return {
-        offer_id: r.offer_id,
-        day_remaining: (r.daily_cap || 0) - u.day,
-        hour_remaining: (r.hourly_cap || 0) - u.hour,
-      };
-    });
+    const result = rows.map((r) => ({
+      offer_id: r.offer_id,
+      day_remaining: (r.daily_cap || 0) - (usage[r.offer_id]?.day || 0),
+      hour_remaining: (r.hourly_cap || 0) - (usage[r.offer_id]?.hour || 0),
+    }));
 
-    res.json(response);
+    res.json(result);
   } catch (err) {
+    console.log("REMAINING ERROR:", err);
     res.status(500).json({ error: "internal_error" });
   }
 });
 
+/* ========================================================
+   EXPORT
+======================================================== */
 export default router;
