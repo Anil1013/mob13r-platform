@@ -12,7 +12,7 @@ import advertisersRoutes from "./routes/advertisers.js";
 import offersRoutes from "./routes/offers.js";
 import clickRoutes from "./routes/clicks.js";
 import postbackRoutes from "./routes/postbacks.js";
-import conversionsRoutes from "./routes/conversions.js";   // FIXED NAME
+import conversionsRoutes from "./routes/conversions.js";
 import statsRoutes from "./routes/stats.js";
 import authRoutes from "./routes/auth.js";
 import analyticsRoutes from "./routes/analytics.js";
@@ -28,9 +28,6 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-/* -------------------------------------------------
-   CORS
---------------------------------------------------*/
 app.use(
   cors({
     origin: ["https://dashboard.mob13r.com", "http://localhost:3000"],
@@ -44,39 +41,24 @@ app.options("*", cors());
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(bodyParser.json({ limit: "10mb" }));
 
-/* -------------------------------------------------
-   HEALTH CHECK
---------------------------------------------------*/
 app.get("/api/health", async (req, res) => {
   const result = await pool.query("SELECT NOW() AS db_time");
   res.json({ status: "ok", db_time: result.rows[0].db_time });
 });
 
-/* -------------------------------------------------
-   CLICK ENTRY POINT  (VERY IMPORTANT — KEEP ON TOP)
---------------------------------------------------*/
+/* -----------------------------------------------------
+   🔥 PUBLIC CLICK ENDPOINT (NO fraudCheck HERE)
+------------------------------------------------------ */
 app.get("/click", (req, res) => {
-  const params = new URLSearchParams(req.query).toString();
-  return res.redirect(`/api/distribution/click?${params}`);
+  const qs = new URLSearchParams(req.query).toString();
+  return res.redirect(`/api/distribution/click?${qs}`);
 });
 
-/* -------------------------------------------------
-   PUBLIC ROUTES
---------------------------------------------------*/
+/* PUBLIC ROUTES */
 app.use("/api/auth", authRoutes);
-
-// Full click → distribution handler (fraud check inside)
 app.use("/api/distribution", distributionRoutes);
 
-/* -------------------------------------------------
-   ADVERTISER POSTBACK → OUR SYSTEM
-   (should always remain PUBLIC)
---------------------------------------------------*/
-app.use("/api/conversion", conversionsRoutes);
-
-/* -------------------------------------------------
-   PROTECTED ROUTES (JWT Required)
---------------------------------------------------*/
+/* PROTECTED ROUTES */
 app.use("/api/publishers", authJWT, publishersRoutes);
 app.use("/api/advertisers", authJWT, advertisersRoutes);
 app.use("/api/offers", authJWT, offersRoutes);
@@ -88,15 +70,10 @@ app.use("/api/templates", authJWT, templateRoutes);
 app.use("/api/tracking", authJWT, publisherTrackingRoutes);
 app.use("/api/fraud", authJWT, fraudRoutes);
 
-/* -------------------------------------------------
-   ANALYTICS
---------------------------------------------------*/
+/* ANALYTICS */
 app.use("/api/analytics", authJWT, analyticsRoutes);
 app.use("/api/analytics/clicks", authJWT, analyticsClicks);
 
-/* -------------------------------------------------
-   START SERVER
---------------------------------------------------*/
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend running on port ${PORT}`);
 });
