@@ -1,193 +1,246 @@
 import express from "express";
 import pool from "../db.js";
+import authJWT from "../middleware/authJWT.js";
 
 const router = express.Router();
 
-/* -----------------------------------------------------
-    1) GET META FROM TRACKING TABLE (BY pub_id)
------------------------------------------------------ */
-router.get("/meta", async (req, res) => {
+/* ======================================================================
+    1) META API 
+    FETCH: publisher_name, geo, carrier, tracking urls (from tracking table)
+====================================================================== */
+router.get("/meta", authJWT, async (req, res) => {
   try {
     const { pub_id } = req.query;
 
-    const query = `
+    if (!pub_id) {
+      return res.status(400).json({ success: false, message: "pub_id required" });
+    }
+
+    // Fetch tracking rows for this publisher
+    const trackRes = await pool.query(
+      `
       SELECT 
+        tracking_link_id,
         pub_id,
         publisher_name,
         geo,
         carrier,
-        type,
-        cap,
-        tracking_link_id,
-        url
+        url AS tracking_url
       FROM tracking
       WHERE pub_id = $1
-    `;
+      ORDER BY id DESC
+      `,
+      [pub_id]
+    );
 
-    const result = await pool.query(query, [pub_id]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Publisher not found" });
+    if (trackRes.rows.length === 0) {
+      return res.json({ success: true, meta: [] });
     }
 
-    return res.json({ success: true, data: result.rows });
+    res.json({
+      success: true,
+      meta: trackRes.rows,
+    });
+
   } catch (err) {
     console.error("META ERROR:", err);
-    return res.status(500).json({ error: "Internal Server Error META" });
+    res.status(500).json({ success: false, message: "Server Error" });
   }
 });
 
-/* -----------------------------------------------------
-    2) GET EXISTING RULES OF PUBLISHER
------------------------------------------------------ */
-router.get("/rules", async (req, res) => {
+/* ======================================================================
+    2) GET RULES FOR PUB_ID (traffic_rules)
+====================================================================== */
+router.get("/rules", authJWT, async (req, res) => {
   try {
     const { pub_id } = req.query;
 
-    const q = `
-      SELECT r.id, r.pub_id, r.geo, r.carrier,
-             r.offer_id, o.offer_code, o.offer_name, o.advertiser_name,
-             r.percentage, r.is_fallback
-      FROM distribution_rules r
-      LEFT JOIN offers o ON r.offer_id = o.id
-      WHERE r.pub_id = $1
-      ORDER BY r.is_fallback DESC, r.percentage DESC
-    `;
+    const rules = await pool.query(
+      `
+      SELECT *
+      FROM traffic_rules
+      WHERE pub_id = $1
+      ORDER BY weight DESC, id DESC
+      `,
+      [pub_id]
+    );
 
-    const result = await pool.query(q, [pub_id]);
-    return res.json({ success: true, data: result.rows });
-
-  } catch (e) {
-    console.error("RULES ERROR:", e);
-    return res.status(500).json({ error: "Internal Server Error RULES" });
+    res.json({ success: true, rules: rules.rows });
+  } catch (err) {
+    console.error("RULES FETCH ERROR:", err);
+    res.status(500).json({ success: false, message: "Server Error" });
   }
 });
 
-/* -----------------------------------------------------
-    3) GET ACTIVE OFFERS FOR DROPDOWN
------------------------------------------------------ */
-router.get("/offers", async (req, res) => {
+/* ======================================================================
+    3) CREATE RULE (traffic_rules)
+====================================================================== */
+router.post("/rules", authJWT, async (req, res) => {
   try {
-    const { exclude } = req.query;
-
-    const q = `
-      SELECT id, offer_code, offer_name, advertiser_name, geo, carrier, cap
-      FROM offers
-      WHERE status = 'Active'
-      AND id <> COALESCE($1, -1)
-      ORDER BY advertiser_name, offer_name
-    `;
-
-    const r = await pool.query(q, [exclude]);
-    return res.json({ success: true, data: r.rows });
-
-  } catch (e) {
-    console.error("OFFERS ERROR:", e);
-    return res.status(500).json({ error: "Internal Server Error OFFERS" });
-  }
-});
-
-/* -----------------------------------------------------
-    4) CALCULATE REMAINING % FOR NEW RULE
------------------------------------------------------ */
-router.get("/rules/remaining", async (req, res) => {
-  try {
-    const { pub_id } = req.query;
-
-    const q = `
-      SELECT COALESCE(SUM(percentage), 0) AS used
-      FROM distribution_rules
-      WHERE pub_id = $1 AND is_fallback = false
-    `;
-
-    const r = await pool.query(q, [pub_id]);
-
-    const used = Number(r.rows[0].used);
-    const remaining = 100 - used;
-
-    return res.json({ success: true, remaining });
-
-  } catch (e) {
-    console.error("Remaining ERROR:", e);
-    return res.status(500).json({ error: "Internal Server Error REMAINING" });
-  }
-});
-
-/* -----------------------------------------------------
-    5) ADD NEW DISTRIBUTION RULE
------------------------------------------------------ */
-router.post("/rules", async (req, res) => {
-  try {
-    const { pub_id, geo, carrier, offer_id, percentage, is_fallback } = req.body;
-
-    const q = `
-      INSERT INTO distribution_rules (pub_id, geo, carrier, offer_id, percentage, is_fallback)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *
-    `;
-
-    const r = await pool.query(q, [
+    const {
       pub_id,
+      publisher_name,
+      tracking_link_id,
       geo,
       carrier,
       offer_id,
-      percentage || 0,
-      is_fallback || false,
-    ]);
+      offer_name,
+      advertiser_name,
+      redirect_url,
+      type,
+      weight,
+      status,
+    } = req.body;
 
-    return res.json({ success: true, data: r.rows[0] });
-
-  } catch (e) {
-    console.error("ADD RULE ERROR:", e);
-    return res.status(500).json({ error: "Internal Server Error ADD RULE" });
-  }
-});
-
-/* -----------------------------------------------------
-    6) UPDATE RULE (percentage / fallback)
------------------------------------------------------ */
-router.put("/rules/:id", async (req, res) => {
-  try {
-    const ruleId = req.params.id;
-    const { percentage, is_fallback } = req.body;
-
-    const q = `
-      UPDATE distribution_rules
-      SET percentage = $1,
-          is_fallback = $2
-      WHERE id = $3
+    const result = await pool.query(
+      `
+      INSERT INTO traffic_rules (
+        pub_id, publisher_name, tracking_link_id, geo, carrier,
+        offer_id, offer_name, advertiser_name, redirect_url,
+        type, weight, status
+      )
+      VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9,
+        $10, $11, $12
+      )
       RETURNING *
-    `;
+      `,
+      [
+        pub_id,
+        publisher_name,
+        tracking_link_id,
+        geo,
+        carrier,
+        offer_id,
+        offer_name,
+        advertiser_name,
+        redirect_url,
+        type,
+        weight,
+        status,
+      ]
+    );
 
-    const r = await pool.query(q, [
-      percentage,
-      is_fallback,
-      ruleId
-    ]);
-
-    return res.json({ success: true, data: r.rows[0] });
-
-  } catch (e) {
-    console.error("UPDATE RULE ERROR:", e);
-    return res.status(500).json({ error: "Internal Server Error UPDATE RULE" });
+    res.json({ success: true, rule: result.rows[0] });
+  } catch (err) {
+    console.error("RULE CREATE ERROR:", err);
+    res.status(500).json({ success: false, message: "Insert failed" });
   }
 });
 
-/* -----------------------------------------------------
-    7) DELETE RULE
------------------------------------------------------ */
-router.delete("/rules/:id", async (req, res) => {
+/* ======================================================================
+    4) UPDATE RULE
+====================================================================== */
+router.put("/rules/:id", authJWT, async (req, res) => {
   try {
-    const ruleId = req.params.id;
+    const { id } = req.params;
 
-    const q = `DELETE FROM distribution_rules WHERE id = $1`;
-    await pool.query(q, [ruleId]);
+    const fields = [
+      "geo", "carrier", "offer_id", "offer_name",
+      "advertiser_name", "redirect_url", "type", "weight", "status"
+    ];
 
-    return res.json({ success: true });
+    const updates = [];
+    const values = [];
+    let index = 1;
 
-  } catch (e) {
-    console.error("DELETE RULE ERROR:", e);
-    return res.status(500).json({ error: "Internal Server Error DELETE" });
+    for (let field of fields) {
+      if (req.body[field] !== undefined) {
+        updates.push(`${field} = $${index}`);
+        values.push(req.body[field]);
+        index++;
+      }
+    }
+
+    values.push(id);
+
+    const updated = await pool.query(
+      `
+      UPDATE traffic_rules
+      SET ${updates.join(", ")}
+      WHERE id = $${index}
+      RETURNING *
+      `,
+      values
+    );
+
+    res.json({ success: true, rule: updated.rows[0] });
+  } catch (err) {
+    console.error("RULE UPDATE ERROR:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
+/* ======================================================================
+    5) DELETE RULE
+====================================================================== */
+router.delete("/rules/:id", authJWT, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await pool.query(`DELETE FROM traffic_rules WHERE id = $1`, [id]);
+
+    res.json({ success: true, message: "Rule deleted" });
+  } catch (err) {
+    console.error("DELETE ERROR:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
+/* ======================================================================
+    6) REMAINING WEIGHT (max 100)
+====================================================================== */
+router.get("/rules/remaining", authJWT, async (req, res) => {
+  try {
+    const { pub_id } = req.query;
+
+    const used = await pool.query(
+      `
+      SELECT COALESCE(SUM(weight),0) AS total
+      FROM traffic_rules
+      WHERE pub_id = $1
+      `,
+      [pub_id]
+    );
+
+    const usedWeight = parseInt(used.rows[0].total);
+    const remaining = 100 - usedWeight;
+
+    res.json({ success: true, used: usedWeight, remaining });
+  } catch (err) {
+    console.error("WEIGHT ERROR:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
+/* ======================================================================
+    7) OFFER LIST (fallback + active)
+    FILTER BY: geo + carrier + NOT already selected
+====================================================================== */
+router.get("/offers", authJWT, async (req, res) => {
+  try {
+    let { geo, carrier, exclude } = req.query;
+
+    exclude = exclude ? exclude.split(",") : [];
+
+    const offers = await pool.query(
+      `
+      SELECT offer_id, advertiser_name, name AS offer_name, cap
+      FROM offers
+      WHERE geo = $1
+      AND carrier = $2
+      AND offer_id != ALL($3)
+      AND status = 'active'
+      ORDER BY id DESC
+      `,
+      [geo, carrier, exclude]
+    );
+
+    res.json({ success: true, offers: offers.rows });
+  } catch (err) {
+    console.error("OFFERS ERROR:", err);
+    res.status(500).json({ success: false });
   }
 });
 
