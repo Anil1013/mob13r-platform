@@ -5,6 +5,10 @@ import fraudCheck from "../middleware/fraudCheck.js";
 
 const router = express.Router();
 
+// Default fallback URL (can override via env)
+const DEFAULT_FALLBACK_URL =
+  process.env.DEFAULT_FALLBACK_URL || "https://example.com";
+
 /* ===========================================================
    SHARED CLICK LOG FUNCTION
    - Logs every click into analytics_clicks
@@ -39,7 +43,89 @@ async function logClick(req, pub_id, offer_id, geo, carrier) {
 }
 
 /* ===========================================================
-   HELPERS: CAPS (HARD CAP using analytics_clicks + POD table)
+   HELPERS
+=========================================================== */
+
+function norm(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+// Reusable helper: get best tracking URL for publisher
+async function getPublisherTrackingUrl(pub, geoUp, carrierUp) {
+  // 1) Try specific GEO + carrier row from publisher_tracking_links
+  const specific = await pool.query(
+    `
+    SELECT tracking_url
+    FROM publisher_tracking_links
+    WHERE pub_code = $1
+      AND (geo IS NULL OR geo = '' OR UPPER(geo) = UPPER($2))
+      AND (carrier IS NULL OR carrier = '' OR UPPER(carrier) = UPPER($3))
+      AND status = 'active'
+    ORDER BY id ASC
+    LIMIT 1
+    `,
+    [pub, geoUp, carrierUp]
+  );
+
+  if (specific.rows.length && specific.rows[0].tracking_url) {
+    return specific.rows[0].tracking_url;
+  }
+
+  // 2) Any active tracking link for this PUB
+  const anyRow = await pool.query(
+    `
+    SELECT tracking_url
+    FROM publisher_tracking_links
+    WHERE pub_code = $1
+      AND status = 'active'
+    ORDER BY id ASC
+    LIMIT 1
+    `,
+    [pub]
+  );
+
+  if (anyRow.rows.length && anyRow.rows[0].tracking_url) {
+    return anyRow.rows[0].tracking_url;
+  }
+
+  // 3) Global default
+  return DEFAULT_FALLBACK_URL;
+}
+
+// Resolve final redirect URL for a selected rule.
+// Priority:
+//   1) rule.redirect_url
+//   2) offers.tracking_url (by id or offer_code)
+//   3) DEFAULT_FALLBACK_URL
+async function resolveRuleRedirectUrl(selected) {
+  if (selected.redirect_url) return selected.redirect_url;
+
+  try {
+    const offerIdInt = Number(selected.offer_id);
+    const offerCode = selected.offer_code || null;
+
+    const { rows } = await pool.query(
+      `
+      SELECT tracking_url
+      FROM offers
+      WHERE (id = $1 OR offer_id = $2)
+      LIMIT 1
+      `,
+      [Number.isNaN(offerIdInt) ? null : offerIdInt, offerCode]
+    );
+
+    if (rows.length && rows[0].tracking_url) {
+      return rows[0].tracking_url;
+    }
+  } catch (err) {
+    console.error("RESOLVE REDIRECT URL ERROR:", err);
+  }
+
+  return DEFAULT_FALLBACK_URL;
+}
+
+/* ===========================================================
+   CAPS (HARD CAP using analytics_clicks + POD table)
 =========================================================== */
 
 // Get daily/hourly usage for a list of offers for a PUB
@@ -74,19 +160,19 @@ async function getOfferUsage(pub_id, offerIds = []) {
 }
 
 /* ===========================================================
-   MAIN CLICK HANDLER (HARD CAP LOGIC)
+   MAIN CLICK HANDLER (HARD CAP + ROTATION)
 =========================================================== */
 async function clickHandler(req, res) {
   try {
     const { pub_id, geo, carrier, click_id } = req.query;
 
     if (!pub_id || !geo || !carrier) {
-      return res.redirect("https://example.com");
+      return res.redirect(DEFAULT_FALLBACK_URL);
     }
 
-    const pub = String(pub_id).toUpperCase();
-    const geoUp = String(geo).toUpperCase();
-    const carrierUp = String(carrier).toUpperCase();
+    const pub = norm(pub_id);
+    const geoUp = norm(geo);
+    const carrierUp = norm(carrier);
 
     /* 1) Fetch all active rules + caps (via publisher_offer_distribution) */
     const rulesRes = await pool.query(
@@ -109,45 +195,15 @@ async function clickHandler(req, res) {
 
     /* 2) If NO RULES → fallback to publisher tracking link */
     if (!rules.length) {
-      // Prefer matching geo/carrier tracking link
-      let fallbackUrl = null;
-
-      const specific = await pool.query(
-        `
-        SELECT tracking_url
-        FROM publisher_tracking_links
-        WHERE pub_code = $1
-          AND (geo IS NULL OR geo = '' OR UPPER(geo) = UPPER($2))
-          AND (carrier IS NULL OR carrier = '' OR UPPER(carrier) = UPPER($3))
-        ORDER BY id ASC
-        LIMIT 1
-        `,
-        [pub, geoUp, carrierUp]
-      );
-
-      if (specific.rows.length) {
-        fallbackUrl = specific.rows[0].tracking_url;
-      } else {
-        const anyRow = await pool.query(
-          `
-          SELECT tracking_url
-          FROM publisher_tracking_links
-          WHERE pub_code = $1
-          ORDER BY id ASC
-          LIMIT 1
-          `,
-          [pub]
-        );
-        fallbackUrl = anyRow.rows[0]?.tracking_url || "https://example.com";
-      }
-
-      if (click_id) {
-        fallbackUrl +=
-          (fallbackUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`;
-      }
+      const baseUrl = await getPublisherTrackingUrl(pub, geoUp, carrierUp);
+      const finalUrl =
+        baseUrl +
+        (click_id
+          ? (baseUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`
+          : "");
 
       await logClick(req, pub, null, geoUp, carrierUp);
-      return res.redirect(fallbackUrl);
+      return res.redirect(finalUrl);
     }
 
     /* 3) GEO + CARRIER filter (robust) */
@@ -198,44 +254,15 @@ async function clickHandler(req, res) {
 
     // After caps, maybe no candidate rule left
     if (!candidateRules.length) {
-      let fallbackUrl = null;
-
-      const specific = await pool.query(
-        `
-        SELECT tracking_url
-        FROM publisher_tracking_links
-        WHERE pub_code = $1
-          AND (geo IS NULL OR geo = '' OR UPPER(geo) = UPPER($2))
-          AND (carrier IS NULL OR carrier = '' OR UPPER(carrier) = UPPER($3))
-        ORDER BY id ASC
-        LIMIT 1
-        `,
-        [pub, geoUp, carrierUp]
-      );
-
-      if (specific.rows.length) {
-        fallbackUrl = specific.rows[0].tracking_url;
-      } else {
-        const anyRow = await pool.query(
-          `
-          SELECT tracking_url
-          FROM publisher_tracking_links
-          WHERE pub_code = $1
-          ORDER BY id ASC
-          LIMIT 1
-          `,
-          [pub]
-        );
-        fallbackUrl = anyRow.rows[0]?.tracking_url || "https://example.com";
-      }
-
-      if (click_id) {
-        fallbackUrl +=
-          (fallbackUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`;
-      }
+      const baseUrl = await getPublisherTrackingUrl(pub, geoUp, carrierUp);
+      const finalUrl =
+        baseUrl +
+        (click_id
+          ? (baseUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`
+          : "");
 
       await logClick(req, pub, null, geoUp, carrierUp);
-      return res.redirect(fallbackUrl);
+      return res.redirect(finalUrl);
     }
 
     /* 5) WEIGHTED ROTATION among candidateRules */
@@ -245,27 +272,15 @@ async function clickHandler(req, res) {
     );
 
     if (totalWeight <= 0) {
-      let fallbackUrl = "https://example.com";
-
-      const fb = await pool.query(
-        `
-        SELECT tracking_url
-        FROM publisher_tracking_links
-        WHERE pub_code = $1
-        ORDER BY id ASC
-        LIMIT 1
-        `,
-        [pub]
-      );
-      if (fb.rows.length) fallbackUrl = fb.rows[0].tracking_url;
-
-      if (click_id) {
-        fallbackUrl +=
-          (fallbackUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`;
-      }
+      const baseUrl = await getPublisherTrackingUrl(pub, geoUp, carrierUp);
+      const finalUrl =
+        baseUrl +
+        (click_id
+          ? (baseUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`
+          : "");
 
       await logClick(req, pub, null, geoUp, carrierUp);
-      return res.redirect(fallbackUrl);
+      return res.redirect(finalUrl);
     }
 
     let rnd = Math.random() * totalWeight;
@@ -283,16 +298,18 @@ async function clickHandler(req, res) {
     await logClick(req, pub, selected.offer_id, geoUp, carrierUp);
 
     /* 7) FINAL REDIRECT URL (with click_id if present) */
-    let finalUrl = selected.redirect_url || "https://example.com";
-    if (click_id) {
-      finalUrl +=
-        (finalUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`;
-    }
+    let baseUrl = await resolveRuleRedirectUrl(selected);
+
+    const finalUrl =
+      baseUrl +
+      (click_id
+        ? (baseUrl.includes("?") ? "&" : "?") + `click_id=${click_id}`
+        : "");
 
     return res.redirect(finalUrl);
   } catch (err) {
     console.error("CLICK ERROR:", err);
-    return res.redirect("https://example.com");
+    return res.redirect(DEFAULT_FALLBACK_URL);
   }
 }
 
@@ -311,8 +328,15 @@ router.get("/meta", async (req, res) => {
     const { pub_id } = req.query;
 
     const q = `
-      SELECT id AS tracking_link_id, pub_code, publisher_id, publisher_name,
-             geo, carrier, type, tracking_url, status
+      SELECT id AS tracking_link_id,
+             pub_code,
+             publisher_id,
+             publisher_name,
+             geo,
+             carrier,
+             type,
+             tracking_url,
+             status
       FROM publisher_tracking_links
       WHERE pub_code = $1
       ORDER BY id ASC
@@ -376,7 +400,12 @@ router.get("/rules", async (req, res) => {
   try {
     const { pub_id } = req.query;
 
-    const q = `SELECT * FROM traffic_rules WHERE pub_id=$1 ORDER BY id ASC`;
+    const q = `
+      SELECT *
+      FROM traffic_rules
+      WHERE pub_id = $1
+      ORDER BY id ASC
+    `;
     const { rows } = await pool.query(q, [pub_id]);
     res.json(rows);
   } catch (err) {
@@ -442,6 +471,7 @@ router.get("/overview", async (req, res) => {
         weight,
         status
       FROM traffic_rules
+      WHERE status = 'active'
       ORDER BY pub_id ASC, id ASC
     `);
 
