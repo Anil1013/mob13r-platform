@@ -20,9 +20,21 @@ export default function TrafficDistribution() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [editOfferLabel, setEditOfferLabel] = useState("");
 
   const [overview, setOverview] = useState([]);
   const [search, setSearch] = useState("");
+
+  /* --------------------------
+      DERIVED
+  -------------------------- */
+
+  // Current selected tracking row (for geo/carrier)
+  const selectedTrack = useMemo(
+    () =>
+      meta.find((m) => m.tracking_link_id === selectedTracking) || null,
+    [meta, selectedTracking]
+  );
 
   /* --------------------------
       LOADERS
@@ -52,7 +64,10 @@ export default function TrafficDistribution() {
           pub_id: f.pub_code,
           publisher_id: f.publisher_id,
           publisher_name: f.publisher_name,
-          combos: rows.map((x) => `${x.geo}/${x.carrier}`).join(", "),
+          combos: rows
+            .map((x) => `${x.geo}/${x.carrier}`)
+            .filter(Boolean)
+            .join(", "),
         });
 
         await loadRules(f.pub_code);
@@ -78,7 +93,9 @@ export default function TrafficDistribution() {
       .join(",");
 
     try {
-      const res = await apiClient.get(`/distribution/offers${exclude ? `?exclude=${exclude}` : ""}`);
+      const res = await apiClient.get(
+        `/distribution/offers${exclude ? `?exclude=${exclude}` : ""}`
+      );
       setOffers(res.data || []);
     } catch {
       setOffers([]);
@@ -97,7 +114,9 @@ export default function TrafficDistribution() {
   const loadRemaining = async (pub, tracking) => {
     try {
       const res = await apiClient.get(
-        `/distribution/rules/remaining?pub_id=${pub}${tracking ? `&tracking_link_id=${tracking}` : ""}`
+        `/distribution/rules/remaining?pub_id=${pub}${
+          tracking ? `&tracking_link_id=${tracking}` : ""
+        }`
       );
       setRemaining(res.data?.remaining ?? 100);
     } catch {
@@ -118,6 +137,7 @@ export default function TrafficDistribution() {
       loadOffers(selectedTracking);
       loadRemaining(publisher.pub_id, selectedTracking);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTracking, rules]);
 
   /* --------------------------
@@ -129,37 +149,72 @@ export default function TrafficDistribution() {
     setWeight(100);
     setIsEditing(false);
     setEditId(null);
+    setEditOfferLabel("");
   };
 
   const addOrUpdateRule = async () => {
     if (!publisher) return alert("Load publisher first");
     if (!selectedTracking) return alert("Select tracking");
-    if (!offerId) return alert("Select offer");
 
-    const track = meta.find((m) => m.tracking_link_id === selectedTracking);
-    const offer = offers.find((o) => o.id === offerId) || rules.find((x) => x.id === editId);
-
-    const payload = {
-      pub_id: publisher.pub_id,
-      publisher_id: publisher.publisher_id,
-      publisher_name: publisher.publisher_name,
-      tracking_link_id: selectedTracking,
-      geo: track.geo,
-      carrier: track.carrier,
-      offer_id: offer.id,
-      offer_code: offer.offer_id,
-      offer_name: offer.offer_name,
-      advertiser_name: offer.advertiser_name,
-      redirect_url: offer.tracking_url,
-      type: offer.type,
-      weight: Number(weight),
-      created_by: 1,
-    };
+    // track row for geo/carrier
+    const track =
+      meta.find((m) => m.tracking_link_id === selectedTracking) || null;
 
     try {
       if (isEditing && editId) {
+        // ---------- UPDATE EXISTING RULE ----------
+        const existingRule = rules.find((r) => r.id === editId);
+        if (!existingRule) {
+          alert("Rule not found");
+          return;
+        }
+
+        const payload = {
+          pub_id: existingRule.pub_id,
+          publisher_id: publisher.publisher_id,
+          publisher_name: publisher.publisher_name,
+          tracking_link_id: existingRule.tracking_link_id,
+          geo: existingRule.geo,
+          carrier: existingRule.carrier,
+          // IMPORTANT: use offer_id from rule (not rule.id)
+          offer_id: existingRule.offer_id,
+          offer_code: existingRule.offer_code,
+          offer_name: existingRule.offer_name,
+          advertiser_name: existingRule.advertiser_name,
+          redirect_url: existingRule.redirect_url,
+          type: existingRule.type,
+          weight: Number(weight),
+          status: existingRule.status,
+          created_by: 1,
+        };
+
         await apiClient.put(`/distribution/rules/${editId}`, payload);
       } else {
+        // ---------- CREATE NEW RULE ----------
+        if (!offerId) return alert("Select offer");
+        const offer = offers.find((o) => o.id === offerId);
+        if (!offer) {
+          alert("Offer not found");
+          return;
+        }
+
+        const payload = {
+          pub_id: publisher.pub_id,
+          publisher_id: publisher.publisher_id,
+          publisher_name: publisher.publisher_name,
+          tracking_link_id: selectedTracking,
+          geo: track?.geo,
+          carrier: track?.carrier,
+          offer_id: offer.id, // offers table ID
+          offer_code: offer.offer_id, // OFF01 / OFF02...
+          offer_name: offer.offer_name,
+          advertiser_name: offer.advertiser_name,
+          redirect_url: offer.tracking_url,
+          type: offer.type,
+          weight: Number(weight),
+          created_by: 1,
+        };
+
         await apiClient.post("/distribution/rules", payload);
       }
 
@@ -169,7 +224,18 @@ export default function TrafficDistribution() {
       resetForm();
     } catch (err) {
       console.error(err);
-      alert("Failed to save");
+
+      // nicer duplicate error
+      const status = err?.response?.status;
+      const code = err?.response?.data?.error;
+
+      if (status === 409 && code === "duplicate_offer_for_pub") {
+        alert(
+          `Rule already exists for: ${publisher.pub_id} | ${publisher.publisher_name}`
+        );
+      } else {
+        alert("Failed to save rule");
+      }
     }
   };
 
@@ -179,14 +245,21 @@ export default function TrafficDistribution() {
     setSelectedTracking(r.tracking_link_id);
     setOfferId(r.offer_id);
     setWeight(r.weight);
+    setEditOfferLabel(
+      `${r.offer_code || ""} — ${r.offer_name || ""}${
+        r.advertiser_name ? ` — ${r.advertiser_name}` : ""
+      }`
+    );
   };
 
   const removeRule = async (id) => {
     if (!window.confirm("Delete rule?")) return;
     try {
       await apiClient.delete(`/distribution/rules/${id}`);
-      await loadRules(publisher.pub_id);
-      await loadRemaining(publisher.pub_id, selectedTracking);
+      if (publisher?.pub_id) {
+        await loadRules(publisher.pub_id);
+        await loadRemaining(publisher.pub_id, selectedTracking);
+      }
       loadOverview();
     } catch {
       alert("Failed to delete");
@@ -194,27 +267,34 @@ export default function TrafficDistribution() {
   };
 
   /* --------------------------
-      SEARCH FILTER
+      SEARCH FILTER (GLOBAL OVERVIEW)
   -------------------------- */
 
   const filteredOverview = useMemo(() => {
     if (!search) return overview;
     const q = search.toLowerCase();
 
-    return overview.filter(
-      (r) =>
-        r.pub_id.toLowerCase().includes(q) ||
+    return overview.filter((r) => {
+      return (
+        r.pub_id?.toLowerCase().includes(q) ||
+        r.publisher_name?.toLowerCase().includes(q) ||
         r.offer_code?.toLowerCase().includes(q) ||
         r.offer_name?.toLowerCase().includes(q) ||
-        r.advertiser_name?.toLowerCase().includes(q)
-    );
+        r.advertiser_name?.toLowerCase().includes(q) ||
+        r.geo?.toLowerCase().includes(q) ||
+        r.carrier?.toLowerCase().includes(q)
+      );
+    });
   }, [overview, search]);
 
   /* --------------------------
       PUBLISHER CLICK URL
   -------------------------- */
   const buildPubUrl = (pub, geo, carrier, click = "{click_id}") => {
-    const backend = window.location.origin.replace("dashboard.", "backend.");
+    const origin = window.location.origin;
+    const backend = origin.includes("dashboard.")
+      ? origin.replace("dashboard.", "backend.")
+      : origin.replace("://", "://backend.");
     return `${backend}/click?pub_id=${pub}&geo=${geo}&carrier=${carrier}&click_id=${click}`;
   };
 
@@ -226,31 +306,48 @@ export default function TrafficDistribution() {
       <h1 className="text-xl font-bold mb-4">Traffic Distribution</h1>
 
       {/* PUB INPUT */}
-      <div className="flex gap-3 mb-4">
+      <div className="flex flex-wrap gap-3 mb-4">
         <input
           value={pubCode}
           onChange={(e) => setPubCode(e.target.value.toUpperCase())}
           className="border p-2 rounded"
           placeholder="PUB03"
         />
-        <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={loadMeta}>
+        <button
+          className="bg-blue-600 text-white px-4 py-2 rounded"
+          onClick={loadMeta}
+        >
           Load
         </button>
-        <button className="bg-gray-700 text-white px-4 py-2 rounded" onClick={loadOverview}>
+        <button
+          className="bg-gray-700 text-white px-4 py-2 rounded"
+          onClick={loadOverview}
+        >
           Refresh Overview
         </button>
       </div>
 
       {/* Publisher Info */}
       {publisher && (
-        <div className="bg-gray-100 p-3 rounded mb-5">
-          <div><b>PUB:</b> {publisher.pub_id}</div>
-          <div><b>Publisher:</b> {publisher.publisher_name}</div>
-          <div><b>Combos:</b> {publisher.combos}</div>
-          <div><b>Remaining:</b> {remaining}%</div>
-          <div className="text-xs mt-2 font-mono bg-white p-2">
-            {buildPubUrl(publisher.pub_id, meta[0].geo, meta[0].carrier)}
+        <div className="bg-gray-100 p-3 rounded mb-5 text-sm">
+          <div>
+            <b>PUB:</b> {publisher.pub_id}
           </div>
+          <div>
+            <b>Publisher:</b> {publisher.publisher_name}
+          </div>
+          <div>
+            <b>Combos:</b> {publisher.combos || "-"}
+          </div>
+          <div>
+            <b>Remaining:</b> {remaining}%
+          </div>
+
+          {meta[0] && (
+            <div className="text-xs mt-2 font-mono bg-white p-2 rounded">
+              {buildPubUrl(publisher.pub_id, meta[0].geo, meta[0].carrier)}
+            </div>
+          )}
         </div>
       )}
 
@@ -259,7 +356,8 @@ export default function TrafficDistribution() {
         <div className="bg-white p-4 shadow rounded mb-6">
           <h2 className="font-semibold mb-2">Add Rule</h2>
 
-          <div className="flex gap-3 items-center">
+          <div className="flex flex-wrap gap-3 items-center">
+            {/* GEO/CARRIER COMBO SELECT */}
             <select
               value={selectedTracking}
               onChange={(e) => setSelectedTracking(Number(e.target.value))}
@@ -272,19 +370,25 @@ export default function TrafficDistribution() {
               ))}
             </select>
 
+            {/* OFFER SELECT */}
             <select
               value={offerId}
               onChange={(e) => setOfferId(Number(e.target.value))}
-              className="border p-2 rounded"
+              className="border p-2 rounded min-w-[260px]"
             >
               <option value="">Select Offer</option>
               {offers.map((o) => (
                 <option key={o.id} value={o.id}>
-                  {o.offer_id} — {o.offer_name} ({o.advertiser_name})
+                  {/* Offer Code — Offer Name — Advertiser — Geo/Carrier */}
+                  {o.offer_id} — {o.offer_name} — {o.advertiser_name}
+                  {selectedTrack
+                    ? ` — ${selectedTrack.geo}/${selectedTrack.carrier}`
+                    : ""}
                 </option>
               ))}
             </select>
 
+            {/* WEIGHT */}
             <input
               value={weight}
               onChange={(e) => setWeight(Number(e.target.value))}
@@ -294,7 +398,10 @@ export default function TrafficDistribution() {
               className="border p-2 rounded w-20"
             />
 
-            <button className="bg-green-600 text-white px-4 py-2 rounded" onClick={addOrUpdateRule}>
+            <button
+              className="bg-green-600 text-white px-4 py-2 rounded"
+              onClick={addOrUpdateRule}
+            >
               Add
             </button>
           </div>
@@ -306,8 +413,12 @@ export default function TrafficDistribution() {
         <div className="bg-yellow-50 p-4 rounded shadow mb-6">
           <h2 className="font-semibold mb-2">Edit Rule</h2>
 
-          <div className="flex gap-3 items-center">
-            <select value={selectedTracking} disabled className="border p-2 rounded bg-gray-200">
+          <div className="flex flex-wrap gap-3 items-center">
+            <select
+              value={selectedTracking}
+              disabled
+              className="border p-2 rounded bg-gray-200"
+            >
               {meta.map((m) => (
                 <option key={m.tracking_link_id} value={m.tracking_link_id}>
                   {m.geo}/{m.carrier}
@@ -315,17 +426,14 @@ export default function TrafficDistribution() {
               ))}
             </select>
 
-            {/* FIXED LABEL HERE */}
-            <select disabled className="border p-2 rounded bg-gray-200 min-w-[260px]">
-              <option>
-                {(() => {
-                  const o =
-                    offers.find((x) => x.id === offerId) ||
-                    rules.find((x) => x.offer_id === offerId);
-
-                  if (!o) return offerId;
-                  return `${o.offer_id} — ${o.offer_name} (${o.advertiser_name})`;
-                })()}
+            {/* Disabled OFFER select but with proper label (OFF02, etc.) */}
+            <select
+              value={offerId}
+              disabled
+              className="border p-2 rounded bg-gray-200 min-w-[260px]"
+            >
+              <option value={offerId}>
+                {editOfferLabel || `ID ${offerId}`}
               </option>
             </select>
 
@@ -338,7 +446,10 @@ export default function TrafficDistribution() {
               className="border p-2 rounded w-20"
             />
 
-            <button className="bg-green-600 text-white px-4 py-2 rounded" onClick={addOrUpdateRule}>
+            <button
+              className="bg-green-600 text-white px-4 py-2 rounded"
+              onClick={addOrUpdateRule}
+            >
               Update
             </button>
 
@@ -356,18 +467,19 @@ export default function TrafficDistribution() {
           <table className="w-full bg-white text-sm border">
             <thead className="bg-gray-100">
               <tr>
-                <th className="p-2">Offer</th>
-                <th className="p-2">Geo</th>
-                <th className="p-2">Carrier</th>
-                <th className="p-2">Weight</th>
-                <th className="p-2">Actions</th>
+                <th className="p-2 text-left">Offer</th>
+                <th className="p-2 text-left">Geo</th>
+                <th className="p-2 text-left">Carrier</th>
+                <th className="p-2 text-left">Weight</th>
+                <th className="p-2 text-left">Actions</th>
               </tr>
             </thead>
             <tbody>
               {rules.map((r) => (
                 <tr key={r.id} className="border-t">
                   <td className="p-2">
-                    {r.offer_code} — {r.offer_name} ({r.advertiser_name})
+                    {r.offer_code} — {r.offer_name}
+                    {r.advertiser_name ? ` — ${r.advertiser_name}` : ""}
                   </td>
                   <td className="p-2">{r.geo}</td>
                   <td className="p-2">{r.carrier}</td>
@@ -388,6 +500,14 @@ export default function TrafficDistribution() {
                   </td>
                 </tr>
               ))}
+
+              {!rules.length && (
+                <tr>
+                  <td className="p-2 text-center text-gray-500" colSpan={5}>
+                    No rules yet
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -400,43 +520,50 @@ export default function TrafficDistribution() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by publisher, offer, advertiser, geo, carrier..."
+          placeholder="Search by PUB, Publisher, Offer, Advertiser, Geo, Carrier..."
           className="border p-2 rounded w-full mb-3"
         />
 
-        <table className="w-full bg-white text-xs border">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="p-2">PUB</th>
-              <th className="p-2">Publisher</th>
-              <th className="p-2">Offer Code</th>
-              <th className="p-2">Offer Name</th>
-              <th className="p-2">Advertiser</th>
-              <th className="p-2">Geo</th>
-              <th className="p-2">Carrier</th>
-              <th className="p-2">Weight</th>
-              <th className="p-2">Sample URL</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {filteredOverview.map((r) => (
-              <tr key={r.id} className="border-t">
-                <td className="p-2">{r.pub_id}</td>
-                <td className="p-2">{r.publisher_name}</td>
-                <td className="p-2">{r.offer_code}</td>
-                <td className="p-2">{r.offer_name}</td>
-                <td className="p-2">{r.advertiser_name}</td>
-                <td className="p-2">{r.geo}</td>
-                <td className="p-2">{r.carrier}</td>
-                <td className="p-2">{r.weight}%</td>
-                <td className="p-2 font-mono break-all">
-                  {buildPubUrl(r.pub_id, r.geo, r.carrier)}
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full bg-white text-xs border">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="p-2 text-left">PUB</th>
+                <th className="p-2 text-left">Publisher</th>
+                <th className="p-2 text-left">Offer Code</th>
+                <th className="p-2 text-left">Offer Name</th>
+                <th className="p-2 text-left">Advertiser</th>
+                <th className="p-2 text-left">Geo</th>
+                <th className="p-2 text-left">Carrier</th>
+                <th className="p-2 text-left">Sample URL</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredOverview.map((r) => (
+                <tr key={r.id} className="border-t">
+                  <td className="p-2">{r.pub_id}</td>
+                  <td className="p-2">{r.publisher_name}</td>
+                  <td className="p-2">{r.offer_code}</td>
+                  <td className="p-2">{r.offer_name}</td>
+                  <td className="p-2">{r.advertiser_name}</td>
+                  <td className="p-2">{r.geo}</td>
+                  <td className="p-2">{r.carrier}</td>
+                  <td className="p-2 font-mono break-all">
+                    {buildPubUrl(r.pub_id, r.geo, r.carrier)}
+                  </td>
+                </tr>
+              ))}
+
+              {!filteredOverview.length && (
+                <tr>
+                  <td className="p-2 text-center text-gray-500" colSpan={8}>
+                    No rules found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
