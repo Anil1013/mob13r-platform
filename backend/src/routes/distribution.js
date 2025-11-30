@@ -4,23 +4,19 @@ import authJWT from "../middleware/authJWT.js";
 
 const router = express.Router();
 
-/* ======================================================================
-    1) META API 
-    FETCH: publisher_name, geo, carrier, tracking urls (from tracking table)
-====================================================================== */
+/* ============================================================
+   GET META FROM TRACKING TABLE
+============================================================ */
 router.get("/meta", authJWT, async (req, res) => {
   try {
     const { pub_id } = req.query;
 
-    if (!pub_id) {
-      return res.status(400).json({ success: false, message: "pub_id required" });
-    }
+    if (!pub_id)
+      return res.json({ success: false, message: "pub_id required" });
 
-    // Fetch tracking rows for this publisher
-    const trackRes = await pool.query(
-      `
+    const q = `
       SELECT 
-        tracking_link_id,
+        id,
         pub_id,
         publisher_name,
         geo,
@@ -29,52 +25,48 @@ router.get("/meta", authJWT, async (req, res) => {
       FROM tracking
       WHERE pub_id = $1
       ORDER BY id DESC
-      `,
-      [pub_id]
-    );
+    `;
 
-    if (trackRes.rows.length === 0) {
-      return res.json({ success: true, meta: [] });
-    }
+    const track = await pool.query(q, [pub_id]);
 
-    res.json({
+    return res.json({
       success: true,
-      meta: trackRes.rows,
+      meta: track.rows,
     });
 
-  } catch (err) {
-    console.error("META ERROR:", err);
-    res.status(500).json({ success: false, message: "Server Error" });
+  } catch (e) {
+    console.error("META ERROR:", e);
+    return res.status(500).json({ success: false });
   }
 });
 
-/* ======================================================================
-    2) GET RULES FOR PUB_ID (traffic_rules)
-====================================================================== */
+/* ============================================================
+   GET TRAFFIC RULES
+============================================================ */
 router.get("/rules", authJWT, async (req, res) => {
   try {
     const { pub_id } = req.query;
 
-    const rules = await pool.query(
-      `
+    const q = `
       SELECT *
       FROM traffic_rules
       WHERE pub_id = $1
       ORDER BY weight DESC, id DESC
-      `,
-      [pub_id]
-    );
+    `;
 
-    res.json({ success: true, rules: rules.rows });
-  } catch (err) {
-    console.error("RULES FETCH ERROR:", err);
-    res.status(500).json({ success: false, message: "Server Error" });
+    const rules = await pool.query(q, [pub_id]);
+
+    return res.json({ success: true, rules: rules.rows });
+
+  } catch (e) {
+    console.error("RULES ERROR:", e);
+    return res.status(500).json({ success: false });
   }
 });
 
-/* ======================================================================
-    3) CREATE RULE (traffic_rules)
-====================================================================== */
+/* ============================================================
+   CREATE RULE
+============================================================ */
 router.post("/rules", authJWT, async (req, res) => {
   try {
     const {
@@ -89,158 +81,124 @@ router.post("/rules", authJWT, async (req, res) => {
       redirect_url,
       type,
       weight,
-      status,
+      status
     } = req.body;
 
-    const result = await pool.query(
-      `
+    const q = `
       INSERT INTO traffic_rules (
-        pub_id, publisher_name, tracking_link_id, geo, carrier,
-        offer_id, offer_name, advertiser_name, redirect_url,
-        type, weight, status
+        pub_id, publisher_name, tracking_link_id,
+        geo, carrier, offer_id, offer_name,
+        advertiser_name, redirect_url, type, weight, status
       )
       VALUES (
-        $1, $2, $3, $4, $5,
-        $6, $7, $8, $9,
-        $10, $11, $12
+        $1,$2,$3,
+        $4,$5,$6,$7,
+        $8,$9,$10,$11,$12
       )
       RETURNING *
-      `,
-      [
-        pub_id,
-        publisher_name,
-        tracking_link_id,
-        geo,
-        carrier,
-        offer_id,
-        offer_name,
-        advertiser_name,
-        redirect_url,
-        type,
-        weight,
-        status,
-      ]
-    );
+    `;
 
-    res.json({ success: true, rule: result.rows[0] });
-  } catch (err) {
-    console.error("RULE CREATE ERROR:", err);
-    res.status(500).json({ success: false, message: "Insert failed" });
+    const r = await pool.query(q, [
+      pub_id, publisher_name, tracking_link_id,
+      geo, carrier, offer_id, offer_name,
+      advertiser_name, redirect_url, type, weight, status
+    ]);
+
+    return res.json({ success: true, rule: r.rows[0] });
+
+  } catch (e) {
+    console.error("CREATE RULE ERROR:", e);
+    return res.status(500).json({ success: false });
   }
 });
 
-/* ======================================================================
-    4) UPDATE RULE
-====================================================================== */
+/* ============================================================
+   UPDATE RULE
+============================================================ */
 router.put("/rules/:id", authJWT, async (req, res) => {
   try {
-    const { id } = req.params;
+    const ruleId = req.params.id;
 
-    const fields = [
+    const allowed = [
       "geo", "carrier", "offer_id", "offer_name",
-      "advertiser_name", "redirect_url", "type", "weight", "status"
+      "advertiser_name", "redirect_url",
+      "type", "weight", "status"
     ];
 
     const updates = [];
     const values = [];
-    let index = 1;
+    let i = 1;
 
-    for (let field of fields) {
-      if (req.body[field] !== undefined) {
-        updates.push(`${field} = $${index}`);
-        values.push(req.body[field]);
-        index++;
+    for (const f of allowed) {
+      if (req.body[f] !== undefined) {
+        updates.push(`${f} = $${i}`);
+        values.push(req.body[f]);
+        i++;
       }
     }
 
-    values.push(id);
+    values.push(ruleId);
 
-    const updated = await pool.query(
-      `
+    const q = `
       UPDATE traffic_rules
       SET ${updates.join(", ")}
-      WHERE id = $${index}
+      WHERE id = $${i}
       RETURNING *
-      `,
-      values
-    );
+    `;
 
-    res.json({ success: true, rule: updated.rows[0] });
-  } catch (err) {
-    console.error("RULE UPDATE ERROR:", err);
-    res.status(500).json({ success: false });
+    const r = await pool.query(q, values);
+
+    return res.json({ success: true, rule: r.rows[0] });
+
+  } catch (e) {
+    console.error("UPDATE RULE ERROR:", e);
+    return res.status(500).json({ success: false });
   }
 });
 
-/* ======================================================================
-    5) DELETE RULE
-====================================================================== */
+/* ============================================================
+   DELETE RULE
+============================================================ */
 router.delete("/rules/:id", authJWT, async (req, res) => {
   try {
-    const { id } = req.params;
+    const ruleId = req.params.id;
 
-    await pool.query(`DELETE FROM traffic_rules WHERE id = $1`, [id]);
+    await pool.query(`DELETE FROM traffic_rules WHERE id = $1`, [ruleId]);
 
-    res.json({ success: true, message: "Rule deleted" });
-  } catch (err) {
-    console.error("DELETE ERROR:", err);
-    res.status(500).json({ success: false });
+    return res.json({ success: true });
+
+  } catch (e) {
+    console.error("DELETE RULE ERROR:", e);
+    return res.status(500).json({ success: false });
   }
 });
 
-/* ======================================================================
-    6) REMAINING WEIGHT (max 100)
-====================================================================== */
-router.get("/rules/remaining", authJWT, async (req, res) => {
-  try {
-    const { pub_id } = req.query;
-
-    const used = await pool.query(
-      `
-      SELECT COALESCE(SUM(weight),0) AS total
-      FROM traffic_rules
-      WHERE pub_id = $1
-      `,
-      [pub_id]
-    );
-
-    const usedWeight = parseInt(used.rows[0].total);
-    const remaining = 100 - usedWeight;
-
-    res.json({ success: true, used: usedWeight, remaining });
-  } catch (err) {
-    console.error("WEIGHT ERROR:", err);
-    res.status(500).json({ success: false });
-  }
-});
-
-/* ======================================================================
-    7) OFFER LIST (fallback + active)
-    FILTER BY: geo + carrier + NOT already selected
-====================================================================== */
+/* ============================================================
+   GET ACTIVE OFFERS FOR DROPDOWN
+============================================================ */
 router.get("/offers", authJWT, async (req, res) => {
   try {
-    let { geo, carrier, exclude } = req.query;
+    const { geo, carrier } = req.query;
 
-    exclude = exclude ? exclude.split(",") : [];
-
-    const offers = await pool.query(
-      `
-      SELECT offer_id, advertiser_name, name AS offer_name, cap
+    const q = `
+      SELECT 
+        offer_id,
+        name AS offer_name,
+        advertiser_name
       FROM offers
       WHERE geo = $1
       AND carrier = $2
-      AND offer_id != ALL($3)
       AND status = 'active'
       ORDER BY id DESC
-      `,
-      [geo, carrier, exclude]
-    );
+    `;
 
-    res.json({ success: true, offers: offers.rows });
-  } catch (err) {
-    console.error("OFFERS ERROR:", err);
-    res.status(500).json({ success: false });
+    const offers = await pool.query(q, [geo, carrier]);
+
+    return res.json({ success: true, offers: offers.rows });
+
+  } catch (e) {
+    console.error("OFFERS ERROR:", e);
+    return res.status(500).json({ success: false });
   }
 });
 
