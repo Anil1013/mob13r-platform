@@ -9,12 +9,15 @@ export default function TrafficDistribution() {
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  /* -------------------------------
-        FETCH TRACKING LINKS
-  ------------------------------- */
+  /* -------------------------------------------
+        LOAD TRACKING LINKS (pub_id → pub_code)
+  ------------------------------------------- */
   const loadTrackingLinks = async () => {
     try {
-      const res = await apiClient.get(`/distribution/tracking-links?pub_id=${pubId}`);
+      const res = await apiClient.get(
+        `/distribution/tracking-links?pub_id=${pubId}`
+      );
+
       if (res.data.success) {
         setTrackingLinks(res.data.links);
       }
@@ -24,42 +27,55 @@ export default function TrafficDistribution() {
     }
   };
 
-  /* -------------------------------
-        FETCH META + RULES
-  ------------------------------- */
+  /* -------------------------------------------
+        LOAD META
+  ------------------------------------------- */
   const loadMeta = async () => {
     try {
       setLoading(true);
+
       const res = await apiClient.get(`/distribution/meta?pub_id=${pubId}`);
 
       if (res.data.success) {
-        const row = res.data.meta.find((x) => x.tracking_link_id === selectedLink);
-        setMeta(row || null);
+        const data = res.data.meta.find(
+          (x) => x.tracking_link_id === selectedLink
+        );
+        setMeta(data || null);
       }
     } catch (err) {
       console.error(err);
-      alert("Meta load error");
+      alert("Error loading meta");
     } finally {
       setLoading(false);
     }
   };
 
+  /* -------------------------------------------
+        LOAD RULES
+  ------------------------------------------- */
   const loadRules = async () => {
     try {
       const res = await apiClient.get(
         `/distribution/rules?pub_id=${pubId}&tracking_link_id=${selectedLink}`
       );
-      if (res.data.success) setRules(res.data.rules);
+
+      if (res.data.success) {
+        setRules(res.data.rules);
+      }
     } catch (err) {
       console.error(err);
-      alert("Rules load error");
+      alert("Error loading rules");
     }
   };
 
+  /* Auto-load tracking links when pubId changes */
   useEffect(() => {
-    if (pubId) loadTrackingLinks();
+    if (pubId.trim() !== "") {
+      loadTrackingLinks();
+    }
   }, [pubId]);
 
+  /* Auto-load meta + rules when link is selected */
   useEffect(() => {
     if (selectedLink) {
       loadMeta();
@@ -67,13 +83,15 @@ export default function TrafficDistribution() {
     }
   }, [selectedLink]);
 
-  /* -------------------------------
-        ADD NEW RULE
-  ------------------------------- */
+  /* -------------------------------------------
+        ADD RULE
+  ------------------------------------------- */
   const addRule = async () => {
     try {
       const offer_id = prompt("Enter Offer ID:");
       const weight = prompt("Enter Weight (%):");
+
+      if (!offer_id || !weight) return alert("Invalid input");
 
       const res = await apiClient.post("/distribution/rules", {
         pub_id: pubId,
@@ -83,7 +101,7 @@ export default function TrafficDistribution() {
       });
 
       if (res.data.success) {
-        alert("Rule Added");
+        alert("Rule added");
         loadRules();
       }
     } catch (err) {
@@ -92,21 +110,23 @@ export default function TrafficDistribution() {
     }
   };
 
-  /* -------------------------------
+  /* -------------------------------------------
         UPDATE RULE
-  ------------------------------- */
+  ------------------------------------------- */
   const updateRule = async (rule) => {
     try {
-      const newOffer = prompt("New Offer ID:", rule.offer_id);
-      const newWeight = prompt("New Weight:", rule.weight);
+      const offer_id = prompt("New Offer ID:", rule.offer_id);
+      const weight = prompt("New Weight (%):", rule.weight);
+
+      if (!offer_id || !weight) return alert("Invalid input");
 
       const res = await apiClient.put(`/distribution/rules/${rule.id}`, {
-        offer_id: newOffer,
-        weight: newWeight,
+        offer_id,
+        weight,
       });
 
       if (res.data.success) {
-        alert("Rule Updated");
+        alert("Rule updated");
         loadRules();
       }
     } catch (err) {
@@ -115,15 +135,18 @@ export default function TrafficDistribution() {
     }
   };
 
-  /* -------------------------------
+  /* -------------------------------------------
         DELETE RULE
-  ------------------------------- */
+  ------------------------------------------- */
   const deleteRule = async (id) => {
     try {
-      await apiClient.delete(`/distribution/rules/${id}`);
-      alert("Rule Deleted");
-      loadRules();
+      const res = await apiClient.delete(`/distribution/rules/${id}`);
+      if (res.data.success) {
+        alert("Rule deleted");
+        loadRules();
+      }
     } catch (err) {
+      console.error(err);
       alert("Delete failed");
     }
   };
@@ -132,18 +155,18 @@ export default function TrafficDistribution() {
     <div className="p-6">
       <h2 className="text-2xl font-bold mb-4">Traffic Distribution</h2>
 
-      {/* Publisher ID Input */}
+      {/* PUB ID INPUT */}
       <div className="mb-4">
         <label>PUB ID</label>
         <input
           className="border p-2 ml-2"
+          placeholder="PUB01"
           value={pubId}
           onChange={(e) => setPubId(e.target.value)}
-          placeholder="PUB01"
         />
       </div>
 
-      {/* Tracking Links */}
+      {/* TRACKING LINKS */}
       {trackingLinks.length > 0 && (
         <div className="mb-4">
           <label>Select Tracking Link</label>
@@ -154,28 +177,31 @@ export default function TrafficDistribution() {
             <option>Select...</option>
             {trackingLinks.map((t) => (
               <option key={t.tracking_link_id} value={t.tracking_link_id}>
-                {t.tracking_id} — {t.base_url}
+                {t.tracking_link_id} — {t.base_url}
               </option>
             ))}
           </select>
         </div>
       )}
 
-      {/* Meta Section */}
+      {/* META SECTION */}
       {selectedLink && meta && (
-        <div className="p-4 border rounded mb-6">
+        <div className="border p-4 mb-6 rounded">
           <h3 className="font-bold text-lg">Meta Info</h3>
           <p>Total Hit: {meta.total_hit}</p>
           <p>Remaining Hit: {meta.remaining_hit}</p>
         </div>
       )}
 
-      {/* Rules Section */}
+      {/* RULES SECTION */}
       {selectedLink && (
         <div>
           <div className="flex justify-between items-center mb-2">
-            <h3 className="font-bold text-lg">Rules</h3>
-            <button className="bg-blue-600 text-white px-4 py-2" onClick={addRule}>
+            <h3 className="text-lg font-bold">Rules</h3>
+            <button
+              className="bg-blue-600 text-white px-4 py-2"
+              onClick={addRule}
+            >
               + Add Rule
             </button>
           </div>
