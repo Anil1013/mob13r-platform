@@ -1,29 +1,32 @@
+// mob13r-platform/backend/src/routes/distribution.js
+
 import express from "express";
 import pool from "../db.js";
-import authJWT from "../middleware/authJWT.js"; // ✅ Correct middleware import
+import authJWT from "../middleware/authJWT.js";
 
 const router = express.Router();
 
-// -----------------------------------------------------
-//  GET META: Publisher details + Offers list
-// -----------------------------------------------------
+/* ======================================================
+   🟢 GET DISTRIBUTION META (Publisher + Offers)
+   ====================================================== */
 router.get("/meta", authJWT, async (req, res) => {
   try {
     const { pub_id } = req.query;
 
-    if (!pub_id) {
+    if (!pub_id || pub_id.trim() === "") {
       return res.status(400).json({ error: "pub_id is required" });
     }
 
-    // -----------------------------------------------
-    // 1) Get publisher metadata from publisher_tracking_links
-    //    (WE USE pub_code — not pub_id)
-    // -----------------------------------------------
-    const publisherQuery = `
-      SELECT 
+    /* ---------------------------------------------------------
+       FETCH PUBLISHER SIDE DATA FROM publisher_tracking_links
+       --------------------------------------------------------- */
+    const trackingQuery = `
+      SELECT
+        id AS tracking_link_id,
         pub_code,
+        publisher_id,
         publisher_name,
-        name AS offer_name,
+        name AS tracking_name,
         geo,
         carrier,
         type,
@@ -31,61 +34,146 @@ router.get("/meta", authJWT, async (req, res) => {
         cap_daily,
         cap_total,
         hold_percent,
-        landing_page
+        landing_page,
+        tracking_url
       FROM publisher_tracking_links
       WHERE pub_code = $1
     `;
 
-    const publisherResult = await pool.query(publisherQuery, [pub_id]);
+    const trackingRes = await pool.query(trackingQuery, [pub_id]);
 
-    // If no publisher found
-    if (publisherResult.rows.length === 0) {
-      return res.status(200).json({
-        publisher: null,
-        offers: [],
-      });
-    }
-
-    const publisherMeta = publisherResult.rows[0];
-
-    // -----------------------------------------------
-    // 2) Get ALL offers from offers table
-    // -----------------------------------------------
+    /* ---------------------------------------------------------
+       FETCH ADVERTISER SIDE OFFERS FROM offers TABLE
+       --------------------------------------------------------- */
     const offersQuery = `
-      SELECT 
-        id,
+      SELECT
         offer_id,
+        name AS offer_name,
         advertiser_id,
-        name,
-        country,
+        advertiser_name,
+        country AS geo,
         carrier,
-        type,
         payout,
         cap_daily,
         cap_total,
-        hold_percent,
-        status
+        status,
+        fallback_offer_id
       FROM offers
       ORDER BY id DESC
     `;
 
-    const offersResult = await pool.query(offersQuery);
+    const offersRes = await pool.query(offersQuery);
 
-    // -----------------------------------------------
-    // Response
-    // -----------------------------------------------
-    return res.status(200).json({
-      publisher: publisherMeta,
-      offers: offersResult.rows,
+    return res.json({
+      pub_code: pub_id,
+      tracking: trackingRes.rows,
+      offers: offersRes.rows,
     });
 
   } catch (err) {
     console.error("META ERROR:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: err.message });
   }
 });
 
-// -----------------------------------------------------
-// EXPORT ROUTER
-// -----------------------------------------------------
+/* ======================================================
+   🟡 GET ALL RULES FOR PUB + TRACKING LINK
+   ====================================================== */
+router.get("/rules", authJWT, async (req, res) => {
+  try {
+    const { pub_id, tracking_link_id } = req.query;
+
+    if (!pub_id || !tracking_link_id) {
+      return res.status(400).json({ error: "pub_id & tracking_link_id required" });
+    }
+
+    const ruleQuery = `
+      SELECT
+        r.id,
+        r.pub_code,
+        r.tracking_link_id,
+        r.offer_id,
+        r.weight,
+        o.name AS offer_name,
+        o.advertiser_name
+      FROM distribution_rules r
+      LEFT JOIN offers o ON o.offer_id = r.offer_id
+      WHERE r.pub_code = $1 AND r.tracking_link_id = $2
+      ORDER BY r.id ASC
+    `;
+
+    const rulesRes = await pool.query(ruleQuery, [pub_id, tracking_link_id]);
+
+    return res.json(rulesRes.rows);
+
+  } catch (err) {
+    console.error("RULE ERROR:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/* ======================================================
+   🟠 BULK UPDATE RULES
+   ====================================================== */
+router.post("/rules/bulk", authJWT, async (req, res) => {
+  const pub_code = req.body.pub_id;
+  const { tracking_link_id, rules } = req.body;
+
+  if (!pub_code || !tracking_link_id || !rules) {
+    return res.status(400).json({ error: "Invalid payload" });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    await client.query(
+      `DELETE FROM distribution_rules WHERE pub_code=$1 AND tracking_link_id=$2`,
+      [pub_code, tracking_link_id]
+    );
+
+    for (const r of rules) {
+      await client.query(
+        `
+          INSERT INTO distribution_rules
+          (pub_code, tracking_link_id, offer_id, weight)
+          VALUES ($1, $2, $3, $4)
+        `,
+        [pub_code, tracking_link_id, r.offer_id, r.weight]
+      );
+    }
+
+    await client.query("COMMIT");
+
+    return res.json({ message: "Rules updated successfully" });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("BULK RULE ERROR:", err);
+    return res.status(500).json({ error: err.message });
+
+  } finally {
+    client.release();
+  }
+});
+
+/* ======================================================
+   🔴 DELETE RULE
+   ====================================================== */
+router.delete("/rules/:id", authJWT, async (req, res) => {
+  try {
+    await pool.query(
+      `DELETE FROM distribution_rules WHERE id=$1`,
+      [req.params.id]
+    );
+
+    return res.json({ message: "Rule deleted" });
+
+  } catch (err) {
+    console.error("DELETE RULE ERROR:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
