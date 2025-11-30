@@ -1,7 +1,7 @@
 // src/routes/distribution.js
 import express from "express";
 import pool from "../db.js";
-import authenticateJWT from "../middleware/authMiddleware.js";
+import authJWT from "../middleware/authJWT.js";
 
 const router = express.Router();
 
