@@ -15,10 +15,10 @@ export default function TrafficDistribution() {
   ------------------------------- */
   const loadTrackingLinks = async () => {
     try {
-      const res = await apiClient.get(`/distribution/tracking-links?pub_id=${pubId}`);
-      if (res.data.success) {
-        setTrackingLinks(res.data.links);
-      }
+      // FIXED API
+      const res = await apiClient.get(`/distribution/meta?pub_id=${pubId}`);
+
+      setTrackingLinks(res.data); // backend returns array
     } catch (err) {
       console.error(err);
       toast.error("Error loading tracking links");
@@ -26,17 +26,16 @@ export default function TrafficDistribution() {
   };
 
   /* -------------------------------
-        FETCH META + RULES
+        FETCH META
   ------------------------------- */
   const loadMeta = async () => {
     try {
       setLoading(true);
+
       const res = await apiClient.get(`/distribution/meta?pub_id=${pubId}`);
 
-      if (res.data.success) {
-        const row = res.data.meta.find((x) => x.tracking_link_id === selectedLink);
-        setMeta(row || null);
-      }
+      const row = res.data.find((x) => x.tracking_link_id === selectedLink);
+      setMeta(row || null);
     } catch (err) {
       console.error(err);
       toast.error("Meta load error");
@@ -45,12 +44,17 @@ export default function TrafficDistribution() {
     }
   };
 
+  /* -------------------------------
+        FETCH RULES
+  ------------------------------- */
   const loadRules = async () => {
     try {
+      // FIXED API
       const res = await apiClient.get(
-        `/distribution/rules?pub_id=${pubId}&tracking_link_id=${selectedLink}`
+        `/distribution?tracking_link_id=${selectedLink}`
       );
-      if (res.data.success) setRules(res.data.rules);
+
+      setRules(res.data);
     } catch (err) {
       console.error(err);
       toast.error("Rules load error");
@@ -74,19 +78,20 @@ export default function TrafficDistribution() {
   const addRule = async () => {
     try {
       const offer_id = prompt("Enter Offer ID:");
-      const weight = prompt("Enter Weight (%):");
+      const percentage = prompt("Enter Weight (%):");
 
-      const res = await apiClient.post("/distribution/rules", {
-        pub_id: pubId,
+      // FIXED API
+      const res = await apiClient.post("/distribution", {
         tracking_link_id: selectedLink,
         offer_id,
-        weight,
+        geo: "ALL",
+        carrier: "ALL",
+        percentage,
+        is_fallback: false,
       });
 
-      if (res.data.success) {
-        toast.success("Rule Added");
-        loadRules();
-      }
+      toast.success("Rule Added");
+      loadRules();
     } catch (err) {
       console.error(err);
       toast.error("Add rule error");
@@ -99,17 +104,22 @@ export default function TrafficDistribution() {
   const updateRule = async (rule) => {
     try {
       const newOffer = prompt("New Offer ID:", rule.offer_id);
-      const newWeight = prompt("New Weight:", rule.weight);
+      const newWeight = prompt("New Percentage:", rule.percentage);
 
-      const res = await apiClient.put(`/distribution/rules/${rule.id}`, {
+      // FIXED API
+      await apiClient.put(`/distribution/${rule.id}`, {
         offer_id: newOffer,
-        weight: newWeight,
+        percentage: newWeight,
+        geo: rule.geo,
+        carrier: rule.carrier,
+        is_fallback: rule.is_fallback,
+        daily_cap: rule.daily_cap,
+        hourly_cap: rule.hourly_cap,
+        status: rule.status,
       });
 
-      if (res.data.success) {
-        toast.success("Rule Updated");
-        loadRules();
-      }
+      toast.success("Rule Updated");
+      loadRules();
     } catch (err) {
       console.error(err);
       toast.error("Update failed");
@@ -121,7 +131,7 @@ export default function TrafficDistribution() {
   ------------------------------- */
   const deleteRule = async (id) => {
     try {
-      await apiClient.delete(`/distribution/rules/${id}`);
+      await apiClient.delete(`/distribution/${id}`);
       toast.success("Rule Deleted");
       loadRules();
     } catch (err) {
@@ -155,7 +165,7 @@ export default function TrafficDistribution() {
             <option>Select...</option>
             {trackingLinks.map((t) => (
               <option key={t.tracking_link_id} value={t.tracking_link_id}>
-                {t.tracking_id} — {t.base_url}
+                {t.tracking_link_id} — {t.tracking_url}
               </option>
             ))}
           </select>
@@ -166,12 +176,11 @@ export default function TrafficDistribution() {
       {selectedLink && meta && (
         <div className="p-4 border rounded mb-6">
           <h3 className="font-bold text-lg">Meta Info</h3>
-          <p>Total Hit: {meta.total_hit}</p>
-          <p>Remaining Hit: {meta.remaining_hit}</p>
+          <p>Offer: {meta.offer_name}</p>
         </div>
       )}
 
-      {/* Rules Section */}
+      {/* Rules */}
       {selectedLink && (
         <div>
           <div className="flex justify-between items-center mb-2">
@@ -185,7 +194,7 @@ export default function TrafficDistribution() {
             <thead className="bg-gray-200">
               <tr>
                 <th className="p-2 border">Offer ID</th>
-                <th className="p-2 border">Weight</th>
+                <th className="p-2 border">Percentage</th>
                 <th className="p-2 border">Actions</th>
               </tr>
             </thead>
@@ -193,7 +202,7 @@ export default function TrafficDistribution() {
               {rules.map((rule) => (
                 <tr key={rule.id}>
                   <td className="p-2 border">{rule.offer_id}</td>
-                  <td className="p-2 border">{rule.weight}%</td>
+                  <td className="p-2 border">{rule.percentage}%</td>
                   <td className="p-2 border flex gap-2">
                     <button
                       className="bg-yellow-500 text-white px-3 py-1"
