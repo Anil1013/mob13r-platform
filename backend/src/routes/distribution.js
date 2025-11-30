@@ -43,7 +43,7 @@ router.get("/remaining", authJWT, async (req, res) => {
     }
 
     const query = `
-      SELECT 100 - COALESCE(SUM(percentage), 0) AS remainingPercentage
+      SELECT (100 - COALESCE(SUM(percentage), 0)) AS remaining
       FROM publisher_offer_distribution
       WHERE tracking_link_id = $1
         AND is_fallback = FALSE
@@ -52,7 +52,7 @@ router.get("/remaining", authJWT, async (req, res) => {
 
     const { rows } = await pool.query(query, [tracking_link_id]);
 
-    res.json({ remainingPercentage: rows[0].remainingpercentage });
+    res.json({ remainingPercentage: rows[0]?.remaining || 100 });
   } catch (err) {
     console.error("GET /api/distribution/remaining error:", err);
     res.status(500).json({ error: err.message });
@@ -76,21 +76,29 @@ router.post("/", authJWT, async (req, res) => {
     } = req.body;
 
     if (!tracking_link_id || !offer_id || !geo || !carrier) {
-      return res.status(400).json({ error: "tracking_link_id, offer_id, geo, carrier required" });
+      return res.status(400).json({
+        error: "tracking_link_id, offer_id, geo, carrier are required.",
+      });
     }
 
-    // Check remaining %
-    const rem = await pool.query(
-      `SELECT 100 - COALESCE(SUM(percentage),0) AS remain 
-       FROM publisher_offer_distribution 
-       WHERE tracking_link_id=$1 AND is_fallback=false AND status='active'`,
-      [tracking_link_id]
-    );
+    // Check remaining % if not fallback
+    if (!is_fallback) {
+      const remQuery = `
+        SELECT (100 - COALESCE(SUM(percentage), 0)) AS remaining
+        FROM publisher_offer_distribution
+        WHERE tracking_link_id = $1 
+          AND is_fallback = FALSE 
+          AND status = 'active'
+      `;
 
-    if (percentage > rem.rows[0].remain && !is_fallback) {
-      return res.status(400).json({
-        error: `Only ${rem.rows[0].remain}% remaining. Reduce percentage.`,
-      });
+      const remaining = await pool.query(remQuery, [tracking_link_id]);
+      const remain = Number(remaining.rows[0]?.remaining || 100);
+
+      if (percentage > remain) {
+        return res.status(400).json({
+          error: `Only ${remain}% remaining. Reduce percentage.`,
+        });
+      }
     }
 
     const insertQuery = `
@@ -106,7 +114,7 @@ router.post("/", authJWT, async (req, res) => {
       offer_id,
       geo,
       carrier,
-      percentage,
+      percentage || 0,
       is_fallback || false,
       daily_cap || 0,
       hourly_cap || 0,
@@ -158,7 +166,6 @@ router.put("/:id", authJWT, async (req, res) => {
     ];
 
     const { rows } = await pool.query(query, values);
-
     res.json(rows[0]);
   } catch (err) {
     console.error("PUT /api/distribution/:id error:", err);
@@ -167,7 +174,7 @@ router.put("/:id", authJWT, async (req, res) => {
 });
 
 /* ======================================================
-   🔴 DELETE DISTRIBUTION RULE (Soft Delete)
+   🔴 DELETE DISTRIBUTION RULE (SOFT DELETE)
    ====================================================== */
 router.delete("/:id", authJWT, async (req, res) => {
   try {
