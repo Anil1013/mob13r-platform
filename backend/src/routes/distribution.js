@@ -1,176 +1,104 @@
-// src/routes/distribution.js
+// mob13r-platform/backend/src/routes/distribution.js
+
 import express from "express";
 import pool from "../db.js";
 import authJWT from "../middleware/authJWT.js";
 
 const router = express.Router();
 
-/**
- * ============================
- *  ADMIN API (JWT PROTECTED)
- * ============================
- */
-
-/**
- * GET /api/distribution/meta?pub_id=PUB01
- * - Returns all distribution_meta rows for a publisher
- */
-router.get("/meta", authenticateJWT, async (req, res) => {
-  const { pub_id } = req.query;
-
-  if (!pub_id) {
-    return res.status(400).json({ message: "pub_id is required" });
-  }
-
+/* ============================================
+   GET META DETAILS FOR FRONTEND
+===============================================*/
+router.get("/meta", authJWT, async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `
-      SELECT
-        dm.id,
-        dm.pub_id,
-        dm.tracking_link_id,
-        dm.total_hit,
-        dm.remaining_hit,
-        dm.is_active,
-        dm.created_at,
-        dm.updated_at,
-        tl.geo,
-        tl.carrier,
-        tl.id AS tracking_id,
-        tl.name AS tracking_name
-      FROM distribution_meta dm
-      LEFT JOIN tracking_links tl
-        ON tl.id = dm.tracking_link_id
-      WHERE dm.pub_id = $1
-      ORDER BY dm.id ASC
-      `,
-      [pub_id]
-    );
+    const { pub_id } = req.query;
 
-    return res.json(rows);
-  } catch (err) {
-    console.error("GET /distribution/meta error:", err);
-    return res.status(500).json({ message: "Internal server error" });
-  }
-});
+    if (!pub_id) {
+      return res.status(400).json({ error: "pub_id is required" });
+    }
 
-/**
- * POST /api/distribution/meta
- * Body: { pub_id, tracking_link_id, total_hit, remaining_hit, is_active }
- * - Upsert single meta row for a publisher + tracking_link
- */
-router.post("/meta", authenticateJWT, async (req, res) => {
-  const {
-    pub_id,
-    tracking_link_id,
-    total_hit = 0,
-    remaining_hit = 0,
-    is_active = true,
-  } = req.body || {};
+    const publisherQuery = `
+      SELECT pub_id, publisher_name 
+      FROM publishers 
+      WHERE pub_id = $1
+    `;
 
-  if (!pub_id || !tracking_link_id) {
-    return res
-      .status(400)
-      .json({ message: "pub_id and tracking_link_id are required" });
-  }
+    const trackingQuery = `
+      SELECT id AS tracking_link_id, pub_id, geo, carrier, url 
+      FROM tracking 
+      WHERE pub_id = $1
+    `;
 
-  try {
-    const { rows } = await pool.query(
-      `
-      INSERT INTO distribution_meta (
-        pub_id,
-        tracking_link_id,
-        total_hit,
-        remaining_hit,
-        is_active
-      )
-      VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (pub_id, tracking_link_id)
-      DO UPDATE SET
-        total_hit = EXCLUDED.total_hit,
-        remaining_hit = EXCLUDED.remaining_hit,
-        is_active = EXCLUDED.is_active,
-        updated_at = now()
-      RETURNING *
-      `,
-      [pub_id, tracking_link_id, total_hit, remaining_hit, is_active]
-    );
+    const offerQuery = `
+      SELECT offer_id, name AS offer_name, advertiser_name, cap, geo, carrier 
+      FROM offers
+    `;
 
-    return res.json(rows[0]);
-  } catch (err) {
-    console.error("POST /distribution/meta error:", err);
-    return res.status(500).json({ message: "Internal server error" });
-  }
-});
+    const [publisherRes, trackingRes, offerRes] = await Promise.all([
+      pool.query(publisherQuery, [pub_id]),
+      pool.query(trackingQuery, [pub_id]),
+      pool.query(offerQuery),
+    ]);
 
-/**
- * GET /api/distribution/rules?pub_id=PUB01&tracking_link_id=3
- * - Returns rules with joined info for UI
- */
-router.get("/rules", authenticateJWT, async (req, res) => {
-  const { pub_id, tracking_link_id } = req.query;
-
-  if (!pub_id || !tracking_link_id) {
-    return res
-      .status(400)
-      .json({ message: "pub_id and tracking_link_id are required" });
-  }
-
-  try {
-    const { rows } = await pool.query(
-      `
-      SELECT
-        dr.id,
-        dr.pub_id,
-        dr.tracking_link_id,
-        dr.offer_id,
-        dr.weight,
-        dr.created_at,
-        dr.updated_at,
-        tl.geo,
-        tl.carrier,
-        p.name  AS publisher_name,
-        o.name  AS offer_name,
-        a.name  AS advertiser_name
-      FROM distribution_rules dr
-      LEFT JOIN tracking_links tl
-        ON tl.id = dr.tracking_link_id
-      LEFT JOIN publishers p
-        ON p.pub_id = dr.pub_id
-      LEFT JOIN offers o
-        ON o.offer_id = dr.offer_id
-      LEFT JOIN advertisers a
-        ON a.id = o.advertiser_id
-      WHERE dr.pub_id = $1
-        AND dr.tracking_link_id = $2
-      ORDER BY dr.id ASC
-      `,
-      [pub_id, tracking_link_id]
-    );
-
-    return res.json(rows);
-  } catch (err) {
-    console.error("GET /distribution/rules error:", err);
-    return res.status(500).json({ message: "Internal server error" });
-  }
-});
-
-/**
- * POST /api/distribution/rules/bulk
- * Body: {
- *   pub_id,
- *   tracking_link_id,
- *   rules: [{ offer_id, weight }]
- * }
- * - Replace existing rules for (pub_id, tracking_link_id) with new set
- */
-router.post("/rules/bulk", authenticateJWT, async (req, res) => {
-  const { pub_id, tracking_link_id, rules } = req.body || {};
-
-  if (!pub_id || !tracking_link_id || !Array.isArray(rules)) {
-    return res.status(400).json({
-      message: "pub_id, tracking_link_id and rules[] are required",
+    return res.json({
+      publisher: publisherRes.rows[0] || null,
+      tracking: trackingRes.rows,
+      offers: offerRes.rows,
     });
+
+  } catch (err) {
+    console.error("META ERROR:", err);
+    return res.status(500).json({ error: "meta failed" });
+  }
+});
+
+/* ============================================
+   GET DISTRIBUTION RULES (WEIGHTED)
+===============================================*/
+router.get("/rules", authJWT, async (req, res) => {
+  try {
+    const { pub_id, tracking_link_id } = req.query;
+
+    if (!pub_id || !tracking_link_id) {
+      return res.status(400).json({ error: "pub_id & tracking_link_id needed" });
+    }
+
+    const query = `
+      SELECT 
+        r.id,
+        r.pub_id,
+        r.tracking_link_id,
+        r.offer_id,
+        r.weight,
+        o.name AS offer_name,
+        o.advertiser_name,
+        t.geo,
+        t.carrier
+      FROM distribution_rules r
+      LEFT JOIN offers o ON o.offer_id = r.offer_id
+      LEFT JOIN tracking t ON t.id = r.tracking_link_id
+      WHERE r.pub_id = $1 AND r.tracking_link_id = $2
+      ORDER BY r.id ASC
+    `;
+
+    const rules = await pool.query(query, [pub_id, tracking_link_id]);
+
+    return res.json(rules.rows);
+
+  } catch (err) {
+    console.error("RULES ERROR:", err);
+    return res.status(500).json({ error: "rules failed" });
+  }
+});
+
+/* ============================================
+   BULK UPDATE RULES
+===============================================*/
+router.post("/rules/bulk", authJWT, async (req, res) => {
+  const { pub_id, tracking_link_id, rules } = req.body;
+
+  if (!pub_id || !tracking_link_id || !rules) {
+    return res.status(400).json({ error: "Invalid payload" });
   }
 
   const client = await pool.connect();
@@ -178,203 +106,121 @@ router.post("/rules/bulk", authenticateJWT, async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // Delete old rules
     await client.query(
-      "DELETE FROM distribution_rules WHERE pub_id = $1 AND tracking_link_id = $2",
+      `DELETE FROM distribution_rules WHERE pub_id=$1 AND tracking_link_id=$2`,
       [pub_id, tracking_link_id]
     );
 
-    // Insert new rules
-    for (const rule of rules) {
-      if (!rule.offer_id || typeof rule.weight !== "number") continue;
-
+    for (const r of rules) {
       await client.query(
         `
-        INSERT INTO distribution_rules (
-          pub_id,
-          tracking_link_id,
-          offer_id,
-          weight
-        )
+        INSERT INTO distribution_rules (pub_id, tracking_link_id, offer_id, weight)
         VALUES ($1, $2, $3, $4)
-        `,
-        [pub_id, tracking_link_id, rule.offer_id, rule.weight]
+      `,
+        [pub_id, tracking_link_id, r.offer_id, r.weight]
       );
     }
 
     await client.query("COMMIT");
 
     return res.json({ message: "Rules updated successfully" });
+
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("POST /distribution/rules/bulk error:", err);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("BULK RULE ERROR:", err);
+    return res.status(500).json({ error: "bulk rule fail" });
+
   } finally {
     client.release();
   }
 });
 
-/**
- * DELETE /api/distribution/rules/:id
- * - Delete a single rule row
- */
-router.delete("/rules/:id", authenticateJWT, async (req, res) => {
-  const { id } = req.params;
-
+/* ============================================
+   DELETE RULE
+===============================================*/
+router.delete("/rules/:id", authJWT, async (req, res) => {
   try {
-    await pool.query("DELETE FROM distribution_rules WHERE id = $1", [id]);
+    await pool.query(
+      `DELETE FROM distribution_rules WHERE id=$1`,
+      [req.params.id]
+    );
+
     return res.json({ message: "Rule deleted" });
+
   } catch (err) {
-    console.error("DELETE /distribution/rules/:id error:", err);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("DELETE RULE ERROR:", err);
+    return res.status(500).json({ error: "delete failed" });
   }
 });
 
-/**
- * ==============================================
- *  HELPER: PICK OFFER FOR CLICK DISTRIBUTION
- * ==============================================
- *
- * Yeh function click route se call karoge.
- *
- * Usage (example in your /click handler):
- *
- *   import { pickOfferForDistribution } from "./routes/distribution.js";
- *
- *   const choice = await pickOfferForDistribution({ pubId, geo, carrier });
- *   if (choice) {
- *      // distribution ke hisaab se offer choose ho gaya
- *      const { offerId, trackingLinkId, isFromDistribution } = choice;
- *      // yahan se redirect logic / tracking logic chalao
- *   } else {
- *      // KOI DISTRIBUTION MATCH NAHI → tumhara
- *      // existing fallback logic run hoga (offer table / traffic_rules ke hisaab se)
- *   }
- */
-
-export async function pickOfferForDistribution({
-  pubId,
-  geo,
-  carrier,
-  client = null,
-}) {
-  if (!pubId || !geo || !carrier) {
-    return null;
-  }
-
-  const db = client || pool;
-  let localClient = null;
-
+/* =====================================================
+   🧠 PICK OFFER FOR CLICK REDIRECTION (DISTRIBUTION LOGIC)
+=======================================================*/
+export async function pickOfferForDistribution({ pubId, geo, carrier }) {
   try {
-    // if no external transaction client provided, create one
-    if (!client) {
-      localClient = await db.connect();
-    }
-
-    const c = localClient || client;
-
-    // 1) Find tracking_link_id with active meta + remaining_hit > 0
-    const metaResult = await c.query(
+    const metaRes = await pool.query(
       `
-      SELECT
-        dm.id,
-        dm.tracking_link_id,
-        dm.remaining_hit,
-        dm.total_hit
-      FROM distribution_meta dm
-      JOIN tracking_links tl
-        ON tl.id = dm.tracking_link_id
-      WHERE dm.pub_id = $1
-        AND dm.is_active = true
-        AND dm.remaining_hit > 0
-        AND tl.geo = $2
-        AND tl.carrier = $3
-      ORDER BY dm.id ASC
+      SELECT m.id, m.pub_id, m.tracking_link_id, m.remaining_hit
+      FROM distribution_meta m
+      JOIN tracking t ON t.id = m.tracking_link_id
+      WHERE 
+        m.pub_id = $1 AND 
+        m.remaining_hit > 0 AND 
+        t.geo = $2 AND 
+        t.carrier = $3
       LIMIT 1
       `,
       [pubId, geo, carrier]
     );
 
-    if (metaResult.rows.length === 0) {
-      // No active distribution meta → let caller use normal fallback
-      return null;
-    }
+    if (!metaRes.rows.length) return null; // fallback
 
-    const metaRow = metaResult.rows[0];
-    const trackingLinkId = metaRow.tracking_link_id;
+    const meta = metaRes.rows[0];
 
-    // 2) Get rules for this pub_id + tracking_link_id
-    const rulesResult = await c.query(
-      `
-      SELECT offer_id, weight
-      FROM distribution_rules
-      WHERE pub_id = $1
-        AND tracking_link_id = $2
-      `,
-      [pubId, trackingLinkId]
+    const rulesRes = await pool.query(
+      `SELECT offer_id, weight FROM distribution_rules WHERE tracking_link_id=$1`,
+      [meta.tracking_link_id]
     );
 
-    const rules = rulesResult.rows || [];
-    if (!rules.length) {
-      // No rules configured → use normal fallback
-      return null;
-    }
+    if (!rulesRes.rows.length) return null;
 
-    // 3) Weighted random selection
-    const totalWeight = rules.reduce(
-      (sum, r) => sum + (Number(r.weight) || 0),
-      0
-    );
+    const rules = rulesRes.rows;
+    const totalWeight = rules.reduce((a, b) => a + Number(b.weight), 0);
 
-    if (totalWeight <= 0) {
-      // Invalid weights → fallback
-      return null;
-    }
-
-    const rnd = Math.random() * totalWeight;
+    const random = Math.random() * totalWeight;
     let cumulative = 0;
-    let selectedOfferId = null;
+
+    let selectedOffer = rules[0].offer_id;
 
     for (const r of rules) {
-      const w = Number(r.weight) || 0;
-      cumulative += w;
-      if (rnd <= cumulative) {
-        selectedOfferId = r.offer_id;
+      cumulative += Number(r.weight);
+      if (random <= cumulative) {
+        selectedOffer = r.offer_id;
         break;
       }
     }
 
-    if (!selectedOfferId) {
-      // safety fallback
-      selectedOfferId = rules[rules.length - 1].offer_id;
-    }
-
-    // 4) Update meta hits: total_hit++, remaining_hit--
-    await c.query(
+    await pool.query(
       `
-      UPDATE distribution_meta
-      SET
-        total_hit = total_hit + 1,
+      UPDATE distribution_meta 
+      SET 
         remaining_hit = GREATEST(remaining_hit - 1, 0),
+        total_hit = total_hit + 1,
         updated_at = now()
-      WHERE pub_id = $1
-        AND tracking_link_id = $2
-      `,
-      [pubId, trackingLinkId]
+      WHERE id=$1
+    `,
+      [meta.id]
     );
 
     return {
-      offerId: selectedOfferId,
-      trackingLinkId,
+      offerId: selectedOffer,
+      tracking_link_id: meta.tracking_link_id,
       isFromDistribution: true,
     };
+
   } catch (err) {
-    console.error("pickOfferForDistribution error:", err);
-    return null; // Any error → let normal fallback handle
-  } finally {
-    if (localClient) {
-      localClient.release();
-    }
+    console.error("DISTRIBUTION PICK ERROR:", err);
+    return null;
   }
 }
 
