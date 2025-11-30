@@ -13,6 +13,73 @@ const router = express.Router();
 const norm = (v) =>
   !v || v.trim() === "" ? "ALL" : v.trim().toUpperCase();
 
+// default required params (tracking ke liye)
+const DEFAULT_REQUIRED_PARAMS = {
+  click_id: false,
+  sub1: false,
+  sub2: false,
+  sub3: false,
+  sub4: false,
+  sub5: false,
+  msisdn: false,
+  ip: true,
+  ua: true,
+  device: false,
+};
+
+// tracking_url se query params nikal ke, defaults + DB value merge
+async function buildRequiredParams(row) {
+  let needsUpdate = false;
+
+  // DB se jo aaya
+  let params = row.required_params && typeof row.required_params === "object"
+    ? { ...row.required_params }
+    : {};
+
+  // defaults merge
+  for (const key of Object.keys(DEFAULT_REQUIRED_PARAMS)) {
+    if (!(key in params)) {
+      params[key] = DEFAULT_REQUIRED_PARAMS[key];
+      needsUpdate = true;
+    }
+  }
+
+  // tracking_url se auto-detect (agar query me param ka naam same hai)
+  try {
+    if (row.tracking_url) {
+      const parts = row.tracking_url.split("?");
+      if (parts[1]) {
+        const search = new URLSearchParams(parts[1]);
+        search.forEach((value, key) => {
+          if (key in params && params[key] === false) {
+            // agar URL me present hai to by default true kar do
+            params[key] = true;
+            needsUpdate = true;
+          }
+        });
+      }
+    }
+  } catch (e) {
+    console.error("buildRequiredParams parse error", e);
+  }
+
+  // agar kuch bhi change hua to DB update
+  if (needsUpdate) {
+    try {
+      await pool.query(
+        `UPDATE publisher_tracking_links
+         SET required_params = $1
+         WHERE id = $2`,
+        [params, row.id]
+      );
+    } catch (e) {
+      console.error("required_params DB update error", e);
+    }
+  }
+
+  return params;
+}
+
 // TOTAL WEIGHT CALCULATOR
 async function getTotalWeight(pubId, trackingLinkId, excludeId = null) {
   let params = [pubId, trackingLinkId];
@@ -97,7 +164,7 @@ router.get("/tracking-links", authJWT, async (req, res) => {
 
     const q = `
       SELECT
-        id AS tracking_link_id,
+        id,
         pub_code,
         publisher_id,
         publisher_name,
@@ -109,6 +176,7 @@ router.get("/tracking-links", authJWT, async (req, res) => {
         cap_daily,
         cap_total,
         tracking_url,
+        required_params,
         status
       FROM publisher_tracking_links
       WHERE pub_code = $1
@@ -117,24 +185,30 @@ router.get("/tracking-links", authJWT, async (req, res) => {
 
     const { rows } = await pool.query(q, [pub_id]);
 
-    const links = rows.map((r) => ({
-      tracking_link_id: r.tracking_link_id,
-      pub_code: r.pub_code,
-      publisher_id: r.publisher_id,
-      publisher_name: r.publisher_name,
-      name: r.name,
-      geo: r.geo,
-      carrier: r.carrier,
-      type: r.type,
-      payout: r.payout,
-      cap_daily: r.cap_daily,
-      cap_total: r.cap_total,
-      tracking_url: r.tracking_url,
-      status: r.status,
+    const links = [];
+    for (const r of rows) {
+      const requiredParams = await buildRequiredParams(r);
 
-      tracking_id: `${r.pub_code}-${r.geo}-${r.carrier}`,
-      base_url: r.tracking_url,
-    }));
+      links.push({
+        tracking_link_id: r.id,
+        pub_code: r.pub_code,
+        publisher_id: r.publisher_id,
+        publisher_name: r.publisher_name,
+        name: r.name,
+        geo: r.geo,
+        carrier: r.carrier,
+        type: r.type,
+        payout: r.payout,
+        cap_daily: r.cap_daily,
+        cap_total: r.cap_total,
+        tracking_url: r.tracking_url,
+        required_params: requiredParams,
+        status: r.status,
+
+        tracking_id: `${r.pub_code}-${r.geo}-${r.carrier}`,
+        base_url: r.tracking_url,
+      });
+    }
 
     res.json({ success: true, links });
   } catch (err) {
@@ -168,6 +242,7 @@ router.get("/meta", authJWT, async (req, res) => {
       return res.json({ success: false, error: "tracking_not_found" });
 
     const r = rows[0];
+    const requiredParams = await buildRequiredParams(r);
 
     const meta = {
       tracking_link_id: r.id,
@@ -175,6 +250,7 @@ router.get("/meta", authJWT, async (req, res) => {
       geo: r.geo,
       carrier: r.carrier,
       tracking_url: r.tracking_url,
+      required_params: requiredParams,
 
       total_hit: null,
       remaining_hit: null,
