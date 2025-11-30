@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import apiClient from "../api/apiClient";
-import { toast } from "react-toastify";
 
 export default function TrafficDistribution() {
   const [pubId, setPubId] = useState("");
@@ -15,49 +14,45 @@ export default function TrafficDistribution() {
   ------------------------------- */
   const loadTrackingLinks = async () => {
     try {
-      // FIXED API
-      const res = await apiClient.get(`/distribution/meta?pub_id=${pubId}`);
-
-      setTrackingLinks(res.data); // backend returns array
+      const res = await apiClient.get(`/distribution/tracking-links?pub_id=${pubId}`);
+      if (res.data.success) {
+        setTrackingLinks(res.data.links);
+      }
     } catch (err) {
       console.error(err);
-      toast.error("Error loading tracking links");
+      alert("Error loading tracking links");
     }
   };
 
   /* -------------------------------
-        FETCH META
+        FETCH META + RULES
   ------------------------------- */
   const loadMeta = async () => {
     try {
       setLoading(true);
-
       const res = await apiClient.get(`/distribution/meta?pub_id=${pubId}`);
 
-      const row = res.data.find((x) => x.tracking_link_id === selectedLink);
-      setMeta(row || null);
+      if (res.data.success) {
+        const row = res.data.meta.find((x) => x.tracking_link_id === selectedLink);
+        setMeta(row || null);
+      }
     } catch (err) {
       console.error(err);
-      toast.error("Meta load error");
+      alert("Meta load error");
     } finally {
       setLoading(false);
     }
   };
 
-  /* -------------------------------
-        FETCH RULES
-  ------------------------------- */
   const loadRules = async () => {
     try {
-      // FIXED API
       const res = await apiClient.get(
-        `/distribution?tracking_link_id=${selectedLink}`
+        `/distribution/rules?pub_id=${pubId}&tracking_link_id=${selectedLink}`
       );
-
-      setRules(res.data);
+      if (res.data.success) setRules(res.data.rules);
     } catch (err) {
       console.error(err);
-      toast.error("Rules load error");
+      alert("Rules load error");
     }
   };
 
@@ -78,23 +73,22 @@ export default function TrafficDistribution() {
   const addRule = async () => {
     try {
       const offer_id = prompt("Enter Offer ID:");
-      const percentage = prompt("Enter Weight (%):");
+      const weight = prompt("Enter Weight (%):");
 
-      // FIXED API
-      const res = await apiClient.post("/distribution", {
+      const res = await apiClient.post("/distribution/rules", {
+        pub_id: pubId,
         tracking_link_id: selectedLink,
         offer_id,
-        geo: "ALL",
-        carrier: "ALL",
-        percentage,
-        is_fallback: false,
+        weight,
       });
 
-      toast.success("Rule Added");
-      loadRules();
+      if (res.data.success) {
+        alert("Rule Added");
+        loadRules();
+      }
     } catch (err) {
       console.error(err);
-      toast.error("Add rule error");
+      alert("Add rule error");
     }
   };
 
@@ -104,25 +98,20 @@ export default function TrafficDistribution() {
   const updateRule = async (rule) => {
     try {
       const newOffer = prompt("New Offer ID:", rule.offer_id);
-      const newWeight = prompt("New Percentage:", rule.percentage);
+      const newWeight = prompt("New Weight:", rule.weight);
 
-      // FIXED API
-      await apiClient.put(`/distribution/${rule.id}`, {
+      const res = await apiClient.put(`/distribution/rules/${rule.id}`, {
         offer_id: newOffer,
-        percentage: newWeight,
-        geo: rule.geo,
-        carrier: rule.carrier,
-        is_fallback: rule.is_fallback,
-        daily_cap: rule.daily_cap,
-        hourly_cap: rule.hourly_cap,
-        status: rule.status,
+        weight: newWeight,
       });
 
-      toast.success("Rule Updated");
-      loadRules();
+      if (res.data.success) {
+        alert("Rule Updated");
+        loadRules();
+      }
     } catch (err) {
       console.error(err);
-      toast.error("Update failed");
+      alert("Update failed");
     }
   };
 
@@ -131,11 +120,11 @@ export default function TrafficDistribution() {
   ------------------------------- */
   const deleteRule = async (id) => {
     try {
-      await apiClient.delete(`/distribution/${id}`);
-      toast.success("Rule Deleted");
+      await apiClient.delete(`/distribution/rules/${id}`);
+      alert("Rule Deleted");
       loadRules();
     } catch (err) {
-      toast.error("Delete failed");
+      alert("Delete failed");
     }
   };
 
@@ -165,7 +154,7 @@ export default function TrafficDistribution() {
             <option>Select...</option>
             {trackingLinks.map((t) => (
               <option key={t.tracking_link_id} value={t.tracking_link_id}>
-                {t.tracking_link_id} — {t.tracking_url}
+                {t.tracking_id} — {t.base_url}
               </option>
             ))}
           </select>
@@ -176,11 +165,12 @@ export default function TrafficDistribution() {
       {selectedLink && meta && (
         <div className="p-4 border rounded mb-6">
           <h3 className="font-bold text-lg">Meta Info</h3>
-          <p>Offer: {meta.offer_name}</p>
+          <p>Total Hit: {meta.total_hit}</p>
+          <p>Remaining Hit: {meta.remaining_hit}</p>
         </div>
       )}
 
-      {/* Rules */}
+      {/* Rules Section */}
       {selectedLink && (
         <div>
           <div className="flex justify-between items-center mb-2">
@@ -194,7 +184,7 @@ export default function TrafficDistribution() {
             <thead className="bg-gray-200">
               <tr>
                 <th className="p-2 border">Offer ID</th>
-                <th className="p-2 border">Percentage</th>
+                <th className="p-2 border">Weight</th>
                 <th className="p-2 border">Actions</th>
               </tr>
             </thead>
@@ -202,7 +192,7 @@ export default function TrafficDistribution() {
               {rules.map((rule) => (
                 <tr key={rule.id}>
                   <td className="p-2 border">{rule.offer_id}</td>
-                  <td className="p-2 border">{rule.percentage}%</td>
+                  <td className="p-2 border">{rule.weight}%</td>
                   <td className="p-2 border flex gap-2">
                     <button
                       className="bg-yellow-500 text-white px-3 py-1"
