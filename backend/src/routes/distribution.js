@@ -52,7 +52,6 @@ async function buildRequiredParams(row) {
         const search = new URLSearchParams(parts[1]);
         search.forEach((value, key) => {
           if (key in params && params[key] === false) {
-            // agar URL me present hai to by default true kar do
             params[key] = true;
             needsUpdate = true;
           }
@@ -63,7 +62,7 @@ async function buildRequiredParams(row) {
     console.error("buildRequiredParams parse error", e);
   }
 
-  // agar kuch bhi change hua to DB update
+  // DB update agar needed
   if (needsUpdate) {
     try {
       await pool.query(
@@ -218,7 +217,7 @@ router.get("/tracking-links", authJWT, async (req, res) => {
 });
 
 /* ===================================================================
-   2) META (simple)
+   2) META
 =================================================================== */
 
 router.get("/meta", authJWT, async (req, res) => {
@@ -226,9 +225,7 @@ router.get("/meta", authJWT, async (req, res) => {
     const { pub_id, tracking_link_id } = req.query;
 
     if (!pub_id || !tracking_link_id)
-      return res
-        .status(400)
-        .json({ success: false, error: "pub_id_tracking_link_id_required" });
+      return res.status(400).json({ success: false, error: "pub_id_tracking_link_id_required" });
 
     const q = `
       SELECT *
@@ -251,7 +248,6 @@ router.get("/meta", authJWT, async (req, res) => {
       carrier: r.carrier,
       tracking_url: r.tracking_url,
       required_params: requiredParams,
-
       total_hit: null,
       remaining_hit: null,
     };
@@ -259,6 +255,49 @@ router.get("/meta", authJWT, async (req, res) => {
     res.json({ success: true, meta });
   } catch (err) {
     console.error("meta error", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* ===================================================================
+   2.5) UPDATE REQUIRED PARAMS (🔥 FIX FOR FRONTEND TOGGLES)
+=================================================================== */
+
+router.put("/update-required-params/:id", authJWT, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { required_params } = req.body;
+
+    if (!required_params || typeof required_params !== "object") {
+      return res.status(400).json({
+        success: false,
+        error: "invalid_required_params",
+      });
+    }
+
+    const q = `
+      UPDATE publisher_tracking_links
+      SET required_params = $1,
+          updated_at = NOW()
+      WHERE id = $2
+      RETURNING id, required_params
+    `;
+
+    const { rows } = await pool.query(q, [required_params, id]);
+
+    if (!rows[0]) {
+      return res.status(404).json({
+        success: false,
+        error: "tracking_link_not_found",
+      });
+    }
+
+    res.json({
+      success: true,
+      updated: rows[0],
+    });
+  } catch (err) {
+    console.error("update-required-params error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -553,7 +592,7 @@ router.delete("/rules/:id", authJWT, async (req, res) => {
 });
 
 /* ===================================================================
-   8) ROTATION PREVIEW (cap + fallback logic)
+   8) ROTATION PREVIEW
 =================================================================== */
 
 router.get("/rotation/preview", authJWT, async (req, res) => {
