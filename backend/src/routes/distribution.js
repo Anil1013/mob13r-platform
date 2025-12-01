@@ -1,190 +1,664 @@
-// frontend/src/components/RuleModal.jsx
+// backend/src/routes/distribution.js
 
-import React, { useState } from "react";
-import apiClient from "../api/apiClient";
+import express from "express";
+import pool from "../db.js";
+import authJWT from "../middleware/authJWT.js";
 
-export default function RuleModal({
-  rule,
-  pubId,
-  trackingLinkId,
-  offers,
-  remaining,
-  onSaved,
-  onClose,
-}) {
-  const [offerId, setOfferId] = useState(rule?.offer_id || "");
-  const [geo, setGeo] = useState(rule?.geo || "ALL");
-  const [carrier, setCarrier] = useState(rule?.carrier || "ALL");
-  const [weight, setWeight] = useState(
-    rule?.weight !== undefined && rule?.weight !== null ? String(rule.weight) : ""
-  );
-  const [fallback, setFallback] = useState(!!rule?.is_fallback);
-  const [status, setStatus] = useState(rule?.status || "active");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+const router = express.Router();
 
-  const handleSave = async () => {
-    if (!offerId) {
-      setError("Offer is required");
-      return;
+/* ===================================================================
+   HELPERS
+=================================================================== */
+
+const norm = (v) =>
+  !v || v.trim() === "" ? "ALL" : v.trim().toUpperCase();
+
+// default required params (tracking ke liye)
+const DEFAULT_REQUIRED_PARAMS = {
+  click_id: false,
+  sub1: false,
+  sub2: false,
+  sub3: false,
+  sub4: false,
+  sub5: false,
+  msisdn: false,
+  ip: true,
+  ua: true,
+  device: false,
+};
+
+// tracking_url se query params nikal ke, defaults + DB value merge
+async function buildRequiredParams(row) {
+  let needsUpdate = false;
+
+  // DB se jo aaya
+  let params = row.required_params && typeof row.required_params === "object"
+    ? { ...row.required_params }
+    : {};
+
+  // defaults merge
+  for (const key of Object.keys(DEFAULT_REQUIRED_PARAMS)) {
+    if (!(key in params)) {
+      params[key] = DEFAULT_REQUIRED_PARAMS[key];
+      needsUpdate = true;
+    }
+  }
+
+  // tracking_url se auto-detect (agar query me param ka naam same hai)
+  try {
+    if (row.tracking_url) {
+      const parts = row.tracking_url.split("?");
+      if (parts[1]) {
+        const search = new URLSearchParams(parts[1]);
+        search.forEach((value, key) => {
+          if (key in params && params[key] === false) {
+            // agar URL me present hai to by default true kar do
+            params[key] = true;
+            needsUpdate = true;
+          }
+        });
+      }
+    }
+  } catch (e) {
+    console.error("buildRequiredParams parse error", e);
+  }
+
+  // agar kuch bhi change hua to DB update
+  if (needsUpdate) {
+    try {
+      await pool.query(
+        `UPDATE publisher_tracking_links
+         SET required_params = $1
+         WHERE id = $2`,
+        [params, row.id]
+      );
+    } catch (e) {
+      console.error("required_params DB update error", e);
+    }
+  }
+
+  return params;
+}
+
+// TOTAL WEIGHT CALCULATOR
+async function getTotalWeight(pubId, trackingLinkId, excludeId = null) {
+  let params = [pubId, trackingLinkId];
+  let where = `pub_id = $1 AND tracking_link_id = $2 AND status = 'active'`;
+
+  if (excludeId) {
+    params.push(excludeId);
+    where += ` AND id <> $${params.length}`;
+  }
+
+  const q = `
+    SELECT COALESCE(SUM(weight), 0) AS total_weight
+    FROM distribution_rules
+    WHERE ${where}
+  `;
+
+  const { rows } = await pool.query(q, params);
+  return Number(rows[0].total_weight || 0);
+}
+
+// OFFER CAP STATS
+async function getOfferCapStats(offerId, pubId, geo, carrier) {
+  const qOffer = `
+    SELECT id, name, cap_daily, cap_total, status
+    FROM offers
+    WHERE id = $1
+    LIMIT 1
+  `;
+  const offerRes = await pool.query(qOffer, [offerId]);
+  if (!offerRes.rows[0]) return null;
+
+  const offer = offerRes.rows[0];
+
+  const qConv = `
+    SELECT
+      COALESCE(SUM(CASE WHEN created_at::date = CURRENT_DATE THEN 1 ELSE 0 END),0) AS today,
+      COALESCE(COUNT(*),0) AS total
+    FROM conversions
+    WHERE offer_id = $1
+      AND pub_id = $2
+      AND ($3 = 'ALL' OR UPPER(geo) = $3)
+      AND ($4 = 'ALL' OR UPPER(carrier) = $4)
+      AND status IN ('approved','confirmed')
+  `;
+  const convRes = await pool.query(qConv, [
+    offerId,
+    pubId,
+    geo.toUpperCase(),
+    carrier.toUpperCase(),
+  ]);
+
+  const today = Number(convRes.rows[0].today || 0);
+  const total = Number(convRes.rows[0].total || 0);
+
+  const dailyCap = Number(offer.cap_daily || 0);
+  const totalCap = Number(offer.cap_total || 0);
+
+  const cappedDaily = dailyCap > 0 && today >= dailyCap;
+  const cappedTotal = totalCap > 0 && total >= totalCap;
+
+  return {
+    offer_id: offer.id,
+    offer_name: offer.name,
+    cap_daily: dailyCap,
+    cap_total: totalCap,
+    used_today: today,
+    used_total: total,
+    is_capped: cappedDaily || cappedTotal || offer.status !== "active",
+  };
+}
+
+/* ===================================================================
+   1) TRACKING LINKS (publisher_tracking_links)
+=================================================================== */
+
+router.get("/tracking-links", authJWT, async (req, res) => {
+  try {
+    const { pub_id } = req.query;
+
+    if (!pub_id)
+      return res.status(400).json({ success: false, error: "pub_id_required" });
+
+    const q = `
+      SELECT
+        id,
+        pub_code,
+        publisher_id,
+        publisher_name,
+        name,
+        geo,
+        carrier,
+        type,
+        payout,
+        cap_daily,
+        cap_total,
+        tracking_url,
+        required_params,
+        status
+      FROM publisher_tracking_links
+      WHERE pub_code = $1
+      ORDER BY id ASC
+    `;
+
+    const { rows } = await pool.query(q, [pub_id]);
+
+    const links = [];
+    for (const r of rows) {
+      const requiredParams = await buildRequiredParams(r);
+
+      links.push({
+        tracking_link_id: r.id,
+        pub_code: r.pub_code,
+        publisher_id: r.publisher_id,
+        publisher_name: r.publisher_name,
+        name: r.name,
+        geo: r.geo,
+        carrier: r.carrier,
+        type: r.type,
+        payout: r.payout,
+        cap_daily: r.cap_daily,
+        cap_total: r.cap_total,
+        tracking_url: r.tracking_url,
+        required_params: requiredParams,
+        status: r.status,
+
+        tracking_id: `${r.pub_code}-${r.geo}-${r.carrier}`,
+        base_url: r.tracking_url,
+      });
     }
 
-    setSaving(true);
-    setError("");
+    res.json({ success: true, links });
+  } catch (err) {
+    console.error("tracking-links error", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
-    const payload = {
-      pub_id: pubId,
-      tracking_link_id: trackingLinkId,
-      offer_id: offerId,
-      geo,
-      carrier,
-      is_fallback: fallback,
-      weight: weight ? Number(weight) : null,
-      autoFill: !weight,
-      status,
+/* ===================================================================
+   2) META (simple)
+=================================================================== */
+
+router.get("/meta", authJWT, async (req, res) => {
+  try {
+    const { pub_id, tracking_link_id } = req.query;
+
+    if (!pub_id || !tracking_link_id)
+      return res
+        .status(400)
+        .json({ success: false, error: "pub_id_tracking_link_id_required" });
+
+    const q = `
+      SELECT *
+      FROM publisher_tracking_links
+      WHERE pub_code = $1 AND id = $2
+      LIMIT 1
+    `;
+
+    const { rows } = await pool.query(q, [pub_id, tracking_link_id]);
+    if (!rows[0])
+      return res.json({ success: false, error: "tracking_not_found" });
+
+    const r = rows[0];
+    const requiredParams = await buildRequiredParams(r);
+
+    const meta = {
+      tracking_link_id: r.id,
+      pub_code: r.pub_code,
+      geo: r.geo,
+      carrier: r.carrier,
+      tracking_url: r.tracking_url,
+      required_params: requiredParams,
+
+      total_hit: null,
+      remaining_hit: null,
     };
 
-    try {
-      if (rule) {
-        await apiClient.put(`/distribution/rules/${rule.id}`, payload);
-      } else {
-        await apiClient.post(`/distribution/rules`, payload);
-      }
-      await onSaved();
-    } catch (e) {
-      console.error(e);
-      setError("Failed to save rule");
-    } finally {
-      setSaving(false);
+    res.json({ success: true, meta });
+  } catch (err) {
+    console.error("meta error", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* ===================================================================
+   3) GET RULES
+=================================================================== */
+
+router.get("/rules", authJWT, async (req, res) => {
+  try {
+    const { pub_id, tracking_link_id } = req.query;
+
+    if (!pub_id || !tracking_link_id)
+      return res
+        .status(400)
+        .json({ success: false, error: "pub_id_tracking_link_id_required" });
+
+    const q = `
+      SELECT *
+      FROM distribution_rules
+      WHERE pub_id = $1
+        AND tracking_link_id = $2
+        AND status <> 'deleted'
+      ORDER BY id ASC
+    `;
+
+    const { rows } = await pool.query(q, [pub_id, tracking_link_id]);
+
+    res.json({ success: true, rules: rows });
+  } catch (err) {
+    console.error("rules error", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* ===================================================================
+   4) REMAINING %
+=================================================================== */
+
+router.get("/rules/remaining", authJWT, async (req, res) => {
+  try {
+    const { pub_id, tracking_link_id } = req.query;
+
+    if (!pub_id || !tracking_link_id)
+      return res
+        .status(400)
+        .json({ success: false, error: "pub_id_tracking_link_id_required" });
+
+    const total = await getTotalWeight(pub_id, tracking_link_id);
+    res.json({ success: true, remaining: 100 - total });
+  } catch (err) {
+    console.error("remaining error", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* ===================================================================
+   5) ADD RULE
+=================================================================== */
+
+router.post("/rules", authJWT, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const {
+      pub_id,
+      tracking_link_id,
+      offer_id,
+      weight,
+      geo,
+      carrier,
+      is_fallback,
+      autoFill,
+    } = req.body;
+
+    if (!pub_id || !tracking_link_id || !offer_id) {
+      return res.status(400).json({
+        success: false,
+        error: "pub_id_tracking_link_id_offer_id_required",
+      });
     }
-  };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 space-y-4">
-        <div className="flex justify-between items-center mb-1">
-          <h2 className="font-bold text-lg">
-            {rule ? "Edit Rule" : "Add Rule"}
-          </h2>
-          <button
-            className="text-gray-500 hover:text-black text-xl leading-none"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </div>
+    const nGeo = norm(geo);
+    const nCarrier = norm(carrier);
 
-        {error && (
-          <div className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">
-            {error}
-          </div>
-        )}
+    await client.query("BEGIN");
 
-        {/* Offer dropdown */}
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Offer <span className="text-red-500">*</span>
-          </label>
-          <select
-            className="border rounded p-2 w-full text-sm"
-            value={offerId}
-            onChange={(e) => setOfferId(e.target.value)}
-          >
-            <option value="">Select Offer</option>
-            {offers.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.id} — {o.name}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-gray-500 mt-1">
-            Only active offers for this GEO &amp; carrier are listed.
-          </p>
-        </div>
+    // --- DUPLICATE CHECK ---
+    const dupQ = `
+      SELECT id
+      FROM distribution_rules
+      WHERE pub_id=$1
+        AND tracking_link_id=$2
+        AND offer_id=$3
+        AND UPPER(geo)=$4
+        AND UPPER(carrier)=$5
+        AND status <> 'deleted'
+    `;
 
-        {/* GEO */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium mb-1">GEO</label>
-            <input
-              className="border rounded p-2 w-full text-sm"
-              value={geo}
-              onChange={(e) => setGeo(e.target.value)}
-            />
-          </div>
+    const dup = await client.query(dupQ, [
+      pub_id,
+      tracking_link_id,
+      offer_id,
+      nGeo,
+      nCarrier,
+    ]);
 
-          {/* Carrier */}
-          <div>
-            <label className="block text-sm font-medium mb-1">Carrier</label>
-            <input
-              className="border rounded p-2 w-full text-sm"
-              value={carrier}
-              onChange={(e) => setCarrier(e.target.value)}
-            />
-          </div>
-        </div>
+    if (dup.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return res.json({
+        success: false,
+        error: "duplicate_rule",
+      });
+    }
 
-        {/* Weight */}
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Weight (%)
-          </label>
-          <input
-            className="border rounded p-2 w-full text-sm"
-            value={weight}
-            onChange={(e) => setWeight(e.target.value)}
-            placeholder={`Leave blank for AutoFill (Remaining ${remaining}%)`}
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            If empty, system will AutoFill remaining % for this link.
-          </p>
-        </div>
+    // --- SMART AUTO FILL ---
+    let finalWeight = Number(weight);
+    if (autoFill || !finalWeight) {
+      const total = await getTotalWeight(pub_id, tracking_link_id);
+      finalWeight = Math.max(100 - total, 0);
+    }
 
-        {/* Fallback + Status */}
-        <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={fallback}
-              onChange={(e) => setFallback(e.target.checked)}
-            />
-            <span>Fallback rule</span>
-          </label>
+    // --- WEIGHT VALIDATION ---
+    const totalNow = await getTotalWeight(pub_id, tracking_link_id);
+    if (totalNow + finalWeight > 100) {
+      await client.query("ROLLBACK");
+      return res.json({
+        success: false,
+        error: "weight_exceeded",
+      });
+    }
 
-          <div>
-            <label className="block text-xs font-medium mb-1">
-              Status
-            </label>
-            <select
-              className="border rounded p-1 text-xs"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              <option value="active">active</option>
-              <option value="paused">paused</option>
-              <option value="deleted">deleted</option>
-            </select>
-          </div>
-        </div>
+    // --- INSERT RULE ---
+    const insertQ = `
+      INSERT INTO distribution_rules
+        (pub_id, tracking_link_id, offer_id, weight, geo, carrier, is_fallback, status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,'active')
+      RETURNING *
+    `;
 
-        {/* Buttons */}
-        <div className="flex justify-end gap-3 pt-2">
-          <button
-            className="px-4 py-2 text-sm rounded border"
-            onClick={onClose}
-            disabled={saving}
-          >
-            Cancel
-          </button>
-          <button
-            className="px-4 py-2 text-sm rounded bg-green-600 text-white disabled:opacity-60"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? "Saving..." : "Save Rule"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+    const result = await client.query(insertQ, [
+      pub_id,
+      tracking_link_id,
+      offer_id,
+      finalWeight,
+      nGeo,
+      nCarrier,
+      Boolean(is_fallback),
+    ]);
+
+    await client.query("COMMIT");
+    res.json({ success: true, rule: result.rows[0] });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("add rule error", err);
+    res.status(500).json({ success: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+/* ===================================================================
+   6) UPDATE RULE
+=================================================================== */
+
+router.put("/rules/:id", authJWT, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const id = req.params.id;
+    const {
+      pub_id,
+      tracking_link_id,
+      offer_id,
+      weight,
+      geo,
+      carrier,
+      is_fallback,
+      status,
+      autoFill,
+    } = req.body;
+
+    if (!pub_id || !tracking_link_id || !offer_id) {
+      return res.json({
+        success: false,
+        error: "pub_id_tracking_link_id_offer_id_required",
+      });
+    }
+
+    const nGeo = norm(geo);
+    const nCarrier = norm(carrier);
+
+    await client.query("BEGIN");
+
+    // DUPLICATE CHECK
+    const dupQ = `
+      SELECT id
+      FROM distribution_rules
+      WHERE pub_id=$1
+        AND tracking_link_id=$2
+        AND offer_id=$3
+        AND UPPER(geo)=$4
+        AND UPPER(carrier)=$5
+        AND id <> $6
+        AND status <> 'deleted'
+    `;
+    const dup = await client.query(dupQ, [
+      pub_id,
+      tracking_link_id,
+      offer_id,
+      nGeo,
+      nCarrier,
+      id,
+    ]);
+
+    if (dup.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return res.json({
+        success: false,
+        error: "duplicate_rule",
+      });
+    }
+
+    // SMART AUTO FILL
+    let finalWeight = Number(weight);
+    if (autoFill || !finalWeight) {
+      const total = await getTotalWeight(pub_id, tracking_link_id, id);
+      finalWeight = Math.max(100 - total, 0);
+    }
+
+    // TOTAL VALIDATION
+    const totalNow = await getTotalWeight(pub_id, tracking_link_id, id);
+    if (totalNow + finalWeight > 100) {
+      await client.query("ROLLBACK");
+      return res.json({
+        success: false,
+        error: "weight_exceeded",
+      });
+    }
+
+    // UPDATE
+    const updateQ = `
+      UPDATE distribution_rules
+      SET offer_id=$1, weight=$2, geo=$3, carrier=$4,
+          is_fallback=$5, status=$6
+      WHERE id=$7
+      RETURNING *
+    `;
+
+    const result = await client.query(updateQ, [
+      offer_id,
+      finalWeight,
+      nGeo,
+      nCarrier,
+      Boolean(is_fallback),
+      status || "active",
+      id,
+    ]);
+
+    await client.query("COMMIT");
+    res.json({ success: true, rule: result.rows[0] });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("update rule error", err);
+    res.status(500).json({ success: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+/* ===================================================================
+   7) DELETE RULE
+=================================================================== */
+
+router.delete("/rules/:id", authJWT, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const q = `
+      UPDATE distribution_rules
+      SET status='deleted'
+      WHERE id=$1
+    `;
+
+    await pool.query(q, [id]);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("delete rule error", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* ===================================================================
+   8) ROTATION PREVIEW (cap + fallback logic)
+=================================================================== */
+
+router.get("/rotation/preview", authJWT, async (req, res) => {
+  try {
+    const { pub_id, tracking_link_id, geo, carrier } = req.query;
+    if (!pub_id || !tracking_link_id)
+      return res.json({
+        success: false,
+        error: "pub_id_tracking_link_id_required",
+      });
+
+    const nGeo = norm(geo);
+    const nCarrier = norm(carrier);
+
+    const q = `
+      SELECT *
+      FROM distribution_rules
+      WHERE pub_id=$1
+        AND tracking_link_id=$2
+        AND status='active'
+      ORDER BY id ASC
+    `;
+
+    const { rows: rules } = await pool.query(q, [pub_id, tracking_link_id]);
+
+    if (!rules.length)
+      return res.json({
+        success: true,
+        selected_offer: null,
+        reason: "no_rules",
+      });
+
+    const eligible = [];
+    const fallbacks = [];
+
+    for (const r of rules) {
+      const rGeo = norm(r.geo);
+      const rCarrier = norm(r.carrier);
+
+      if (rGeo !== "ALL" && rGeo !== nGeo) continue;
+      if (rCarrier !== "ALL" && rCarrier !== nCarrier) continue;
+
+      const cap = await getOfferCapStats(
+        r.offer_id,
+        pub_id,
+        nGeo,
+        nCarrier
+      );
+
+      if (!cap || cap.is_capped) {
+        if (r.is_fallback) fallbacks.push({ rule: r });
+        continue;
+      }
+
+      if (r.is_fallback) fallbacks.push({ rule: r });
+      else eligible.push({ rule: r });
+    }
+
+    let selected = null;
+    let type = null;
+
+    if (eligible.length) {
+      const sum = eligible.reduce(
+        (a, b) => a + Number(b.rule.weight),
+        0
+      );
+      let rnd = Math.random() * sum;
+
+      for (const e of eligible) {
+        rnd -= Number(e.rule.weight);
+        if (rnd <= 0) {
+          selected = e.rule;
+          type = "primary";
+          break;
+        }
+      }
+    } else if (fallbacks.length) {
+      const sum = fallbacks.reduce(
+        (a, b) => a + Number(b.rule.weight),
+        0
+      );
+      let rnd = Math.random() * sum;
+
+      for (const f of fallbacks) {
+        rnd -= Number(f.rule.weight);
+        if (rnd <= 0) {
+          selected = f.rule;
+          type = "fallback";
+          break;
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      selected,
+      type,
+    });
+  } catch (err) {
+    console.error("preview error", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* ===================================================================
+   EXPORT
+=================================================================== */
+export default router;
