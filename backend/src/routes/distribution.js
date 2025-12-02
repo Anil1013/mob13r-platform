@@ -31,12 +31,12 @@ const DEFAULT_REQUIRED_PARAMS = {
 async function buildRequiredParams(row) {
   let needsUpdate = false;
 
-  // DB se jo aaya
-  let params = row.required_params && typeof row.required_params === "object"
-    ? { ...row.required_params }
-    : {};
+  let params =
+    row.required_params && typeof row.required_params === "object"
+      ? { ...row.required_params }
+      : {};
 
-  // defaults merge
+  // merge defaults
   for (const key of Object.keys(DEFAULT_REQUIRED_PARAMS)) {
     if (!(key in params)) {
       params[key] = DEFAULT_REQUIRED_PARAMS[key];
@@ -44,25 +44,25 @@ async function buildRequiredParams(row) {
     }
   }
 
-  // tracking_url se auto-detect (agar query me param ka naam same hai)
+  // detect from tracking_url
   try {
     if (row.tracking_url) {
       const parts = row.tracking_url.split("?");
       if (parts[1]) {
-        const search = new URLSearchParams(parts[1]);
-        search.forEach((value, key) => {
-          if (key in params && params[key] === false) {
-            params[key] = true;
+        const qs = new URLSearchParams(parts[1]);
+        qs.forEach((v, k) => {
+          if (k in params && params[k] === false) {
+            params[k] = true;
             needsUpdate = true;
           }
         });
       }
     }
   } catch (e) {
-    console.error("buildRequiredParams parse error", e);
+    console.error("buildRequiredParams ERROR", e);
   }
 
-  // DB update agar needed
+  // update DB
   if (needsUpdate) {
     try {
       await pool.query(
@@ -79,109 +79,48 @@ async function buildRequiredParams(row) {
   return params;
 }
 
-// TOTAL WEIGHT CALCULATOR
-async function getTotalWeight(pubId, trackingLinkId, excludeId = null) {
-  let params = [pubId, trackingLinkId];
-  let where = `pub_id = $1 AND tracking_link_id = $2 AND status = 'active'`;
+/* ===================================================================
+   NEW: OFFER LIST FOR DROPDOWN (🔥 FIX)
+=================================================================== */
 
-  if (excludeId) {
-    params.push(excludeId);
-    where += ` AND id <> $${params.length}`;
+router.get("/offers", authJWT, async (req, res) => {
+  try {
+    const q = `
+      SELECT
+        id,
+        offer_id,
+        name,
+        advertiser_name,
+        payout,
+        status
+      FROM offers
+      WHERE status = 'active'
+      ORDER BY id ASC
+    `;
+
+    const { rows } = await pool.query(q);
+
+    return res.json({ success: true, offers: rows });
+  } catch (err) {
+    console.error("offers list error:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
-
-  const q = `
-    SELECT COALESCE(SUM(weight), 0) AS total_weight
-    FROM distribution_rules
-    WHERE ${where}
-  `;
-
-  const { rows } = await pool.query(q, params);
-  return Number(rows[0].total_weight || 0);
-}
-
-// OFFER CAP STATS
-async function getOfferCapStats(offerId, pubId, geo, carrier) {
-  const qOffer = `
-    SELECT id, name, cap_daily, cap_total, status
-    FROM offers
-    WHERE id = $1
-    LIMIT 1
-  `;
-  const offerRes = await pool.query(qOffer, [offerId]);
-  if (!offerRes.rows[0]) return null;
-
-  const offer = offerRes.rows[0];
-
-  const qConv = `
-    SELECT
-      COALESCE(SUM(CASE WHEN created_at::date = CURRENT_DATE THEN 1 ELSE 0 END),0) AS today,
-      COALESCE(COUNT(*),0) AS total
-    FROM conversions
-    WHERE offer_id = $1
-      AND pub_id = $2
-      AND ($3 = 'ALL' OR UPPER(geo) = $3)
-      AND ($4 = 'ALL' OR UPPER(carrier) = $4)
-      AND status IN ('approved','confirmed')
-  `;
-  const convRes = await pool.query(qConv, [
-    offerId,
-    pubId,
-    geo.toUpperCase(),
-    carrier.toUpperCase(),
-  ]);
-
-  const today = Number(convRes.rows[0].today || 0);
-  const total = Number(convRes.rows[0].total || 0);
-
-  const dailyCap = Number(offer.cap_daily || 0);
-  const totalCap = Number(offer.cap_total || 0);
-
-  const cappedDaily = dailyCap > 0 && today >= dailyCap;
-  const cappedTotal = totalCap > 0 && total >= totalCap;
-
-  return {
-    offer_id: offer.id,
-    offer_name: offer.name,
-    cap_daily: dailyCap,
-    cap_total: totalCap,
-    used_today: today,
-    used_total: total,
-    is_capped: cappedDaily || cappedTotal || offer.status !== "active",
-  };
-}
+});
 
 /* ===================================================================
-   1) TRACKING LINKS (publisher_tracking_links)
+   1) TRACKING LINKS
 =================================================================== */
 
 router.get("/tracking-links", authJWT, async (req, res) => {
   try {
     const { pub_id } = req.query;
 
-    if (!pub_id)
-      return res.status(400).json({ success: false, error: "pub_id_required" });
-
     const q = `
-      SELECT
-        id,
-        pub_code,
-        publisher_id,
-        publisher_name,
-        name,
-        geo,
-        carrier,
-        type,
-        payout,
-        cap_daily,
-        cap_total,
-        tracking_url,
-        required_params,
-        status
+      SELECT *
       FROM publisher_tracking_links
       WHERE pub_code = $1
       ORDER BY id ASC
     `;
-
     const { rows } = await pool.query(q, [pub_id]);
 
     const links = [];
@@ -198,20 +137,17 @@ router.get("/tracking-links", authJWT, async (req, res) => {
         carrier: r.carrier,
         type: r.type,
         payout: r.payout,
-        cap_daily: r.cap_daily,
-        cap_total: r.cap_total,
         tracking_url: r.tracking_url,
         required_params: requiredParams,
-        status: r.status,
-
-        tracking_id: `${r.pub_code}-${r.geo}-${r.carrier}`,
-        base_url: r.tracking_url,
+        cap_daily: r.cap_daily,
+        cap_total: r.cap_total,
+        status: r.status
       });
     }
 
     res.json({ success: true, links });
   } catch (err) {
-    console.error("tracking-links error", err);
+    console.error("tracking-links error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -223,9 +159,6 @@ router.get("/tracking-links", authJWT, async (req, res) => {
 router.get("/meta", authJWT, async (req, res) => {
   try {
     const { pub_id, tracking_link_id } = req.query;
-
-    if (!pub_id || !tracking_link_id)
-      return res.status(400).json({ success: false, error: "pub_id_tracking_link_id_required" });
 
     const q = `
       SELECT *
@@ -241,63 +174,42 @@ router.get("/meta", authJWT, async (req, res) => {
     const r = rows[0];
     const requiredParams = await buildRequiredParams(r);
 
-    const meta = {
-      tracking_link_id: r.id,
-      pub_code: r.pub_code,
-      geo: r.geo,
-      carrier: r.carrier,
-      tracking_url: r.tracking_url,
-      required_params: requiredParams,
-      total_hit: null,
-      remaining_hit: null,
-    };
-
-    res.json({ success: true, meta });
+    res.json({
+      success: true,
+      meta: {
+        tracking_link_id: r.id,
+        pub_code: r.pub_code,
+        geo: r.geo,
+        carrier: r.carrier,
+        tracking_url: r.tracking_url,
+        required_params: requiredParams
+      }
+    });
   } catch (err) {
-    console.error("meta error", err);
+    console.error("meta error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 /* ===================================================================
-   2.5) UPDATE REQUIRED PARAMS (🔥 FIX FOR FRONTEND TOGGLES)
+   2.5) UPDATE REQUIRED PARAMS
 =================================================================== */
 
 router.put("/update-required-params/:id", authJWT, async (req, res) => {
   try {
-    const { id } = req.params;
     const { required_params } = req.body;
-
-    if (!required_params || typeof required_params !== "object") {
-      return res.status(400).json({
-        success: false,
-        error: "invalid_required_params",
-      });
-    }
 
     const q = `
       UPDATE publisher_tracking_links
-      SET required_params = $1,
-          updated_at = NOW()
+      SET required_params = $1, updated_at = NOW()
       WHERE id = $2
       RETURNING id, required_params
     `;
 
-    const { rows } = await pool.query(q, [required_params, id]);
-
-    if (!rows[0]) {
-      return res.status(404).json({
-        success: false,
-        error: "tracking_link_not_found",
-      });
-    }
-
-    res.json({
-      success: true,
-      updated: rows[0],
-    });
+    const { rows } = await pool.query(q, [required_params, req.params.id]);
+    res.json({ success: true, updated: rows[0] });
   } catch (err) {
-    console.error("update-required-params error:", err);
+    console.error("update-required-params:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -310,17 +222,10 @@ router.get("/rules", authJWT, async (req, res) => {
   try {
     const { pub_id, tracking_link_id } = req.query;
 
-    if (!pub_id || !tracking_link_id)
-      return res
-        .status(400)
-        .json({ success: false, error: "pub_id_tracking_link_id_required" });
-
     const q = `
       SELECT *
       FROM distribution_rules
-      WHERE pub_id = $1
-        AND tracking_link_id = $2
-        AND status <> 'deleted'
+      WHERE pub_id=$1 AND tracking_link_id=$2 AND status <> 'deleted'
       ORDER BY id ASC
     `;
 
@@ -328,7 +233,7 @@ router.get("/rules", authJWT, async (req, res) => {
 
     res.json({ success: true, rules: rows });
   } catch (err) {
-    console.error("rules error", err);
+    console.error("rules error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -340,16 +245,16 @@ router.get("/rules", authJWT, async (req, res) => {
 router.get("/rules/remaining", authJWT, async (req, res) => {
   try {
     const { pub_id, tracking_link_id } = req.query;
+    const q = `
+      SELECT COALESCE(SUM(weight),0) AS total
+      FROM distribution_rules
+      WHERE pub_id=$1 AND tracking_link_id=$2 AND status='active'
+    `;
+    const { rows } = await pool.query(q, [pub_id, tracking_link_id]);
 
-    if (!pub_id || !tracking_link_id)
-      return res
-        .status(400)
-        .json({ success: false, error: "pub_id_tracking_link_id_required" });
-
-    const total = await getTotalWeight(pub_id, tracking_link_id);
-    res.json({ success: true, remaining: 100 - total });
+    res.json({ success: true, remaining: 100 - Number(rows[0].total) });
   } catch (err) {
-    console.error("remaining error", err);
+    console.error("remaining error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -370,89 +275,60 @@ router.post("/rules", authJWT, async (req, res) => {
       geo,
       carrier,
       is_fallback,
-      autoFill,
+      autoFill
     } = req.body;
 
-    if (!pub_id || !tracking_link_id || !offer_id) {
-      return res.status(400).json({
-        success: false,
-        error: "pub_id_tracking_link_id_offer_id_required",
-      });
-    }
+    await client.query("BEGIN");
 
     const nGeo = norm(geo);
     const nCarrier = norm(carrier);
 
-    await client.query("BEGIN");
-
-    // --- DUPLICATE CHECK ---
-    const dupQ = `
-      SELECT id
-      FROM distribution_rules
-      WHERE pub_id=$1
-        AND tracking_link_id=$2
-        AND offer_id=$3
-        AND UPPER(geo)=$4
-        AND UPPER(carrier)=$5
-        AND status <> 'deleted'
-    `;
-
-    const dup = await client.query(dupQ, [
-      pub_id,
-      tracking_link_id,
-      offer_id,
-      nGeo,
-      nCarrier,
-    ]);
+    // DUPLICATE CHECK
+    const dup = await client.query(
+      `SELECT id FROM distribution_rules
+       WHERE pub_id=$1 AND tracking_link_id=$2
+       AND offer_id=$3 AND UPPER(geo)=$4 AND UPPER(carrier)=$5
+       AND status <> 'deleted'`,
+      [pub_id, tracking_link_id, offer_id, nGeo, nCarrier]
+    );
 
     if (dup.rows.length > 0) {
       await client.query("ROLLBACK");
-      return res.json({
-        success: false,
-        error: "duplicate_rule",
-      });
+      return res.json({ success: false, error: "duplicate_rule" });
     }
 
-    // --- SMART AUTO FILL ---
+    // SMART WEIGHT
+    const used = await client.query(
+      `SELECT COALESCE(SUM(weight),0) AS total
+       FROM distribution_rules
+       WHERE pub_id=$1 AND tracking_link_id=$2 AND status='active'`,
+      [pub_id, tracking_link_id]
+    );
+
     let finalWeight = Number(weight);
-    if (autoFill || !finalWeight) {
-      const total = await getTotalWeight(pub_id, tracking_link_id);
-      finalWeight = Math.max(100 - total, 0);
+    if (!finalWeight || autoFill) {
+      finalWeight = Math.max(100 - Number(used.rows[0].total), 0);
     }
 
-    // --- WEIGHT VALIDATION ---
-    const totalNow = await getTotalWeight(pub_id, tracking_link_id);
-    if (totalNow + finalWeight > 100) {
+    if (Number(used.rows[0].total) + finalWeight > 100) {
       await client.query("ROLLBACK");
-      return res.json({
-        success: false,
-        error: "weight_exceeded",
-      });
+      return res.json({ success: false, error: "weight_exceeded" });
     }
 
-    // --- INSERT RULE ---
-    const insertQ = `
-      INSERT INTO distribution_rules
-        (pub_id, tracking_link_id, offer_id, weight, geo, carrier, is_fallback, status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,'active')
-      RETURNING *
-    `;
-
-    const result = await client.query(insertQ, [
-      pub_id,
-      tracking_link_id,
-      offer_id,
-      finalWeight,
-      nGeo,
-      nCarrier,
-      Boolean(is_fallback),
-    ]);
+    // INSERT
+    const result = await client.query(
+      `INSERT INTO distribution_rules
+       (pub_id, tracking_link_id, offer_id, weight, geo, carrier, is_fallback, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'active')
+       RETURNING *`,
+      [pub_id, tracking_link_id, offer_id, finalWeight, nGeo, nCarrier, is_fallback]
+    );
 
     await client.query("COMMIT");
     res.json({ success: true, rule: result.rows[0] });
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("add rule error", err);
+    console.error("add rule error:", err);
     res.status(500).json({ success: false, error: err.message });
   } finally {
     client.release();
@@ -477,94 +353,81 @@ router.put("/rules/:id", authJWT, async (req, res) => {
       carrier,
       is_fallback,
       status,
-      autoFill,
+      autoFill
     } = req.body;
 
-    if (!pub_id || !tracking_link_id || !offer_id) {
-      return res.json({
-        success: false,
-        error: "pub_id_tracking_link_id_offer_id_required",
-      });
-    }
+    await client.query("BEGIN");
 
     const nGeo = norm(geo);
     const nCarrier = norm(carrier);
 
-    await client.query("BEGIN");
-
     // DUPLICATE CHECK
-    const dupQ = `
-      SELECT id
-      FROM distribution_rules
-      WHERE pub_id=$1
-        AND tracking_link_id=$2
-        AND offer_id=$3
-        AND UPPER(geo)=$4
-        AND UPPER(carrier)=$5
-        AND id <> $6
-        AND status <> 'deleted'
-    `;
-    const dup = await client.query(dupQ, [
-      pub_id,
-      tracking_link_id,
-      offer_id,
-      nGeo,
-      nCarrier,
-      id,
-    ]);
+    const dup = await client.query(
+      `SELECT id FROM distribution_rules
+       WHERE pub_id=$1 AND tracking_link_id=$2 AND offer_id=$3
+       AND UPPER(geo)=$4 AND UPPER(carrier)=$5 AND id <> $6
+       AND status <> 'deleted'`,
+      [pub_id, tracking_link_id, offer_id, nGeo, nCarrier, id]
+    );
 
     if (dup.rows.length > 0) {
       await client.query("ROLLBACK");
-      return res.json({
-        success: false,
-        error: "duplicate_rule",
-      });
+      return res.json({ success: false, error: "duplicate_rule" });
     }
 
-    // SMART AUTO FILL
+    // SMART WEIGHT
+    const used = await client.query(
+      `SELECT COALESCE(SUM(weight),0) AS total
+       FROM distribution_rules
+       WHERE pub_id=$1 AND tracking_link_id=$2 AND id <> $3
+       AND status='active'`,
+      [pub_id, tracking_link_id, id]
+    );
+
     let finalWeight = Number(weight);
-    if (autoFill || !finalWeight) {
-      const total = await getTotalWeight(pub_id, tracking_link_id, id);
-      finalWeight = Math.max(100 - total, 0);
+    if (!finalWeight || autoFill) {
+      finalWeight = Math.max(100 - Number(used.rows[0].total), 0);
     }
 
-    // TOTAL VALIDATION
-    const totalNow = await getTotalWeight(pub_id, tracking_link_id, id);
-    if (totalNow + finalWeight > 100) {
+    if (Number(used.rows[0].total) + finalWeight > 100) {
       await client.query("ROLLBACK");
-      return res.json({
-        success: false,
-        error: "weight_exceeded",
-      });
+      return res.json({ success: false, error: "weight_exceeded" });
     }
 
     // UPDATE
-    const updateQ = `
-      UPDATE distribution_rules
-      SET offer_id=$1, weight=$2, geo=$3, carrier=$4,
-          is_fallback=$5, status=$6
-      WHERE id=$7
-      RETURNING *
-    `;
-
-    const result = await client.query(updateQ, [
-      offer_id,
-      finalWeight,
-      nGeo,
-      nCarrier,
-      Boolean(is_fallback),
-      status || "active",
-      id,
-    ]);
+    const result = await client.query(
+      `UPDATE distribution_rules
+       SET offer_id=$1, weight=$2, geo=$3, carrier=$4,
+       is_fallback=$5, status=$6
+       WHERE id=$7 RETURNING *`,
+      [offer_id, finalWeight, nGeo, nCarrier, is_fallback, status, id]
+    );
 
     await client.query("COMMIT");
     res.json({ success: true, rule: result.rows[0] });
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("update rule error", err);
+    console.error("update rule error:", err);
     res.status(500).json({ success: false, error: err.message });
   } finally {
     client.release();
+  }
+});
+
+/* ===================================================================
+   NEW: CLICK HANDLER (🔥 FIX FOR TRACKING URL)
+=================================================================== */
+
+router.get("/click", async (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      received_params: req.query,
+      message: "Click handler active"
+    });
+  } catch (err) {
+    console.error("click error:", err);
+    res.status(500).send("Internal error");
   }
 });
 
@@ -574,125 +437,13 @@ router.put("/rules/:id", authJWT, async (req, res) => {
 
 router.delete("/rules/:id", authJWT, async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const q = `
-      UPDATE distribution_rules
-      SET status='deleted'
-      WHERE id=$1
-    `;
-
-    await pool.query(q, [id]);
-
+    await pool.query(
+      `UPDATE distribution_rules SET status='deleted' WHERE id=$1`,
+      [req.params.id]
+    );
     res.json({ success: true });
   } catch (err) {
-    console.error("delete rule error", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/* ===================================================================
-   8) ROTATION PREVIEW
-=================================================================== */
-
-router.get("/rotation/preview", authJWT, async (req, res) => {
-  try {
-    const { pub_id, tracking_link_id, geo, carrier } = req.query;
-    if (!pub_id || !tracking_link_id)
-      return res.json({
-        success: false,
-        error: "pub_id_tracking_link_id_required",
-      });
-
-    const nGeo = norm(geo);
-    const nCarrier = norm(carrier);
-
-    const q = `
-      SELECT *
-      FROM distribution_rules
-      WHERE pub_id=$1
-        AND tracking_link_id=$2
-        AND status='active'
-      ORDER BY id ASC
-    `;
-
-    const { rows: rules } = await pool.query(q, [pub_id, tracking_link_id]);
-
-    if (!rules.length)
-      return res.json({
-        success: true,
-        selected_offer: null,
-        reason: "no_rules",
-      });
-
-    const eligible = [];
-    const fallbacks = [];
-
-    for (const r of rules) {
-      const rGeo = norm(r.geo);
-      const rCarrier = norm(r.carrier);
-
-      if (rGeo !== "ALL" && rGeo !== nGeo) continue;
-      if (rCarrier !== "ALL" && rCarrier !== nCarrier) continue;
-
-      const cap = await getOfferCapStats(
-        r.offer_id,
-        pub_id,
-        nGeo,
-        nCarrier
-      );
-
-      if (!cap || cap.is_capped) {
-        if (r.is_fallback) fallbacks.push({ rule: r });
-        continue;
-      }
-
-      if (r.is_fallback) fallbacks.push({ rule: r });
-      else eligible.push({ rule: r });
-    }
-
-    let selected = null;
-    let type = null;
-
-    if (eligible.length) {
-      const sum = eligible.reduce(
-        (a, b) => a + Number(b.rule.weight),
-        0
-      );
-      let rnd = Math.random() * sum;
-
-      for (const e of eligible) {
-        rnd -= Number(e.rule.weight);
-        if (rnd <= 0) {
-          selected = e.rule;
-          type = "primary";
-          break;
-        }
-      }
-    } else if (fallbacks.length) {
-      const sum = fallbacks.reduce(
-        (a, b) => a + Number(b.rule.weight),
-        0
-      );
-      let rnd = Math.random() * sum;
-
-      for (const f of fallbacks) {
-        rnd -= Number(f.rule.weight);
-        if (rnd <= 0) {
-          selected = f.rule;
-          type = "fallback";
-          break;
-        }
-      }
-    }
-
-    res.json({
-      success: true,
-      selected,
-      type,
-    });
-  } catch (err) {
-    console.error("preview error", err);
+    console.error("delete rule error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
