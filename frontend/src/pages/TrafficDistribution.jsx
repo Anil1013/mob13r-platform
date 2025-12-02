@@ -56,7 +56,7 @@ const PARAM_PLACEHOLDERS = {
 };
 
 /* --------------------------------------------------------
-   UTILS
+   SMALL UTILS
 -------------------------------------------------------- */
 
 function classNames(...classes) {
@@ -69,19 +69,22 @@ function buildFinalUrl(baseUrl, requiredParams) {
   const activeParams = Object.entries(requiredParams || {})
     .filter(([, v]) => v)
     .map(([key]) => {
-      const paramName = key;
+      const paramName = key; // param name in URL
       const placeholder = PARAM_PLACEHOLDERS[key] || `{${key.toUpperCase()}}`;
+      // NOTE: param name encode karein, placeholder raw rakhen (no %7B %7D)
       return `${encodeURIComponent(paramName)}=${placeholder}`;
     });
 
   if (!activeParams.length) return baseUrl;
 
   const hasQuery = baseUrl.includes("?");
-  return `${baseUrl}${hasQuery ? "&" : "?"}${activeParams.join("&")}`;
+  const joiner = hasQuery ? "&" : "?";
+
+  return `${baseUrl}${joiner}${activeParams.join("&")}`;
 }
 
 /* --------------------------------------------------------
-   MAIN
+   MAIN COMPONENT
 -------------------------------------------------------- */
 
 export default function TrafficDistribution() {
@@ -110,13 +113,12 @@ export default function TrafficDistribution() {
   const [savingRule, setSavingRule] = useState(false);
 
   /* --------------------------------------------------------
-     FILTERED LINK LIST
+     DERIVED
   -------------------------------------------------------- */
 
   const filteredLinks = useMemo(() => {
     if (!search.trim()) return links;
     const q = search.toLowerCase();
-
     return links.filter(
       (l) =>
         (l.tracking_id || "").toLowerCase().includes(q) ||
@@ -127,7 +129,10 @@ export default function TrafficDistribution() {
 
   const finalTrackingUrl = useMemo(
     () =>
-      buildFinalUrl(meta?.tracking_url || selectedLink?.tracking_url || "", requiredParams),
+      buildFinalUrl(
+        meta?.tracking_url || selectedLink?.tracking_url || "",
+        requiredParams
+      ),
     [meta, selectedLink, requiredParams]
   );
 
@@ -137,32 +142,30 @@ export default function TrafficDistribution() {
 
   const loadTrackingLinks = async () => {
     if (!pubId.trim()) {
-      toast.error("Publisher ID required");
+      toast.error("Publisher ID required (e.g. PUB03)");
       return;
     }
-
     setLoadingLinks(true);
     setSelectedLink(null);
     setMeta(null);
     setRules([]);
     setPreview(null);
-
     try {
       const res = await apiClient.get(
-        `/distribution/tracking-links?pub_id=${encodeURIComponent(pubId.trim())}`
+        `/distribution/tracking-links?pub_id=${encodeURIComponent(
+          pubId.trim()
+        )}`
       );
-
       if (!res.data?.success) {
-        toast.error(res.data?.error || "Failed to load links");
+        toast.error(res.data?.error || "Failed to load tracking links");
         return;
       }
-
       setLinks(res.data.links || []);
       if (!res.data.links?.length) {
-        toast.info("No tracking links for this publisher");
+        toast.info("No tracking links found for this publisher.");
       }
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      console.error(err);
       toast.error("Error loading tracking links");
     } finally {
       setLoadingLinks(false);
@@ -197,8 +200,11 @@ export default function TrafficDistribution() {
           pubId.trim()
         )}&tracking_link_id=${link.tracking_link_id}`
       );
-      if (res.data?.success) setRules(res.data.rules || []);
-      else toast.error(res.data?.error || "Failed loading rules");
+      if (res.data?.success) {
+        setRules(res.data.rules || []);
+      } else {
+        toast.error(res.data?.error || "Rules fetch failed");
+      }
     } catch (e) {
       console.error(e);
       toast.error("Error loading rules");
@@ -213,7 +219,9 @@ export default function TrafficDistribution() {
           pubId.trim()
         )}&tracking_link_id=${link.tracking_link_id}`
       );
-      if (res.data?.success) setRemaining(res.data.remaining ?? 0);
+      if (res.data?.success) {
+        setRemaining(res.data.remaining ?? 0);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -223,21 +231,26 @@ export default function TrafficDistribution() {
     if (!linkMeta) return;
     setLoadingOffers(true);
     setOffers([]);
-
     try {
+      // Backend: /distribution/offers -> active offers
       const res = await apiClient.get("/distribution/offers", {
         params: {
           pub_id: pubId.trim(),
           geo: linkMeta.geo,
           carrier: linkMeta.carrier,
+          status: "active",
         },
       });
 
-      const list = res.data?.offers || [];
+      if (res.data?.success === false) {
+        toast.error(res.data?.error || "Offers fetch failed");
+      }
+
+      const list = res.data?.offers || res.data || [];
       setOffers(Array.isArray(list) ? list : []);
     } catch (e) {
       console.error(e);
-      toast.error("Failed to load offers");
+      toast.error("Unable to load offers for dropdown (check /distribution/offers API)");
     } finally {
       setLoadingOffers(false);
     }
@@ -245,9 +258,8 @@ export default function TrafficDistribution() {
 
   const refreshAllForLink = async (link) => {
     if (!link) return;
-
     await Promise.all([loadMeta(link), loadRules(link), loadRemaining(link)]);
-
+    // meta set hone ke baad offers load karo
     setTimeout(() => {
       setMeta((m) => {
         if (m) loadOffers(m);
@@ -263,15 +275,16 @@ export default function TrafficDistribution() {
   };
 
   /* --------------------------------------------------------
-     PARAM REQUIRED TOGGLE
+     PARAM TOGGLES
   -------------------------------------------------------- */
 
   const handleToggleParam = async (key) => {
     if (!selectedLink) return;
-
-    const next = { ...(requiredParams || {}), [key]: !requiredParams[key] };
+    const next = {
+      ...(requiredParams || {}),
+      [key]: !requiredParams?.[key],
+    };
     setRequiredParams(next);
-
     setSavingParams(true);
     try {
       await apiClient.put(
@@ -279,23 +292,21 @@ export default function TrafficDistribution() {
         { required_params: next }
       );
     } catch (e) {
-      toast.error("Failed saving parameters");
+      console.error(e);
+      toast.error("Failed to update required parameters");
     } finally {
       setSavingParams(false);
     }
   };
 
-  /* --------------------------------------------------------
-     COPY URL
-  -------------------------------------------------------- */
-
   const handleCopyUrl = async () => {
     if (!finalTrackingUrl) return;
     try {
       await navigator.clipboard.writeText(finalTrackingUrl);
-      toast.success("URL Copied");
+      toast.success("Tracking URL copied to clipboard");
     } catch (e) {
-      toast.error("Copy failed");
+      console.error(e);
+      toast.error("Unable to copy URL");
     }
   };
 
@@ -305,10 +316,8 @@ export default function TrafficDistribution() {
 
   const runPreview = async () => {
     if (!selectedLink || !meta) return;
-
     setPreviewLoading(true);
     setPreview(null);
-
     try {
       const res = await apiClient.get("/distribution/rotation/preview", {
         params: {
@@ -318,18 +327,21 @@ export default function TrafficDistribution() {
           carrier: meta.carrier,
         },
       });
-
-      if (res.data?.success) setPreview(res.data);
-      else toast.error(res.data?.error || "Preview failed");
+      if (res.data?.success) {
+        setPreview(res.data);
+      } else {
+        toast.error(res.data?.error || "Preview failed");
+      }
     } catch (e) {
-      toast.error("Preview crashed");
+      console.error(e);
+      toast.error("Preview call failed");
     } finally {
       setPreviewLoading(false);
     }
   };
 
   /* --------------------------------------------------------
-     RULE CREATE / EDIT
+     RULE CRUD
   -------------------------------------------------------- */
 
   const openAddRule = () => {
@@ -350,12 +362,14 @@ export default function TrafficDistribution() {
     if (!selectedLink) return;
 
     setSavingRule(true);
-
     try {
+      // OFFER ID: always OFF01 / OFF02...
+      const cleanOfferId = (form.offerId || "").trim();
+
       const payload = {
         pub_id: pubId.trim(),
         tracking_link_id: selectedLink.tracking_link_id,
-        offer_id: form.offerId, // NOW ALWAYS OFF01 / OFF02
+        offer_id: cleanOfferId,
         geo: form.geo || "ALL",
         carrier: form.carrier || "ALL",
         is_fallback: form.fallback,
@@ -370,19 +384,39 @@ export default function TrafficDistribution() {
         return;
       }
 
+      let res;
       if (editingRule) {
-        await apiClient.put(`/distribution/rules/${editingRule.id}`, payload);
-        toast.success("Rule updated");
+        res = await apiClient.put(
+          `/distribution/rules/${editingRule.id}`,
+          payload
+        );
       } else {
-        await apiClient.post("/distribution/rules", payload);
-        toast.success("Rule added");
+        res = await apiClient.post("/distribution/rules", payload);
       }
+
+      if (!res.data?.success) {
+        // backend se logical error aaya (200 + success:false)
+        if (res.data.error === "duplicate_rule") {
+          toast.error("Duplicate rule for same Offer + GEO + Carrier.");
+        } else if (res.data.error === "weight_exceeded") {
+          toast.error("Total weight exceeds 100% for this tracking link.");
+        } else if (res.data.error === "pub_id_tracking_link_id_offer_id_required") {
+          toast.error("pub_id / tracking_link_id / offer_id missing.");
+        } else {
+          toast.error(res.data.error || "Failed to save rule");
+        }
+        setSavingRule(false);
+        return;
+      }
+
+      toast.success(editingRule ? "Rule updated" : "Rule added");
 
       setShowRuleModal(false);
       setEditingRule(null);
       await Promise.all([loadRules(selectedLink), loadRemaining(selectedLink)]);
     } catch (e) {
-      toast.error("Failed saving rule");
+      console.error(e);
+      toast.error("Failed to save rule (network/server error)");
     } finally {
       setSavingRule(false);
     }
@@ -392,59 +426,83 @@ export default function TrafficDistribution() {
     if (!window.confirm("Delete this rule?")) return;
     try {
       await apiClient.delete(`/distribution/rules/${rule.id}`);
-      toast.success("Deleted");
+      toast.success("Rule deleted");
       await Promise.all([loadRules(selectedLink), loadRemaining(selectedLink)]);
     } catch (e) {
-      toast.error("Delete failed");
+      console.error(e);
+      toast.error("Failed to delete rule");
     }
   };
 
-  useEffect(() => {}, []);
+  /* --------------------------------------------------------
+     EFFECTS
+  -------------------------------------------------------- */
+
+  useEffect(() => {
+    // optional: auto-load default PUB on mount
+    // loadTrackingLinks();
+  }, []);
 
   /* --------------------------------------------------------
-     RENDER UI
+     RENDER
   -------------------------------------------------------- */
 
   return (
     <div className="p-6 space-y-6">
-
-            {/* HEADER */}
+      {/* HEADER */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Traffic Distribution</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Traffic Distribution
+          </h1>
           <p className="text-sm text-gray-500">
-            Manage rotation rules, required params & offer mapping
+            Manage rotation rules, required tracking parameters & offer caps
+            per publisher tracking link.
           </p>
         </div>
       </div>
 
-      {/* TOP BAR */}
+      {/* TOP BAR: PUB ID + LOAD + SEARCH */}
       <div className="flex flex-col gap-3 md:flex-row md:items-end">
         <div className="flex-1">
-          <label className="text-xs font-semibold">Publisher ID</label>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">
+            Publisher ID
+          </label>
           <input
-            className="w-full rounded-md border px-3 py-2 text-sm"
+            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
             value={pubId}
             onChange={(e) => setPubId(e.target.value)}
+            placeholder="PUB01 / PUB02 / PUB03..."
           />
         </div>
 
         <button
           onClick={loadTrackingLinks}
           disabled={loadingLinks}
-          className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-white text-sm"
+          className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-blue-700 disabled:opacity-60"
         >
-          {loadingLinks ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-          Load
+          {loadingLinks ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Load
+            </>
+          )}
         </button>
 
         <div className="flex-1 md:max-w-md">
-          <label className="text-xs font-semibold">Search</label>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">
+            Search tracking links
+          </label>
           <div className="relative">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+            <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
             <input
-              className="w-full rounded-md border pl-8 py-2 text-sm"
-              placeholder="ID, URL or publisher name..."
+              className="w-full rounded-md border border-gray-200 bg-white pl-8 pr-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              placeholder="Search by ID, URL or publisher name..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -452,222 +510,331 @@ export default function TrafficDistribution() {
         </div>
       </div>
 
-      {/* GRID */}
+      {/* MAIN GRID */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* LEFT PANEL */}
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold flex items-center gap-2">
-            <LinkIcon className="h-4 w-4 text-gray-500" /> Tracking Links
+        {/* LEFT: LIST OF TRACKING LINKS */}
+        <div className="space-y-2 lg:col-span-1">
+          <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <LinkIcon className="h-4 w-4 text-gray-400" />
+            Publisher Tracking Links
           </h2>
 
           <div className="space-y-2 max-h-[520px] overflow-auto pr-1">
             {filteredLinks.map((link) => {
               const active =
                 selectedLink?.tracking_link_id === link.tracking_link_id;
-
               return (
                 <button
                   key={link.tracking_link_id}
                   onClick={() => handleSelectLink(link)}
-                  className={
+                  className={classNames(
+                    "w-full text-left rounded-lg border px-3 py-2 text-sm shadow-sm transition",
                     active
-                      ? "border border-blue-500 bg-blue-50 w-full text-left px-3 py-2 rounded-lg"
-                      : "border border-gray-200 w-full text-left px-3 py-2 rounded-lg hover:bg-blue-50/40"
-                  }
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 bg-white hover:border-blue-400 hover:bg-blue-50/60"
+                  )}
                 >
-                  <div className="flex justify-between">
-                    <span className="font-semibold">{link.tracking_id}</span>
-                    <span className="text-[11px] bg-gray-100 px-2 py-0.5 rounded-full">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold">
+                      {link.tracking_id || `${link.pub_code}-${link.geo}-${link.carrier}`}
+                    </span>
+                    <span className="text-[11px] rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">
                       {link.type} · {link.payout}
                     </span>
                   </div>
-                  <div className="text-xs text-gray-500 flex justify-between">
-                    <span>{link.geo} · {link.carrier}</span>
+                  <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
+                    <span>
+                      {link.geo} · {link.carrier}
+                    </span>
                     <span>{link.publisher_name}</span>
                   </div>
-                  <p className="text-[11px] text-gray-400 truncate">{link.tracking_url}</p>
+                  <p className="mt-1 line-clamp-1 text-[11px] text-gray-400">
+                    {link.tracking_url}
+                  </p>
                 </button>
               );
             })}
 
             {!loadingLinks && !links.length && (
               <p className="text-xs text-gray-400">
-                Enter a Publisher ID & click Load.
+                Enter a Publisher ID and click <b>Load</b> to see tracking
+                links.
               </p>
             )}
           </div>
         </div>
 
-        {/* RIGHT SIDE */}
+        {/* RIGHT: DETAIL (OVERVIEW + RULES) */}
         <div className="space-y-4 lg:col-span-2">
           {/* OVERVIEW CARD */}
-          <div className="rounded-xl border p-5 bg-white shadow-sm">
-            <div className="flex justify-between">
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-2">
               <div>
-                <h2 className="font-semibold text-sm">Overview</h2>
+                <h2 className="text-sm font-semibold text-gray-800">
+                  Overview
+                </h2>
                 <p className="text-xs text-gray-500">
-                  Publisher, GEO, carrier & final click URL.
+                  Publisher, GEO, carrier & final tracking URL.
                 </p>
               </div>
               <div className="text-right">
-                <span className="text-[10px] uppercase text-gray-400">
+                <span className="text-[11px] uppercase tracking-wide text-gray-400">
                   Remaining Weight
                 </span>
-                <div className={remaining === 0 ? "text-red-500" : "text-green-600"}>
-                  {remaining}%
+                <div
+                  className={classNames(
+                    "text-sm font-semibold",
+                    remaining === 0 ? "text-red-500" : "text-green-600"
+                  )}
+                >
+                  {remaining}% free
                 </div>
               </div>
             </div>
 
+            {/* META ROW */}
             {meta ? (
               <>
-                {/* META */}
-                <div className="mt-3 grid md:grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <div><b>Publisher:</b> {meta.pub_code}</div>
-                    <div><b>GEO:</b> {meta.geo}</div>
-                    <div><b>Carrier:</b> {meta.carrier}</div>
+                <div className="mt-3 grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+                  <div className="space-y-1">
+                    <div>
+                      <span className="text-xs font-semibold text-gray-500">
+                        Publisher:
+                      </span>{" "}
+                      <span className="font-medium">{meta.pub_code}</span>
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-gray-500">
+                        GEO:
+                      </span>{" "}
+                      <span className="font-medium">{meta.geo}</span>
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-gray-500">
+                        Carrier:
+                      </span>{" "}
+                      <span className="font-medium">{meta.carrier}</span>
+                    </div>
                   </div>
 
-                  {/* URL */}
-                  <div>
-                    <label className="text-xs font-semibold">Final URL</label>
-                    <div className="flex gap-2">
+                  {/* URL + COPY */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-gray-500">
+                      Tracking URL (with required params)
+                    </label>
+                    <div className="flex items-center gap-2">
                       <input
                         readOnly
-                        className="flex-1 border rounded-md bg-gray-50 px-3 py-2 text-xs font-mono"
-                        value={finalTrackingUrl}
+                        className="flex-1 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-mono text-gray-700 focus:outline-none"
+                        value={finalTrackingUrl || ""}
                       />
                       <button
                         onClick={handleCopyUrl}
-                        className="border p-2 rounded-md"
+                        disabled={!finalTrackingUrl}
+                        className="inline-flex items-center justify-center rounded-md border border-gray-200 bg-white p-2 text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-60"
                       >
                         <Copy className="h-4 w-4" />
                       </button>
                     </div>
+                    <p className="text-[11px] text-gray-400">
+                      Example:{" "}
+                      <code className="rounded bg-gray-100 px-1">
+                        &click_id={"{CLICK_ID}"}&ip={"{IP}"}&ua={"{UA}"}
+                      </code>
+                    </p>
                   </div>
                 </div>
 
                 {/* PARAM TOGGLES */}
-                <div className="mt-4 border-t pt-3">
-                  <div className="flex justify-between">
-                    <span className="text-xs font-semibold">Required Params</span>
+                <div className="mt-4 border-t border-dashed border-gray-200 pt-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-gray-500">
+                      Required Parameters
+                    </p>
                     {savingParams && (
-                      <span className="text-[11px] flex items-center gap-1">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Saving...
+                      <span className="flex items-center gap-1 text-[11px] text-gray-400">
+                        <Loader2 className="h-3 w-3 animate-spin" /> saving...
                       </span>
                     )}
                   </div>
 
                   <div className="mt-2 flex flex-wrap gap-2">
                     {PARAM_ORDER.map((key) => {
-                      const active = requiredParams[key];
+                      const active = requiredParams?.[key];
                       return (
                         <button
                           key={key}
                           onClick={() => handleToggleParam(key)}
-                          className={
+                          className={classNames(
+                            "rounded-full border px-3 py-1 text-xs font-medium transition",
                             active
-                              ? "border border-emerald-500 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs"
-                              : "border border-gray-300 px-3 py-1 rounded-full text-xs text-gray-500"
-                          }
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                              : "border-gray-200 bg-white text-gray-500 hover:border-blue-300 hover:text-blue-600"
+                          )}
                         >
-                          {PARAM_LABELS[key]}
+                          {PARAM_LABELS[key] || key.toUpperCase()}
                         </button>
                       );
                     })}
                   </div>
+
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    Click to toggle which parameters are required & appended to
+                    the final click URL.
+                  </p>
                 </div>
 
-                {/* PREVIEW */}
-                <div className="mt-4 border-t pt-3">
+                {/* PREVIEW SECTION */}
+                <div className="mt-4 border-t border-dashed border-gray-200 pt-3 grid gap-3 md:grid-cols-[auto,1fr]">
                   <button
                     onClick={runPreview}
-                    className="bg-black text-white px-3 py-2 rounded-md text-xs flex items-center gap-2"
+                    disabled={previewLoading}
+                    className="inline-flex items-center justify-center rounded-md bg-gray-900 px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-black disabled:opacity-60"
                   >
                     {previewLoading ? (
                       <>
-                        <Loader2 className="h-3 w-3 animate-spin" /> Running...
+                        <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                        Running...
                       </>
                     ) : (
                       <>
-                        <RefreshCw className="h-3 w-3" /> Rotation Preview
+                        <RefreshCw className="mr-2 h-3 w-3" />
+                        Rotation Preview
                       </>
                     )}
                   </button>
-
-                  <div className="text-xs mt-2 text-gray-600">
+                  <div className="text-xs text-gray-500">
                     {preview ? (
                       preview.selected ? (
-                        <>
-                          <b>Selected Offer:</b> {preview.selected.offer_id}  
-                        </>
+                        <div className="space-y-1">
+                          <p>
+                            Selected Offer ID:{" "}
+                            <b>{preview.selected.offer_id}</b> (
+                            {preview.type || "primary"})
+                          </p>
+                        </div>
                       ) : (
-                        <>No eligible rule (Reason: {preview.reason})</>
+                        <p>
+                          No eligible rule matched (reason: {preview.reason})
+                        </p>
                       )
                     ) : (
-                      <>Run preview to simulate rotation.</>
+                      <p className="text-gray-400">
+                        Run preview to simulate which offer will be served for
+                        this GEO & carrier.
+                      </p>
                     )}
                   </div>
                 </div>
               </>
             ) : selectedLink ? (
-              <p className="text-xs text-gray-400 mt-3">Loading overview...</p>
+              <p className="mt-3 text-xs text-gray-400">
+                Loading overview for selected link...
+              </p>
             ) : (
-              <p className="text-xs text-gray-400 mt-3">Select a tracking link.</p>
+              <p className="mt-3 text-xs text-gray-400">
+                Select a tracking link from the left panel to see its overview.
+              </p>
             )}
           </div>
 
           {/* RULES CARD */}
-          <div className="rounded-xl border bg-white p-5 shadow-sm">
-            <div className="flex justify-between mb-3">
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-2">
               <div>
-                <h2 className="font-semibold text-sm">Rules</h2>
-                <p className="text-xs text-gray-500">Offer rotation logic</p>
+                <h2 className="text-sm font-semibold text-gray-800">Rules</h2>
+                <p className="text-xs text-gray-500">
+                  Define offer rotation, GEO/carrier targeting & fallback logic.
+                </p>
               </div>
-
               <button
                 onClick={openAddRule}
-                className="bg-emerald-600 text-white text-xs px-3 py-2 rounded-md"
+                disabled={!selectedLink}
+                className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
               >
-                <Plus className="h-4 w-4 inline mr-1" /> Add Rule
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add Rule
               </button>
             </div>
 
-            <div className="overflow-x-auto border rounded-lg">
-              <table className="min-w-full text-xs">
-                <thead className="bg-gray-50">
+            <div className="overflow-x-auto rounded-lg border border-gray-100">
+              <table className="min-w-full divide-y divide-gray-100 text-xs">
+                <thead className="bg-gray-50/80">
                   <tr>
-                    <th className="px-3 py-2 text-left">Offer</th>
-                    <th className="px-3 py-2 text-left">Geo</th>
-                    <th className="px-3 py-2 text-left">Carrier</th>
-                    <th className="px-3 py-2 text-left">% Weight</th>
-                    <th className="px-3 py-2 text-left">Fallback</th>
-                    <th className="px-3 py-2 text-left">Status</th>
-                    <th className="px-3 py-2 text-right">Actions</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-500">
+                      Offer ID
+                    </th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-500">
+                      GEO
+                    </th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-500">
+                      Carrier
+                    </th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-500">
+                      % Weight
+                    </th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-500">
+                      Fallback
+                    </th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-500">
+                      Status
+                    </th>
+                    <th className="px-3 py-2 text-right font-semibold text-gray-500">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
-
-                <tbody>
-                  {rules.map((r) => (
-                    <tr key={r.id} className="border-t">
-                      <td className="px-3 py-2">{r.offer_id}</td>
-                      <td className="px-3 py-2">{r.geo}</td>
-                      <td className="px-3 py-2">{r.carrier}</td>
-                      <td className="px-3 py-2">{r.weight}%</td>
-                      <td className="px-3 py-2">{r.is_fallback ? "YES" : "NO"}</td>
-                      <td className="px-3 py-2">{r.status}</td>
+                <tbody className="divide-y divide-gray-100">
+                  {rules.map((rule) => (
+                    <tr key={rule.id} className="hover:bg-gray-50/70">
+                      <td className="px-3 py-2 font-mono text-[11px] text-gray-800">
+                        {rule.offer_id}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">
+                        {rule.geo || "ALL"}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">
+                        {rule.carrier || "ALL"}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">
+                        {rule.weight}%
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={classNames(
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
+                            rule.is_fallback
+                              ? "bg-purple-50 text-purple-700"
+                              : "bg-gray-50 text-gray-400"
+                          )}
+                        >
+                          {rule.is_fallback ? "YES" : "NO"}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={classNames(
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
+                            rule.status === "active"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : rule.status === "paused"
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-red-50 text-red-600"
+                          )}
+                        >
+                          {rule.status}
+                        </span>
+                      </td>
                       <td className="px-3 py-2 text-right">
                         <button
-                          className="text-blue-600 mr-2"
-                          onClick={() => openEditRule(r)}
+                          onClick={() => openEditRule(rule)}
+                          className="mr-2 text-[11px] font-medium text-blue-600 hover:underline"
                         >
                           Edit
                         </button>
                         <button
-                          className="text-red-600"
-                          onClick={() => deleteRule(r)}
+                          onClick={() => deleteRule(rule)}
+                          className="text-[11px] font-medium text-red-600 hover:underline"
                         >
                           Delete
                         </button>
@@ -678,10 +845,11 @@ export default function TrafficDistribution() {
                   {!rules.length && (
                     <tr>
                       <td
-                        colSpan="7"
-                        className="px-3 py-3 text-center text-gray-400"
+                        colSpan={7}
+                        className="px-3 py-4 text-center text-[11px] text-gray-400"
                       >
-                        No rules added yet.
+                        No rules configured yet. Add first rule for this
+                        tracking link.
                       </td>
                     </tr>
                   )}
@@ -689,8 +857,9 @@ export default function TrafficDistribution() {
               </table>
             </div>
 
-            <p className="text-[11px] text-gray-500 mt-2">
-              Total cannot exceed 100%
+            <p className="mt-2 text-[11px] text-gray-400">
+              Total weight for this tracking link cannot exceed 100%. Use
+              AutoFill to automatically use remaining % for a rule.
             </p>
           </div>
         </div>
@@ -720,7 +889,7 @@ export default function TrafficDistribution() {
 }
 
 /* --------------------------------------------------------
-   RULE MODAL COMPONENT
+   RULE MODAL (INLINE COMPONENT)
 -------------------------------------------------------- */
 
 function RuleModal({
@@ -736,7 +905,9 @@ function RuleModal({
 }) {
   const [offerId, setOfferId] = useState(rule?.offer_id || "");
   const [geo, setGeo] = useState(rule?.geo || meta?.geo || "ALL");
-  const [carrier, setCarrier] = useState(rule?.carrier || meta?.carrier || "ALL");
+  const [carrier, setCarrier] = useState(
+    rule?.carrier || meta?.carrier || "ALL"
+  );
   const [weight, setWeight] = useState(
     rule?.weight != null ? String(rule.weight) : ""
   );
@@ -752,88 +923,125 @@ function RuleModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-xl rounded-xl bg-white shadow-xl">
-        <div className="flex justify-between border-b p-4">
-          <h2 className="font-semibold text-sm">
-            {rule ? "Edit Rule" : "Add Rule"}
-          </h2>
-          <button onClick={onClose} className="text-gray-400">✕</button>
+      <div className="w-full max-w-xl rounded-xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b px-5 py-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-800">
+              {rule ? "Edit Distribution Rule" : "Add Distribution Rule"}
+            </h2>
+            <p className="text-[11px] text-gray-500">
+              Active offers for this publisher / GEO / carrier (if backend
+              filters).
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          >
+            ✕
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* OFFER DROPDOWN */}
-          <div>
-            <label className="text-xs font-semibold">Offer *</label>
+        <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
+          {/* OFFER */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-700">
+              OFFER ID <span className="text-red-500">*</span>
+            </label>
             <select
               value={offerId}
               onChange={(e) => setOfferId(e.target.value)}
-              className="w-full border rounded-md px-3 py-2 text-sm"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
             >
-              <option value="">Select Offer</option>
-
+              <option value="">Select Offer (OFF01, OFF02...)</option>
               {offers.map((o) => (
-                <option key={o.offer_id} value={o.offer_id}>
-                  {o.offer_id} — {o.name}
+                <option
+                  key={o.offer_id || o.id}
+                  value={o.offer_id || o.id} // OFF01, OFF02...
+                >
+                  {(o.offer_id || o.id) + (o.name ? ` — ${o.name}` : "")}
                 </option>
               ))}
             </select>
-
             {loadingOffers && (
               <p className="text-[11px] text-gray-400">
-                Loading active offers...
+                Loading offers for this GEO / carrier...
+              </p>
+            )}
+            {!loadingOffers && !offers.length && (
+              <p className="text-[11px] text-amber-500">
+                No offers loaded. Make sure /distribution/offers API is
+                implemented & returns active offers.
               </p>
             )}
           </div>
 
           {/* GEO + CARRIER */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold">GEO</label>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-700">
+                GEO
+              </label>
               <input
                 value={geo}
                 onChange={(e) => setGeo(e.target.value)}
-                className="w-full border rounded-md px-3 py-2 text-sm"
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               />
+              <p className="text-[11px] text-gray-400">
+                Use <b>ALL</b> for all GEOs.
+              </p>
             </div>
-
-            <div>
-              <label className="text-xs font-semibold">Carrier</label>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-700">
+                Carrier
+              </label>
               <input
                 value={carrier}
                 onChange={(e) => setCarrier(e.target.value)}
-                className="w-full border rounded-md px-3 py-2 text-sm"
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               />
+              <p className="text-[11px] text-gray-400">
+                Use <b>ALL</b> for all carriers.
+              </p>
             </div>
           </div>
 
           {/* WEIGHT */}
-          <div>
-            <label className="text-xs font-semibold">Weight (%)</label>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-700">
+              WEIGHT (%)
+            </label>
             <input
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
-              placeholder={`AutoFill (${remaining}% left)`}
-              className="w-full border rounded-md px-3 py-2 text-sm"
+              placeholder={`Leave blank for AutoFill (remaining ${remaining}%)`}
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
             />
+            <p className="text-[11px] text-gray-400">
+              Empty = Smart AutoFill (system uses remaining %).
+            </p>
           </div>
 
-          {/* FALLBACK & STATUS */}
-          <div className="flex justify-between items-center border-t pt-3">
-            <label className="flex items-center gap-2 text-sm">
+          {/* FALLBACK + STATUS */}
+          <div className="flex flex-col gap-3 border-t border-dashed border-gray-200 pt-3 md:flex-row md:items-center md:justify-between">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
               <input
                 type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                 checked={fallback}
                 onChange={(e) => setFallback(e.target.checked)}
               />
-              Fallback rule
+              <span>Fallback rule</span>
             </label>
 
-            <div>
-              <label className="text-xs">Status</label>
+            <div className="space-y-1 text-sm">
+              <label className="text-xs font-semibold text-gray-700">
+                Status
+              </label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="ml-2 border rounded-md px-2 py-1 text-sm"
+                className="w-32 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               >
                 <option value="active">active</option>
                 <option value="paused">paused</option>
@@ -843,23 +1051,25 @@ function RuleModal({
           </div>
 
           {/* ACTIONS */}
-          <div className="flex justify-end gap-3 pt-3 border-t">
+          <div className="mt-2 flex items-center justify-end gap-3 border-t border-gray-100 pt-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border rounded-md text-sm"
+              disabled={saving}
+              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm"
+              className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
             >
               {saving ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Saving...
-                </span>
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
               ) : (
                 "Save Rule"
               )}
