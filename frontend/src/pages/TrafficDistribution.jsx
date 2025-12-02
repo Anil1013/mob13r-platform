@@ -4,531 +4,350 @@ import React, { useEffect, useMemo, useState } from "react";
 import apiClient from "../api/apiClient";
 import { toast } from "react-toastify";
 import {
-  Link as LinkIcon,
-  RefreshCcw,
-  Search,
-  Copy as CopyIcon,
-  Settings,
   Plus,
-  Edit2,
-  Trash2,
-  Wifi,
+  Copy,
+  RefreshCw,
+  Search,
+  Link as LinkIcon,
+  Loader2,
 } from "lucide-react";
 
-/** -----------------------------------------------------------
- *  DEFAULT REQUIRED PARAMS (frontend mirror only for UI)
- *  ----------------------------------------------------------*/
-const DEFAULT_REQUIRED_PARAMS = {
-  click_id: false,
-  sub1: false,
-  sub2: false,
-  sub3: false,
-  sub4: false,
-  sub5: false,
-  msisdn: false,
-  ip: true,
-  ua: true,
-  device: false,
+/* --------------------------------------------------------
+   CONSTANTS
+-------------------------------------------------------- */
+
+const PARAM_ORDER = [
+  "ip",
+  "ua",
+  "sub1",
+  "sub2",
+  "sub3",
+  "sub4",
+  "sub5",
+  "device",
+  "msisdn",
+  "click_id",
+];
+
+const PARAM_LABELS = {
+  ip: "IP",
+  ua: "UA",
+  sub1: "SUB1",
+  sub2: "SUB2",
+  sub3: "SUB3",
+  sub4: "SUB4",
+  sub5: "SUB5",
+  device: "DEVICE",
+  msisdn: "MSISDN",
+  click_id: "CLICK_ID",
 };
 
-/** -----------------------------------------------------------
- *  Rule Modal (same file as requested)
- *  ----------------------------------------------------------*/
-function RuleModal({
-  isOpen,
-  onClose,
-  rule,
-  pubId,
-  trackingLinkId,
-  offers,
-  remaining,
-  onSaved,
-}) {
-  const [offerId, setOfferId] = useState(rule?.offer_id || "");
-  const [geo, setGeo] = useState(rule?.geo || "ALL");
-  const [carrier, setCarrier] = useState(rule?.carrier || "ALL");
-  const [weight, setWeight] = useState(
-    rule?.weight !== undefined && rule?.weight !== null
-      ? String(rule.weight)
-      : ""
-  );
-  const [fallback, setFallback] = useState(!!rule?.is_fallback);
-  const [status, setStatus] = useState(rule?.status || "active");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+const PARAM_PLACEHOLDERS = {
+  ip: "{IP}",
+  ua: "{UA}",
+  sub1: "{SUB1}",
+  sub2: "{SUB2}",
+  sub3: "{SUB3}",
+  sub4: "{SUB4}",
+  sub5: "{SUB5}",
+  device: "{DEVICE}",
+  msisdn: "{MSISDN}",
+  click_id: "{CLICK_ID}",
+};
 
-  useEffect(() => {
-    if (!isOpen) return;
-    setOfferId(rule?.offer_id || "");
-    setGeo(rule?.geo || "ALL");
-    setCarrier(rule?.carrier || "ALL");
-    setWeight(
-      rule?.weight !== undefined && rule?.weight !== null
-        ? String(rule.weight)
-        : ""
-    );
-    setFallback(!!rule?.is_fallback);
-    setStatus(rule?.status || "active");
-    setError("");
-    setSaving(false);
-  }, [isOpen, rule]);
+/* --------------------------------------------------------
+   SMALL UTILS
+-------------------------------------------------------- */
 
-  if (!isOpen) return null;
-
-  const handleSave = async () => {
-    if (!offerId) {
-      setError("Offer ID required");
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-
-    const payload = {
-      pub_id: pubId,
-      tracking_link_id: trackingLinkId,
-      offer_id: offerId,
-      geo,
-      carrier,
-      is_fallback: fallback,
-      weight: weight ? Number(weight) : null,
-      autoFill: !weight,
-      status,
-    };
-
-    try {
-      if (rule?.id) {
-        const res = await apiClient.put(
-          `/distribution/rules/${rule.id}`,
-          payload
-        );
-        if (!res.data.success) throw new Error(res.data.error || "Update failed");
-      } else {
-        const res = await apiClient.post(`/distribution/rules`, payload);
-        if (!res.data.success) throw new Error(res.data.error || "Create failed");
-      }
-      toast.success("Rule saved");
-      await onSaved();
-      onClose();
-    } catch (e) {
-      console.error(e);
-      setError(e.message || "Failed to save rule");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">
-            {rule ? "Edit Distribution Rule" : "Add Distribution Rule"}
-          </h2>
-          <button
-            className="text-xl leading-none text-gray-500 hover:text-gray-900"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </div>
-
-        {error && (
-          <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-            {error}
-          </div>
-        )}
-
-        {/* Offer dropdown */}
-        <div className="mb-3">
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
-            Offer ID <span className="text-red-500">*</span>
-          </label>
-          <select
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-            value={offerId}
-            onChange={(e) => setOfferId(e.target.value)}
-          >
-            <option value="">Select Offer (OFF01, OFF02...)</option>
-            {offers.map((o) => {
-              const id = o.offer_id || o.id; // backend id (like OFF01)
-              const name = o.name || o.offer_name || "";
-              return (
-                <option key={id} value={id}>
-                  {id} {name ? `— ${name}` : ""}
-                </option>
-              );
-            })}
-          </select>
-          <p className="mt-1 text-xs text-gray-500">
-            Active offers for this publisher/geo/carrier (if backend filters).
-          </p>
-        </div>
-
-        {/* GEO + Carrier */}
-        <div className="mb-3 grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
-              GEO
-            </label>
-            <input
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              value={geo}
-              onChange={(e) => setGeo(e.target.value.toUpperCase())}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
-              Carrier
-            </label>
-            <input
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              value={carrier}
-              onChange={(e) => setCarrier(e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* Weight */}
-        <div className="mb-3">
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
-            Weight (%)
-          </label>
-          <input
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-            value={weight}
-            onChange={(e) => setWeight(e.target.value)}
-            placeholder={`Leave blank for AutoFill (Remaining ${remaining}%)`}
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            Empty = Smart AutoFill (system uses remaining %).
-          </p>
-        </div>
-
-        {/* Fallback + Status */}
-        <div className="mb-4 flex items-center justify-between">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={fallback}
-              onChange={(e) => setFallback(e.target.checked)}
-            />
-            <span>Fallback rule</span>
-          </label>
-
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600">
-              Status
-            </label>
-            <select
-              className="rounded-lg border border-gray-200 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              <option value="active">active</option>
-              <option value="paused">paused</option>
-              <option value="deleted">deleted</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Buttons */}
-        <div className="flex justify-end gap-3">
-          <button
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-            onClick={onClose}
-            disabled={saving}
-          >
-            Cancel
-          </button>
-          <button
-            className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-60"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? (
-              <>
-                <RefreshCcw className="h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save Rule"
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+function classNames(...classes) {
+  return classes.filter(Boolean).join(" ");
 }
 
-/** -----------------------------------------------------------
- *  MAIN PAGE
- *  ----------------------------------------------------------*/
+function buildFinalUrl(baseUrl, requiredParams) {
+  if (!baseUrl) return "";
+
+  const activeParams = Object.entries(requiredParams || {})
+    .filter(([, v]) => v)
+    .map(([key]) => {
+      const paramName = key; // same as key in URL
+      const placeholder = PARAM_PLACEHOLDERS[key] || `{${key.toUpperCase()}}`;
+      return `${encodeURIComponent(paramName)}=${placeholder}`;
+    });
+
+  if (!activeParams.length) return baseUrl;
+
+  const hasQuery = baseUrl.includes("?");
+  const joiner = hasQuery ? "&" : "?";
+
+  return `${baseUrl}${joiner}${activeParams.join("&")}`;
+}
+
+/* --------------------------------------------------------
+   MAIN COMPONENT
+-------------------------------------------------------- */
+
 export default function TrafficDistribution() {
-  const [pubId, setPubId] = useState("");
-  const [loadingLinks, setLoadingLinks] = useState(false);
-  const [links, setLinks] = useState([]);
+  const [pubId, setPubId] = useState("PUB03");
   const [search, setSearch] = useState("");
+  const [links, setLinks] = useState([]);
+  const [loadingLinks, setLoadingLinks] = useState(false);
 
-  const [selectedLinkId, setSelectedLinkId] = useState(null);
   const [selectedLink, setSelectedLink] = useState(null);
-
   const [meta, setMeta] = useState(null);
-  const [rules, setRules] = useState([]);
-  const [remaining, setRemaining] = useState(100);
 
-  const [requiredParams, setRequiredParams] = useState(DEFAULT_REQUIRED_PARAMS);
-  const [finalUrl, setFinalUrl] = useState("");
-  const [updatingParams, setUpdatingParams] = useState(false);
+  const [rules, setRules] = useState([]);
+  const [remaining, setRemaining] = useState(0);
+
+  const [requiredParams, setRequiredParams] = useState({});
+  const [savingParams, setSavingParams] = useState(false);
 
   const [offers, setOffers] = useState([]);
-  const [offersLoading, setOffersLoading] = useState(false);
-
-  const [geoFilter, setGeoFilter] = useState("ALL");
-  const [carrierFilter, setCarrierFilter] = useState("ALL");
-
-  const [showRuleModal, setShowRuleModal] = useState(false);
-  const [editingRule, setEditingRule] = useState(null);
+  const [loadingOffers, setLoadingOffers] = useState(false);
 
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  /** -------------------------------
-   * FILTERED LINKS
-   * ------------------------------*/
+  const [showRuleModal, setShowRuleModal] = useState(false);
+  const [editingRule, setEditingRule] = useState(null);
+  const [savingRule, setSavingRule] = useState(false);
+
+  /* --------------------------------------------------------
+     DERIVED
+  -------------------------------------------------------- */
+
   const filteredLinks = useMemo(() => {
     if (!search.trim()) return links;
-    return links.filter((l) => {
-      const term = search.toLowerCase();
-      return (
-        l.tracking_id?.toLowerCase().includes(term) ||
-        l.tracking_url?.toLowerCase().includes(term) ||
-        l.publisher_name?.toLowerCase().includes(term) ||
-        l.name?.toLowerCase().includes(term)
-      );
-    });
+    const q = search.toLowerCase();
+    return links.filter(
+      (l) =>
+        l.tracking_id.toLowerCase().includes(q) ||
+        (l.publisher_name || "").toLowerCase().includes(q) ||
+        (l.tracking_url || "").toLowerCase().includes(q)
+    );
   }, [links, search]);
 
-  /** -------------------------------
-   * BUILD FINAL URL (no %3 issue)
-   * ------------------------------*/
-  const computeFinalUrl = (baseUrl, params) => {
-    if (!baseUrl) return "";
-    const enabled = Object.entries(params || {}).filter(([_, v]) => v);
-    if (!enabled.length) return baseUrl;
+  const finalTrackingUrl = useMemo(
+    () =>
+      buildFinalUrl(meta?.tracking_url || selectedLink?.tracking_url || "", requiredParams),
+    [meta, selectedLink, requiredParams]
+  );
 
-    const hasQuery = baseUrl.includes("?");
-    let url = baseUrl + (hasQuery ? "&" : "?");
+  /* --------------------------------------------------------
+     LOADERS
+  -------------------------------------------------------- */
 
-    url += enabled
-      .map(([key]) => `${key}={${key.toUpperCase()}}`)
-      .join("&");
-
-    return url;
-  };
-
-  useEffect(() => {
-    if (!meta) {
-      setFinalUrl("");
-      return;
-    }
-    setFinalUrl(computeFinalUrl(meta.tracking_url, requiredParams));
-  }, [meta, requiredParams]);
-
-  /** -------------------------------
-   * LOAD TRACKING LINKS
-   * ------------------------------*/
   const loadTrackingLinks = async () => {
     if (!pubId.trim()) {
-      toast.error("Please enter PUB code (PUB01 / PUB02 / PUB03)");
+      toast.error("Publisher ID required (e.g. PUB03)");
       return;
     }
     setLoadingLinks(true);
-    setSelectedLinkId(null);
     setSelectedLink(null);
     setMeta(null);
     setRules([]);
-    setOffers([]);
     setPreview(null);
-
     try {
       const res = await apiClient.get(
-        `/distribution/tracking-links?pub_id=${pubId.trim()}`
+        `/distribution/tracking-links?pub_id=${encodeURIComponent(pubId.trim())}`
       );
-      if (!res.data.success) {
-        throw new Error(res.data.error || "Failed");
+      if (!res.data?.success) {
+        toast.error(res.data?.error || "Failed to load tracking links");
+        return;
       }
       setLinks(res.data.links || []);
-      if (!res.data.links || !res.data.links.length) {
-        toast.info("No tracking links found for this publisher");
+      if (!res.data.links?.length) {
+        toast.info("No tracking links found for this publisher.");
       }
     } catch (err) {
       console.error(err);
-      toast.error("Failed to load tracking links");
+      toast.error("Error loading tracking links");
     } finally {
       setLoadingLinks(false);
     }
   };
 
-  /** -------------------------------
-   * WHEN LINK SELECTED
-   * ------------------------------*/
-  const handleSelectLink = (link) => {
-    setSelectedLinkId(link.tracking_link_id);
-    setSelectedLink(link);
-    setMeta(null);
-    setRules([]);
-    setRemaining(100);
-    setOffers([]);
-    setPreview(null);
-
-    const rp = link.required_params || DEFAULT_REQUIRED_PARAMS;
-    setRequiredParams({ ...DEFAULT_REQUIRED_PARAMS, ...rp });
-
-    setGeoFilter(link.geo || "ALL");
-    setCarrierFilter(link.carrier || "ALL");
-  };
-
-  /** -------------------------------
-   * LOAD META + RULES + REMAINING
-   * ------------------------------*/
-  const loadMeta = async () => {
-    if (!selectedLinkId || !pubId) return;
+  const loadMeta = async (link) => {
+    if (!link) return;
     try {
       const res = await apiClient.get(
-        `/distribution/meta?pub_id=${pubId}&tracking_link_id=${selectedLinkId}`
+        `/distribution/meta?pub_id=${encodeURIComponent(
+          pubId.trim()
+        )}&tracking_link_id=${link.tracking_link_id}`
       );
-      if (res.data.success) {
+      if (res.data?.success) {
         setMeta(res.data.meta);
-        if (res.data.meta?.required_params) {
-          setRequiredParams({
-            ...DEFAULT_REQUIRED_PARAMS,
-            ...res.data.meta.required_params,
-          });
-        }
-        if (res.data.meta?.geo) setGeoFilter(res.data.meta.geo);
-        if (res.data.meta?.carrier) setCarrierFilter(res.data.meta.carrier);
+        setRequiredParams(res.data.meta.required_params || {});
+      } else {
+        toast.error(res.data?.error || "Meta fetch failed");
       }
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load meta");
+    } catch (e) {
+      console.error(e);
+      toast.error("Error loading overview");
     }
   };
 
-  const loadRules = async () => {
-    if (!selectedLinkId || !pubId) return;
+  const loadRules = async (link) => {
+    if (!link) return;
     try {
       const res = await apiClient.get(
-        `/distribution/rules?pub_id=${pubId}&tracking_link_id=${selectedLinkId}`
+        `/distribution/rules?pub_id=${encodeURIComponent(
+          pubId.trim()
+        )}&tracking_link_id=${link.tracking_link_id}`
       );
-      if (res.data.success) {
+      if (res.data?.success) {
         setRules(res.data.rules || []);
+      } else {
+        toast.error(res.data?.error || "Rules fetch failed");
       }
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load rules");
+    } catch (e) {
+      console.error(e);
+      toast.error("Error loading rules");
     }
   };
 
-  const loadRemaining = async () => {
-    if (!selectedLinkId || !pubId) return;
+  const loadRemaining = async (link) => {
+    if (!link) return;
     try {
       const res = await apiClient.get(
-        `/distribution/rules/remaining?pub_id=${pubId}&tracking_link_id=${selectedLinkId}`
+        `/distribution/rules/remaining?pub_id=${encodeURIComponent(
+          pubId.trim()
+        )}&tracking_link_id=${link.tracking_link_id}`
       );
-      if (res.data.success) {
-        setRemaining(res.data.remaining);
+      if (res.data?.success) {
+        setRemaining(res.data.remaining ?? 0);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  /** -------------------------------
-   * LOAD OFFERS (generic endpoint)
-   * NOTE: If your backend uses another path,
-   *       just change the URL below.
-   * ------------------------------*/
-  const loadOffers = async () => {
-    if (!pubId) return;
-    setOffersLoading(true);
+  const loadOffers = async (linkMeta) => {
+    if (!linkMeta) return;
+    setLoadingOffers(true);
+    setOffers([]);
     try {
-      // 🔁 CHANGE HERE if your offers endpoint is different
+      // NOTE: yaha assume hai backend me /offers endpoint bana hua hai
+      // jo pub_id + geo + carrier se active offers return karega.
       const res = await apiClient.get("/offers", {
         params: {
-          pub_id: pubId,
-          geo: geoFilter === "ALL" ? undefined : geoFilter,
-          carrier: carrierFilter === "ALL" ? undefined : carrierFilter,
+          pub_id: pubId.trim(),
+          geo: linkMeta.geo,
+          carrier: linkMeta.carrier,
           status: "active",
         },
       });
 
-      const data = res.data || {};
-      const list = data.offers || data.items || data.data || [];
-      setOffers(list);
-    } catch (err) {
-      console.error("offers load error", err);
-      setOffers([]);
-      // no toast, to avoid spam if endpoint slightly different
+      if (res.data?.success === false) {
+        // in case aapka /offers JSON { success:false } format use karta ho
+        toast.error(res.data?.error || "Offers fetch failed");
+      }
+
+      const list = res.data?.offers || res.data || [];
+      setOffers(Array.isArray(list) ? list : []);
+    } catch (e) {
+      console.error(e);
+      // agar endpoint exist nahi karta to bhi app chalega, बस dropdown empty रहेगा
+      toast.error("Unable to load offers for dropdown (check /offers API)");
     } finally {
-      setOffersLoading(false);
+      setLoadingOffers(false);
     }
   };
 
-  /** -------------------------------
-   * LOAD ALL WHEN LINK CHANGES
-   * ------------------------------*/
-  useEffect(() => {
-    if (!selectedLinkId || !pubId) return;
-    loadMeta();
-    loadRules();
-    loadRemaining();
-  }, [selectedLinkId, pubId]);
+  const refreshAllForLink = async (link) => {
+    if (!link) return;
+    await Promise.all([loadMeta(link), loadRules(link), loadRemaining(link)]);
+    if (link.geo || link.carrier) {
+      // try to use latest meta for offers
+      setTimeout(() => {
+        setMeta((m) => {
+          if (m) loadOffers(m);
+          return m;
+        });
+      }, 0);
+    }
+  };
 
-  /** When geo/carrier filter changes, reload offers */
-  useEffect(() => {
-    if (!selectedLinkId) return;
-    loadOffers();
-  }, [geoFilter, carrierFilter, pubId, selectedLinkId]);
+  const handleSelectLink = async (link) => {
+    setSelectedLink(link);
+    setPreview(null);
+    await refreshAllForLink(link);
+  };
 
-  /** -------------------------------
-   * PARAM TOGGLE (update backend)
-   * ------------------------------*/
-  const handleParamToggle = async (key) => {
-    if (!selectedLinkId) return;
+  /* --------------------------------------------------------
+     PARAM TOGGLES
+  -------------------------------------------------------- */
 
-    const updated = {
-      ...DEFAULT_REQUIRED_PARAMS,
+  const handleToggleParam = async (key) => {
+    if (!selectedLink) return;
+    const next = {
       ...(requiredParams || {}),
       [key]: !requiredParams?.[key],
     };
-
-    setRequiredParams(updated);
-    setUpdatingParams(true);
+    setRequiredParams(next);
+    setSavingParams(true);
     try {
-      const res = await apiClient.put(
-        `/distribution/update-required-params/${selectedLinkId}`,
-        { required_params: updated }
+      await apiClient.put(
+        `/distribution/update-required-params/${selectedLink.tracking_link_id}`,
+        { required_params: next }
       );
-      if (!res.data.success) {
-        throw new Error(res.data.error || "Update failed");
-      }
-      // meta required_params also refresh
-      setMeta((prev) =>
-        prev ? { ...prev, required_params: updated } : prev
-      );
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to update parameters");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to update required parameters");
     } finally {
-      setUpdatingParams(false);
+      setSavingParams(false);
     }
   };
 
-  /** -------------------------------
-   * RULE ACTIONS
-   * ------------------------------*/
+  const handleCopyUrl = async () => {
+    if (!finalTrackingUrl) return;
+    try {
+      await navigator.clipboard.writeText(finalTrackingUrl);
+      toast.success("Tracking URL copied to clipboard");
+    } catch (e) {
+      console.error(e);
+      toast.error("Unable to copy URL");
+    }
+  };
+
+  /* --------------------------------------------------------
+     PREVIEW
+  -------------------------------------------------------- */
+
+  const runPreview = async () => {
+    if (!selectedLink || !meta) return;
+    setPreviewLoading(true);
+    setPreview(null);
+    try {
+      const res = await apiClient.get("/distribution/rotation/preview", {
+        params: {
+          pub_id: pubId.trim(),
+          tracking_link_id: selectedLink.tracking_link_id,
+          geo: meta.geo,
+          carrier: meta.carrier,
+        },
+      });
+      if (res.data?.success) {
+        setPreview(res.data);
+      } else {
+        toast.error(res.data?.error || "Preview failed");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Preview call failed");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  /* --------------------------------------------------------
+     RULE CRUD
+  -------------------------------------------------------- */
+
   const openAddRule = () => {
+    if (!selectedLink) {
+      toast.error("Select a tracking link first");
+      return;
+    }
     setEditingRule(null);
     setShowRuleModal(true);
   };
@@ -538,597 +357,696 @@ export default function TrafficDistribution() {
     setShowRuleModal(true);
   };
 
-  const handleDeleteRule = async (id) => {
+  const saveRule = async (form) => {
+    if (!selectedLink) return;
+
+    setSavingRule(true);
+    try {
+      const payload = {
+        pub_id: pubId.trim(),
+        tracking_link_id: selectedLink.tracking_link_id,
+        offer_id: form.offerId,
+        geo: form.geo || "ALL",
+        carrier: form.carrier || "ALL",
+        is_fallback: form.fallback,
+        weight: form.weight ? Number(form.weight) : null,
+        autoFill: !form.weight,
+        status: form.status,
+      };
+
+      if (!payload.offer_id) {
+        toast.error("Offer is required");
+        setSavingRule(false);
+        return;
+      }
+
+      if (editingRule) {
+        await apiClient.put(`/distribution/rules/${editingRule.id}`, payload);
+        toast.success("Rule updated");
+      } else {
+        await apiClient.post("/distribution/rules", payload);
+        toast.success("Rule added");
+      }
+
+      setShowRuleModal(false);
+      setEditingRule(null);
+      await Promise.all([loadRules(selectedLink), loadRemaining(selectedLink)]);
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to save rule");
+    } finally {
+      setSavingRule(false);
+    }
+  };
+
+  const deleteRule = async (rule) => {
     if (!window.confirm("Delete this rule?")) return;
     try {
-      const res = await apiClient.delete(`/distribution/rules/${id}`);
-      if (!res.data.success) throw new Error(res.data.error || "Failed");
+      await apiClient.delete(`/distribution/rules/${rule.id}`);
       toast.success("Rule deleted");
-      loadRules();
-      loadRemaining();
-    } catch (err) {
-      console.error(err);
+      await Promise.all([loadRules(selectedLink), loadRemaining(selectedLink)]);
+    } catch (e) {
+      console.error(e);
       toast.error("Failed to delete rule");
     }
   };
 
-  const refreshRules = async () => {
-    await Promise.all([loadRules(), loadRemaining()]);
-  };
+  /* --------------------------------------------------------
+     EFFECTS
+  -------------------------------------------------------- */
 
-  /** -------------------------------
-   * ROTATION PREVIEW
-   * ------------------------------*/
-  const handlePreviewRotation = async () => {
-    if (!selectedLinkId || !pubId) return;
-    setPreviewLoading(true);
-    setPreview(null);
-    try {
-      const res = await apiClient.get("/distribution/rotation/preview", {
-        params: {
-          pub_id: pubId,
-          tracking_link_id: selectedLinkId,
-          geo: geoFilter,
-          carrier: carrierFilter,
-        },
-      });
-      if (!res.data.success) {
-        throw new Error(res.data.error || "Preview failed");
-      }
-      setPreview(res.data);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load rotation preview");
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
+  useEffect(() => {
+    // initial load for default PUB03 (optional)
+    // loadTrackingLinks();
+  }, []);
 
-  /** -------------------------------
-   * COPY URL
-   * ------------------------------*/
-  const handleCopyUrl = async () => {
-    if (!finalUrl) return;
-    try {
-      await navigator.clipboard.writeText(finalUrl);
-      toast.success("Tracking URL copied");
-    } catch (err) {
-      toast.error("Failed to copy URL");
-    }
-  };
+  /* --------------------------------------------------------
+     RENDER
+  -------------------------------------------------------- */
 
-  /** -------------------------------
-   * RENDER
-   * ------------------------------*/
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      {/* Sidebar */}
-      <aside className="hidden w-64 border-r border-slate-200 bg-white/80 p-4 lg:block">
-        <div className="mb-6 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white">
-            <Wifi className="h-4 w-4" />
-          </div>
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              mob13r
-            </div>
-            <div className="text-sm font-semibold text-slate-900">
-              Traffic Engine
-            </div>
-          </div>
-        </div>
-
-        <nav className="space-y-1 text-sm">
-          <div className="rounded-xl bg-blue-50 px-3 py-2 text-blue-700">
+    <div className="p-6 space-y-6">
+      {/* HEADER */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
             Traffic Distribution
-          </div>
-          <div className="rounded-xl px-3 py-2 text-slate-500">
-            Fraud Analytics
-          </div>
-          <div className="rounded-xl px-3 py-2 text-slate-500">
-            Reports
-          </div>
-        </nav>
-
-        <div className="mt-8 rounded-xl bg-slate-100 p-3 text-xs text-slate-600">
-          <div className="mb-1 font-semibold text-slate-700">
-            Tips for best setup
-          </div>
-          <ul className="space-y-1">
-            <li>• Set at least one fallback rule</li>
-            <li>• Use AutoFill for last rule</li>
-            <li>• Monitor caps daily</li>
-          </ul>
+          </h1>
+          <p className="text-sm text-gray-500">
+            Manage rotation rules, required tracking parameters & offer caps
+            per publisher tracking link.
+          </p>
         </div>
-      </aside>
+      </div>
 
-      {/* Main content */}
-      <div className="flex flex-1 flex-col">
-        {/* Header */}
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white/70 px-6 py-3 backdrop-blur">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">
-              Traffic Distribution
-            </h1>
-            <p className="text-xs text-slate-500">
-              Configure rotation, caps & tracking parameters publisher-wise.
-            </p>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-slate-500">
-            <Settings className="h-4 w-4" />
-            <span>Advanced rules engine</span>
-          </div>
-        </header>
+      {/* TOP BAR: PUB ID + LOAD + SEARCH */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-end">
+        <div className="flex-1">
+          <label className="block text-xs font-semibold text-gray-600 mb-1">
+            Publisher ID
+          </label>
+          <input
+            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            value={pubId}
+            onChange={(e) => setPubId(e.target.value)}
+            placeholder="PUB01 / PUB02 / PUB03..."
+          />
+        </div>
 
-        {/* Body */}
-        <div className="flex flex-1 flex-col gap-4 p-4 lg:flex-row lg:p-6">
-          {/* Left: Tracking links list */}
-          <div className="flex w-full flex-col gap-3 lg:w-1/3">
-            {/* PUB input + search */}
-            <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Publisher Code
-                  </label>
-                  <input
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                    placeholder="PUB01, PUB02, PUB03..."
-                    value={pubId}
-                    onChange={(e) => setPubId(e.target.value.toUpperCase())}
-                  />
-                </div>
+        <button
+          onClick={loadTrackingLinks}
+          disabled={loadingLinks}
+          className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-blue-700 disabled:opacity-60"
+        >
+          {loadingLinks ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Load
+            </>
+          )}
+        </button>
+
+        <div className="flex-1 md:max-w-md">
+          <label className="block text-xs font-semibold text-gray-600 mb-1">
+            Search tracking links
+          </label>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+            <input
+              className="w-full rounded-md border border-gray-200 bg-white pl-8 pr-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              placeholder="Search by ID, URL or publisher name..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* MAIN GRID */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* LEFT: LIST OF TRACKING LINKS */}
+        <div className="space-y-2 lg:col-span-1">
+          <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <LinkIcon className="h-4 w-4 text-gray-400" />
+            Publisher Tracking Links
+          </h2>
+
+          <div className="space-y-2 max-h-[520px] overflow-auto pr-1">
+            {filteredLinks.map((link) => {
+              const active = selectedLink?.tracking_link_id === link.tracking_link_id;
+              return (
                 <button
-                  className="mt-5 inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-                  onClick={loadTrackingLinks}
-                  disabled={loadingLinks}
-                >
-                  {loadingLinks ? (
-                    <RefreshCcw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCcw className="h-4 w-4" />
+                  key={link.tracking_link_id}
+                  onClick={() => handleSelectLink(link)}
+                  className={classNames(
+                    "w-full text-left rounded-lg border px-3 py-2 text-sm shadow-sm transition",
+                    active
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 bg-white hover:border-blue-400 hover:bg-blue-50/60"
                   )}
-                  Load
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold">{link.tracking_id}</span>
+                    <span className="text-[11px] rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">
+                      {link.type} · {link.payout}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
+                    <span>
+                      {link.geo} · {link.carrier}
+                    </span>
+                    <span>{link.publisher_name}</span>
+                  </div>
+                  <p className="mt-1 line-clamp-1 text-[11px] text-gray-400">
+                    {link.tracking_url}
+                  </p>
                 </button>
-              </div>
+              );
+            })}
 
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
-                <input
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-7 pr-3 py-2 text-xs focus:border-blue-500 focus:bg-white focus:outline-none"
-                  placeholder="Search links by ID, URL, name..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {/* Tracking links */}
-            <div className="flex-1 overflow-hidden rounded-2xl bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Tracking Links
-                </span>
-                <span className="text-xs text-slate-400">
-                  {filteredLinks.length} found
-                </span>
-              </div>
-
-              <div className="max-h-[480px] space-y-1 overflow-auto px-2 py-2">
-                {filteredLinks.map((l) => {
-                  const active = l.tracking_link_id === selectedLinkId;
-                  return (
-                    <button
-                      key={l.tracking_link_id}
-                      className={`flex w-full flex-col rounded-xl border px-3 py-2 text-left text-xs transition ${
-                        active
-                          ? "border-blue-500 bg-blue-50"
-                          : "border-slate-100 bg-white hover:border-blue-200 hover:bg-blue-50/40"
-                      }`}
-                      onClick={() => handleSelectLink(l)}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold text-slate-800">
-                          {l.tracking_id}
-                        </span>
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] ${
-                            l.status === "active"
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          {l.status || "unknown"}
-                        </span>
-                      </div>
-                      <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500">
-                        <span className="rounded bg-slate-100 px-1.5 py-0.5">
-                          {l.geo}
-                        </span>
-                        <span className="rounded bg-slate-100 px-1.5 py-0.5">
-                          {l.carrier}
-                        </span>
-                        <span className="truncate text-slate-400">
-                          {l.tracking_url}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-
-                {!filteredLinks.length && (
-                  <div className="py-10 text-center text-xs text-slate-400">
-                    No links. Enter PUB code and click Load.
-                  </div>
-                )}
-              </div>
-            </div>
+            {!loadingLinks && !links.length && (
+              <p className="text-xs text-gray-400">
+                Enter a Publisher ID and click <b>Load</b> to see tracking
+                links.
+              </p>
+            )}
           </div>
+        </div>
 
-          {/* Right: Overview + Rules + Params */}
-          <div className="flex w-full flex-1 flex-col gap-3">
-            {/* Overview + Params + URL */}
-            <div className="grid gap-3 lg:grid-cols-2">
-              {/* Overview */}
-              <div className="rounded-2xl bg-white p-4 shadow-sm">
-                <div className="mb-2 flex items-center justify-between">
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Distribution Overview
-                    </div>
-                    <div className="text-sm text-slate-800">
-                      {selectedLink
-                        ? selectedLink.publisher_name || selectedLink.pub_code
-                        : "Select a tracking link"}
-                    </div>
-                  </div>
-                  <button
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-[11px] text-slate-500 hover:bg-slate-50"
-                    onClick={refreshRules}
-                    disabled={!selectedLinkId}
-                  >
-                    <RefreshCcw className="h-3 w-3" />
-                    Refresh
-                  </button>
+        {/* RIGHT: DETAIL (OVERVIEW + RULES) */}
+        <div className="space-y-4 lg:col-span-2">
+          {/* OVERVIEW CARD */}
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-800">
+                  Overview
+                </h2>
+                <p className="text-xs text-gray-500">
+                  Publisher, GEO, carrier & final tracking URL.
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-[11px] uppercase tracking-wide text-gray-400">
+                  Remaining Weight
+                </span>
+                <div
+                  className={classNames(
+                    "text-sm font-semibold",
+                    remaining === 0 ? "text-red-500" : "text-green-600"
+                  )}
+                >
+                  {remaining}% free
                 </div>
+              </div>
+            </div>
 
-                {meta ? (
-                  <div className="space-y-1.5 text-xs text-slate-600">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Publisher</span>
-                      <span className="font-medium">
-                        {meta.pub_code}{" "}
-                        {selectedLink?.publisher_name
-                          ? `— ${selectedLink.publisher_name}`
-                          : ""}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">GEO</span>
-                      <span className="rounded bg-slate-100 px-2 py-0.5 font-medium">
-                        {meta.geo}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Carrier</span>
-                      <span className="rounded bg-slate-100 px-2 py-0.5 font-medium">
-                        {meta.carrier}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">% Used</span>
-                      <span className="font-semibold text-slate-800">
-                        {100 - remaining}% used · {remaining}% free
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="pt-4 text-xs text-slate-400">
-                    Select a tracking link to view details.
-                  </div>
-                )}
-
-                {/* Geo/Carrier filter for preview + offers */}
-                {selectedLinkId && (
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+            {/* META ROW */}
+            {meta ? (
+              <>
+                <div className="mt-3 grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+                  <div className="space-y-1">
                     <div>
-                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                        Geo (for preview/offers)
-                      </label>
-                      <input
-                        className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
-                        value={geoFilter}
-                        onChange={(e) =>
-                          setGeoFilter(
-                            e.target.value ? e.target.value.toUpperCase() : "ALL"
-                          )
-                        }
-                      />
+                      <span className="text-xs font-semibold text-gray-500">
+                        Publisher:
+                      </span>{" "}
+                      <span className="font-medium">{meta.pub_code}</span>
                     </div>
                     <div>
-                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                        Carrier (for preview/offers)
-                      </label>
-                      <input
-                        className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
-                        value={carrierFilter}
-                        onChange={(e) =>
-                          setCarrierFilter(e.target.value || "ALL")
-                        }
-                      />
+                      <span className="text-xs font-semibold text-gray-500">
+                        GEO:
+                      </span>{" "}
+                      <span className="font-medium">{meta.geo}</span>
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-gray-500">
+                        Carrier:
+                      </span>{" "}
+                      <span className="font-medium">{meta.carrier}</span>
                     </div>
                   </div>
-                )}
 
-                {/* Rotation preview */}
-                {selectedLinkId && (
-                  <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-3">
-                    <div className="mb-2 flex items-center justify-between text-xs">
-                      <span className="font-semibold text-slate-700">
-                        Rotation Preview
-                      </span>
+                  {/* URL + COPY */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-gray-500">
+                      Tracking URL (with required params)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        readOnly
+                        className="flex-1 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-mono text-gray-700 focus:outline-none"
+                        value={finalTrackingUrl || ""}
+                      />
                       <button
-                        className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-medium text-white hover:bg-black disabled:opacity-60"
-                        onClick={handlePreviewRotation}
-                        disabled={previewLoading}
+                        onClick={handleCopyUrl}
+                        disabled={!finalTrackingUrl}
+                        className="inline-flex items-center justify-center rounded-md border border-gray-200 bg-white p-2 text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-60"
                       >
-                        {previewLoading ? (
-                          <RefreshCcw className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <RefreshCcw className="h-3 w-3" />
-                        )}
-                        Run
+                        <Copy className="h-4 w-4" />
                       </button>
                     </div>
-                    {preview && (
-                      <div className="space-y-1 text-[11px] text-slate-600">
-                        <div>
-                          <span className="text-slate-500">Type:</span>{" "}
-                          <span className="font-medium">
-                            {preview.type || preview.reason}
-                          </span>
-                        </div>
-                        {preview.selected && (
-                          <>
-                            <div>
-                              <span className="text-slate-500">Offer ID:</span>{" "}
-                              <span className="font-semibold">
-                                {preview.selected.offer_id}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-slate-500">
-                                Rule Weight:
-                              </span>{" "}
-                              <span>{preview.selected.weight}%</span>
-                            </div>
-                          </>
-                        )}
-                        {!preview.selected && (
-                          <div className="text-slate-400">
-                            No eligible rule found for this geo/carrier.
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {!preview && !previewLoading && (
-                      <div className="text-[11px] text-slate-400">
-                        Use current rules + caps to simulate selected offer.
-                      </div>
-                    )}
+                    <p className="text-[11px] text-gray-400">
+                      Example:{" "}
+                      <code className="rounded bg-gray-100 px-1">
+                        &click_id={"{CLICK_ID}"}&ip={"{IP}"}&ua={"{UA}"}
+                      </code>
+                    </p>
                   </div>
-                )}
-              </div>
-
-              {/* Params + URL */}
-              <div className="rounded-2xl bg-white p-4 shadow-sm">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Tracking Parameters
-                  </span>
-                  {selectedLinkId && (
-                    <span className="text-[10px] text-slate-400">
-                      Auto-synced with backend
-                    </span>
-                  )}
                 </div>
 
-                {selectedLinkId ? (
-                  <>
-                    {/* Params toggle */}
-                    <div className="mb-3 grid grid-cols-2 gap-2 text-xs">
-                      {Object.keys(DEFAULT_REQUIRED_PARAMS).map((key) => (
-                        <label
-                          key={key}
-                          className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-700"
-                        >
-                          <input
-                            type="checkbox"
-                            className="h-3.5 w-3.5"
-                            checked={!!requiredParams?.[key]}
-                            onChange={() => handleParamToggle(key)}
-                            disabled={updatingParams}
-                          />
-                          <span className="uppercase">
-                            {key.replace("_", " ")}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
+                {/* PARAM TOGGLES */}
+                <div className="mt-4 border-t border-dashed border-gray-200 pt-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-gray-500">
+                      Required Parameters
+                    </p>
+                    {savingParams && (
+                      <span className="flex items-center gap-1 text-[11px] text-gray-400">
+                        <Loader2 className="h-3 w-3 animate-spin" /> saving...
+                      </span>
+                    )}
+                  </div>
 
-                    {/* Final URL */}
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-2">
-                      <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
-                        <span className="flex items-center gap-1">
-                          <LinkIcon className="h-3 w-3" />
-                          Final Tracking URL
-                        </span>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {PARAM_ORDER.map((key) => {
+                      const active = requiredParams?.[key];
+                      return (
                         <button
-                          className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-[10px] hover:bg-white"
-                          onClick={handleCopyUrl}
-                          disabled={!finalUrl}
+                          key={key}
+                          onClick={() => handleToggleParam(key)}
+                          className={classNames(
+                            "rounded-full border px-3 py-1 text-xs font-medium transition",
+                            active
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                              : "border-gray-200 bg-white text-gray-500 hover:border-blue-300 hover:text-blue-600"
+                          )}
                         >
-                          <CopyIcon className="h-3 w-3" />
-                          Copy
+                          {PARAM_LABELS[key] || key.toUpperCase()}
                         </button>
-                      </div>
-                      <div className="max-h-20 overflow-auto rounded bg-white px-2 py-1 text-[11px] text-slate-800">
-                        {finalUrl || "Select at least one parameter."}
-                      </div>
-                      <p className="mt-1 text-[10px] text-slate-400">
-                        Example:{" "}
-                        <code className="rounded bg-gray-100 px-1">
-                          &click_id={'{CLICK_ID}'}&ip={'{IP}'}&ua={'{UA}'}
-                        </code>
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <div className="pt-4 text-xs text-slate-400">
-                    Select a tracking link to configure parameters.
+                      );
+                    })}
                   </div>
-                )}
-              </div>
-            </div>
 
-            {/* Rules table */}
-            <div className="flex-1 rounded-2xl bg-white p-4 shadow-sm">
-              <div className="mb-2 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Distribution Rules
-                  </div>
-                  <div className="text-[11px] text-slate-400">
-                    Weighted rotation + fallback per offer.
-                  </div>
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    Click to toggle which parameters are required & appended to
+                    the final click URL.
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-slate-500">
-                    Remaining:{" "}
-                    <span className="font-semibold text-slate-900">
-                      {remaining}%
-                    </span>
-                  </span>
+
+                {/* PREVIEW SECTION */}
+                <div className="mt-4 border-t border-dashed border-gray-200 pt-3 grid gap-3 md:grid-cols-[auto,1fr]">
                   <button
-                    className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-                    onClick={openAddRule}
-                    disabled={!selectedLinkId}
+                    onClick={runPreview}
+                    disabled={previewLoading}
+                    className="inline-flex items-center justify-center rounded-md bg-gray-900 px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-black disabled:opacity-60"
                   >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add Rule
+                    {previewLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                        Running...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="mr-2 h-3 w-3" />
+                        Rotation Preview
+                      </>
+                    )}
                   </button>
+                  <div className="text-xs text-gray-500">
+                    {preview ? (
+                      preview.selected ? (
+                        <div className="space-y-1">
+                          <p>
+                            Selected Offer ID:{" "}
+                            <b>{preview.selected.offer_id}</b> (
+                            {preview.type || "primary"})
+                          </p>
+                        </div>
+                      ) : (
+                        <p>No eligible rule matched (reason: {preview.reason})</p>
+                      )
+                    ) : (
+                      <p className="text-gray-400">
+                        Run preview to simulate which offer will be served for
+                        this GEO & carrier.
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </>
+            ) : selectedLink ? (
+              <p className="mt-3 text-xs text-gray-400">
+                Loading overview for selected link...
+              </p>
+            ) : (
+              <p className="mt-3 text-xs text-gray-400">
+                Select a tracking link from the left panel to see its overview.
+              </p>
+            )}
+          </div>
 
-              {selectedLinkId ? (
-                <div className="mt-2 overflow-auto rounded-xl border border-slate-100">
-                  <table className="min-w-full text-xs">
-                    <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-3 py-2 text-left">Offer ID</th>
-                        <th className="px-3 py-2 text-left">Geo</th>
-                        <th className="px-3 py-2 text-left">Carrier</th>
-                        <th className="px-3 py-2 text-right">% Weight</th>
-                        <th className="px-3 py-2 text-center">Fallback</th>
-                        <th className="px-3 py-2 text-center">Status</th>
-                        <th className="px-3 py-2 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rules.map((r) => (
-                        <tr
-                          key={r.id}
-                          className="border-t border-slate-100 hover:bg-slate-50/70"
-                        >
-                          <td className="px-3 py-2 font-semibold text-slate-800">
-                            {r.offer_id}
-                          </td>
-                          <td className="px-3 py-2 text-slate-600">
-                            {r.geo || "ALL"}
-                          </td>
-                          <td className="px-3 py-2 text-slate-600">
-                            {r.carrier || "ALL"}
-                          </td>
-                          <td className="px-3 py-2 text-right font-medium text-slate-800">
-                            {r.weight}%
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            {r.is_fallback ? (
-                              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                                YES
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-slate-400">
-                                —
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-[10px] ${
-                                r.status === "active"
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : r.status === "paused"
-                                  ? "bg-amber-50 text-amber-700"
-                                  : "bg-slate-100 text-slate-500"
-                              }`}
-                            >
-                              {r.status}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <div className="inline-flex items-center gap-1.5">
-                              <button
-                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:bg-white"
-                                onClick={() => openEditRule(r)}
-                              >
-                                <Edit2 className="h-3 w-3" />
-                                Edit
-                              </button>
-                              <button
-                                className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700 hover:bg-red-100"
-                                onClick={() => handleDeleteRule(r.id)}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                                Del
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                      {!rules.length && (
-                        <tr>
-                          <td
-                            className="px-3 py-6 text-center text-[11px] text-slate-400"
-                            colSpan={7}
-                          >
-                            No rules yet. Add first rule for this tracking link.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="pt-6 text-center text-xs text-slate-400">
-                  Select a tracking link to manage rules.
-                </div>
-              )}
+          {/* RULES CARD */}
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-800">Rules</h2>
+                <p className="text-xs text-gray-500">
+                  Define offer rotation, GEO/carrier targeting & fallback logic.
+                </p>
+              </div>
+              <button
+                onClick={openAddRule}
+                disabled={!selectedLink}
+                className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-xs font-medium text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
+              >
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add Rule
+              </button>
             </div>
+
+            <div className="overflow-x-auto rounded-lg border border-gray-100">
+              <table className="min-w-full divide-y divide-gray-100 text-xs">
+                <thead className="bg-gray-50/80">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-500">
+                      Offer ID
+                    </th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-500">
+                      GEO
+                    </th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-500">
+                      Carrier
+                    </th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-500">
+                      % Weight
+                    </th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-500">
+                      Fallback
+                    </th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-500">
+                      Status
+                    </th>
+                    <th className="px-3 py-2 text-right font-semibold text-gray-500">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {rules.map((rule) => (
+                    <tr key={rule.id} className="hover:bg-gray-50/70">
+                      <td className="px-3 py-2 font-mono text-[11px] text-gray-800">
+                        {rule.offer_id}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">
+                        {rule.geo || "ALL"}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">
+                        {rule.carrier || "ALL"}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">
+                        {rule.weight}%
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={classNames(
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
+                            rule.is_fallback
+                              ? "bg-purple-50 text-purple-700"
+                              : "bg-gray-50 text-gray-400"
+                          )}
+                        >
+                          {rule.is_fallback ? "YES" : "NO"}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={classNames(
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
+                            rule.status === "active"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : rule.status === "paused"
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-red-50 text-red-600"
+                          )}
+                        >
+                          {rule.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          onClick={() => openEditRule(rule)}
+                          className="mr-2 text-[11px] font-medium text-blue-600 hover:underline"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => deleteRule(rule)}
+                          className="text-[11px] font-medium text-red-600 hover:underline"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {!rules.length && (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        className="px-3 py-4 text-center text-[11px] text-gray-400"
+                      >
+                        No rules configured yet. Add first rule for this
+                        tracking link.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <p className="mt-2 text-[11px] text-gray-400">
+              Total weight for this tracking link cannot exceed 100%. Use
+              AutoFill to automatically use remaining % for a rule.
+            </p>
           </div>
         </div>
+      </div>
 
-        {/* Rule modal */}
+      {/* RULE MODAL */}
+      {showRuleModal && (
         <RuleModal
-          isOpen={showRuleModal}
-          onClose={() => setShowRuleModal(false)}
+          open={showRuleModal}
+          onClose={() => {
+            if (!savingRule) {
+              setShowRuleModal(false);
+              setEditingRule(null);
+            }
+          }}
+          onSave={saveRule}
           rule={editingRule}
-          pubId={pubId}
-          trackingLinkId={selectedLinkId}
-          offers={offers}
           remaining={remaining}
-          onSaved={refreshRules}
+          offers={offers}
+          loadingOffers={loadingOffers}
+          saving={savingRule}
+          meta={meta}
         />
+      )}
+    </div>
+  );
+}
+
+/* --------------------------------------------------------
+   RULE MODAL (INLINE COMPONENT)
+-------------------------------------------------------- */
+
+function RuleModal({
+  open,
+  onClose,
+  onSave,
+  rule,
+  remaining,
+  offers,
+  loadingOffers,
+  saving,
+  meta,
+}) {
+  const [offerId, setOfferId] = useState(rule?.offer_id || "");
+  const [geo, setGeo] = useState(rule?.geo || meta?.geo || "ALL");
+  const [carrier, setCarrier] = useState(
+    rule?.carrier || meta?.carrier || "ALL"
+  );
+  const [weight, setWeight] = useState(
+    rule?.weight != null ? String(rule.weight) : ""
+  );
+  const [fallback, setFallback] = useState(!!rule?.is_fallback);
+  const [status, setStatus] = useState(rule?.status || "active");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({ offerId, geo, carrier, weight, fallback, status });
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-xl rounded-xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b px-5 py-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-800">
+              {rule ? "Edit Distribution Rule" : "Add Distribution Rule"}
+            </h2>
+            <p className="text-[11px] text-gray-500">
+              Active offers for this publisher / GEO / carrier (if backend
+              filters).
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
+          {/* OFFER */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-700">
+              OFFER ID <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={offerId}
+              onChange={(e) => setOfferId(e.target.value)}
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            >
+              <option value="">
+                Select Offer (OFF01, OFF02...)
+              </option>
+              {offers.map((o) => (
+                <option key={o.id ?? o.offer_id} value={o.id ?? o.offer_id}>
+                  {(o.offer_id || o.id) + (o.name ? ` — ${o.name}` : "")}
+                </option>
+              ))}
+            </select>
+            {loadingOffers && (
+              <p className="text-[11px] text-gray-400">
+                Loading offers for this GEO / carrier...
+              </p>
+            )}
+            {!loadingOffers && !offers.length && (
+              <p className="text-[11px] text-amber-500">
+                No offers loaded. Make sure /offers API is implemented for this
+                filter.
+              </p>
+            )}
+          </div>
+
+          {/* GEO + CARRIER */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-700">
+                GEO
+              </label>
+              <input
+                value={geo}
+                onChange={(e) => setGeo(e.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+              <p className="text-[11px] text-gray-400">
+                Use <b>ALL</b> for all GEOs.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-700">
+                Carrier
+              </label>
+              <input
+                value={carrier}
+                onChange={(e) => setCarrier(e.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+              <p className="text-[11px] text-gray-400">
+                Use <b>ALL</b> for all carriers.
+              </p>
+            </div>
+          </div>
+
+          {/* WEIGHT */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-700">
+              WEIGHT (%)
+            </label>
+            <input
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              placeholder={`Leave blank for AutoFill (remaining ${remaining}%)`}
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+            <p className="text-[11px] text-gray-400">
+              Empty = Smart AutoFill (system uses remaining %).
+            </p>
+          </div>
+
+          {/* FALLBACK + STATUS */}
+          <div className="flex flex-col gap-3 border-t border-dashed border-gray-200 pt-3 md:flex-row md:items-center md:justify-between">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                checked={fallback}
+                onChange={(e) => setFallback(e.target.checked)}
+              />
+              <span>Fallback rule</span>
+            </label>
+
+            <div className="space-y-1 text-sm">
+              <label className="text-xs font-semibold text-gray-700">
+                Status
+              </label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="w-32 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                <option value="active">active</option>
+                <option value="paused">paused</option>
+                <option value="deleted">deleted</option>
+              </select>
+            </div>
+          </div>
+
+          {/* ACTIONS */}
+          <div className="mt-2 flex items-center justify-end gap-3 border-t border-gray-100 pt-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Rule"
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
