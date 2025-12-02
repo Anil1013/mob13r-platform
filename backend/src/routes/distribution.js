@@ -59,8 +59,7 @@ async function buildRequiredParams(row) {
     try {
       await pool.query(
         `UPDATE publisher_tracking_links
-         SET required_params=$1
-         WHERE id=$2`,
+         SET required_params=$1 WHERE id=$2`,
         [params, row.id]
       );
     } catch (e) {
@@ -72,9 +71,8 @@ async function buildRequiredParams(row) {
 }
 
 /* ============================================================
-   OFFERS LIST (FINAL FIXED)
-   returns → offer_id + name
-   frontend expects:
+   OFFERS LIST — ✔ FINAL FIX
+   front-end expects:
    value = offer_id (OFF01)
    display = "OFF01 — Game"
 ============================================================ */
@@ -91,9 +89,9 @@ router.get("/offers", authJWT, async (req, res) => {
     const { rows } = await pool.query(q);
 
     const offers = rows.map((o) => ({
-      id: o.offer_id,        // frontend value = OFF01
-      offer_id: o.offer_id,  // OFF01
-      name: o.name,          // Game
+      id: o.offer_id,
+      offer_id: o.offer_id,
+      name: o.name,
       advertiser_name: o.advertiser_name,
       payout: o.payout,
       status: o.status,
@@ -257,13 +255,13 @@ router.get("/rules/remaining", authJWT, async (req, res) => {
     const q = `
       SELECT COALESCE(SUM(weight),0) AS total
       FROM distribution_rules
-      WHERE pub_id=$1 AND tracking_link_id=$2
-        AND status='active'
+      WHERE pub_id=$1 AND tracking_link_id=$2 AND status='active'
     `;
 
     const { rows } = await pool.query(q, [pub_id, tracking_link_id]);
 
     const used = Number(rows[0].total || 0);
+
     res.json({ success: true, remaining: 100 - used });
   } catch (err) {
     console.error("remaining:", err);
@@ -273,7 +271,7 @@ router.get("/rules/remaining", authJWT, async (req, res) => {
 
 /* ============================================================
    ADD RULE (FINAL FIX)
-   offer_id MUST be string (OFF01)
+   offer_id = OFF01 (string)
 ============================================================ */
 
 router.post("/rules", authJWT, async (req, res) => {
@@ -290,7 +288,7 @@ router.post("/rules", authJWT, async (req, res) => {
       autoFill,
     } = req.body;
 
-    const cleanOfferId = String(offer_id || "").trim(); // <-- OFF01
+    const cleanOfferId = String(offer_id || "").trim();
 
     if (!pub_id || !tracking_link_id || !cleanOfferId)
       return res.json({
@@ -303,10 +301,11 @@ router.post("/rules", authJWT, async (req, res) => {
     const nGeo = norm(geo);
     const nCarrier = norm(carrier);
 
+    // 🔥 duplicate check
     const dup = await client.query(
       `SELECT id FROM distribution_rules
-       WHERE pub_id=$1 AND tracking_link_id=$2 AND offer_id=$3
-       AND UPPER(geo)=$4 AND UPPER(carrier)=$5
+       WHERE pub_id=$1 AND tracking_link_id=$2
+       AND offer_id=$3 AND UPPER(geo)=$4 AND UPPER(carrier)=$5
        AND status <> 'deleted'`,
       [pub_id, tracking_link_id, cleanOfferId, nGeo, nCarrier]
     );
@@ -314,6 +313,7 @@ router.post("/rules", authJWT, async (req, res) => {
     if (dup.rows.length)
       return res.json({ success: false, error: "duplicate_rule" });
 
+    // 🔥 weight validation
     const usedRes = await client.query(
       `SELECT COALESCE(SUM(weight),0) AS total
        FROM distribution_rules
@@ -347,6 +347,7 @@ router.post("/rules", authJWT, async (req, res) => {
     );
 
     await client.query("COMMIT");
+
     res.json({ success: true, rule: insert.rows[0] });
   } catch (err) {
     await client.query("ROLLBACK");
@@ -358,7 +359,7 @@ router.post("/rules", authJWT, async (req, res) => {
 });
 
 /* ============================================================
-   UPDATE RULE (Final Fix)
+   UPDATE RULE (FINAL FIX)
 ============================================================ */
 
 router.put("/rules/:id", authJWT, async (req, res) => {
@@ -396,7 +397,7 @@ router.put("/rules/:id", authJWT, async (req, res) => {
       `SELECT id FROM distribution_rules
        WHERE pub_id=$1 AND tracking_link_id=$2
        AND offer_id=$3 AND UPPER(geo)=$4 AND UPPER(carrier)=$5
-       AND id <> $6 AND status <> 'deleted'`,
+       AND id<>$6 AND status <> 'deleted'`,
       [
         pub_id,
         tracking_link_id,
@@ -414,7 +415,7 @@ router.put("/rules/:id", authJWT, async (req, res) => {
       `SELECT COALESCE(SUM(weight),0) AS total
        FROM distribution_rules
        WHERE pub_id=$1 AND tracking_link_id=$2
-         AND id <> $3 AND status='active'`,
+       AND id<>$3 AND status='active'`,
       [pub_id, tracking_link_id, id]
     );
 
