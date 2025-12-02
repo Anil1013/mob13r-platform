@@ -81,6 +81,8 @@ async function buildRequiredParams(row) {
 
 /* ===================================================================
    NEW: OFFER LIST FOR DROPDOWN (🔥 FIX)
+   - Frontend RuleModal value = o.id ?? o.offer_id
+   - Yaha hum id = offer_id (OFF01, OFF02...) bhej rahe hain
 =================================================================== */
 
 router.get("/offers", authJWT, async (req, res) => {
@@ -100,7 +102,18 @@ router.get("/offers", authJWT, async (req, res) => {
 
     const { rows } = await pool.query(q);
 
-    return res.json({ success: true, offers: rows });
+    // IMPORTANT: id ko offer_id se override kar rahe hain
+    // taaki frontend se OFF01, OFF02 hi backend me jaye
+    const offers = rows.map((r) => ({
+      id: r.offer_id,           // <-- ye frontend ka value hoga
+      offer_id: r.offer_id,     // OFF01 / OFF02 / ...
+      name: r.name,
+      advertiser_name: r.advertiser_name,
+      payout: r.payout,
+      status: r.status,
+    }));
+
+    return res.json({ success: true, offers });
   } catch (err) {
     console.error("offers list error:", err);
     res.status(500).json({ success: false, error: err.message });
@@ -114,6 +127,12 @@ router.get("/offers", authJWT, async (req, res) => {
 router.get("/tracking-links", authJWT, async (req, res) => {
   try {
     const { pub_id } = req.query;
+
+    if (!pub_id) {
+      return res
+        .status(400)
+        .json({ success: false, error: "pub_id_required" });
+    }
 
     const q = `
       SELECT *
@@ -141,7 +160,7 @@ router.get("/tracking-links", authJWT, async (req, res) => {
         required_params: requiredParams,
         cap_daily: r.cap_daily,
         cap_total: r.cap_total,
-        status: r.status
+        status: r.status,
       });
     }
 
@@ -159,6 +178,12 @@ router.get("/tracking-links", authJWT, async (req, res) => {
 router.get("/meta", authJWT, async (req, res) => {
   try {
     const { pub_id, tracking_link_id } = req.query;
+
+    if (!pub_id || !tracking_link_id) {
+      return res
+        .status(400)
+        .json({ success: false, error: "pub_id_tracking_link_id_required" });
+    }
 
     const q = `
       SELECT *
@@ -182,8 +207,8 @@ router.get("/meta", authJWT, async (req, res) => {
         geo: r.geo,
         carrier: r.carrier,
         tracking_url: r.tracking_url,
-        required_params: requiredParams
-      }
+        required_params: requiredParams,
+      },
     });
   } catch (err) {
     console.error("meta error:", err);
@@ -252,7 +277,8 @@ router.get("/rules/remaining", authJWT, async (req, res) => {
     `;
     const { rows } = await pool.query(q, [pub_id, tracking_link_id]);
 
-    res.json({ success: true, remaining: 100 - Number(rows[0].total) });
+    const used = Number(rows[0]?.total || 0);
+    res.json({ success: true, remaining: 100 - used });
   } catch (err) {
     console.error("remaining error:", err);
     res.status(500).json({ success: false, error: err.message });
@@ -261,6 +287,7 @@ router.get("/rules/remaining", authJWT, async (req, res) => {
 
 /* ===================================================================
    5) ADD RULE
+   - Yaha offer_id ko string OFF01/02 ke रूप में treat kar rahe hain
 =================================================================== */
 
 router.post("/rules", authJWT, async (req, res) => {
@@ -275,8 +302,16 @@ router.post("/rules", authJWT, async (req, res) => {
       geo,
       carrier,
       is_fallback,
-      autoFill
+      autoFill,
     } = req.body;
+
+    const cleanOfferId = String(offer_id || "").trim();
+    if (!pub_id || !tracking_link_id || !cleanOfferId) {
+      return res.json({
+        success: false,
+        error: "pub_id_tracking_link_id_offer_id_required",
+      });
+    }
 
     await client.query("BEGIN");
 
@@ -289,7 +324,7 @@ router.post("/rules", authJWT, async (req, res) => {
        WHERE pub_id=$1 AND tracking_link_id=$2
        AND offer_id=$3 AND UPPER(geo)=$4 AND UPPER(carrier)=$5
        AND status <> 'deleted'`,
-      [pub_id, tracking_link_id, offer_id, nGeo, nCarrier]
+      [pub_id, tracking_link_id, cleanOfferId, nGeo, nCarrier]
     );
 
     if (dup.rows.length > 0) {
@@ -298,19 +333,20 @@ router.post("/rules", authJWT, async (req, res) => {
     }
 
     // SMART WEIGHT
-    const used = await client.query(
+    const usedRes = await client.query(
       `SELECT COALESCE(SUM(weight),0) AS total
        FROM distribution_rules
        WHERE pub_id=$1 AND tracking_link_id=$2 AND status='active'`,
       [pub_id, tracking_link_id]
     );
 
+    const used = Number(usedRes.rows[0]?.total || 0);
     let finalWeight = Number(weight);
     if (!finalWeight || autoFill) {
-      finalWeight = Math.max(100 - Number(used.rows[0].total), 0);
+      finalWeight = Math.max(100 - used, 0);
     }
 
-    if (Number(used.rows[0].total) + finalWeight > 100) {
+    if (used + finalWeight > 100) {
       await client.query("ROLLBACK");
       return res.json({ success: false, error: "weight_exceeded" });
     }
@@ -321,7 +357,7 @@ router.post("/rules", authJWT, async (req, res) => {
        (pub_id, tracking_link_id, offer_id, weight, geo, carrier, is_fallback, status)
        VALUES ($1,$2,$3,$4,$5,$6,$7,'active')
        RETURNING *`,
-      [pub_id, tracking_link_id, offer_id, finalWeight, nGeo, nCarrier, is_fallback]
+      [pub_id, tracking_link_id, cleanOfferId, finalWeight, nGeo, nCarrier, !!is_fallback]
     );
 
     await client.query("COMMIT");
@@ -337,6 +373,7 @@ router.post("/rules", authJWT, async (req, res) => {
 
 /* ===================================================================
    6) UPDATE RULE
+   - Yaha bhi offer_id ko string OFF01/02 ki तरह treat kar rahe hain
 =================================================================== */
 
 router.put("/rules/:id", authJWT, async (req, res) => {
@@ -353,8 +390,16 @@ router.put("/rules/:id", authJWT, async (req, res) => {
       carrier,
       is_fallback,
       status,
-      autoFill
+      autoFill,
     } = req.body;
+
+    const cleanOfferId = String(offer_id || "").trim();
+    if (!pub_id || !tracking_link_id || !cleanOfferId) {
+      return res.json({
+        success: false,
+        error: "pub_id_tracking_link_id_offer_id_required",
+      });
+    }
 
     await client.query("BEGIN");
 
@@ -367,7 +412,7 @@ router.put("/rules/:id", authJWT, async (req, res) => {
        WHERE pub_id=$1 AND tracking_link_id=$2 AND offer_id=$3
        AND UPPER(geo)=$4 AND UPPER(carrier)=$5 AND id <> $6
        AND status <> 'deleted'`,
-      [pub_id, tracking_link_id, offer_id, nGeo, nCarrier, id]
+      [pub_id, tracking_link_id, cleanOfferId, nGeo, nCarrier, id]
     );
 
     if (dup.rows.length > 0) {
@@ -376,7 +421,7 @@ router.put("/rules/:id", authJWT, async (req, res) => {
     }
 
     // SMART WEIGHT
-    const used = await client.query(
+    const usedRes = await client.query(
       `SELECT COALESCE(SUM(weight),0) AS total
        FROM distribution_rules
        WHERE pub_id=$1 AND tracking_link_id=$2 AND id <> $3
@@ -384,12 +429,13 @@ router.put("/rules/:id", authJWT, async (req, res) => {
       [pub_id, tracking_link_id, id]
     );
 
+    const used = Number(usedRes.rows[0]?.total || 0);
     let finalWeight = Number(weight);
     if (!finalWeight || autoFill) {
-      finalWeight = Math.max(100 - Number(used.rows[0].total), 0);
+      finalWeight = Math.max(100 - used, 0);
     }
 
-    if (Number(used.rows[0].total) + finalWeight > 100) {
+    if (used + finalWeight > 100) {
       await client.query("ROLLBACK");
       return res.json({ success: false, error: "weight_exceeded" });
     }
@@ -398,9 +444,9 @@ router.put("/rules/:id", authJWT, async (req, res) => {
     const result = await client.query(
       `UPDATE distribution_rules
        SET offer_id=$1, weight=$2, geo=$3, carrier=$4,
-       is_fallback=$5, status=$6
+           is_fallback=$5, status=$6
        WHERE id=$7 RETURNING *`,
-      [offer_id, finalWeight, nGeo, nCarrier, is_fallback, status, id]
+      [cleanOfferId, finalWeight, nGeo, nCarrier, !!is_fallback, status || "active", id]
     );
 
     await client.query("COMMIT");
@@ -415,7 +461,7 @@ router.put("/rules/:id", authJWT, async (req, res) => {
 });
 
 /* ===================================================================
-   NEW: CLICK HANDLER (🔥 FIX FOR TRACKING URL)
+   NEW: CLICK HANDLER (TEST ONLY)
 =================================================================== */
 
 router.get("/click", async (req, res) => {
@@ -423,7 +469,7 @@ router.get("/click", async (req, res) => {
     return res.json({
       success: true,
       received_params: req.query,
-      message: "Click handler active"
+      message: "Click handler active",
     });
   } catch (err) {
     console.error("click error:", err);
