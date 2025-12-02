@@ -889,7 +889,7 @@ export default function TrafficDistribution() {
 }
 
 /* --------------------------------------------------------
-   RULE MODAL (INLINE COMPONENT)
+   RULE MODAL (INLINE COMPONENT) — FIXED VERSION
 -------------------------------------------------------- */
 
 function RuleModal({
@@ -905,18 +905,25 @@ function RuleModal({
 }) {
   const [offerId, setOfferId] = useState(rule?.offer_id || "");
   const [geo, setGeo] = useState(rule?.geo || meta?.geo || "ALL");
-  const [carrier, setCarrier] = useState(
-    rule?.carrier || meta?.carrier || "ALL"
-  );
-  const [weight, setWeight] = useState(
-    rule?.weight != null ? String(rule.weight) : ""
-  );
+  const [carrier, setCarrier] = useState(rule?.carrier || meta?.carrier || "ALL");
+  const [weight, setWeight] = useState(rule?.weight != null ? String(rule.weight) : "");
   const [fallback, setFallback] = useState(!!rule?.is_fallback);
   const [status, setStatus] = useState(rule?.status || "active");
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave({ offerId, geo, carrier, weight, fallback, status });
+
+    // PURE offer_id extraction
+    const cleanOffer = (offerId || "").split("—")[0].trim(); // OFF02 only
+
+    onSave({
+      offerId: cleanOffer, // always OFFXX
+      geo,
+      carrier,
+      weight,
+      fallback,
+      status,
+    });
   };
 
   if (!open) return null;
@@ -930,8 +937,7 @@ function RuleModal({
               {rule ? "Edit Distribution Rule" : "Add Distribution Rule"}
             </h2>
             <p className="text-[11px] text-gray-500">
-              Active offers for this publisher / GEO / carrier (if backend
-              filters).
+              Active offers for this publisher / GEO / carrier.
             </p>
           </div>
           <button
@@ -948,30 +954,28 @@ function RuleModal({
             <label className="text-xs font-semibold text-gray-700">
               OFFER ID <span className="text-red-500">*</span>
             </label>
+
             <select
               value={offerId}
               onChange={(e) => setOfferId(e.target.value)}
-              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm
+              focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
             >
               <option value="">Select Offer (OFF01, OFF02...)</option>
+
               {offers.map((o) => (
                 <option
-                  key={o.offer_id || o.id}
-                  value={o.offer_id || o.id} // OFF01, OFF02...
+                  key={o.offer_id}
+                  value={o.offer_id}   // ALWAYS PURE VALUE = OFF02
                 >
-                  {(o.offer_id || o.id) + (o.name ? ` — ${o.name}` : "")}
+                  {o.offer_id + (o.name ? ` — ${o.name}` : "")}
                 </option>
               ))}
             </select>
+
             {loadingOffers && (
               <p className="text-[11px] text-gray-400">
                 Loading offers for this GEO / carrier...
-              </p>
-            )}
-            {!loadingOffers && !offers.length && (
-              <p className="text-[11px] text-amber-500">
-                No offers loaded. Make sure /distribution/offers API is
-                implemented & returns active offers.
               </p>
             )}
           </div>
@@ -979,100 +983,71 @@ function RuleModal({
           {/* GEO + CARRIER */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-700">
-                GEO
-              </label>
+              <label className="text-xs font-semibold text-gray-700">GEO</label>
               <input
                 value={geo}
                 onChange={(e) => setGeo(e.target.value)}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              />
-              <p className="text-[11px] text-gray-400">
-                Use <b>ALL</b> for all GEOs.
-              </p>
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm"/>
             </div>
+
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-700">
-                Carrier
-              </label>
+              <label className="text-xs font-semibold text-gray-700">Carrier</label>
               <input
                 value={carrier}
                 onChange={(e) => setCarrier(e.target.value)}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              />
-              <p className="text-[11px] text-gray-400">
-                Use <b>ALL</b> for all carriers.
-              </p>
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm"/>
             </div>
           </div>
 
           {/* WEIGHT */}
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-700">
-              WEIGHT (%)
-            </label>
+            <label className="text-xs font-semibold text-gray-700">WEIGHT (%)</label>
             <input
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
               placeholder={`Leave blank for AutoFill (remaining ${remaining}%)`}
-              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm"
             />
-            <p className="text-[11px] text-gray-400">
-              Empty = Smart AutoFill (system uses remaining %).
-            </p>
           </div>
 
           {/* FALLBACK + STATUS */}
-          <div className="flex flex-col gap-3 border-t border-dashed border-gray-200 pt-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center justify-between border-t border-dashed pt-3">
             <label className="inline-flex items-center gap-2 text-sm text-gray-700">
               <input
                 type="checkbox"
-                className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                 checked={fallback}
                 onChange={(e) => setFallback(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
               />
-              <span>Fallback rule</span>
+              Fallback Rule
             </label>
 
-            <div className="space-y-1 text-sm">
-              <label className="text-xs font-semibold text-gray-700">
-                Status
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="w-32 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              >
-                <option value="active">active</option>
-                <option value="paused">paused</option>
-                <option value="deleted">deleted</option>
-              </select>
-            </div>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-32 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm"
+            >
+              <option value="active">active</option>
+              <option value="paused">paused</option>
+              <option value="deleted">deleted</option>
+            </select>
           </div>
 
           {/* ACTIONS */}
-          <div className="mt-2 flex items-center justify-end gap-3 border-t border-gray-100 pt-3">
+          <div className="mt-2 flex justify-end gap-3 border-t pt-3">
             <button
               type="button"
               onClick={onClose}
-              disabled={saving}
-              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60"
-            >
+              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm">
               Cancel
             </button>
+
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
+              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
             >
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Rule"
-              )}
+              {saving ? "Saving..." : "Save Rule"}
             </button>
           </div>
         </form>
