@@ -72,9 +72,6 @@ async function buildRequiredParams(row) {
 
 /* ============================================================
    OFFERS LIST — ✔ FINAL FIX
-   front-end expects:
-   value = offer_id (OFF01)
-   display = "OFF01 — Game"
 ============================================================ */
 
 router.get("/offers", authJWT, async (req, res) => {
@@ -89,8 +86,8 @@ router.get("/offers", authJWT, async (req, res) => {
     const { rows } = await pool.query(q);
 
     const offers = rows.map((o) => ({
-      id: o.offer_id,
-      offer_id: o.offer_id,
+      id: o.offer_id,           // value = OFF01
+      offer_id: o.offer_id,     // string
       name: o.name,
       advertiser_name: o.advertiser_name,
       payout: o.payout,
@@ -271,7 +268,6 @@ router.get("/rules/remaining", authJWT, async (req, res) => {
 
 /* ============================================================
    ADD RULE (FINAL FIX)
-   offer_id = OFF01 (string)
 ============================================================ */
 
 router.post("/rules", authJWT, async (req, res) => {
@@ -301,7 +297,6 @@ router.post("/rules", authJWT, async (req, res) => {
     const nGeo = norm(geo);
     const nCarrier = norm(carrier);
 
-    // 🔥 duplicate check
     const dup = await client.query(
       `SELECT id FROM distribution_rules
        WHERE pub_id=$1 AND tracking_link_id=$2
@@ -313,7 +308,6 @@ router.post("/rules", authJWT, async (req, res) => {
     if (dup.rows.length)
       return res.json({ success: false, error: "duplicate_rule" });
 
-    // 🔥 weight validation
     const usedRes = await client.query(
       `SELECT COALESCE(SUM(weight),0) AS total
        FROM distribution_rules
@@ -332,7 +326,7 @@ router.post("/rules", authJWT, async (req, res) => {
 
     const insert = await client.query(
       `INSERT INTO distribution_rules
-       (pub_id, tracking_link_id, offer_id, weight, geo, carrier, is_fallback, status)
+         (pub_id, tracking_link_id, offer_id, weight, geo, carrier, is_fallback, status)
        VALUES ($1,$2,$3,$4,$5,$6,$7,'active')
        RETURNING *`,
       [
