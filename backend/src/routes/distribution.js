@@ -1,4 +1,3 @@
-// src/routes/distribution.js
 import express from "express";
 import pool from "../db.js";
 import authJWT from "../middleware/authJWT.js";
@@ -6,8 +5,8 @@ import authJWT from "../middleware/authJWT.js";
 const router = express.Router();
 
 /* ======================================================
-   HELPERS
-====================================================== */
+   HELPER RESPONSES
+   ====================================================== */
 const success = (message, extra = {}) => ({
   response: "SUCCESS",
   errorMessage: message,
@@ -21,19 +20,8 @@ const fail = (message, extra = {}) => ({
 });
 
 /* ======================================================
-   FIX: PUB03 → 3
-====================================================== */
-function normalizePubCode(pubId) {
-  if (!pubId) return pubId;
-  if (typeof pubId === "string" && pubId.toUpperCase().startsWith("PUB")) {
-    return parseInt(pubId.replace(/PUB/i, "").replace(/^0+/, ""), 10);
-  }
-  return pubId;
-}
-
-/* ======================================================
    TARGET MATCH
-====================================================== */
+   ====================================================== */
 function matchesTargeting(rule, geo, carrier, device) {
   const geoOk = !geo || rule.geo === "ALL" || rule.geo === geo;
   const carrierOk = !carrier || rule.carrier === "ALL" || rule.carrier === carrier;
@@ -42,77 +30,48 @@ function matchesTargeting(rule, geo, carrier, device) {
 }
 
 /* ======================================================
-   WEIGHT PICKER
-====================================================== */
+   WEIGHT PICK
+   ====================================================== */
 function pickByWeight(rules) {
   if (!rules.length) return null;
-  if (rules.length === 1) return rules[0];
 
-  const total = rules.reduce((sum, r) => sum + (r.weight || 0), 0);
+  const total = rules.reduce((s, r) => s + (r.weight || 0), 0);
   if (total <= 0) return rules[0];
 
   const rnd = Math.random() * total;
   let acc = 0;
-
   for (const r of rules) {
     acc += r.weight || 0;
     if (rnd <= acc) return r;
   }
-
   return rules[0];
 }
 
 /* ======================================================
-   CAPS CHECK
-====================================================== */
-async function checkCaps(_ruleRow) {
-  return true; // future update ready
+   CAPS (placeholder)
+   ====================================================== */
+async function checkCaps() {
+  return true;
 }
 
 /* ======================================================
    BUILD OFFER RESPONSE
-====================================================== */
+   ====================================================== */
 function buildOfferResponse(rule) {
   const base = {
     offer_id: rule.offer_id,
     type: rule.offer_type,
   };
 
-  switch (rule.offer_type) {
-    case "INAPP":
-      return success("INAPP Loaded", {
-        ...base,
-        template_id: rule.inapp_template_id,
-        inapp_config: rule.inapp_config,
-      });
-
-    case "SMARTLINK":
-    case "ROTATION":
-      return success("Offer Selected", {
-        ...base,
-        url: rule.offer_tracking_url,
-      });
-
-    case "FALLBACK":
-      return success("Fallback Offer Selected", {
-        ...base,
-        url: rule.offer_tracking_url,
-      });
-
-    default:
-      return success(
-        rule.offer_is_fallback ? "Fallback Offer Selected" : "Offer Selected",
-        {
-          ...base,
-          url: rule.offer_tracking_url,
-        }
-      );
-  }
+  return success(rule.is_fallback ? "Fallback Offer Selected" : "Offer Selected", {
+    ...base,
+    url: rule.offer_tracking_url,
+  });
 }
 
 /* ======================================================
-   PUBLIC: RESOLVE
-====================================================== */
+   PUBLIC RESOLVE
+   ====================================================== */
 router.get("/resolve", async (req, res) => {
   try {
     const { pub_id, tracking_link_id, geo, carrier, device } = req.query;
@@ -121,92 +80,78 @@ router.get("/resolve", async (req, res) => {
       return res.status(400).json(fail("Missing pub_id or tracking_link_id"));
     }
 
-    // 🔥 FIX: normalize PUB03 → 3
-    const normalizedPub = normalizePubCode(pub_id);
-
+    /* 🔥 FIX: pub_id may be PUB01/PUB02 etc → NOT numeric */
     const { rows } = await pool.query(
       `
-      SELECT 
-        dr.*,
-        o.type AS offer_type,
-        o.tracking_url AS offer_tracking_url,
-        o.inapp_template_id,
-        o.inapp_config,
-        o.is_fallback AS offer_is_fallback
+      SELECT dr.*, 
+             o.type AS offer_type,
+             o.tracking_url AS offer_tracking_url,
+             o.is_fallback
       FROM distribution_rules dr
       JOIN offers o ON o.offer_id = dr.offer_id
-      WHERE dr.pub_id = $1
+      WHERE dr.pub_id = $1 
         AND dr.tracking_link_id = $2
         AND dr.is_active = TRUE
         AND dr.status = 'active'
       ORDER BY dr.priority ASC, dr.id ASC
       `,
-      [normalizedPub, tracking_link_id]
+      [pub_id, tracking_link_id]   // pub_id is pub_code (PUB03)
     );
 
     if (!rows.length) {
       return res.status(200).json(fail("No active rules"));
     }
 
-    // Apply targeting
     const matched = rows.filter((r) =>
       matchesTargeting(r, geo, carrier, device)
     );
 
     if (!matched.length) {
-      const fallback =
-        rows.find((r) => r.is_fallback) ||
-        rows.find((r) => r.offer_type === "FALLBACK");
-
+      const fallback = rows.find((r) => r.is_fallback);
       return fallback
         ? res.json(buildOfferResponse(fallback))
-        : res.json(fail("No matching rule"));
+        : res.json(fail("No targeting match"));
     }
 
     const minPriority = matched[0].priority;
-    const samePriority = matched.filter((r) => r.priority === minPriority);
+    const prRules = matched.filter((r) => r.priority === minPriority);
 
     const eligible = [];
-    for (const r of samePriority) {
+    for (const r of prRules) {
       if (await checkCaps(r)) eligible.push(r);
     }
 
     if (!eligible.length) {
-      const fallback =
-        rows.find((r) => r.is_fallback) ||
-        rows.find((r) => r.offer_type === "FALLBACK");
-
+      const fallback = rows.find((r) => r.is_fallback);
       return fallback
         ? res.json(buildOfferResponse(fallback))
         : res.json(fail("All rules capped"));
     }
 
-    const finalRule = pickByWeight(eligible);
-    return res.json(buildOfferResponse(finalRule));
+    const selected = pickByWeight(eligible);
+    return res.json(buildOfferResponse(selected));
   } catch (err) {
     console.error("RESOLVE ERROR:", err);
-    res.status(500).json(fail("Internal server error"));
+    res.status(500).json(fail("Internal Error"));
   }
 });
 
 /* ======================================================
-   ADMIN: GET RULES
-====================================================== */
+   ADMIN: GET RULES BY pub_code (PUB03)
+   ====================================================== */
 router.get("/rules/:pub_id/:tracking_link_id", authJWT, async (req, res) => {
   try {
     const { pub_id, tracking_link_id } = req.params;
 
-    // FIX
-    const normalizedPub = normalizePubCode(pub_id);
-
+    // 🔥 FIX: pub_id here is pub_code, allowed!
     const { rows } = await pool.query(
       `
       SELECT *
       FROM distribution_rules
       WHERE pub_id = $1 AND tracking_link_id = $2
       ORDER BY priority ASC, id ASC
-      `,
-      [normalizedPub, tracking_link_id]
+    `,
+      [pub_id, tracking_link_id]
     );
 
     res.json(rows);
@@ -218,7 +163,7 @@ router.get("/rules/:pub_id/:tracking_link_id", authJWT, async (req, res) => {
 
 /* ======================================================
    ADMIN: CREATE RULE
-====================================================== */
+   ====================================================== */
 router.post("/rules", authJWT, async (req, res) => {
   try {
     let {
@@ -233,12 +178,10 @@ router.post("/rules", authJWT, async (req, res) => {
       is_fallback,
     } = req.body;
 
+    // 🔥 pub_id = PUB03 OK!
     if (!pub_id || !tracking_link_id || !offer_id) {
-      return res.status(400).json({ error: "Missing fields" });
+      return res.status(400).json({ error: "Missing required fields" });
     }
-
-    // FIX
-    pub_id = normalizePubCode(pub_id);
 
     priority = priority ?? 1;
     weight = weight ?? 100;
@@ -247,18 +190,19 @@ router.post("/rules", authJWT, async (req, res) => {
     device = device || "ALL";
     is_fallback = !!is_fallback;
 
+    /* Duplicate check */
     const dup = await pool.query(
       `
       SELECT 1 FROM distribution_rules
-      WHERE pub_id=$1 AND tracking_link_id=$2 AND offer_id=$3
+      WHERE pub_id=$1 AND tracking_link_id=$2 AND offer_id=$3 
         AND geo=$4 AND carrier=$5
-      `,
+    `,
       [pub_id, tracking_link_id, offer_id, geo, carrier]
     );
 
     if (dup.rowCount > 0) {
       return res.status(400).json({
-        error: "Rule already exists with same targeting",
+        error: "Duplicate rule",
       });
     }
 
@@ -269,7 +213,7 @@ router.post("/rules", authJWT, async (req, res) => {
        is_active, is_fallback, status, created_at, updated_at)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9,'active',NOW(),NOW())
       RETURNING *;
-      `,
+    `,
       [
         pub_id,
         tracking_link_id,
@@ -291,8 +235,8 @@ router.post("/rules", authJWT, async (req, res) => {
 });
 
 /* ======================================================
-   ADMIN: UPDATE RULE
-====================================================== */
+   UPDATE RULE
+   ====================================================== */
 router.put("/rules/:id", authJWT, async (req, res) => {
   try {
     const { id } = req.params;
@@ -306,7 +250,7 @@ router.put("/rules/:id", authJWT, async (req, res) => {
       return res.status(404).json({ error: "Rule not found" });
     }
 
-    let cur = existing.rows[0];
+    const cur = existing.rows[0];
 
     let {
       pub_id = cur.pub_id,
@@ -322,22 +266,17 @@ router.put("/rules/:id", authJWT, async (req, res) => {
       status = cur.status,
     } = req.body;
 
-    // FIX
-    pub_id = normalizePubCode(pub_id);
-
     const dup = await pool.query(
       `
       SELECT 1 FROM distribution_rules
       WHERE pub_id=$1 AND tracking_link_id=$2 AND offer_id=$3
         AND geo=$4 AND carrier=$5 AND id <> $6
-      `,
+    `,
       [pub_id, tracking_link_id, offer_id, geo, carrier, id]
     );
 
     if (dup.rowCount > 0) {
-      return res.status(400).json({
-        error: "Another rule already exists with same targeting",
-      });
+      return res.status(400).json({ error: "Duplicate rule" });
     }
 
     const { rows } = await pool.query(
@@ -348,7 +287,7 @@ router.put("/rules/:id", authJWT, async (req, res) => {
           is_active=$9, is_fallback=$10, status=$11, updated_at=NOW()
       WHERE id=$12
       RETURNING *;
-      `,
+    `,
       [
         pub_id,
         tracking_link_id,
@@ -374,7 +313,7 @@ router.put("/rules/:id", authJWT, async (req, res) => {
 
 /* ======================================================
    DELETE RULE
-====================================================== */
+   ====================================================== */
 router.delete("/rules/:id", authJWT, async (req, res) => {
   try {
     await pool.query("DELETE FROM distribution_rules WHERE id=$1", [
