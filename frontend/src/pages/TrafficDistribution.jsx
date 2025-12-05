@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import apiClient from "../api/apiClient";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Modal } from "@/components/ui/modal";
+
+// FIXED IMPORT PATHS (NO "@/")
+import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
+import { Modal } from "../components/ui/modal";
 
 export default function TrafficDistribution() {
   const [publisherId, setPublisherId] = useState("");
@@ -47,7 +49,9 @@ export default function TrafficDistribution() {
 
   const fetchRemainingOffers = async (pub, link) => {
     try {
-      const res = await apiClient.get(`/offers/remaining?pub_id=${pub}&tracking_link_id=${link}`);
+      const res = await apiClient.get(
+        `/offers/remaining?pub_id=${pub}&tracking_link_id=${link}`
+      );
       setOffers(res.data);
     } catch (err) {
       console.error(err);
@@ -174,7 +178,9 @@ export default function TrafficDistribution() {
             <select
               className="border p-2 rounded w-full"
               value={form.offer_id}
-              onChange={(e) => setForm({ ...form, offer_id: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, offer_id: e.target.value })
+              }
             >
               <option value="">Select Offer</option>
               {offers.map((o) => (
@@ -189,19 +195,25 @@ export default function TrafficDistribution() {
                 placeholder="Geo"
                 className="border p-2 rounded"
                 value={form.geo}
-                onChange={(e) => setForm({ ...form, geo: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, geo: e.target.value })
+                }
               />
               <input
                 placeholder="Carrier"
                 className="border p-2 rounded"
                 value={form.carrier}
-                onChange={(e) => setForm({ ...form, carrier: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, carrier: e.target.value })
+                }
               />
               <input
                 placeholder="Device"
                 className="border p-2 rounded"
                 value={form.device}
-                onChange={(e) => setForm({ ...form, device: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, device: e.target.value })
+                }
               />
             </div>
 
@@ -211,14 +223,24 @@ export default function TrafficDistribution() {
                 placeholder="Priority"
                 className="border p-2 rounded"
                 value={form.priority}
-                onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    priority: Number(e.target.value),
+                  })
+                }
               />
               <input
                 type="number"
                 placeholder="Weight"
                 className="border p-2 rounded"
                 value={form.weight}
-                onChange={(e) => setForm({ ...form, weight: Number(e.target.value) })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    weight: Number(e.target.value),
+                  })
+                }
               />
             </div>
 
@@ -226,7 +248,12 @@ export default function TrafficDistribution() {
               <input
                 type="checkbox"
                 checked={form.is_fallback}
-                onChange={(e) => setForm({ ...form, is_fallback: e.target.checked })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    is_fallback: e.target.checked,
+                  })
+                }
               />
               Fallback Rule
             </label>
