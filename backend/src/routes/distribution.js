@@ -1,474 +1,290 @@
-// backend/src/routes/distribution.js
-
 import express from "express";
 import pool from "../db.js";
 import authJWT from "../middleware/authJWT.js";
 
 const router = express.Router();
 
-/* ============================================================
-   HELPERS
-============================================================ */
-
-const norm = (v) =>
-  !v || v.trim() === "" ? "ALL" : v.trim().toUpperCase();
-
-const DEFAULT_REQUIRED_PARAMS = {
-  click_id: false,
-  sub1: false,
-  sub2: false,
-  sub3: false,
-  sub4: false,
-  sub5: false,
-  msisdn: false,
-  ip: true,
-  ua: true,
-  device: false,
-};
-
-async function buildRequiredParams(row) {
-  let needsUpdate = false;
-
-  let params =
-    row.required_params && typeof row.required_params === "object"
-      ? { ...row.required_params }
-      : {};
-
-  for (const key of Object.keys(DEFAULT_REQUIRED_PARAMS)) {
-    if (!(key in params)) {
-      params[key] = DEFAULT_REQUIRED_PARAMS[key];
-      needsUpdate = true;
-    }
-  }
-
-  try {
-    if (row.tracking_url?.includes("?")) {
-      const qs = new URLSearchParams(row.tracking_url.split("?")[1]);
-      qs.forEach((v, k) => {
-        if (k in params && params[k] === false) {
-          params[k] = true;
-          needsUpdate = true;
-        }
-      });
-    }
-  } catch (e) {
-    console.error("Required params parse error", e);
-  }
-
-  if (needsUpdate) {
-    try {
-      await pool.query(
-        `UPDATE publisher_tracking_links
-         SET required_params=$1 WHERE id=$2`,
-        [params, row.id]
-      );
-    } catch (e) {
-      console.error("Required params update error", e);
-    }
-  }
-
-  return params;
+/* ======================================================
+   UTILITY JSON RESPONSE (same format as INAPP)
+   ====================================================== */
+function success(message, extra = {}) {
+  return {
+    response: "SUCCESS",
+    errorMessage: message,
+    ...extra,
+  };
 }
 
-/* ============================================================
-   OFFERS LIST — ✔ FINAL FIX
-============================================================ */
+function fail(message, extra = {}) {
+  return {
+    response: "Fail",
+    errorMessage: message,
+    ...extra,
+  };
+}
 
-router.get("/offers", authJWT, async (req, res) => {
-  try {
-    const q = `
-      SELECT offer_id, name, advertiser_name, payout, status
-      FROM offers
-      WHERE status='active'
-      ORDER BY id ASC
-    `;
+/* ======================================================
+   TARGETING MATCH
+   ====================================================== */
+function matchesTargeting(rule, geo, carrier, device) {
+  const geoOK = !geo || rule.geo === "ALL" || rule.geo === geo;
+  const carrierOK = !carrier || rule.carrier === "ALL" || rule.carrier === carrier;
+  const deviceOK = !device || rule.device === "ALL" || rule.device === device;
+  return geoOK && carrierOK && deviceOK;
+}
 
-    const { rows } = await pool.query(q);
+/* ======================================================
+   WEIGHT PICKER
+   ====================================================== */
+function pickByWeight(rules) {
+  if (!rules.length) return null;
+  if (rules.length === 1) return rules[0];
 
-    const offers = rows.map((o) => ({
-      id: o.offer_id,           // value = OFF01
-      offer_id: o.offer_id,     // string
-      name: o.name,
-      advertiser_name: o.advertiser_name,
-      payout: o.payout,
-      status: o.status,
-    }));
+  const total = rules.reduce((sum, r) => sum + (r.weight || 0), 0);
+  if (total <= 0) return rules[0];
 
-    return res.json({ success: true, offers });
-  } catch (err) {
-    console.error("offers error:", err);
-    res.status(500).json({ success: false, error: err.message });
+  const rnd = Math.random() * total;
+  let acc = 0;
+
+  for (const r of rules) {
+    acc += r.weight;
+    if (rnd <= acc) return r;
   }
-});
 
-/* ============================================================
-   TRACKING LINKS
-============================================================ */
+  return rules[0];
+}
 
-router.get("/tracking-links", authJWT, async (req, res) => {
-  try {
-    const { pub_id } = req.query;
+/* ======================================================
+   CAPS CHECK (future)
+   ====================================================== */
+async function checkCaps(ruleRow) {
+  // TODO: integrate click_logs + conversion caps here
+  return true;
+}
 
-    const q = `
-      SELECT *
-      FROM publisher_tracking_links
-      WHERE pub_code=$1
-      ORDER BY id ASC
-    `;
+/* ======================================================
+   OFFER RESPONSE BUILDER (CPA, CPS, SMARTLINK, INAPP)
+   ====================================================== */
+function buildOfferResponse(rule, context) {
+  const {
+    offer_type,
+    offer_tracking_url,
+    offer_id,
+    offer_is_fallback,
+    inapp_template_id,
+    inapp_config,
+  } = rule;
 
-    const { rows } = await pool.query(q, [pub_id]);
+  const base = { offer_id, type: offer_type };
 
-    const links = [];
-
-    for (const r of rows) {
-      const required = await buildRequiredParams(r);
-
-      links.push({
-        tracking_link_id: r.id,
-        pub_code: r.pub_code,
-        publisher_id: r.publisher_id,
-        publisher_name: r.publisher_name,
-        name: r.name,
-        geo: r.geo,
-        carrier: r.carrier,
-        type: r.type,
-        payout: r.payout,
-        tracking_url: r.tracking_url,
-        required_params: required,
-        cap_daily: r.cap_daily,
-        cap_total: r.cap_total,
-        status: r.status,
-        tracking_id: r.tracking_id,
+  switch (offer_type) {
+    case "INAPP":
+      return success("INAPP Loaded", {
+        ...base,
+        template_id: inapp_template_id,
+        inapp_config,
       });
+
+    case "SMARTLINK":
+      return success("Smartlink Offer Selected", {
+        ...base,
+        url: offer_tracking_url,
+      });
+
+    case "ROTATION":
+      return success("Rotation Offer Selected", {
+        ...base,
+        url: offer_tracking_url,
+      });
+
+    case "FALLBACK":
+      return success("Fallback Offer Selected", {
+        ...base,
+        url: offer_tracking_url,
+      });
+
+    default:
+      return success(
+        offer_is_fallback ? "Fallback Offer Selected" : "Offer Selected",
+        {
+          ...base,
+          url: offer_tracking_url,
+        }
+      );
+  }
+}
+
+/* ======================================================
+   🟢 RESOLVE CLICK (PUBLIC API)
+   Example:
+   /api/distribution/resolve?pub_id=PUB03&tracking_link_id=3&geo=BD&carrier=ROBI
+   ====================================================== */
+router.get("/resolve", async (req, res) => {
+  try {
+    const { pub_id, tracking_link_id, geo, carrier, device, ip, ua } = req.query;
+
+    if (!pub_id || !tracking_link_id) {
+      return res.status(400).json(fail("Missing pub_id or tracking_link_id"));
     }
 
-    res.json({ success: true, links });
-  } catch (err) {
-    console.error("tracking-links:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/* ============================================================
-   META DETAILS
-============================================================ */
-
-router.get("/meta", authJWT, async (req, res) => {
-  try {
-    const { pub_id, tracking_link_id } = req.query;
-
-    const q = `
-      SELECT *
-      FROM publisher_tracking_links
-      WHERE pub_code=$1 AND id=$2
-      LIMIT 1
-    `;
-
-    const { rows } = await pool.query(q, [pub_id, tracking_link_id]);
-
-    if (!rows[0])
-      return res.json({ success: false, error: "not_found" });
-
-    const r = rows[0];
-    const required = await buildRequiredParams(r);
-
-    res.json({
-      success: true,
-      meta: {
-        pub_code: r.pub_code,
-        tracking_link_id: r.id,
-        geo: r.geo,
-        carrier: r.carrier,
-        tracking_url: r.tracking_url,
-        required_params: required,
-      },
-    });
-  } catch (err) {
-    console.error("meta:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/* ============================================================
-   UPDATE REQUIRED PARAMS
-============================================================ */
-
-router.put("/update-required-params/:id", authJWT, async (req, res) => {
-  try {
-    const { required_params } = req.body;
-
-    const q = `
-      UPDATE publisher_tracking_links
-      SET required_params=$1, updated_at=NOW()
-      WHERE id=$2
-      RETURNING id
-    `;
-
-    const { rows } = await pool.query(q, [
-      required_params,
-      req.params.id,
-    ]);
-
-    res.json({ success: true, updated: rows[0] });
-  } catch (err) {
-    console.error("update-required-params:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/* ============================================================
-   GET RULES
-============================================================ */
-
-router.get("/rules", authJWT, async (req, res) => {
-  try {
-    const { pub_id, tracking_link_id } = req.query;
-
-    const q = `
-      SELECT *
-      FROM distribution_rules
-      WHERE pub_id=$1 AND tracking_link_id=$2
-      AND status <> 'deleted'
-      ORDER BY id ASC
-    `;
-
-    const { rows } = await pool.query(q, [pub_id, tracking_link_id]);
-
-    res.json({ success: true, rules: rows });
-  } catch (err) {
-    console.error("rules:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/* ============================================================
-   REMAINING WEIGHT
-============================================================ */
-
-router.get("/rules/remaining", authJWT, async (req, res) => {
-  try {
-    const { pub_id, tracking_link_id } = req.query;
-
-    const q = `
-      SELECT COALESCE(SUM(weight),0) AS total
-      FROM distribution_rules
-      WHERE pub_id=$1 AND tracking_link_id=$2 AND status='active'
-    `;
-
-    const { rows } = await pool.query(q, [pub_id, tracking_link_id]);
-
-    const used = Number(rows[0].total || 0);
-
-    res.json({ success: true, remaining: 100 - used });
-  } catch (err) {
-    console.error("remaining:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-/* ============================================================
-   ADD RULE (FINAL FIX)
-============================================================ */
-
-router.post("/rules", authJWT, async (req, res) => {
-  const client = await pool.connect();
-  try {
-    const {
-      pub_id,
-      tracking_link_id,
-      offer_id,
-      weight,
-      geo,
-      carrier,
-      is_fallback,
-      autoFill,
-    } = req.body;
-
-    const cleanOfferId = String(offer_id || "").trim();
-
-    if (!pub_id || !tracking_link_id || !cleanOfferId)
-      return res.json({
-        success: false,
-        error: "missing_fields",
-      });
-
-    await client.query("BEGIN");
-
-    const nGeo = norm(geo);
-    const nCarrier = norm(carrier);
-
-    const dup = await client.query(
-      `SELECT id FROM distribution_rules
-       WHERE pub_id=$1 AND tracking_link_id=$2
-       AND offer_id=$3 AND UPPER(geo)=$4 AND UPPER(carrier)=$5
-       AND status <> 'deleted'`,
-      [pub_id, tracking_link_id, cleanOfferId, nGeo, nCarrier]
-    );
-
-    if (dup.rows.length)
-      return res.json({ success: false, error: "duplicate_rule" });
-
-    const usedRes = await client.query(
-      `SELECT COALESCE(SUM(weight),0) AS total
-       FROM distribution_rules
-       WHERE pub_id=$1 AND tracking_link_id=$2 AND status='active'`,
+    // 1. Load active rules
+    const { rows } = await pool.query(
+      `
+        SELECT 
+          dr.*,
+          o.type AS offer_type,
+          o.tracking_url AS offer_tracking_url,
+          o.inapp_template_id,
+          o.inapp_config,
+          o.is_fallback AS offer_is_fallback
+        FROM distribution_rules dr
+        JOIN offers o ON o.offer_id = dr.offer_id
+        WHERE dr.pub_id = $1
+          AND dr.tracking_link_id = $2
+          AND dr.is_active = TRUE
+          AND dr.status = 'active'
+        ORDER BY dr.priority ASC, dr.id ASC
+      `,
       [pub_id, tracking_link_id]
     );
 
-    const used = Number(usedRes.rows[0].total || 0);
+    if (!rows.length) {
+      return res.status(200).json(fail("No active rules for this publisher"));
+    }
 
-    let finalWeight = Number(weight);
-    if (!finalWeight || autoFill)
-      finalWeight = Math.max(100 - used, 0);
-
-    if (used + finalWeight > 100)
-      return res.json({ success: false, error: "weight_exceeded" });
-
-    const insert = await client.query(
-      `INSERT INTO distribution_rules
-         (pub_id, tracking_link_id, offer_id, weight, geo, carrier, is_fallback, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'active')
-       RETURNING *`,
-      [
-        pub_id,
-        tracking_link_id,
-        cleanOfferId,
-        finalWeight,
-        nGeo,
-        nCarrier,
-        !!is_fallback,
-      ]
+    // 2. Apply targeting filters
+    const matched = rows.filter((r) =>
+      matchesTargeting(r, geo, carrier, device)
     );
 
-    await client.query("COMMIT");
+    // 3. If no match → fallback
+    if (!matched.length) {
+      const fallback = rows.find(
+        (r) => r.is_fallback || r.offer_type === "FALLBACK"
+      );
 
-    res.json({ success: true, rule: insert.rows[0] });
-  } catch (err) {
-    await client.query("ROLLBACK");
-    console.error("add rule:", err);
-    res.status(500).json({ success: false, error: err.message });
-  } finally {
-    client.release();
+      if (fallback) {
+        return res.status(200).json(
+          buildOfferResponse(fallback, { pub_id, tracking_link_id, geo })
+        );
+      }
+
+      return res.status(200).json(fail("No matching rule"));
+    }
+
+    // 4. Use lowest priority group
+    const minPriority = matched[0].priority;
+    const samePriority = matched.filter((r) => r.priority === minPriority);
+
+    // 5. Caps check
+    const eligible = [];
+    for (const r of samePriority) {
+      const capsOK = await checkCaps(r);
+      if (capsOK) eligible.push(r);
+    }
+
+    if (!eligible.length) {
+      const fallback = rows.find(
+        (r) => r.is_fallback || r.offer_type === "FALLBACK"
+      );
+      if (fallback) {
+        return res.status(200).json(buildOfferResponse(fallback));
+      }
+      return res.status(200).json(fail("All rules over cap"));
+    }
+
+    // 6. Weighted random pick
+    const selected = pickByWeight(eligible);
+
+    // 7. Final offer response
+    return res.status(200).json(
+      buildOfferResponse(selected, { pub_id, geo, carrier, device })
+    );
+  } catch (error) {
+    console.error("RESOLVE ERROR:", error);
+    return res.status(500).json(fail("Internal error"));
   }
 });
 
-/* ============================================================
-   UPDATE RULE (FINAL FIX)
-============================================================ */
-
-router.put("/rules/:id", authJWT, async (req, res) => {
-  const client = await pool.connect();
-
+/* ======================================================
+   🟡 ADMIN – GET RULES BY LINK
+   ====================================================== */
+router.get("/rules/:pub_id/:tracking_id", authJWT, async (req, res) => {
   try {
-    const id = req.params.id;
+    const { pub_id, tracking_id } = req.params;
 
+    const { rows } = await pool.query(
+      `SELECT * FROM distribution_rules
+       WHERE pub_id=$1 AND tracking_link_id=$2
+       ORDER BY priority ASC, id ASC`,
+      [pub_id, tracking_id]
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error("GET RULES ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ======================================================
+   🟠 ADMIN – CREATE RULE
+   ====================================================== */
+router.post("/rules", authJWT, async (req, res) => {
+  try {
     const {
       pub_id,
       tracking_link_id,
       offer_id,
+      priority,
       weight,
       geo,
       carrier,
+      device,
       is_fallback,
-      status,
-      autoFill,
     } = req.body;
 
-    const cleanOfferId = String(offer_id || "").trim();
-
-    if (!pub_id || !tracking_link_id || !cleanOfferId)
-      return res.json({
-        success: false,
-        error: "missing_fields",
-      });
-
-    await client.query("BEGIN");
-
-    const nGeo = norm(geo);
-    const nCarrier = norm(carrier);
-
-    const dup = await client.query(
-      `SELECT id FROM distribution_rules
-       WHERE pub_id=$1 AND tracking_link_id=$2
-       AND offer_id=$3 AND UPPER(geo)=$4 AND UPPER(carrier)=$5
-       AND id<>$6 AND status <> 'deleted'`,
+    const { rows } = await pool.query(
+      `
+      INSERT INTO distribution_rules
+      (pub_id, tracking_link_id, offer_id, priority, weight, geo, carrier, device, is_active, is_fallback, status, created_at, updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9,'active',NOW(),NOW())
+      RETURNING *;
+      `,
       [
         pub_id,
         tracking_link_id,
-        cleanOfferId,
-        nGeo,
-        nCarrier,
-        id,
+        offer_id,
+        priority || 1,
+        weight || 100,
+        geo || "ALL",
+        carrier || "ALL",
+        device || "ALL",
+        is_fallback || false,
       ]
     );
 
-    if (dup.rows.length)
-      return res.json({ success: false, error: "duplicate_rule" });
-
-    const usedRes = await client.query(
-      `SELECT COALESCE(SUM(weight),0) AS total
-       FROM distribution_rules
-       WHERE pub_id=$1 AND tracking_link_id=$2
-       AND id<>$3 AND status='active'`,
-      [pub_id, tracking_link_id, id]
-    );
-
-    const used = Number(usedRes.rows[0].total || 0);
-
-    let finalWeight = Number(weight);
-    if (!finalWeight || autoFill)
-      finalWeight = Math.max(100 - used, 0);
-
-    if (used + finalWeight > 100)
-      return res.json({ success: false, error: "weight_exceeded" });
-
-    const updated = await client.query(
-      `UPDATE distribution_rules
-       SET offer_id=$1, weight=$2, geo=$3, carrier=$4,
-           is_fallback=$5, status=$6
-       WHERE id=$7 RETURNING *`,
-      [
-        cleanOfferId,
-        finalWeight,
-        nGeo,
-        nCarrier,
-        !!is_fallback,
-        status || "active",
-        id,
-      ]
-    );
-
-    await client.query("COMMIT");
-
-    res.json({ success: true, rule: updated.rows[0] });
+    res.json(rows[0]);
   } catch (err) {
-    await client.query("ROLLBACK");
-    console.error("update rule:", err);
-    res.status(500).json({ success: false, error: err.message });
-  } finally {
-    client.release();
+    console.error("POST RULE ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-/* ============================================================
-   DELETE RULE
-============================================================ */
-
+/* ======================================================
+   🟥 ADMIN – DELETE RULE
+   ====================================================== */
 router.delete("/rules/:id", authJWT, async (req, res) => {
   try {
-    await pool.query(
-      `UPDATE distribution_rules SET status='deleted' WHERE id=$1`,
-      [req.params.id]
-    );
-    res.json({ success: true });
+    const { id } = req.params;
+
+    await pool.query("DELETE FROM distribution_rules WHERE id=$1", [id]);
+
+    res.json({ message: "Rule deleted" });
   } catch (err) {
-    console.error("delete:", err);
-    res.status(500).json({ success: false, error: err.message });
+    console.error("DELETE RULE ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
 });
-
-/* ============================================================
-   EXPORT
-============================================================ */
 
 export default router;
