@@ -1,22 +1,18 @@
-// frontend/src/pages/TrafficDistribution.jsx
-
 import React, { useEffect, useState } from "react";
 import apiClient from "../api/apiClient";
 
-// FIXED IMPORT PATHS (NO "@/")
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { Modal } from "../components/ui/modal";
 
 export default function TrafficDistribution() {
-  // yahan hum PUB03 / PUB04 type value rakh rahe hain
-  const [publisherCode, setPublisherCode] = useState("");
+  const [publisherId, setPublisherId] = useState("");
   const [trackingLinks, setTrackingLinks] = useState([]);
   const [rules, setRules] = useState([]);
   const [offers, setOffers] = useState([]);
   const [selectedLink, setSelectedLink] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+
   const [form, setForm] = useState({
     offer_id: "",
     geo: "ALL",
@@ -24,62 +20,61 @@ export default function TrafficDistribution() {
     device: "ALL",
     priority: 1,
     weight: 100,
-    is_fallback: false,
+    fallback: false,
   });
 
-  /* -------------------------------------------------
-   * 1) TRACKING LINKS – use pub_code (PUB03, PUB04)
-   * ------------------------------------------------- */
+  /* ------------------------------------------------------
+     LOAD TRACKING LINKS
+  ------------------------------------------------------ */
   const fetchTrackingLinks = async () => {
-    if (!publisherCode) return;
-    setLoading(true);
-    try {
-      // IMPORTANT: yahan /tracking?publisher_id=... nahi
-      const res = await apiClient.get(
-        `/distribution/tracking-links?pub_id=${publisherCode}`
-      );
-      setTrackingLinks(res.data || []);
-    } catch (err) {
-      console.error("Error fetching tracking links:", err);
-      setTrackingLinks([]);
-    }
-    setLoading(false);
-  };
+    if (!publisherId) return;
 
-  /* -------------------------------------------------
-   * 2) RULES for selected link
-   * ------------------------------------------------- */
-  const fetchRules = async (pubCode, linkId) => {
-    if (!pubCode || !linkId) return;
-    setLoading(true);
     try {
-      const res = await apiClient.get(
-        `/distribution/rules/${pubCode}/${linkId}`
-      );
-      setRules(res.data || []);
+      const res = await apiClient.get(`/tracking?publisher_id=${publisherId}`);
+      setTrackingLinks(res.data);
     } catch (err) {
-      console.error("Error fetching rules:", err);
-      setRules([]);
-    }
-    setLoading(false);
-  };
-
-  /* -------------------------------------------------
-   * 3) REMAINING OFFERS for selected link
-   * ------------------------------------------------- */
-  const fetchRemainingOffers = async (pubCode, linkId) => {
-    if (!pubCode || !linkId) return;
-    try {
-      const res = await apiClient.get(
-        `/offers/remaining?pub_id=${pubCode}&tracking_link_id=${linkId}`
-      );
-      setOffers(res.data || []);
-    } catch (err) {
-      console.error("Error fetching remaining offers:", err);
-      setOffers([]);
+      console.error("Fetch tracking links error:", err);
     }
   };
 
+  /* ------------------------------------------------------
+     LOAD RULES
+  ------------------------------------------------------ */
+  const fetchRules = async (pub, id) => {
+    try {
+      const res = await apiClient.get(`/distribution/rules/${pub}/${id}`);
+      setRules(res.data);
+    } catch (err) {
+      console.error("Fetch rules error:", err);
+    }
+  };
+
+  /* ------------------------------------------------------
+     LOAD OFFERS NOT USED IN THIS LINK
+  ------------------------------------------------------ */
+  const fetchRemainingOffers = async (pub, id) => {
+    try {
+      const res = await apiClient.get(
+        `/offers/remaining?pub_id=${pub}&tracking_link_id=${id}`
+      );
+      setOffers(res.data);
+    } catch (err) {
+      console.error("Fetch remaining offers error:", err);
+    }
+  };
+
+  /* ------------------------------------------------------
+     SELECT A LINK
+  ------------------------------------------------------ */
+  const handleSelectLink = (link) => {
+    setSelectedLink(link);
+    fetchRules(link.pub_code, link.id);
+    fetchRemainingOffers(link.pub_code, link.id);
+  };
+
+  /* ------------------------------------------------------
+     OPEN ADD RULE MODAL
+  ------------------------------------------------------ */
   const openAddRule = () => {
     setForm({
       offer_id: "",
@@ -88,74 +83,63 @@ export default function TrafficDistribution() {
       device: "ALL",
       priority: 1,
       weight: 100,
-      is_fallback: false,
+      fallback: false,
     });
     setModalOpen(true);
   };
 
+  /* ------------------------------------------------------
+     SUBMIT RULE
+  ------------------------------------------------------ */
   const handleSubmit = async () => {
-    if (!selectedLink) return;
     try {
       await apiClient.post(`/distribution/rules`, {
-        pub_id: selectedLink.pub_code, // string: PUB03
-        tracking_link_id: selectedLink.id, // integer
+        pub_code: selectedLink.pub_code,
+        tracking_link_id: selectedLink.id,
         ...form,
       });
 
       setModalOpen(false);
-      // refresh data
       fetchRules(selectedLink.pub_code, selectedLink.id);
       fetchRemainingOffers(selectedLink.pub_code, selectedLink.id);
     } catch (err) {
-      console.error("Error saving rule:", err);
+      console.error("Create rule error:", err);
     }
   };
 
-  const handleSelectLink = (link) => {
-    setSelectedLink(link);
-    fetchRules(link.pub_code, link.id);
-    fetchRemainingOffers(link.pub_code, link.id);
-  };
-
-  // OPTIONAL: agar enter press karte hi load karwana ho
   useEffect(() => {
-    // yadi tum nahi chahte auto-load, isko hata sakte ho
-    // abhi safe rehne ke liye disabled rakha hai
-    // if (publisherCode) fetchTrackingLinks();
-  }, [publisherCode]);
+    if (publisherId.trim() !== "") fetchTrackingLinks();
+  }, [publisherId]);
 
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-2xl font-bold">Traffic Distribution</h1>
 
-      {/* Publisher Code Input (PUB03 / PUB04) */}
+      {/* ---------------------------------- */}
+      {/* SEARCH PUBLISHER (PUB03 / PUB04) */}
+      {/* ---------------------------------- */}
       <div className="flex items-center gap-3 mb-4">
         <input
           type="text"
-          placeholder="Publisher Code (e.g. PUB03)"
+          placeholder="Enter Publisher ID (PUB03)"
           className="border rounded p-2"
-          value={publisherCode}
-          onChange={(e) => setPublisherCode(e.target.value.trim())}
+          value={publisherId}
+          onChange={(e) => setPublisherId(e.target.value)}
         />
-        <Button onClick={fetchTrackingLinks} disabled={!publisherCode || loading}>
-          {loading ? "Loading..." : "Load Links"}
-        </Button>
+        <Button onClick={fetchTrackingLinks}>Load Links</Button>
       </div>
 
+      {/* ---------------------------------- */}
+      {/* GRID LAYOUT */}
+      {/* ---------------------------------- */}
       <div className="grid grid-cols-3 gap-4">
-        {/* LEFT: Tracking Links List */}
+        {/* LEFT COLUMN: TRACKING LINKS */}
         <Card>
           <CardContent className="p-3">
             <h2 className="font-semibold mb-2">Tracking Links</h2>
 
-            {loading && !selectedLink && (
-              <p className="text-sm text-gray-500">Loading links...</p>
-            )}
-
-            {!loading && trackingLinks.length === 0 && publisherCode && (
-              <p className="text-sm text-red-500">
-                No tracking links found for {publisherCode}
-              </p>
+            {trackingLinks.length === 0 && (
+              <p className="text-sm text-gray-500">No links found.</p>
             )}
 
             {trackingLinks.map((link) => (
@@ -167,73 +151,68 @@ export default function TrafficDistribution() {
                 onClick={() => handleSelectLink(link)}
               >
                 <div className="font-medium">{link.name}</div>
-                <div className="text-xs text-gray-500">
-                  {link.pub_code} · {link.geo} · {link.carrier}
+                <div className="text-xs text-gray-600">
+                  {link.pub_code} • {link.geo} • {link.carrier}
                 </div>
               </div>
             ))}
           </CardContent>
         </Card>
 
-        {/* RIGHT: Rules Table */}
+        {/* RIGHT SECTION: RULES TABLE */}
         <Card className="col-span-2">
           <CardContent className="p-3">
             <div className="flex justify-between mb-3">
               <h2 className="font-semibold">Rules</h2>
+
               {selectedLink && (
                 <Button onClick={openAddRule}>+ Add Rule</Button>
               )}
             </div>
 
-            {selectedLink ? (
-              rules.length > 0 ? (
-                <table className="w-full border text-sm">
-                  <thead>
-                    <tr className="bg-gray-200">
-                      <th className="p-2 text-left">Offer</th>
-                      <th className="p-2 text-left">Geo</th>
-                      <th className="p-2 text-left">Carrier</th>
-                      <th className="p-2 text-left">Device</th>
-                      <th className="p-2 text-left">Priority</th>
-                      <th className="p-2 text-left">Weight</th>
-                      <th className="p-2 text-left">Fallback</th>
+            {!selectedLink && <p>Select a tracking link to view rules</p>}
+
+            {selectedLink && (
+              <table className="w-full border">
+                <thead>
+                  <tr className="bg-gray-200 text-sm">
+                    <th className="p-2">Offer</th>
+                    <th className="p-2">Geo</th>
+                    <th className="p-2">Carrier</th>
+                    <th className="p-2">Device</th>
+                    <th className="p-2">Priority</th>
+                    <th className="p-2">Weight</th>
+                    <th className="p-2">Fallback</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {rules.map((r) => (
+                    <tr key={r.id} className="border-b text-sm">
+                      <td className="p-2">{r.offer_id}</td>
+                      <td className="p-2">{r.geo}</td>
+                      <td className="p-2">{r.carrier}</td>
+                      <td className="p-2">{r.device}</td>
+                      <td className="p-2">{r.priority}</td>
+                      <td className="p-2">{r.weight}</td>
+                      <td className="p-2">{r.fallback ? "YES" : "NO"}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {rules.map((r) => (
-                      <tr key={r.id} className="border-b">
-                        <td className="p-2">{r.offer_id}</td>
-                        <td className="p-2">{r.geo}</td>
-                        <td className="p-2">{r.carrier}</td>
-                        <td className="p-2">{r.device}</td>
-                        <td className="p-2">{r.priority}</td>
-                        <td className="p-2">{r.weight}</td>
-                        <td className="p-2">
-                          {r.is_fallback ? "YES" : "NO"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p className="text-sm text-gray-500">
-                  No rules yet. Click &quot;Add Rule&quot; to create one.
-                </p>
-              )
-            ) : (
-              <p>Select a tracking link to view rules</p>
+                  ))}
+                </tbody>
+              </table>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Add Rule Modal */}
+      {/* ---------------------------------- */}
+      {/* ADD RULE MODAL */}
+      {/* ---------------------------------- */}
       {modalOpen && (
         <Modal onClose={() => setModalOpen(false)}>
           <div className="p-4 space-y-3">
-            <h2 className="text-xl font-bold">Add Rule</h2>
+            <h2 className="text-lg font-bold">Add Rule</h2>
 
-            {/* Offer Dropdown */}
             <select
               className="border p-2 rounded w-full"
               value={form.offer_id}
@@ -247,68 +226,54 @@ export default function TrafficDistribution() {
               ))}
             </select>
 
-            {/* Geo / Carrier / Device */}
             <div className="grid grid-cols-3 gap-2">
               <input
-                placeholder="Geo"
                 className="border p-2 rounded"
+                placeholder="Geo"
                 value={form.geo}
                 onChange={(e) => setForm({ ...form, geo: e.target.value })}
               />
               <input
-                placeholder="Carrier"
                 className="border p-2 rounded"
+                placeholder="Carrier"
                 value={form.carrier}
-                onChange={(e) =>
-                  setForm({ ...form, carrier: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, carrier: e.target.value })}
               />
               <input
-                placeholder="Device"
                 className="border p-2 rounded"
+                placeholder="Device"
                 value={form.device}
                 onChange={(e) => setForm({ ...form, device: e.target.value })}
               />
             </div>
 
-            {/* Priority / Weight */}
             <div className="grid grid-cols-2 gap-2">
               <input
                 type="number"
-                placeholder="Priority"
                 className="border p-2 rounded"
+                placeholder="Priority"
                 value={form.priority}
                 onChange={(e) =>
-                  setForm({
-                    ...form,
-                    priority: Number(e.target.value),
-                  })
+                  setForm({ ...form, priority: Number(e.target.value) })
                 }
               />
               <input
                 type="number"
-                placeholder="Weight"
                 className="border p-2 rounded"
+                placeholder="Weight"
                 value={form.weight}
                 onChange={(e) =>
-                  setForm({
-                    ...form,
-                    weight: Number(e.target.value),
-                  })
+                  setForm({ ...form, weight: Number(e.target.value) })
                 }
               />
             </div>
 
-            {/* Fallback */}
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2">
               <input
                 type="checkbox"
-                checked={form.is_fallback}
+                checked={form.fallback}
                 onChange={(e) =>
-                  setForm({
-                    ...form,
-                    is_fallback: e.target.checked,
-                  })
+                  setForm({ ...form, fallback: e.target.checked })
                 }
               />
               Fallback Rule
