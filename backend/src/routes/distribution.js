@@ -1,3 +1,5 @@
+// File: backend/src/routes/distribution.js
+
 import express from "express";
 import pool from "../db.js";
 import authJWT from "../middleware/authJWT.js";
@@ -5,48 +7,14 @@ import authJWT from "../middleware/authJWT.js";
 const router = express.Router();
 
 /* ------------------------------------------------------------------
-   Helpers
+   Common helpers
 ------------------------------------------------------------------ */
-
 const apiSuccess = (data = {}) => ({ success: true, ...data });
 const apiError = (message, extra = {}) => ({
   success: false,
   message,
   ...extra,
 });
-
-const ALLOWED_PARAMS = [
-  "ip",
-  "ua",
-  "device",
-  "msisdn",
-  "click_id",
-  "sub1",
-  "sub2",
-  "sub3",
-  "sub4",
-  "sub5",
-];
-
-function normaliseRequiredParamsArray(list) {
-  if (!Array.isArray(list)) return [];
-  const set = new Set();
-  for (const raw of list) {
-    const key = String(raw || "").toLowerCase();
-    if (ALLOWED_PARAMS.includes(key)) {
-      set.add(key);
-    }
-  }
-  return Array.from(set);
-}
-
-function buildParamsJson(flags = {}) {
-  const obj = {};
-  for (const key of ALLOWED_PARAMS) {
-    obj[key] = !!flags[key];
-  }
-  return obj;
-}
 
 /**
  * DB-level validation for rules
@@ -65,7 +33,8 @@ async function validateRuleOnServer({
 }) {
   // 1) Fallback uniqueness
   if (is_fallback) {
-    const sql = `
+    const fallbackCheck = await pool.query(
+      `
       SELECT id
       FROM distribution_rules
       WHERE pub_code = $1
@@ -73,12 +42,11 @@ async function validateRuleOnServer({
         AND is_fallback = TRUE
         AND is_active = TRUE
         ${idToIgnore ? "AND id <> $3" : ""}
-    `;
-    const params = idToIgnore
-      ? [pub_code, tracking_link_id, idToIgnore]
-      : [pub_code, tracking_link_id];
-
-    const fallbackCheck = await pool.query(sql, params);
+    `,
+      idToIgnore
+        ? [pub_code, tracking_link_id, idToIgnore]
+        : [pub_code, tracking_link_id]
+    );
 
     if (fallbackCheck.rowCount > 0) {
       return "A fallback rule already exists for this tracking link.";
@@ -86,7 +54,8 @@ async function validateRuleOnServer({
   }
 
   // 2) Duplicate targeting rule
-  const dupSql = `
+  const dupCheck = await pool.query(
+    `
     SELECT id
     FROM distribution_rules
     WHERE pub_code = $1
@@ -97,12 +66,11 @@ async function validateRuleOnServer({
       AND device = $6
       AND is_active = TRUE
       ${idToIgnore ? "AND id <> $7" : ""}
-  `;
-  const dupParams = idToIgnore
-    ? [pub_code, tracking_link_id, offer_id, geo, carrier, device, idToIgnore]
-    : [pub_code, tracking_link_id, offer_id, geo, carrier, device];
-
-  const dupCheck = await pool.query(dupSql, dupParams);
+  `,
+    idToIgnore
+      ? [pub_code, tracking_link_id, offer_id, geo, carrier, device, idToIgnore]
+      : [pub_code, tracking_link_id, offer_id, geo, carrier, device]
+  );
 
   if (dupCheck.rowCount > 0) {
     return "Duplicate rule: same Offer + Geo + Carrier + Device already exists.";
@@ -130,6 +98,7 @@ router.get("/tracking-links", authJWT, async (req, res) => {
         pub_code,
         publisher_id,
         publisher_name,
+        advertiser_name,        -- <- from publisher_tracking_links (as you said)
         name,
         geo,
         carrier,
@@ -144,10 +113,10 @@ router.get("/tracking-links", authJWT, async (req, res) => {
         pin_verify_url,
         check_status_url,
         portal_url,
+        required_params,        -- <- list of default params (JSON / text)
         status,
         created_at,
-        updated_at,
-        required_params
+        updated_at
       FROM publisher_tracking_links
       WHERE pub_code = $1
         AND status = 'active'
@@ -158,40 +127,6 @@ router.get("/tracking-links", authJWT, async (req, res) => {
     res.json(apiSuccess({ items: result.rows }));
   } catch (err) {
     console.error("tracking-links error:", err);
-    res
-      .status(500)
-      .json(apiError("Internal server error", { error: err.message }));
-  }
-});
-
-/* ------------------------------------------------------------------
-   UPDATE DEFAULT PARAMETERS ON TRACKING LINK
-   PUT /api/distribution/tracking-links/:id/params
------------------------------------------------------------------- */
-
-router.put("/tracking-links/:id/params", authJWT, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { required_params } = req.body || {};
-
-    const paramsJson = buildParamsJson(required_params || {});
-
-    const updateSql = `
-      UPDATE publisher_tracking_links
-      SET required_params = $1,
-          updated_at = NOW()
-      WHERE id = $2
-      RETURNING *
-    `;
-
-    const result = await pool.query(updateSql, [paramsJson, id]);
-    if (!result.rowCount) {
-      return res.status(404).json(apiError("Tracking link not found"));
-    }
-
-    res.json(apiSuccess({ item: result.rows[0] }));
-  } catch (err) {
-    console.error("update tracking-link params error:", err);
     res
       .status(500)
       .json(apiError("Internal server error", { error: err.message }));
@@ -212,15 +147,17 @@ router.get("/offers", authJWT, async (req, res) => {
       SELECT
         offer_id,
         name,
-        type,
         advertiser_name,
-        status
+        type,
+        status,
+        payout
       FROM offers
       WHERE status = 'active'
         AND (
           $1 = '' OR
           LOWER(offer_id) LIKE LOWER('%' || $1 || '%') OR
-          LOWER(name) LIKE LOWER('%' || $1 || '%')
+          LOWER(name) LIKE LOWER('%' || $1 || '%') OR
+          LOWER(advertiser_name) LIKE LOWER('%' || $1 || '%')
         )
       ORDER BY offer_id ASC
       LIMIT 200
@@ -254,7 +191,7 @@ router.get("/rules", authJWT, async (req, res) => {
         dr.*,
         o.name AS offer_name,
         o.type AS offer_type,
-        o.advertiser_name
+        o.advertiser_name AS advertiser_name
       FROM distribution_rules dr
       JOIN offers o ON o.offer_id = dr.offer_id
       WHERE dr.tracking_link_id = $1
@@ -289,7 +226,6 @@ router.post("/rules", authJWT, async (req, res) => {
       priority = 1,
       weight = 100,
       is_fallback = false,
-      required_params = [],
     } = req.body;
 
     if (!pub_code) return res.status(400).json(apiError("pub_code required"));
@@ -302,9 +238,8 @@ router.post("/rules", authJWT, async (req, res) => {
     carrier = carrier || "ALL";
     device = device || "ALL";
     priority = Number(priority) || 1;
-    weight = is_fallback ? 0 : Number(weight) || 0;
+    weight = Number(weight) || 0;
     is_fallback = !!is_fallback;
-    const reqParamsArray = normaliseRequiredParamsArray(required_params);
 
     // Server-side validation (fallback + duplicate)
     const validationError = await validateRuleOnServer({
@@ -324,10 +259,9 @@ router.post("/rules", authJWT, async (req, res) => {
     const insert = `
       INSERT INTO distribution_rules
         (pub_code, tracking_link_id, offer_id, geo, carrier, device,
-         priority, weight, is_fallback, is_active, required_params,
-         created_at, updated_at)
+         priority, weight, is_fallback, is_active, status, created_at, updated_at)
       VALUES
-        ($1,$2,$3,$4,$5,$6,$7,$8,$9,TRUE,$10,NOW(),NOW())
+        ($1,$2,$3,$4,$5,$6,$7,$8,$9,TRUE,'active',NOW(),NOW())
       RETURNING *
     `;
 
@@ -341,7 +275,6 @@ router.post("/rules", authJWT, async (req, res) => {
       priority,
       weight,
       is_fallback,
-      reqParamsArray,
     ]);
 
     res.json(apiSuccess({ item: result.rows[0] }));
@@ -384,7 +317,6 @@ router.put("/rules/:id", authJWT, async (req, res) => {
       is_fallback = current.is_fallback,
       is_active = current.is_active,
       status = current.status || "active",
-      required_params = current.required_params || [],
     } = req.body;
 
     if (!pub_code) return res.status(400).json(apiError("pub_code required"));
@@ -396,10 +328,9 @@ router.put("/rules/:id", authJWT, async (req, res) => {
     carrier = carrier || "ALL";
     device = device || "ALL";
     priority = Number(priority) || 1;
-    weight = is_fallback ? 0 : Number(weight) || 0;
+    weight = Number(weight) || 0;
     is_fallback = !!is_fallback;
     is_active = !!is_active;
-    const reqParamsArray = normaliseRequiredParamsArray(required_params);
 
     const validationError = await validateRuleOnServer({
       idToIgnore: id,
@@ -429,9 +360,8 @@ router.put("/rules/:id", authJWT, async (req, res) => {
           is_fallback = $9,
           is_active = $10,
           status = $11,
-          required_params = $12,
           updated_at = NOW()
-      WHERE id = $13
+      WHERE id = $12
       RETURNING *
     `;
 
@@ -448,7 +378,6 @@ router.put("/rules/:id", authJWT, async (req, res) => {
         is_fallback,
         is_active,
         status,
-        reqParamsArray,
         id,
       ])
     ).rows[0];
@@ -463,7 +392,7 @@ router.put("/rules/:id", authJWT, async (req, res) => {
 });
 
 /* ------------------------------------------------------------------
-   DELETE RULE (hard delete)
+   DELETE RULE  (hard delete)
    DELETE /api/distribution/rules/:id
 ------------------------------------------------------------------ */
 
@@ -483,8 +412,10 @@ router.delete("/rules/:id", authJWT, async (req, res) => {
 });
 
 /* ------------------------------------------------------------------
-   RESOLVE endpoint for real traffic (optional)
+   Resolve endpoint for real traffic
    GET /api/distribution/resolve?pub_id=PUB03&tracking_link_id=3&geo=BD...
+   - pub_id here is actually your pub_code (PUB03)
+   - Auto-detect device from User-Agent if not passed
 ------------------------------------------------------------------ */
 
 function matchesTarget(rule, geo, carrier, device) {
@@ -512,12 +443,22 @@ function pickByWeight(rules) {
 
 router.get("/resolve", async (req, res) => {
   try {
-    const { pub_id, tracking_link_id, geo, carrier, device } = req.query;
+    let { pub_id, tracking_link_id, geo, carrier, device } = req.query;
 
     if (!pub_id || !tracking_link_id) {
       return res
         .status(400)
         .json(apiError("Missing pub_id or tracking_link_id for resolve"));
+    }
+
+    // Auto-detect device from User-Agent if not provided
+    if (!device) {
+      const ua = (req.headers["user-agent"] || "").toLowerCase();
+      if (ua.includes("android")) device = "ANDROID";
+      else if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ios"))
+        device = "IOS";
+      else if (ua) device = "DESKTOP";
+      // if UA missing: keep device undefined (rules with device=ALL will match)
     }
 
     const rulesQuery = `
@@ -535,8 +476,10 @@ router.get("/resolve", async (req, res) => {
       ORDER BY dr.priority ASC, dr.id ASC
     `;
 
-    const result = await pool.query(rulesQuery, [pub_id, tracking_link_id]);
-    const rules = result.rows;
+    // pub_id in query = pub_code in DB
+    const rules = (
+      await pool.query(rulesQuery, [pub_id, tracking_link_id])
+    ).rows;
 
     if (!rules.length) {
       return res.json(apiError("No active rules"));
@@ -561,10 +504,9 @@ router.get("/resolve", async (req, res) => {
     }
 
     const minPriority = matched[0].priority;
-    const samePriority = matched.filter(
-      (r) => r.priority === minPriority
-    );
+    const samePriority = matched.filter((r) => r.priority === minPriority);
 
+    // (caps logic can be added later if needed)
     const selected = pickByWeight(samePriority);
 
     return res.json(
