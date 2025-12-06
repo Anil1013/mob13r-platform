@@ -1,114 +1,147 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import apiClient from "../api/apiClient";
 
 export default function TrafficDistribution() {
   const [pubCode, setPubCode] = useState("");
-  const [links, setLinks] = useState([]);
-  const [rules, setRules] = useState([]);
+  const [trackingLinks, setTrackingLinks] = useState([]);
   const [selectedLink, setSelectedLink] = useState(null);
+  const [rules, setRules] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const loadLinks = async () => {
-    if (!pubCode) return alert("Enter PUB Code");
+  /* ------------------------------------------------------------------
+     LOAD TRACKING LINKS by pub_code
+  ------------------------------------------------------------------ */
+  const loadTrackingLinks = async () => {
+    if (!pubCode) {
+      alert("Enter pub_code (Example: PUB03)");
+      return;
+    }
 
+    setLoading(true);
     try {
-      const res = await apiClient.get(
-        `/distribution/tracking-links?pub_code=${pubCode}`
-      );
-      setLinks(res.data);
+      const res = await apiClient.get(`/tracking/list/${pubCode}`);
+      setTrackingLinks(res.data || []);
+      setSelectedLink(null);
       setRules([]);
     } catch (err) {
-      console.error("Fetch tracking links error:", err);
+      console.error(err);
+      alert("Error loading tracking links");
     }
+    setLoading(false);
   };
 
+  /* ------------------------------------------------------------------
+     LOAD RULES WHEN A TRACKING LINK IS CLICKED
+  ------------------------------------------------------------------ */
   const loadRules = async (link) => {
     setSelectedLink(link);
+    setRules([]);
 
     try {
       const res = await apiClient.get(
-        `/distribution/rules?tracking_link_id=${link.id}`
+        `/distribution/rules/${link.pub_code}/${link.id}`
       );
-      setRules(res.data);
+      setRules(res.data || []);
     } catch (err) {
-      console.error("Fetch rules error:", err);
+      console.error(err);
+      alert("Error loading rules");
     }
   };
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Traffic Distribution</h1>
+      <h2 className="text-3xl font-bold mb-6">Traffic Distribution</h2>
 
-      <div className="flex gap-3 mb-4">
+      {/* INPUT + LOAD BUTTON */}
+      <div className="flex gap-3 mb-6">
         <input
           type="text"
-          placeholder="PUB03"
-          className="border rounded p-2"
+          placeholder="Enter PUB Code (e.g., PUB03)"
+          className="border rounded px-3 py-2 w-64"
           value={pubCode}
           onChange={(e) => setPubCode(e.target.value)}
         />
-
         <button
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-          onClick={loadLinks}
+          onClick={loadTrackingLinks}
+          className="bg-blue-600 text-white px-5 py-2 rounded"
         >
-          Load Links
+          {loading ? "Loading..." : "Load Links"}
         </button>
       </div>
 
       <div className="grid grid-cols-2 gap-6">
-        {/* Tracking Links */}
-        <div className="border rounded p-4">
-          <h3 className="font-semibold mb-3">Tracking Links</h3>
+        {/* ---------------- LEFT PANEL: TRACKING LINKS ---------------- */}
+        <div className="border rounded-lg p-4 shadow bg-white">
+          <h3 className="text-xl font-semibold mb-4">Tracking Links</h3>
 
-          {links.length === 0 && <p>No tracking links</p>}
+          {trackingLinks.length === 0 && (
+            <p className="text-gray-500">No tracking links found</p>
+          )}
 
-          {links.map((link) => (
+          {trackingLinks.map((link) => (
             <div
               key={link.id}
-              className={`p-2 border rounded cursor-pointer mb-2 ${
-                selectedLink?.id === link.id ? "bg-blue-200" : ""
-              }`}
               onClick={() => loadRules(link)}
+              className={`p-3 mb-2 rounded border cursor-pointer ${
+                selectedLink?.id === link.id
+                  ? "bg-blue-100 border-blue-400"
+                  : "bg-gray-50 border-gray-300"
+              }`}
             >
-              {link.name} ({link.pub_code})
+              <strong>{link.name}</strong> ({link.pub_code})
             </div>
           ))}
         </div>
 
-        {/* Rules */}
-        <div className="border rounded p-4">
-          <h3 className="font-semibold mb-3">Rules</h3>
+        {/* ---------------- RIGHT PANEL: RULES LIST ---------------- */}
+        <div className="border rounded-lg p-4 shadow bg-white">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-semibold">Rules</h3>
+            {selectedLink && (
+              <button className="bg-green-600 text-white px-4 py-2 rounded">
+                + Add Rule
+              </button>
+            )}
+          </div>
 
-          {rules.length === 0 && <p>Select a link to view rules</p>}
+          {!selectedLink && (
+            <p className="text-gray-500">Select a tracking link</p>
+          )}
 
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th>Offer</th>
-                <th>Geo</th>
-                <th>Carrier</th>
-                <th>Device</th>
-                <th>Priority</th>
-                <th>Weight</th>
-                <th>Fallback</th>
-              </tr>
-            </thead>
+          {selectedLink && rules.length === 0 && (
+            <p className="text-gray-500">No rules found</p>
+          )}
 
-            <tbody>
-              {rules.map((r) => (
-                <tr key={r.id} className="border-b">
-                  <td>{r.offer_id}</td>
-                  <td>{r.geo}</td>
-                  <td>{r.carrier}</td>
-                  <td>{r.device}</td>
-                  <td>{r.priority}</td>
-                  <td>{r.weight}</td>
-                  <td>{r.is_fallback ? "YES" : "NO"}</td>
+          {rules.length > 0 && (
+            <table className="w-full border">
+              <thead>
+                <tr className="bg-gray-200 text-left">
+                  <th className="p-2 border">Offer</th>
+                  <th className="p-2 border">Geo</th>
+                  <th className="p-2 border">Carrier</th>
+                  <th className="p-2 border">Device</th>
+                  <th className="p-2 border">Priority</th>
+                  <th className="p-2 border">Weight</th>
+                  <th className="p-2 border">Fallback</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-
+              </thead>
+              <tbody>
+                {rules.map((r) => (
+                  <tr key={r.id} className="border">
+                    <td className="p-2 border">{r.offer_id}</td>
+                    <td className="p-2 border">{r.geo}</td>
+                    <td className="p-2 border">{r.carrier}</td>
+                    <td className="p-2 border">{r.device}</td>
+                    <td className="p-2 border">{r.priority}</td>
+                    <td className="p-2 border">{r.weight}</td>
+                    <td className="p-2 border">
+                      {r.is_fallback ? "YES" : "NO"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>
