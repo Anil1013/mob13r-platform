@@ -17,11 +17,25 @@ const apiError = (message, extra = {}) => ({
   ...extra,
 });
 
+// Allowed required params for tracking links
+const REQUIRED_PARAM_KEYS = [
+  "ip",
+  "ua",
+  "device",
+  "msisdn",
+  "click_id",
+  "sub1",
+  "sub2",
+  "sub3",
+  "sub4",
+  "sub5",
+];
+
 /**
- * DB-level validation for rules
+ * Server-side rule validation:
  *  - Only 1 fallback per (pub_code, tracking_link_id)
- *  - No exact duplicates (pub_code + tracking_link_id + offer_id + geo + carrier)
- *    (yehi tumhari DB UNIQUE constraint hai)
+ *  - No exact duplicates (pub_code + tracking_link_id + offer_id + geo + carrier + device)
+ *  - Sum of active weights for that (pub_code, tracking_link_id) <= 100
  */
 async function validateRuleOnServer({
   idToIgnore = null,
@@ -30,8 +44,9 @@ async function validateRuleOnServer({
   offer_id,
   geo,
   carrier,
-  device, // still accept but not used in unique check, just in case
+  device,
   is_fallback,
+  weight,
 }) {
   // 1) Fallback uniqueness
   if (is_fallback) {
@@ -56,7 +71,6 @@ async function validateRuleOnServer({
   }
 
   // 2) Duplicate targeting rule
-  //    NOTE: device ko yahan include nahi kar rahe, kyunki DB constraint me bhi nahi hai
   const dupCheck = await pool.query(
     `
     SELECT id
@@ -66,16 +80,39 @@ async function validateRuleOnServer({
       AND offer_id = $3
       AND geo = $4
       AND carrier = $5
+      AND device = $6
       AND is_active = TRUE
-      ${idToIgnore ? "AND id <> $6" : ""}
+      ${idToIgnore ? "AND id <> $7" : ""}
   `,
     idToIgnore
-      ? [pub_code, tracking_link_id, offer_id, geo, carrier, idToIgnore]
-      : [pub_code, tracking_link_id, offer_id, geo, carrier]
+      ? [pub_code, tracking_link_id, offer_id, geo, carrier, device, idToIgnore]
+      : [pub_code, tracking_link_id, offer_id, geo, carrier, device]
   );
 
   if (dupCheck.rowCount > 0) {
-    return "Duplicate rule: same Offer + Geo + Carrier already exists.";
+    return "Duplicate rule: same Offer + Geo + Carrier + Device already exists.";
+  }
+
+  // 3) Weight sum <= 100
+  const weightRes = await pool.query(
+    `
+    SELECT COALESCE(SUM(weight), 0) AS total
+    FROM distribution_rules
+    WHERE pub_code = $1
+      AND tracking_link_id = $2
+      AND is_active = TRUE
+      ${idToIgnore ? "AND id <> $3" : ""}
+  `,
+    idToIgnore
+      ? [pub_code, tracking_link_id, idToIgnore]
+      : [pub_code, tracking_link_id]
+  );
+
+  const existingTotal = Number(weightRes.rows[0].total || 0);
+  const newTotal = existingTotal + (Number(weight) || 0);
+
+  if (newTotal > 100) {
+    return `Total weight for this PUB & Tracking Link cannot exceed 100. Current: ${existingTotal}, new rule: ${weight}, total: ${newTotal}.`;
   }
 
   return null; // no error
@@ -83,7 +120,6 @@ async function validateRuleOnServer({
 
 /* ------------------------------------------------------------------
    TRACKING LINKS (by pub_code)
-   Example:
    GET /api/distribution/tracking-links?pub_code=PUB03
 ------------------------------------------------------------------ */
 
@@ -116,7 +152,8 @@ router.get("/tracking-links", authJWT, async (req, res) => {
         portal_url,
         status,
         created_at,
-        updated_at
+        updated_at,
+        required_params
       FROM publisher_tracking_links
       WHERE pub_code = $1
         AND status = 'active'
@@ -134,8 +171,51 @@ router.get("/tracking-links", authJWT, async (req, res) => {
 });
 
 /* ------------------------------------------------------------------
+   UPDATE required_params for a tracking link
+   PUT /api/distribution/tracking-links/:id/params
+------------------------------------------------------------------ */
+
+router.put("/tracking-links/:id/params", authJWT, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { required_params } = req.body;
+
+    if (!required_params || typeof required_params !== "object") {
+      return res
+        .status(400)
+        .json(apiError("required_params object is required"));
+    }
+
+    // Keep only allowed keys, coerce to boolean
+    const cleaned = {};
+    for (const key of REQUIRED_PARAM_KEYS) {
+      cleaned[key] = !!required_params[key];
+    }
+
+    const q = `
+      UPDATE publisher_tracking_links
+      SET required_params = $1,
+          updated_at = NOW()
+      WHERE id = $2
+      RETURNING id, required_params
+    `;
+
+    const result = await pool.query(q, [cleaned, id]);
+    if (!result.rowCount) {
+      return res.status(404).json(apiError("Tracking link not found"));
+    }
+
+    res.json(apiSuccess({ item: result.rows[0] }));
+  } catch (err) {
+    console.error("update tracking params error:", err);
+    res
+      .status(500)
+      .json(apiError("Internal server error", { error: err.message }));
+  }
+});
+
+/* ------------------------------------------------------------------
    OFFERS (for dropdown)
-   Example:
    GET /api/distribution/offers?search=game
 ------------------------------------------------------------------ */
 
@@ -147,6 +227,7 @@ router.get("/offers", authJWT, async (req, res) => {
       SELECT
         offer_id,
         name,
+        advertiser_name,
         type,
         status
       FROM offers
@@ -154,7 +235,8 @@ router.get("/offers", authJWT, async (req, res) => {
         AND (
           $1 = '' OR
           LOWER(offer_id) LIKE LOWER('%' || $1 || '%') OR
-          LOWER(name) LIKE LOWER('%' || $1 || '%')
+          LOWER(name) LIKE LOWER('%' || $1 || '%') OR
+          LOWER(advertiser_name) LIKE LOWER('%' || $1 || '%')
         )
       ORDER BY offer_id ASC
       LIMIT 200
@@ -172,7 +254,6 @@ router.get("/offers", authJWT, async (req, res) => {
 
 /* ------------------------------------------------------------------
    LIST RULES for a tracking link
-   Example:
    GET /api/distribution/rules?tracking_link_id=3
 ------------------------------------------------------------------ */
 
@@ -187,6 +268,7 @@ router.get("/rules", authJWT, async (req, res) => {
       SELECT
         dr.*,
         o.name AS offer_name,
+        o.advertiser_name,
         o.type AS offer_type
       FROM distribution_rules dr
       JOIN offers o ON o.offer_id = dr.offer_id
@@ -229,7 +311,6 @@ router.post("/rules", authJWT, async (req, res) => {
       return res.status(400).json(apiError("tracking_link_id required"));
     if (!offer_id) return res.status(400).json(apiError("offer_id required"));
 
-    // Normalise
     geo = geo || "ALL";
     carrier = carrier || "ALL";
     device = device || "ALL";
@@ -237,7 +318,6 @@ router.post("/rules", authJWT, async (req, res) => {
     weight = Number(weight) || 0;
     is_fallback = !!is_fallback;
 
-    // Server-side validation (fallback + duplicate)
     const validationError = await validateRuleOnServer({
       pub_code,
       tracking_link_id,
@@ -246,6 +326,7 @@ router.post("/rules", authJWT, async (req, res) => {
       carrier,
       device,
       is_fallback,
+      weight,
     });
 
     if (validationError) {
@@ -337,6 +418,7 @@ router.put("/rules/:id", authJWT, async (req, res) => {
       carrier,
       device,
       is_fallback,
+      weight,
     });
 
     if (validationError) {
@@ -388,7 +470,7 @@ router.put("/rules/:id", authJWT, async (req, res) => {
 });
 
 /* ------------------------------------------------------------------
-   DELETE RULE  (Hard delete – best for your case)
+   DELETE RULE (hard delete)
    DELETE /api/distribution/rules/:id
 ------------------------------------------------------------------ */
 
@@ -408,7 +490,7 @@ router.delete("/rules/:id", authJWT, async (req, res) => {
 });
 
 /* ------------------------------------------------------------------
-   (Optional) Resolve endpoint for real traffic
+   Resolve endpoint (unchanged selection logic)
    GET /api/distribution/resolve?pub_id=PUB03&tracking_link_id=3&geo=BD...
 ------------------------------------------------------------------ */
 
@@ -483,7 +565,6 @@ router.get("/resolve", async (req, res) => {
     const minPriority = matched[0].priority;
     const samePriority = matched.filter((r) => r.priority === minPriority);
 
-    // (caps logic can be added later if needed)
     const selected = pickByWeight(samePriority);
 
     return res.json(
