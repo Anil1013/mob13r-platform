@@ -20,7 +20,8 @@ const apiError = (message, extra = {}) => ({
 /**
  * DB-level validation for rules
  *  - Only 1 fallback per (pub_code, tracking_link_id)
- *  - No exact duplicates (pub_code + tracking_link_id + offer_id + geo + carrier + device)
+ *  - No exact duplicates (pub_code + tracking_link_id + offer_id + geo + carrier)
+ *    (yehi tumhari DB UNIQUE constraint hai)
  */
 async function validateRuleOnServer({
   idToIgnore = null,
@@ -29,7 +30,7 @@ async function validateRuleOnServer({
   offer_id,
   geo,
   carrier,
-  device,
+  device, // still accept but not used in unique check, just in case
   is_fallback,
 }) {
   // 1) Fallback uniqueness
@@ -55,6 +56,7 @@ async function validateRuleOnServer({
   }
 
   // 2) Duplicate targeting rule
+  //    NOTE: device ko yahan include nahi kar rahe, kyunki DB constraint me bhi nahi hai
   const dupCheck = await pool.query(
     `
     SELECT id
@@ -64,17 +66,16 @@ async function validateRuleOnServer({
       AND offer_id = $3
       AND geo = $4
       AND carrier = $5
-      AND device = $6
       AND is_active = TRUE
-      ${idToIgnore ? "AND id <> $7" : ""}
+      ${idToIgnore ? "AND id <> $6" : ""}
   `,
     idToIgnore
-      ? [pub_code, tracking_link_id, offer_id, geo, carrier, device, idToIgnore]
-      : [pub_code, tracking_link_id, offer_id, geo, carrier, device]
+      ? [pub_code, tracking_link_id, offer_id, geo, carrier, idToIgnore]
+      : [pub_code, tracking_link_id, offer_id, geo, carrier]
   );
 
   if (dupCheck.rowCount > 0) {
-    return "Duplicate rule: same Offer + Geo + Carrier + Device already exists.";
+    return "Duplicate rule: same Offer + Geo + Carrier already exists.";
   }
 
   return null; // no error
@@ -126,7 +127,9 @@ router.get("/tracking-links", authJWT, async (req, res) => {
     res.json(apiSuccess({ items: result.rows }));
   } catch (err) {
     console.error("tracking-links error:", err);
-    res.status(500).json(apiError("Internal server error", { error: err.message }));
+    res
+      .status(500)
+      .json(apiError("Internal server error", { error: err.message }));
   }
 });
 
@@ -161,7 +164,9 @@ router.get("/offers", authJWT, async (req, res) => {
     res.json(apiSuccess({ items: result.rows }));
   } catch (err) {
     console.error("offers list error:", err);
-    res.status(500).json(apiError("Internal server error", { error: err.message }));
+    res
+      .status(500)
+      .json(apiError("Internal server error", { error: err.message }));
   }
 });
 
@@ -194,7 +199,9 @@ router.get("/rules", authJWT, async (req, res) => {
     res.json(apiSuccess({ items: result.rows }));
   } catch (err) {
     console.error("rules list error:", err);
-    res.status(500).json(apiError("Internal server error", { error: err.message }));
+    res
+      .status(500)
+      .json(apiError("Internal server error", { error: err.message }));
   }
 });
 
@@ -269,7 +276,9 @@ router.post("/rules", authJWT, async (req, res) => {
     res.json(apiSuccess({ item: result.rows[0] }));
   } catch (err) {
     console.error("create rule error:", err);
-    res.status(500).json(apiError("Internal server error", { error: err.message }));
+    res
+      .status(500)
+      .json(apiError("Internal server error", { error: err.message }));
   }
 });
 
@@ -372,7 +381,9 @@ router.put("/rules/:id", authJWT, async (req, res) => {
     res.json(apiSuccess({ item: updated }));
   } catch (err) {
     console.error("update rule error:", err);
-    res.status(500).json(apiError("Internal server error", { error: err.message }));
+    res
+      .status(500)
+      .json(apiError("Internal server error", { error: err.message }));
   }
 });
 
@@ -390,7 +401,9 @@ router.delete("/rules/:id", authJWT, async (req, res) => {
     res.json(apiSuccess({ message: "Rule deleted" }));
   } catch (err) {
     console.error("delete rule error:", err);
-    res.status(500).json(apiError("Internal server error", { error: err.message }));
+    res
+      .status(500)
+      .json(apiError("Internal server error", { error: err.message }));
   }
 });
 
@@ -483,7 +496,9 @@ router.get("/resolve", async (req, res) => {
     );
   } catch (err) {
     console.error("resolve error:", err);
-    res.status(500).json(apiError("Internal server error", { error: err.message }));
+    res
+      .status(500)
+      .json(apiError("Internal server error", { error: err.message }));
   }
 });
 
