@@ -1,491 +1,832 @@
-import React, { useEffect, useState } from "react";
+import React, { useMemo, useState } from "react";
 import apiClient from "../api/apiClient";
 
+const PARAM_KEYS = [
+  "ip",
+  "ua",
+  "device",
+  "msisdn",
+  "click_id",
+  "sub1",
+  "sub2",
+  "sub3",
+  "sub4",
+  "sub5",
+];
+
+const PARAM_LABELS = {
+  ip: "IP",
+  ua: "UA",
+  device: "Device",
+  msisdn: "MSISDN",
+  click_id: "Click ID",
+  sub1: "sub1",
+  sub2: "sub2",
+  sub3: "sub3",
+  sub4: "sub4",
+  sub5: "sub5",
+};
+
+const emptyFlags = PARAM_KEYS.reduce((acc, key) => {
+  acc[key] = false;
+  return acc;
+}, {});
+
+function flagsFromJson(jsonValue) {
+  // jsonValue expected like: { ip: true, ua: false, ... }
+  const flags = { ...emptyFlags };
+
+  if (jsonValue && typeof jsonValue === "object") {
+    for (const key of PARAM_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(jsonValue, key)) {
+        flags[key] = !!jsonValue[key];
+      }
+    }
+  }
+
+  return flags;
+}
+
+function arrayFromFlags(flags) {
+  return PARAM_KEYS.filter((key) => flags[key]);
+}
+
+function buildUrlWithParams(baseUrl, flags) {
+  if (!baseUrl) return "";
+
+  const params = arrayFromFlags(flags);
+  if (!params.length) return baseUrl;
+
+  const hasQuery = baseUrl.includes("?");
+  let url = baseUrl;
+
+  for (const key of params) {
+    url += (hasQuery ? "&" : "?") + `${key}={${key}}`;
+    // after first param, we always have query part
+    if (!hasQuery) {
+      // first time we add '?'
+      // for next params, we want '&'
+      baseUrl += "";
+    }
+  }
+
+  return url;
+}
+
+function initialRuleForm(selectedLink) {
+  return {
+    offer_id: "",
+    geo: selectedLink?.geo && selectedLink.geo !== "ALL" ? selectedLink.geo : "ALL",
+    carrier:
+      selectedLink?.carrier && selectedLink.carrier !== "ALL"
+        ? selectedLink.carrier
+        : "ALL",
+    device: "ALL",
+    priority: 1,
+    weight: 0,
+    is_fallback: false,
+  };
+}
+
 export default function TrafficDistribution() {
-  /* ------------------------------------------
-     STATE
-  ------------------------------------------ */
   const [pubCode, setPubCode] = useState("");
+
   const [links, setLinks] = useState([]);
+  const [linksLoading, setLinksLoading] = useState(false);
+
   const [selectedLink, setSelectedLink] = useState(null);
 
   const [rules, setRules] = useState([]);
+  const [rulesLoading, setRulesLoading] = useState(false);
+
+  const [ruleSearch, setRuleSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+
   const [offers, setOffers] = useState([]);
-  const [search, setSearch] = useState("");
+  const [offersLoading, setOffersLoading] = useState(false);
 
-  const [showModal, setShowModal] = useState(false);
-  const [editRule, setEditRule] = useState(null);
+  const [paramFlags, setParamFlags] = useState({ ...emptyFlags });
+  const [savingParams, setSavingParams] = useState(false);
 
-  const [params, setParams] = useState({
-    ip: false,
-    ua: false,
-    device: false,
-    msisdn: false,
-    click_id: false,
-    sub1: false,
-    sub2: false,
-    sub3: false,
-    sub4: false,
-    sub5: false,
-  });
+  const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
+  const [editingRule, setEditingRule] = useState(null);
+  const [ruleForm, setRuleForm] = useState(initialRuleForm());
 
-  /* ------------------------------------------
-     LOAD OFFERS
-  ------------------------------------------ */
-  const loadOffers = async () => {
-    try {
-      const res = await apiClient.get(`/distribution/offers`);
-      setOffers(res.data.items || []);
-    } catch (err) {
-      console.error("load offers error:", err);
-    }
-  };
+  const [savingRule, setSavingRule] = useState(false);
 
-  useEffect(() => {
-    loadOffers();
-  }, []);
-
-  /* ------------------------------------------
-     LOAD TRACKING LINKS
-  ------------------------------------------ */
+  /* ---------------------------
+      LOAD TRACKING LINKS
+  --------------------------- */
   const loadLinks = async () => {
-    if (!pubCode) return alert("Enter PUB Code");
+    const code = pubCode.trim();
+    if (!code) {
+      alert("Enter PUB Code (e.g. PUB03)");
+      return;
+    }
+
+    setLinksLoading(true);
+    setSelectedLink(null);
+    setRules([]);
+    setPage(1);
 
     try {
       const res = await apiClient.get(
-        `/distribution/tracking-links?pub_code=${pubCode}`
+        `/distribution/tracking-links?pub_code=${encodeURIComponent(code)}`
       );
+      const items = res.data?.items || [];
+      setLinks(items);
 
-      setLinks(res.data.items || []);
-      setSelectedLink(null);
-      setRules([]);
-
-      if (res.data.items.length === 1) {
-        handleSelectLink(res.data.items[0]);
+      if (!items.length) {
+        alert("No tracking links found for this PUB code.");
       }
     } catch (err) {
-      console.error("tracking link error:", err);
+      console.error("Fetch tracking links error:", err);
+      alert("Failed to fetch tracking links.");
+    } finally {
+      setLinksLoading(false);
     }
   };
 
-  /* ------------------------------------------
-     SELECT TRACKING LINK
-  ------------------------------------------ */
-  const handleSelectLink = async (link) => {
+  /* ---------------------------
+      LOAD RULES
+  --------------------------- */
+  const loadRules = async (link) => {
+    if (!link) return;
+
     setSelectedLink(link);
+    setRules([]);
+    setPage(1);
 
-    // load params
-    if (link.required_params) {
-      setParams(link.required_params);
-    }
+    // load default parameter flags from tracking link
+    const flags = flagsFromJson(link.required_params || {});
+    setParamFlags(flags);
 
-    // load rules
-    loadRules(link.id);
-  };
-
-  /* ------------------------------------------
-     LOAD RULES
-  ------------------------------------------ */
-  const loadRules = async (id) => {
+    setRulesLoading(true);
     try {
       const res = await apiClient.get(
-        `/distribution/rules?tracking_link_id=${id}`
+        `/distribution/rules?tracking_link_id=${link.id}`
       );
-      setRules(res.data.items || []);
+      const items = res.data?.items || [];
+      setRules(items);
     } catch (err) {
-      console.error("rules load error:", err);
+      console.error("Fetch rules error:", err);
+      alert("Failed to fetch rules.");
+    } finally {
+      setRulesLoading(false);
     }
   };
 
-  /* ------------------------------------------
-     SAVE PARAMS
-  ------------------------------------------ */
-  const saveParams = async () => {
+  /* ---------------------------
+      SAVE DEFAULT PARAMETERS
+  --------------------------- */
+  const handleSaveParams = async () => {
     if (!selectedLink) return;
 
+    setSavingParams(true);
     try {
       await apiClient.put(
         `/distribution/tracking-links/${selectedLink.id}/params`,
-        { required_params: params }
+        {
+          required_params: paramFlags,
+        }
       );
 
-      alert("Parameters Saved!");
+      // update copy inside links + selectedLink
+      setLinks((prev) =>
+        prev.map((l) =>
+          l.id === selectedLink.id ? { ...l, required_params: { ...paramFlags } } : l
+        )
+      );
+      setSelectedLink((prev) =>
+        prev ? { ...prev, required_params: { ...paramFlags } } : prev
+      );
+
+      alert("Default parameters saved.");
     } catch (err) {
-      console.error("save params error:", err);
+      console.error("Save params error:", err);
+      alert("Failed to save parameters.");
+    } finally {
+      setSavingParams(false);
     }
   };
 
-  /* ------------------------------------------
-     COPY URL
-  ------------------------------------------ */
-  const copyTrackingUrl = () => {
-    if (!selectedLink) return alert("Select a link first");
+  /* ---------------------------
+      COPY TRACKING URL
+  --------------------------- */
+  const trackingUrlWithParams = useMemo(() => {
+    if (!selectedLink) return "";
+    return buildUrlWithParams(selectedLink.tracking_url, paramFlags);
+  }, [selectedLink, paramFlags]);
 
-    let base = selectedLink.tracking_url;
-
-    // attach required params as tokens
-    const qp = [];
-
-    Object.keys(params).forEach((key) => {
-      if (params[key] === true) qp.push(`${key}={<${key}>}`);
-    });
-
-    const finalUrl =
-      qp.length > 0 ? `${base}?${qp.join("&")}` : base;
-
-    navigator.clipboard.writeText(finalUrl);
-    alert("Copied:\n" + finalUrl);
-  };
-
-  /* ------------------------------------------
-     ADD / EDIT RULE MODAL OPEN
-  ------------------------------------------ */
-  const openAddRule = () => {
-    setEditRule(null);
-    setShowModal(true);
-  };
-
-  const openEditRule = (rule) => {
-    setEditRule(rule);
-    setShowModal(true);
-  };
-
-  /* ------------------------------------------
-     DELETE RULE
-  ------------------------------------------ */
-  const deleteRule = async (id) => {
-    if (!window.confirm("Delete this rule?")) return;
+  const handleCopyUrl = async () => {
+    if (!trackingUrlWithParams) {
+      alert("No tracking link selected.");
+      return;
+    }
 
     try {
-      await apiClient.delete(`/distribution/rules/${id}`);
-      loadRules(selectedLink.id);
+      await navigator.clipboard.writeText(trackingUrlWithParams);
+      alert("Tracking URL copied!");
     } catch (err) {
-      console.error("delete rule:", err);
+      console.error("Clipboard error:", err);
+      // Fallback
+      window.prompt("Copy URL:", trackingUrlWithParams);
     }
   };
 
-  /* ------------------------------------------
-     SAVE RULE
-  ------------------------------------------ */
-  const saveRule = async (e) => {
-    e.preventDefault();
-
-    const fd = new FormData(e.target);
-
-    const payload = {
-      pub_code: pubCode,
-      tracking_link_id: selectedLink.id,
-      offer_id: fd.get("offer_id"),
-      geo: fd.get("geo"),
-      carrier: fd.get("carrier"),
-      device: fd.get("device"),
-      priority: Number(fd.get("priority")),
-      weight: Number(fd.get("weight")),
-      is_fallback: fd.get("is_fallback") === "on",
-    };
-
+  /* ---------------------------
+      OFFERS (for dropdown)
+  --------------------------- */
+  const loadOffers = async (search = "") => {
+    setOffersLoading(true);
     try {
-      if (editRule) {
-        await apiClient.put(`/distribution/rules/${editRule.id}`, payload);
-      } else {
-        await apiClient.post(`/distribution/rules`, payload);
-      }
-
-      setShowModal(false);
-      loadRules(selectedLink.id);
+      const res = await apiClient.get(
+        `/distribution/offers?search=${encodeURIComponent(search.trim())}`
+      );
+      const items = res.data?.items || [];
+      setOffers(items);
     } catch (err) {
-      console.error("save rule error:", err);
-      alert(err.response?.data?.message || "Error");
+      console.error("Fetch offers error:", err);
+      alert("Failed to fetch offers.");
+    } finally {
+      setOffersLoading(false);
     }
   };
 
-  /* ------------------------------------------
-     FILTERED RULES
-  ------------------------------------------ */
-  const filteredRules = rules.filter((r) =>
-    `${r.offer_id} ${r.offer_name} ${r.geo}`
-      .toLowerCase()
-      .includes(search.toLowerCase())
+  /* ---------------------------
+      RULE TABLE HELPERS
+  --------------------------- */
+  const totalWeight = useMemo(
+    () =>
+      rules.reduce(
+        (sum, r) => sum + (!r.is_fallback ? Number(r.weight || 0) : 0),
+        0
+      ),
+    [rules]
   );
 
-  /* ------------------------------------------
-     CALCULATE TOTAL WEIGHT
-  ------------------------------------------ */
-  const totalWeight = rules.reduce((sum, r) => sum + Number(r.weight), 0);
+  const filteredRules = useMemo(() => {
+    const term = ruleSearch.trim().toLowerCase();
+    if (!term) return rules;
 
-  /* ------------------------------------------
-     UI
-  ------------------------------------------ */
+    return rules.filter((r) => {
+      const values = [
+        r.offer_id,
+        r.offer_name,
+        r.offer_type,
+        r.geo,
+        r.carrier,
+        r.device,
+        r.advertiser_name,
+      ];
+      return values.some(
+        (v) => v && String(v).toLowerCase().includes(term)
+      );
+    });
+  }, [rules, ruleSearch]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredRules.length / pageSize)
+  );
+  const pageSafe = Math.min(page, totalPages);
+  const startIdx = (pageSafe - 1) * pageSize;
+  const pageRules = filteredRules.slice(startIdx, startIdx + pageSize);
+
+  /* ---------------------------
+      RULE MODAL OPEN
+  --------------------------- */
+  const openAddRule = async () => {
+    if (!selectedLink) {
+      alert("Select a tracking link first.");
+      return;
+    }
+    setEditingRule(null);
+    setRuleForm(initialRuleForm(selectedLink));
+    setIsRuleModalOpen(true);
+    await loadOffers("");
+  };
+
+  const openEditRule = async (rule) => {
+    if (!selectedLink) return;
+    setEditingRule(rule);
+    setRuleForm({
+      offer_id: rule.offer_id,
+      geo: rule.geo,
+      carrier: rule.carrier,
+      device: rule.device,
+      priority: rule.priority,
+      weight: rule.weight,
+      is_fallback: rule.is_fallback,
+    });
+    setIsRuleModalOpen(true);
+    await loadOffers(rule.offer_id);
+  };
+
+  const closeRuleModal = () => {
+    setIsRuleModalOpen(false);
+    setEditingRule(null);
+    setRuleForm(initialRuleForm(selectedLink));
+  };
+
+  const handleRuleFormChange = (field, value) => {
+    setRuleForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  /* ---------------------------
+      RULE VALIDATION
+  --------------------------- */
+  const validateRuleForm = () => {
+    if (!ruleForm.offer_id) return "Offer is required.";
+
+    const priority = Number(ruleForm.priority) || 1;
+    const weight = ruleForm.is_fallback ? 0 : Number(ruleForm.weight) || 0;
+
+    if (priority < 1) return "Priority must be at least 1.";
+    if (!ruleForm.is_fallback && weight <= 0)
+      return "Weight must be greater than 0 (for non-fallback rule).";
+
+    // Ensure total weight <= 100 for non-fallback rules
+    const otherWeight = rules.reduce((sum, r) => {
+      if (r.is_fallback) return sum;
+      if (editingRule && r.id === editingRule.id) return sum;
+      return sum + Number(r.weight || 0);
+    }, 0);
+
+    if (otherWeight + weight > 100) {
+      return `Total weight would be ${
+        otherWeight + weight
+      }%. It must not exceed 100%.`;
+    }
+
+    return null;
+  };
+
+  /* ---------------------------
+      SAVE RULE (ADD / EDIT)
+  --------------------------- */
+  const handleSaveRule = async () => {
+    if (!selectedLink) return;
+
+    const error = validateRuleForm();
+    if (error) {
+      alert(error);
+      return;
+    }
+
+    const payload = {
+      pub_code: selectedLink.pub_code,
+      tracking_link_id: selectedLink.id,
+      offer_id: ruleForm.offer_id,
+      geo: ruleForm.geo || "ALL",
+      carrier: ruleForm.carrier || "ALL",
+      device: ruleForm.device || "ALL",
+      priority: Number(ruleForm.priority) || 1,
+      weight: ruleForm.is_fallback ? 0 : Number(ruleForm.weight) || 0,
+      is_fallback: !!ruleForm.is_fallback,
+      required_params: arrayFromFlags(paramFlags),
+    };
+
+    setSavingRule(true);
+    try {
+      if (editingRule) {
+        await apiClient.put(`/distribution/rules/${editingRule.id}`, payload);
+      } else {
+        await apiClient.post("/distribution/rules", payload);
+      }
+
+      // reload rules
+      await loadRules(selectedLink);
+      closeRuleModal();
+    } catch (err) {
+      console.error("Add/Edit rule error:", err);
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Failed to save rule.";
+      alert(msg);
+    } finally {
+      setSavingRule(false);
+    }
+  };
+
+  /* ---------------------------
+      DELETE RULE
+  --------------------------- */
+  const handleDeleteRule = async (rule) => {
+    if (!window.confirm(`Delete rule for offer ${rule.offer_id}?`)) return;
+
+    try {
+      await apiClient.delete(`/distribution/rules/${rule.id}`);
+      await loadRules(selectedLink);
+    } catch (err) {
+      console.error("Delete rule error:", err);
+      alert("Failed to delete rule.");
+    }
+  };
+
+  /* ---------------------------
+      RENDER
+  --------------------------- */
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">Traffic Distribution</h1>
+      <h1 className="text-2xl font-bold mb-4">Traffic Distribution</h1>
 
-      {/* Pub Code Input */}
-      <div className="flex gap-3 items-center mb-4">
+      {/* PUB Code + Buttons */}
+      <div className="flex flex-wrap gap-3 mb-4 items-center">
         <input
           type="text"
           placeholder="PUB03"
+          className="border rounded px-3 py-2 min-w-[160px]"
           value={pubCode}
-          onChange={(e) => setPubCode(e.target.value)}
-          className="border rounded px-3 py-2"
+          onChange={(e) => setPubCode(e.target.value.toUpperCase())}
         />
 
         <button
-          className="bg-blue-600 text-white px-4 py-2 rounded"
+          className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-60"
           onClick={loadLinks}
+          disabled={linksLoading}
         >
-          Load Links
+          {linksLoading ? "Loading..." : "Load Links"}
         </button>
 
         <button
-          className="bg-gray-700 text-white px-4 py-2 rounded"
-          onClick={copyTrackingUrl}
+          className="border px-4 py-2 rounded disabled:opacity-60"
+          onClick={handleCopyUrl}
+          disabled={!selectedLink}
         >
           Copy Tracking URL
         </button>
 
         {selectedLink && (
-          <span className="text-sm text-gray-700">
-            Publisher: {selectedLink.publisher_name} |
-            Link: {selectedLink.name}
-          </span>
+          <div className="text-sm text-gray-600 ml-2">
+            <span className="mr-4">
+              <strong>Publisher:</strong> {selectedLink.publisher_name}
+            </span>
+            <span>
+              <strong>Link:</strong> {selectedLink.name}
+            </span>
+          </div>
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        {/* LEFT: Tracking Links */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Tracking Links */}
         <div className="border rounded p-4">
-          <h3 className="font-semibold mb-2">
-            Tracking Links ({links.length})
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold">Tracking Links</h3>
+            <span className="text-xs text-gray-500">
+              {links.length} link(s)
+            </span>
+          </div>
 
-          {links.map((link) => (
-            <div
-              key={link.id}
-              className={`p-3 border rounded mb-2 cursor-pointer ${
-                selectedLink?.id === link.id ? "bg-blue-200" : ""
-              }`}
-              onClick={() => handleSelectLink(link)}
-            >
-              <div className="font-semibold">
-                {link.name} ({link.pub_code})
+          {links.length === 0 && (
+            <p className="text-sm text-gray-500">No tracking links.</p>
+          )}
+
+          <div className="space-y-2">
+            {links.map((link) => (
+              <div
+                key={link.id}
+                className={`p-2 border rounded cursor-pointer text-sm ${
+                  selectedLink?.id === link.id
+                    ? "bg-blue-100 border-blue-400"
+                    : "hover:bg-gray-50"
+                }`}
+                onClick={() => loadRules(link)}
+              >
+                <div className="font-medium">
+                  {link.name} ({link.pub_code})
+                </div>
+                <div className="text-xs text-gray-600">
+                  {link.geo} • {link.carrier} • {link.type}
+                </div>
               </div>
-              <div className="text-xs text-gray-600">
-                {link.geo} • {link.carrier} • {link.type}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
-        {/* RIGHT: RULES */}
-        <div className="border rounded p-4">
-
-          {/* Header */}
-          <div className="flex justify-between items-center mb-3">
+        {/* Rules */}
+        <div className="border rounded p-4 overflow-x-auto">
+          <div className="flex items-center justify-between mb-2">
             <div>
               <h3 className="font-semibold">Rules</h3>
               {selectedLink && (
-                <p className="text-sm text-gray-500">
+                <div className="text-xs text-gray-500">
                   {selectedLink.name} ({selectedLink.pub_code})
-                </p>
+                </div>
               )}
-              <p className="text-sm text-green-600">
-                Total Weight: {totalWeight} / 100
-              </p>
+              <div className="text-xs text-gray-700 mt-1">
+                Total Weight: <strong>{totalWeight}</strong> / 100
+              </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <input
                 type="text"
                 placeholder="Search rules..."
-                className="border rounded px-3 py-1"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                className="border rounded px-2 py-1 text-sm"
+                value={ruleSearch}
+                onChange={(e) => {
+                  setRuleSearch(e.target.value);
+                  setPage(1);
+                }}
               />
               <button
-                className="bg-green-600 text-white px-4 py-2 rounded"
+                className="bg-green-600 text-white px-4 py-1.5 rounded text-sm disabled:opacity-60"
                 onClick={openAddRule}
+                disabled={!selectedLink}
               >
                 + Add Rule
               </button>
             </div>
           </div>
 
-          {/* Required Params */}
-          <div className="border rounded p-3 mb-4">
-            <div className="font-semibold mb-2">
-              Default Parameters (required_params)
+          {/* Default Parameters */}
+          <div className="border rounded px-3 py-2 mb-3 bg-gray-50">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold">
+                Default Parameters (required_params)
+              </span>
+              <button
+                className="bg-gray-800 text-white px-3 py-1 rounded text-xs disabled:opacity-60"
+                onClick={handleSaveParams}
+                disabled={!selectedLink || savingParams}
+              >
+                {savingParams ? "Saving..." : "Save Params"}
+              </button>
             </div>
 
-            <div className="grid grid-cols-5 gap-2 text-sm">
-              {Object.keys(params).map((key) => (
-                <label key={key} className="flex items-center gap-1">
+            <div className="flex flex-wrap gap-3 text-xs">
+              {PARAM_KEYS.map((key) => (
+                <label
+                  key={key}
+                  className="inline-flex items-center gap-1 cursor-pointer"
+                >
                   <input
                     type="checkbox"
-                    checked={params[key]}
+                    className="h-3 w-3"
+                    checked={paramFlags[key]}
                     onChange={(e) =>
-                      setParams({ ...params, [key]: e.target.checked })
+                      setParamFlags((prev) => ({
+                        ...prev,
+                        [key]: e.target.checked,
+                      }))
                     }
                   />
-                  {key.toUpperCase()}
+                  <span>{PARAM_LABELS[key]}</span>
                 </label>
               ))}
             </div>
 
-            <button
-              className="mt-3 bg-blue-600 text-white px-3 py-1 rounded"
-              onClick={saveParams}
-            >
-              Save Params
-            </button>
+            {selectedLink && (
+              <div className="mt-2 text-[11px] text-gray-600 break-all">
+                <span className="font-semibold">Preview:</span>{" "}
+                {trackingUrlWithParams}
+              </div>
+            )}
           </div>
 
-          {/* RULE TABLE */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-gray-100 text-xs">
-                  <th>Offer</th>
-                  <th>Advertiser</th>
-                  <th>Publisher</th>
-                  <th>Type</th>
-                  <th>Geo</th>
-                  <th>Carrier</th>
-                  <th>Device</th>
-                  <th>Priority</th>
-                  <th>Weight</th>
-                  <th>Fallback</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {filteredRules.map((r) => (
-                  <tr key={r.id} className="border-b">
-                    <td>
-                      <b>{r.offer_id}</b> <br />
-                      <span className="text-xs text-gray-500">
-                        {r.offer_name}
-                      </span>
-                    </td>
-                    <td>{r.advertiser_name || "-"}</td>
-                    <td>{selectedLink?.publisher_name}</td>
-                    <td>{r.offer_type}</td>
-                    <td>{r.geo}</td>
-                    <td>{r.carrier}</td>
-                    <td>{r.device}</td>
-                    <td>{r.priority}</td>
-                    <td>{r.weight}</td>
-                    <td>{r.is_fallback ? "YES" : "NO"}</td>
-                    <td className="text-blue-600 cursor-pointer"
-                        onClick={() => openEditRule(r)}>Edit</td>
-                    <td className="text-red-600 cursor-pointer"
-                        onClick={() => deleteRule(r.id)}>Delete</td>
+          {/* Rules table */}
+          {rulesLoading ? (
+            <p className="text-sm">Loading rules...</p>
+          ) : filteredRules.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              {selectedLink
+                ? "No rules for this tracking link."
+                : "Select a tracking link to view rules."}
+            </p>
+          ) : (
+            <>
+              <table className="w-full text-xs min-w-[900px]">
+                <thead>
+                  <tr className="border-b bg-gray-50">
+                    <th className="py-2 px-2 text-left">PUB</th>
+                    <th className="py-2 px-2 text-left">Offer</th>
+                    <th className="py-2 px-2 text-left">Advertiser</th>
+                    <th className="py-2 px-2 text-left">Publisher</th>
+                    <th className="py-2 px-2 text-left">Geo</th>
+                    <th className="py-2 px-2 text-left">Carrier</th>
+                    <th className="py-2 px-2 text-left">Type</th>
+                    <th className="py-2 px-2 text-left">Device</th>
+                    <th className="py-2 px-2 text-right">Priority</th>
+                    <th className="py-2 px-2 text-right">Weight</th>
+                    <th className="py-2 px-2 text-center">Fallback</th>
+                    <th className="py-2 px-2 text-center">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {pageRules.map((r) => (
+                    <tr key={r.id} className="border-b">
+                      <td className="px-2 py-2">{selectedLink?.pub_code}</td>
+                      <td className="px-2 py-2">
+                        <div className="font-semibold">{r.offer_id}</div>
+                        <div className="text-[11px] text-gray-600">
+                          {r.offer_name}
+                        </div>
+                      </td>
+                      <td className="px-2 py-2">{r.advertiser_name}</td>
+                      <td className="px-2 py-2">
+                        {selectedLink?.publisher_name}
+                      </td>
+                      <td className="px-2 py-2">{r.geo}</td>
+                      <td className="px-2 py-2">{r.carrier}</td>
+                      <td className="px-2 py-2">{r.offer_type}</td>
+                      <td className="px-2 py-2">{r.device}</td>
+                      <td className="px-2 py-2 text-right">{r.priority}</td>
+                      <td className="px-2 py-2 text-right">{r.weight}</td>
+                      <td className="px-2 py-2 text-center">
+                        {r.is_fallback ? "YES" : "NO"}
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <button
+                          className="text-blue-600 mr-2"
+                          onClick={() => openEditRule(r)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="text-red-600"
+                          onClick={() => handleDeleteRule(r)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Pagination */}
+              <div className="flex justify-between items-center mt-2 text-xs">
+                <span>
+                  Showing {startIdx + 1} –{" "}
+                  {Math.min(startIdx + pageSize, filteredRules.length)} of{" "}
+                  {filteredRules.length}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    className="border px-2 py-1 rounded disabled:opacity-50"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={pageSafe <= 1}
+                  >
+                    Prev
+                  </button>
+                  <span>
+                    Page {pageSafe} / {totalPages}
+                  </span>
+                  <button
+                    className="border px-2 py-1 rounded disabled:opacity-50"
+                    onClick={() =>
+                      setPage((p) => Math.min(totalPages, p + 1))
+                    }
+                    disabled={pageSafe >= totalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* ADD / EDIT MODAL */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg shadow-xl">
-
-            <h2 className="text-xl font-semibold mb-4">
-              {editRule ? "Edit Rule" : "Add Rule"}
+      {/* Add / Edit Rule Modal */}
+      {isRuleModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-40">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-xl p-6">
+            <h2 className="text-lg font-semibold mb-4">
+              {editingRule ? "Edit Rule" : "Add Rule"}
             </h2>
 
-            <form onSubmit={saveRule} className="grid gap-4">
-
-              {/* Offer Dropdown */}
-              <div>
-                <label>Offer</label>
-                <select
-                  name="offer_id"
-                  required
-                  defaultValue={editRule?.offer_id || ""}
-                  className="border rounded w-full p-2"
-                >
-                  <option value="">-- Select Offer --</option>
-                  {offers.map((o) => (
+            {/* Offer */}
+            <div className="mb-3">
+              <label className="block text-sm mb-1">Offer</label>
+              <select
+                className="border rounded px-2 py-1 w-full text-sm"
+                value={ruleForm.offer_id}
+                onChange={(e) =>
+                  handleRuleFormChange("offer_id", e.target.value)
+                }
+              >
+                <option value="">Select Offer</option>
+                {offersLoading && <option>Loading...</option>}
+                {!offersLoading &&
+                  offers.map((o) => (
                     <option key={o.offer_id} value={o.offer_id}>
-                      {o.offer_id} — {o.name}
+                      {o.offer_id} — {o.name} ({o.type})
                     </option>
                   ))}
-                </select>
-              </div>
+              </select>
+            </div>
 
-              {/* Geo, Carrier, Device */}
-              <div className="grid grid-cols-3 gap-3">
+            {/* Targeting */}
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div>
+                <label className="block text-sm mb-1">Geo</label>
                 <input
-                  name="geo"
-                  placeholder="Geo"
-                  defaultValue={editRule?.geo || "ALL"}
-                  className="border rounded p-2"
-                />
-                <input
-                  name="carrier"
-                  placeholder="Carrier"
-                  defaultValue={editRule?.carrier || "ALL"}
-                  className="border rounded p-2"
-                />
-                <input
-                  name="device"
-                  placeholder="Device"
-                  defaultValue={editRule?.device || "ALL"}
-                  className="border rounded p-2"
+                  type="text"
+                  className="border rounded px-2 py-1 w-full text-sm"
+                  value={ruleForm.geo}
+                  onChange={(e) =>
+                    handleRuleFormChange("geo", e.target.value.toUpperCase())
+                  }
                 />
               </div>
-
-              {/* Priority + Weight */}
-              <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm mb-1">Carrier</label>
                 <input
-                  name="priority"
+                  type="text"
+                  className="border rounded px-2 py-1 w-full text-sm"
+                  value={ruleForm.carrier}
+                  onChange={(e) =>
+                    handleRuleFormChange(
+                      "carrier",
+                      e.target.value.toUpperCase()
+                    )
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Device</label>
+                <input
+                  type="text"
+                  className="border rounded px-2 py-1 w-full text-sm"
+                  value={ruleForm.device}
+                  onChange={(e) =>
+                    handleRuleFormChange(
+                      "device",
+                      e.target.value.toUpperCase()
+                    )
+                  }
+                />
+              </div>
+            </div>
+
+            {/* Priority / Weight */}
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="block text-sm mb-1">Priority</label>
+                <input
                   type="number"
-                  placeholder="Priority"
-                  defaultValue={editRule?.priority || 1}
-                  className="border rounded p-2"
-                />
-                <input
-                  name="weight"
-                  type="number"
-                  placeholder="Weight"
-                  defaultValue={editRule?.weight || 100}
-                  className="border rounded p-2"
+                  className="border rounded px-2 py-1 w-full text-sm"
+                  value={ruleForm.priority}
+                  onChange={(e) =>
+                    handleRuleFormChange("priority", e.target.value)
+                  }
+                  min={1}
                 />
               </div>
+              <div>
+                <label className="block text-sm mb-1">Weight</label>
+                <input
+                  type="number"
+                  className="border rounded px-2 py-1 w-full text-sm"
+                  value={ruleForm.is_fallback ? 0 : ruleForm.weight}
+                  onChange={(e) =>
+                    handleRuleFormChange("weight", e.target.value)
+                  }
+                  disabled={ruleForm.is_fallback}
+                  min={0}
+                />
+              </div>
+            </div>
 
-              <label className="flex items-center gap-2 mt-2">
+            {/* Fallback */}
+            <div className="mb-4">
+              <label className="inline-flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  name="is_fallback"
-                  defaultChecked={editRule?.is_fallback}
+                  checked={ruleForm.is_fallback}
+                  onChange={(e) =>
+                    handleRuleFormChange("is_fallback", e.target.checked)
+                  }
                 />
-                Fallback Rule
+                <span>Fallback Rule</span>
               </label>
+            </div>
 
-              {/* Buttons */}
-              <div className="flex justify-end gap-3 mt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-gray-300 rounded"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded"
-                >
-                  Save
-                </button>
-              </div>
-            </form>
-
+            {/* Buttons */}
+            <div className="flex justify-end gap-2">
+              <button
+                className="border px-4 py-2 rounded text-sm"
+                onClick={closeRuleModal}
+                disabled={savingRule}
+              >
+                Cancel
+              </button>
+              <button
+                className="bg-blue-600 text-white px-4 py-2 rounded text-sm disabled:opacity-60"
+                onClick={handleSaveRule}
+                disabled={savingRule}
+              >
+                {savingRule ? "Saving..." : "Save"}
+              </button>
+            </div>
           </div>
         </div>
       )}
