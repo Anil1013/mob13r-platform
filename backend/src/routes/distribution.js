@@ -7,14 +7,67 @@ import authJWT from "../middleware/authJWT.js";
 const router = express.Router();
 
 /* ------------------------------------------------------------------
-   Common helpers
+   Helpers
 ------------------------------------------------------------------ */
+
 const apiSuccess = (data = {}) => ({ success: true, ...data });
 const apiError = (message, extra = {}) => ({
   success: false,
   message,
   ...extra,
 });
+
+function matchesTarget(rule, geo, carrier, device) {
+  const geoUpper = geo ? String(geo).toUpperCase() : null;
+  const carrierUpper = carrier ? String(carrier).toUpperCase() : null;
+  const deviceUpper = device ? String(device).toUpperCase() : null;
+
+  const ruleGeo = rule.geo ? String(rule.geo).toUpperCase() : "ALL";
+  const ruleCarrier = rule.carrier ? String(rule.carrier).toUpperCase() : "ALL";
+  const ruleDevice = rule.device ? String(rule.device).toUpperCase() : "ALL";
+
+  const geoOK = !geoUpper || ruleGeo === "ALL" || ruleGeo === geoUpper;
+  const carrierOK =
+    !carrierUpper || ruleCarrier === "ALL" || ruleCarrier === carrierUpper;
+  const deviceOK =
+    !deviceUpper || ruleDevice === "ALL" || ruleDevice === deviceUpper;
+
+  return geoOK && carrierOK && deviceOK;
+}
+
+function pickByWeight(rules) {
+  if (!rules.length) return null;
+  const total = rules.reduce((sum, r) => sum + (r.weight || 0), 0);
+  if (total <= 0) return rules[0];
+
+  const rand = Math.random() * total;
+  let acc = 0;
+  for (const r of rules) {
+    acc += r.weight || 0;
+    if (rand <= acc) return r;
+  }
+  return rules[0];
+}
+
+function appendQueryParams(baseUrl, params = {}) {
+  if (!baseUrl) return baseUrl;
+
+  const entries = Object.entries(params).filter(
+    ([, v]) => v !== undefined && v !== null && v !== ""
+  );
+  if (!entries.length) return baseUrl;
+
+  const hasQuery = baseUrl.includes("?");
+  const glue = hasQuery ? "&" : "?";
+  const qs = entries
+    .map(
+      ([k, v]) =>
+        `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`
+    )
+    .join("&");
+
+  return `${baseUrl}${glue}${qs}`;
+}
 
 /**
  * DB-level validation for rules
@@ -79,6 +132,66 @@ async function validateRuleOnServer({
   return null; // no error
 }
 
+/**
+ * Core resolver used by /resolve and /click
+ */
+async function resolveOffer({ pub_code, tracking_link_id, geo, carrier, device }) {
+  const rulesQuery = `
+    SELECT
+      dr.*,
+      o.name AS offer_name,
+      o.type AS offer_type,
+      o.tracking_url AS offer_tracking_url,
+      o.advertiser_name,
+      ptl.publisher_name
+    FROM distribution_rules dr
+    JOIN offers o ON o.offer_id = dr.offer_id
+    LEFT JOIN publisher_tracking_links ptl ON ptl.id = dr.tracking_link_id
+    WHERE dr.pub_code = $1
+      AND dr.tracking_link_id = $2
+      AND dr.is_active = TRUE
+      AND dr.status = 'active'
+    ORDER BY dr.priority ASC, dr.id ASC
+  `;
+
+  const { rows: rules } = await pool.query(rulesQuery, [
+    pub_code,
+    tracking_link_id,
+  ]);
+
+  if (!rules.length) {
+    return { error: "No active rules" };
+  }
+
+  const matched = rules.filter((r) => matchesTarget(r, geo, carrier, device));
+
+  if (!matched.length) {
+    const fallback = rules.find((r) => r.is_fallback);
+    if (!fallback) {
+      return { error: "No targeting match" };
+    }
+    return {
+      offer_id: fallback.offer_id,
+      offer_type: fallback.offer_type,
+      url: fallback.offer_tracking_url,
+      rule: fallback,
+      fallback: true,
+    };
+  }
+
+  const minPriority = matched[0].priority;
+  const samePriority = matched.filter((r) => r.priority === minPriority);
+  const selected = pickByWeight(samePriority) || samePriority[0];
+
+  return {
+    offer_id: selected.offer_id,
+    offer_type: selected.offer_type,
+    url: selected.offer_tracking_url,
+    rule: selected,
+    fallback: !!selected.is_fallback,
+  };
+}
+
 /* ------------------------------------------------------------------
    TRACKING LINKS (by pub_code)
    Example:
@@ -98,7 +211,6 @@ router.get("/tracking-links", authJWT, async (req, res) => {
         pub_code,
         publisher_id,
         publisher_name,
-        advertiser_name,        -- <- from publisher_tracking_links (as you said)
         name,
         geo,
         carrier,
@@ -113,10 +225,10 @@ router.get("/tracking-links", authJWT, async (req, res) => {
         pin_verify_url,
         check_status_url,
         portal_url,
-        required_params,        -- <- list of default params (JSON / text)
         status,
         created_at,
-        updated_at
+        updated_at,
+        required_params
       FROM publisher_tracking_links
       WHERE pub_code = $1
         AND status = 'active'
@@ -127,6 +239,43 @@ router.get("/tracking-links", authJWT, async (req, res) => {
     res.json(apiSuccess({ items: result.rows }));
   } catch (err) {
     console.error("tracking-links error:", err);
+    res
+      .status(500)
+      .json(apiError("Internal server error", { error: err.message }));
+  }
+});
+
+/* ------------------------------------------------------------------
+   UPDATE REQUIRED PARAMS FOR A TRACKING LINK
+   PUT /api/distribution/tracking-links/:id/params
+------------------------------------------------------------------ */
+
+router.put("/tracking-links/:id/params", authJWT, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { required_params } = req.body;
+
+    const normalized =
+      required_params && typeof required_params === "object"
+        ? required_params
+        : {};
+
+    const update = `
+      UPDATE publisher_tracking_links
+      SET required_params = $1,
+          updated_at = NOW()
+      WHERE id = $2
+      RETURNING *
+    `;
+
+    const { rows } = await pool.query(update, [normalized, id]);
+    if (!rows.length) {
+      return res.status(404).json(apiError("Tracking link not found"));
+    }
+
+    res.json(apiSuccess({ item: rows[0] }));
+  } catch (err) {
+    console.error("update tracking-link params error:", err);
     res
       .status(500)
       .json(apiError("Internal server error", { error: err.message }));
@@ -149,8 +298,7 @@ router.get("/offers", authJWT, async (req, res) => {
         name,
         advertiser_name,
         type,
-        status,
-        payout
+        status
       FROM offers
       WHERE status = 'active'
         AND (
@@ -191,9 +339,11 @@ router.get("/rules", authJWT, async (req, res) => {
         dr.*,
         o.name AS offer_name,
         o.type AS offer_type,
-        o.advertiser_name AS advertiser_name
+        o.advertiser_name,
+        ptl.publisher_name
       FROM distribution_rules dr
       JOIN offers o ON o.offer_id = dr.offer_id
+      LEFT JOIN publisher_tracking_links ptl ON ptl.id = dr.tracking_link_id
       WHERE dr.tracking_link_id = $1
         AND dr.is_active = TRUE
       ORDER BY dr.priority ASC, dr.id ASC
@@ -412,38 +562,13 @@ router.delete("/rules/:id", authJWT, async (req, res) => {
 });
 
 /* ------------------------------------------------------------------
-   Resolve endpoint for real traffic
-   GET /api/distribution/resolve?pub_id=PUB03&tracking_link_id=3&geo=BD...
-   - pub_id here is actually your pub_code (PUB03)
-   - Auto-detect device from User-Agent if not passed
+   PUBLIC RESOLVE ENDPOINT (JSON)
+   GET /api/distribution/resolve?pub_id=PUB03&tracking_link_id=3&geo=BD&carrier=Robi
 ------------------------------------------------------------------ */
-
-function matchesTarget(rule, geo, carrier, device) {
-  const geoOK = !geo || rule.geo === "ALL" || rule.geo === geo;
-  const carrierOK =
-    !carrier || rule.carrier === "ALL" || rule.carrier === carrier;
-  const deviceOK =
-    !device || rule.device === "ALL" || rule.device === device;
-  return geoOK && carrierOK && deviceOK;
-}
-
-function pickByWeight(rules) {
-  if (!rules.length) return null;
-  const total = rules.reduce((sum, r) => sum + (r.weight || 0), 0);
-  if (total <= 0) return rules[0];
-
-  const rand = Math.random() * total;
-  let acc = 0;
-  for (const r of rules) {
-    acc += r.weight || 0;
-    if (rand <= acc) return r;
-  }
-  return rules[0];
-}
 
 router.get("/resolve", async (req, res) => {
   try {
-    let { pub_id, tracking_link_id, geo, carrier, device } = req.query;
+    const { pub_id, tracking_link_id, geo, carrier, device } = req.query;
 
     if (!pub_id || !tracking_link_id) {
       return res
@@ -451,70 +576,24 @@ router.get("/resolve", async (req, res) => {
         .json(apiError("Missing pub_id or tracking_link_id for resolve"));
     }
 
-    // Auto-detect device from User-Agent if not provided
-    if (!device) {
-      const ua = (req.headers["user-agent"] || "").toLowerCase();
-      if (ua.includes("android")) device = "ANDROID";
-      else if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ios"))
-        device = "IOS";
-      else if (ua) device = "DESKTOP";
-      // if UA missing: keep device undefined (rules with device=ALL will match)
+    const result = await resolveOffer({
+      pub_code: pub_id,
+      tracking_link_id,
+      geo,
+      carrier,
+      device,
+    });
+
+    if (result.error) {
+      return res.json(apiError(result.error));
     }
-
-    const rulesQuery = `
-      SELECT
-        dr.*,
-        o.type AS offer_type,
-        o.tracking_url AS offer_tracking_url,
-        o.is_fallback
-      FROM distribution_rules dr
-      JOIN offers o ON o.offer_id = dr.offer_id
-      WHERE dr.pub_code = $1
-        AND dr.tracking_link_id = $2
-        AND dr.is_active = TRUE
-        AND dr.status = 'active'
-      ORDER BY dr.priority ASC, dr.id ASC
-    `;
-
-    // pub_id in query = pub_code in DB
-    const rules = (
-      await pool.query(rulesQuery, [pub_id, tracking_link_id])
-    ).rows;
-
-    if (!rules.length) {
-      return res.json(apiError("No active rules"));
-    }
-
-    const matched = rules.filter((r) =>
-      matchesTarget(r, geo, carrier, device)
-    );
-
-    if (!matched.length) {
-      const fallback = rules.find((r) => r.is_fallback);
-      return fallback
-        ? res.json(
-            apiSuccess({
-              offer_id: fallback.offer_id,
-              type: fallback.offer_type,
-              url: fallback.offer_tracking_url,
-              fallback: true,
-            })
-          )
-        : res.json(apiError("No targeting match"));
-    }
-
-    const minPriority = matched[0].priority;
-    const samePriority = matched.filter((r) => r.priority === minPriority);
-
-    // (caps logic can be added later if needed)
-    const selected = pickByWeight(samePriority);
 
     return res.json(
       apiSuccess({
-        offer_id: selected.offer_id,
-        type: selected.offer_type,
-        url: selected.offer_tracking_url,
-        fallback: !!selected.is_fallback,
+        offer_id: result.offer_id,
+        type: result.offer_type,
+        url: result.url,
+        fallback: result.fallback,
       })
     );
   } catch (err) {
@@ -522,6 +601,124 @@ router.get("/resolve", async (req, res) => {
     res
       .status(500)
       .json(apiError("Internal server error", { error: err.message }));
+  }
+});
+
+/* ------------------------------------------------------------------
+   PUBLIC CLICK ENDPOINT FOR PUBLISHERS
+   Example publisher URL:
+   https://backend.mob13r.com/click?pub_id=PUB03&geo=BD&carrier=Robi&click_id=123
+   This endpoint:
+   - Finds matching tracking link
+   - Applies distribution rules
+   - Appends required params
+   - 302 redirects to offer.tracking_url
+------------------------------------------------------------------ */
+
+router.get("/click", async (req, res) => {
+  try {
+    const { pub_id, geo, carrier } = req.query;
+
+    if (!pub_id) {
+      return res
+        .status(400)
+        .send("Missing pub_id. Example: /click?pub_id=PUB03&geo=BD&carrier=Robi");
+    }
+
+    // Auto-detect device from UA (can be overridden via ?device=)
+    const uaHeader = req.headers["user-agent"] || "";
+    let deviceAuto = "ALL";
+    if (/Android/i.test(uaHeader)) deviceAuto = "ANDROID";
+    else if (/iPhone|iPad|iPod/i.test(uaHeader)) deviceAuto = "IOS";
+    else if (/Windows|Macintosh|Linux/i.test(uaHeader)) deviceAuto = "DESKTOP";
+
+    const device = (req.query.device || deviceAuto || "ALL").toString();
+
+    // 1) Find appropriate tracking link for this pub + geo + carrier
+    const trackingSql = `
+      SELECT *
+      FROM publisher_tracking_links
+      WHERE pub_code = $1
+        AND status = 'active'
+      ORDER BY
+        CASE
+          WHEN UPPER(geo) = UPPER($2) THEN 0
+          WHEN geo = 'ALL' THEN 1
+          ELSE 2
+        END,
+        CASE
+          WHEN UPPER(carrier) = UPPER($3) THEN 0
+          WHEN carrier = 'ALL' THEN 1
+          ELSE 2
+        END,
+        id ASC
+      LIMIT 1
+    `;
+
+    const { rows: trackingRows } = await pool.query(trackingSql, [
+      pub_id,
+      geo || "",
+      carrier || "",
+    ]);
+
+    if (!trackingRows.length) {
+      return res.status(404).send("No tracking link configured for this pub.");
+    }
+
+    const link = trackingRows[0];
+
+    // 2) Resolve best offer using distribution rules
+    const resolution = await resolveOffer({
+      pub_code: pub_id,
+      tracking_link_id: link.id,
+      geo,
+      carrier,
+      device,
+    });
+
+    if (resolution.error || !resolution.url) {
+      return res
+        .status(302)
+        .redirect(link.landing_page_url || link.tracking_url || "https://google.com");
+    }
+
+    // 3) Build params to forward based on required_params JSONB
+    const ipHeader =
+      (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "")
+        .toString()
+        .split(",")[0]
+        .trim();
+
+    const q = req.query;
+
+    const actual = {
+      ip: ipHeader,
+      ua: uaHeader,
+      device,
+      msisdn: q.msisdn || "",
+      click_id: q.click_id || "",
+      sub1: q.sub1 || "",
+      sub2: q.sub2 || "",
+      sub3: q.sub3 || "",
+      sub4: q.sub4 || "",
+      sub5: q.sub5 || "",
+    };
+
+    const required = link.required_params || {};
+    const forward = {};
+
+    for (const key of Object.keys(required)) {
+      if (required[key]) {
+        forward[key] = actual[key] || "";
+      }
+    }
+
+    const redirectUrl = appendQueryParams(resolution.url, forward);
+
+    return res.redirect(302, redirectUrl);
+  } catch (err) {
+    console.error("click error:", err);
+    res.status(500).send("Internal server error");
   }
 });
 
