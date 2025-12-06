@@ -17,25 +17,8 @@ const apiError = (message, extra = {}) => ({
   ...extra,
 });
 
-// Allowed required params for tracking links
-const REQUIRED_PARAM_KEYS = [
-  "ip",
-  "ua",
-  "device",
-  "msisdn",
-  "click_id",
-  "sub1",
-  "sub2",
-  "sub3",
-  "sub4",
-  "sub5",
-];
-
 /**
- * Server-side rule validation:
- *  - Only 1 fallback per (pub_code, tracking_link_id)
- *  - No exact duplicates (pub_code + tracking_link_id + offer_id + geo + carrier + device)
- *  - Sum of active weights for that (pub_code, tracking_link_id) <= 100
+ * Validate rule on server
  */
 async function validateRuleOnServer({
   idToIgnore = null,
@@ -46,19 +29,18 @@ async function validateRuleOnServer({
   carrier,
   device,
   is_fallback,
-  weight,
 }) {
-  // 1) Fallback uniqueness
+  // Fallback uniqueness
   if (is_fallback) {
     const fallbackCheck = await pool.query(
       `
       SELECT id
       FROM distribution_rules
-      WHERE pub_code = $1
-        AND tracking_link_id = $2
-        AND is_fallback = TRUE
-        AND is_active = TRUE
-        ${idToIgnore ? "AND id <> $3" : ""}
+      WHERE pub_code=$1
+        AND tracking_link_id=$2
+        AND is_fallback=TRUE
+        AND is_active=TRUE
+        ${idToIgnore ? "AND id<>$3" : ""}
     `,
       idToIgnore
         ? [pub_code, tracking_link_id, idToIgnore]
@@ -66,23 +48,22 @@ async function validateRuleOnServer({
     );
 
     if (fallbackCheck.rowCount > 0) {
-      return "A fallback rule already exists for this tracking link.";
+      return "Fallback rule already exists.";
     }
   }
 
-  // 2) Duplicate targeting rule
+  // Duplicate rule
   const dupCheck = await pool.query(
     `
-    SELECT id
-    FROM distribution_rules
-    WHERE pub_code = $1
-      AND tracking_link_id = $2
-      AND offer_id = $3
-      AND geo = $4
-      AND carrier = $5
-      AND device = $6
-      AND is_active = TRUE
-      ${idToIgnore ? "AND id <> $7" : ""}
+    SELECT id FROM distribution_rules
+    WHERE pub_code=$1
+      AND tracking_link_id=$2
+      AND offer_id=$3
+      AND geo=$4
+      AND carrier=$5
+      AND device=$6
+      AND is_active=TRUE
+      ${idToIgnore ? "AND id<>$7" : ""}
   `,
     idToIgnore
       ? [pub_code, tracking_link_id, offer_id, geo, carrier, device, idToIgnore]
@@ -90,89 +71,38 @@ async function validateRuleOnServer({
   );
 
   if (dupCheck.rowCount > 0) {
-    return "Duplicate rule: same Offer + Geo + Carrier + Device already exists.";
+    return "Duplicate rule exists.";
   }
 
-  // 3) Weight sum <= 100
-  const weightRes = await pool.query(
-    `
-    SELECT COALESCE(SUM(weight), 0) AS total
-    FROM distribution_rules
-    WHERE pub_code = $1
-      AND tracking_link_id = $2
-      AND is_active = TRUE
-      ${idToIgnore ? "AND id <> $3" : ""}
-  `,
-    idToIgnore
-      ? [pub_code, tracking_link_id, idToIgnore]
-      : [pub_code, tracking_link_id]
-  );
-
-  const existingTotal = Number(weightRes.rows[0].total || 0);
-  const newTotal = existingTotal + (Number(weight) || 0);
-
-  if (newTotal > 100) {
-    return `Total weight for this PUB & Tracking Link cannot exceed 100. Current: ${existingTotal}, new rule: ${weight}, total: ${newTotal}.`;
-  }
-
-  return null; // no error
+  return null;
 }
 
 /* ------------------------------------------------------------------
-   TRACKING LINKS (by pub_code)
-   GET /api/distribution/tracking-links?pub_code=PUB03
+   GET TRACKING LINKS
 ------------------------------------------------------------------ */
 
 router.get("/tracking-links", authJWT, async (req, res) => {
   try {
     const { pub_code } = req.query;
-    if (!pub_code) {
-      return res.status(400).json(apiError("pub_code required"));
-    }
+    if (!pub_code) return res.status(400).json(apiError("pub_code required"));
 
     const q = `
-      SELECT
-        id,
-        pub_code,
-        publisher_id,
-        publisher_name,
-        name,
-        geo,
-        carrier,
-        type,
-        payout,
-        cap_daily,
-        cap_total,
-        hold_percent,
-        landing_page_url,
-        tracking_url,
-        pin_send_url,
-        pin_verify_url,
-        check_status_url,
-        portal_url,
-        status,
-        created_at,
-        updated_at,
-        required_params
+      SELECT *
       FROM publisher_tracking_links
-      WHERE pub_code = $1
-        AND status = 'active'
+      WHERE pub_code=$1 AND status='active'
       ORDER BY id ASC
     `;
 
     const result = await pool.query(q, [pub_code]);
     res.json(apiSuccess({ items: result.rows }));
   } catch (err) {
-    console.error("tracking-links error:", err);
-    res
-      .status(500)
-      .json(apiError("Internal server error", { error: err.message }));
+    console.error(err);
+    res.status(500).json(apiError("Internal server error"));
   }
 });
 
 /* ------------------------------------------------------------------
-   UPDATE required_params for a tracking link
-   PUT /api/distribution/tracking-links/:id/params
+   SAVE REQUIRED PARAMS (checkbox UI)
 ------------------------------------------------------------------ */
 
 router.put("/tracking-links/:id/params", authJWT, async (req, res) => {
@@ -180,43 +110,25 @@ router.put("/tracking-links/:id/params", authJWT, async (req, res) => {
     const { id } = req.params;
     const { required_params } = req.body;
 
-    if (!required_params || typeof required_params !== "object") {
-      return res
-        .status(400)
-        .json(apiError("required_params object is required"));
-    }
-
-    // Keep only allowed keys, coerce to boolean
-    const cleaned = {};
-    for (const key of REQUIRED_PARAM_KEYS) {
-      cleaned[key] = !!required_params[key];
-    }
-
-    const q = `
+    const result = await pool.query(
+      `
       UPDATE publisher_tracking_links
-      SET required_params = $1,
-          updated_at = NOW()
-      WHERE id = $2
-      RETURNING id, required_params
-    `;
-
-    const result = await pool.query(q, [cleaned, id]);
-    if (!result.rowCount) {
-      return res.status(404).json(apiError("Tracking link not found"));
-    }
+      SET required_params=$1, updated_at=NOW()
+      WHERE id=$2
+      RETURNING *
+    `,
+      [required_params, id]
+    );
 
     res.json(apiSuccess({ item: result.rows[0] }));
   } catch (err) {
-    console.error("update tracking params error:", err);
-    res
-      .status(500)
-      .json(apiError("Internal server error", { error: err.message }));
+    console.error("save params error:", err);
+    res.status(500).json(apiError("Internal server error"));
   }
 });
 
 /* ------------------------------------------------------------------
-   OFFERS (for dropdown)
-   GET /api/distribution/offers?search=game
+   OFFER LIST
 ------------------------------------------------------------------ */
 
 router.get("/offers", authJWT, async (req, res) => {
@@ -224,19 +136,12 @@ router.get("/offers", authJWT, async (req, res) => {
     const { search = "" } = req.query;
 
     const q = `
-      SELECT
-        offer_id,
-        name,
-        advertiser_name,
-        type,
-        status
+      SELECT offer_id, advertiser_name, name, type, status
       FROM offers
-      WHERE status = 'active'
+      WHERE status='active'
         AND (
-          $1 = '' OR
-          LOWER(offer_id) LIKE LOWER('%' || $1 || '%') OR
-          LOWER(name) LIKE LOWER('%' || $1 || '%') OR
-          LOWER(advertiser_name) LIKE LOWER('%' || $1 || '%')
+          $1='' OR LOWER(offer_id) LIKE LOWER('%'||$1||'%')
+          OR LOWER(name) LIKE LOWER('%'||$1||'%')
         )
       ORDER BY offer_id ASC
       LIMIT 200
@@ -245,51 +150,41 @@ router.get("/offers", authJWT, async (req, res) => {
     const result = await pool.query(q, [search.trim()]);
     res.json(apiSuccess({ items: result.rows }));
   } catch (err) {
-    console.error("offers list error:", err);
-    res
-      .status(500)
-      .json(apiError("Internal server error", { error: err.message }));
+    console.error("offers error:", err);
+    res.status(500).json(apiError("Internal server error"));
   }
 });
 
 /* ------------------------------------------------------------------
-   LIST RULES for a tracking link
-   GET /api/distribution/rules?tracking_link_id=3
+   LIST RULES (with advertiser + offer type)
 ------------------------------------------------------------------ */
 
 router.get("/rules", authJWT, async (req, res) => {
   try {
     const { tracking_link_id } = req.query;
-    if (!tracking_link_id) {
-      return res.status(400).json(apiError("tracking_link_id required"));
-    }
 
     const q = `
-      SELECT
+      SELECT 
         dr.*,
         o.name AS offer_name,
-        o.advertiser_name,
-        o.type AS offer_type
+        o.type AS offer_type,
+        o.advertiser_name
       FROM distribution_rules dr
       JOIN offers o ON o.offer_id = dr.offer_id
-      WHERE dr.tracking_link_id = $1
-        AND dr.is_active = TRUE
+      WHERE dr.tracking_link_id=$1 AND dr.is_active=TRUE
       ORDER BY dr.priority ASC, dr.id ASC
     `;
 
     const result = await pool.query(q, [tracking_link_id]);
     res.json(apiSuccess({ items: result.rows }));
   } catch (err) {
-    console.error("rules list error:", err);
-    res
-      .status(500)
-      .json(apiError("Internal server error", { error: err.message }));
+    console.error("rules error:", err);
+    res.status(500).json(apiError("Internal server error"));
   }
 });
 
 /* ------------------------------------------------------------------
-   CREATE NEW RULE
-   POST /api/distribution/rules
+   ADD RULE
 ------------------------------------------------------------------ */
 
 router.post("/rules", authJWT, async (req, res) => {
@@ -306,18 +201,6 @@ router.post("/rules", authJWT, async (req, res) => {
       is_fallback = false,
     } = req.body;
 
-    if (!pub_code) return res.status(400).json(apiError("pub_code required"));
-    if (!tracking_link_id)
-      return res.status(400).json(apiError("tracking_link_id required"));
-    if (!offer_id) return res.status(400).json(apiError("offer_id required"));
-
-    geo = geo || "ALL";
-    carrier = carrier || "ALL";
-    device = device || "ALL";
-    priority = Number(priority) || 1;
-    weight = Number(weight) || 0;
-    is_fallback = !!is_fallback;
-
     const validationError = await validateRuleOnServer({
       pub_code,
       tracking_link_id,
@@ -326,88 +209,66 @@ router.post("/rules", authJWT, async (req, res) => {
       carrier,
       device,
       is_fallback,
-      weight,
     });
 
-    if (validationError) {
-      return res.status(400).json(apiError(validationError));
-    }
+    if (validationError) return res.status(400).json(apiError(validationError));
 
-    const insert = `
+    const result = await pool.query(
+      `
       INSERT INTO distribution_rules
-        (pub_code, tracking_link_id, offer_id, geo, carrier, device,
-         priority, weight, is_fallback, is_active, created_at, updated_at)
-      VALUES
-        ($1,$2,$3,$4,$5,$6,$7,$8,$9,TRUE,NOW(),NOW())
+      (pub_code, tracking_link_id, offer_id, geo, carrier, device, priority, weight, is_fallback, is_active)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,TRUE)
       RETURNING *
-    `;
-
-    const result = await pool.query(insert, [
-      pub_code,
-      tracking_link_id,
-      offer_id,
-      geo,
-      carrier,
-      device,
-      priority,
-      weight,
-      is_fallback,
-    ]);
+    `,
+      [
+        pub_code,
+        tracking_link_id,
+        offer_id,
+        geo,
+        carrier,
+        device,
+        priority,
+        weight,
+        is_fallback,
+      ]
+    );
 
     res.json(apiSuccess({ item: result.rows[0] }));
   } catch (err) {
     console.error("create rule error:", err);
-    res
-      .status(500)
-      .json(apiError("Internal server error", { error: err.message }));
+    res.status(500).json(apiError("Internal server error"));
   }
 });
 
 /* ------------------------------------------------------------------
    UPDATE RULE
-   PUT /api/distribution/rules/:id
 ------------------------------------------------------------------ */
 
 router.put("/rules/:id", authJWT, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const existingRes = await pool.query(
-      "SELECT * FROM distribution_rules WHERE id = $1",
+    const current = await pool.query(
+      `SELECT * FROM distribution_rules WHERE id=$1`,
       [id]
     );
-    if (!existingRes.rowCount) {
-      return res.status(404).json(apiError("Rule not found"));
-    }
 
-    const current = existingRes.rows[0];
+    if (!current.rowCount) return res.status(404).json(apiError("Not found"));
+
+    const old = current.rows[0];
 
     let {
-      pub_code = current.pub_code,
-      tracking_link_id = current.tracking_link_id,
-      offer_id = current.offer_id,
-      geo = current.geo,
-      carrier = current.carrier,
-      device = current.device,
-      priority = current.priority,
-      weight = current.weight,
-      is_fallback = current.is_fallback,
-      is_active = current.is_active,
-      status = current.status || "active",
+      pub_code = old.pub_code,
+      tracking_link_id = old.tracking_link_id,
+      offer_id = old.offer_id,
+      geo = old.geo,
+      carrier = old.carrier,
+      device = old.device,
+      priority = old.priority,
+      weight = old.weight,
+      is_fallback = old.is_fallback,
+      is_active = old.is_active,
     } = req.body;
-
-    if (!pub_code) return res.status(400).json(apiError("pub_code required"));
-    if (!tracking_link_id)
-      return res.status(400).json(apiError("tracking_link_id required"));
-    if (!offer_id) return res.status(400).json(apiError("offer_id required"));
-
-    geo = geo || "ALL";
-    carrier = carrier || "ALL";
-    device = device || "ALL";
-    priority = Number(priority) || 1;
-    weight = Number(weight) || 0;
-    is_fallback = !!is_fallback;
-    is_active = !!is_active;
 
     const validationError = await validateRuleOnServer({
       idToIgnore: id,
@@ -418,33 +279,20 @@ router.put("/rules/:id", authJWT, async (req, res) => {
       carrier,
       device,
       is_fallback,
-      weight,
     });
 
-    if (validationError) {
-      return res.status(400).json(apiError(validationError));
-    }
+    if (validationError) return res.status(400).json(apiError(validationError));
 
-    const update = `
+    const result = await pool.query(
+      `
       UPDATE distribution_rules
-      SET pub_code = $1,
-          tracking_link_id = $2,
-          offer_id = $3,
-          geo = $4,
-          carrier = $5,
-          device = $6,
-          priority = $7,
-          weight = $8,
-          is_fallback = $9,
-          is_active = $10,
-          status = $11,
-          updated_at = NOW()
-      WHERE id = $12
+      SET pub_code=$1, tracking_link_id=$2, offer_id=$3, geo=$4,
+          carrier=$5, device=$6, priority=$7, weight=$8,
+          is_fallback=$9, is_active=$10, updated_at=NOW()
+      WHERE id=$11
       RETURNING *
-    `;
-
-    const updated = (
-      await pool.query(update, [
+    `,
+      [
         pub_code,
         tracking_link_id,
         offer_id,
@@ -455,131 +303,31 @@ router.put("/rules/:id", authJWT, async (req, res) => {
         weight,
         is_fallback,
         is_active,
-        status,
         id,
-      ])
-    ).rows[0];
+      ]
+    );
 
-    res.json(apiSuccess({ item: updated }));
+    res.json(apiSuccess({ item: result.rows[0] }));
   } catch (err) {
     console.error("update rule error:", err);
-    res
-      .status(500)
-      .json(apiError("Internal server error", { error: err.message }));
+    res.status(500).json(apiError("Internal server error"));
   }
 });
 
 /* ------------------------------------------------------------------
-   DELETE RULE (hard delete)
-   DELETE /api/distribution/rules/:id
+   DELETE RULE
 ------------------------------------------------------------------ */
 
 router.delete("/rules/:id", authJWT, async (req, res) => {
   try {
-    const { id } = req.params;
-
-    await pool.query("DELETE FROM distribution_rules WHERE id = $1", [id]);
+    await pool.query("DELETE FROM distribution_rules WHERE id=$1", [
+      req.params.id,
+    ]);
 
     res.json(apiSuccess({ message: "Rule deleted" }));
   } catch (err) {
     console.error("delete rule error:", err);
-    res
-      .status(500)
-      .json(apiError("Internal server error", { error: err.message }));
-  }
-});
-
-/* ------------------------------------------------------------------
-   Resolve endpoint (unchanged selection logic)
-   GET /api/distribution/resolve?pub_id=PUB03&tracking_link_id=3&geo=BD...
------------------------------------------------------------------- */
-
-function matchesTarget(rule, geo, carrier, device) {
-  const geoOK = !geo || rule.geo === "ALL" || rule.geo === geo;
-  const carrierOK = !carrier || rule.carrier === "ALL" || rule.carrier === carrier;
-  const deviceOK = !device || rule.device === "ALL" || rule.device === device;
-  return geoOK && carrierOK && deviceOK;
-}
-
-function pickByWeight(rules) {
-  if (!rules.length) return null;
-  const total = rules.reduce((sum, r) => sum + (r.weight || 0), 0);
-  if (total <= 0) return rules[0];
-
-  const rand = Math.random() * total;
-  let acc = 0;
-  for (const r of rules) {
-    acc += r.weight || 0;
-    if (rand <= acc) return r;
-  }
-  return rules[0];
-}
-
-router.get("/resolve", async (req, res) => {
-  try {
-    const { pub_id, tracking_link_id, geo, carrier, device } = req.query;
-
-    if (!pub_id || !tracking_link_id) {
-      return res
-        .status(400)
-        .json(apiError("Missing pub_id or tracking_link_id for resolve"));
-    }
-
-    const rulesQuery = `
-      SELECT
-        dr.*,
-        o.type AS offer_type,
-        o.tracking_url AS offer_tracking_url,
-        o.is_fallback
-      FROM distribution_rules dr
-      JOIN offers o ON o.offer_id = dr.offer_id
-      WHERE dr.pub_code = $1
-        AND dr.tracking_link_id = $2
-        AND dr.is_active = TRUE
-        AND dr.status = 'active'
-      ORDER BY dr.priority ASC, dr.id ASC
-    `;
-
-    const rules = (await pool.query(rulesQuery, [pub_id, tracking_link_id])).rows;
-
-    if (!rules.length) {
-      return res.json(apiError("No active rules"));
-    }
-
-    const matched = rules.filter((r) => matchesTarget(r, geo, carrier, device));
-
-    if (!matched.length) {
-      const fallback = rules.find((r) => r.is_fallback);
-      return fallback
-        ? res.json(
-            apiSuccess({
-              offer_id: fallback.offer_id,
-              type: fallback.offer_type,
-              url: fallback.offer_tracking_url,
-              fallback: true,
-            })
-          )
-        : res.json(apiError("No targeting match"));
-    }
-
-    const minPriority = matched[0].priority;
-    const samePriority = matched.filter((r) => r.priority === minPriority);
-
-    const selected = pickByWeight(samePriority);
-
-    return res.json(
-      apiSuccess({
-        offer_id: selected.offer_id,
-        type: selected.offer_type,
-        url: selected.offer_tracking_url,
-        fallback: !!selected.is_fallback,
-      })
-    );
-  } catch (err) {
-    console.error("resolve error:", err);
-    res
-      .status(500)
-      .json(apiError("Internal server error", { error: err.message }));
+    res.status(500).json(apiError("Internal server error"));
   }
 });
 
