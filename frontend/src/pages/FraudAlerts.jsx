@@ -4,126 +4,143 @@ import apiClient from "../api/apiClient";
 
 export default function FraudAlerts() {
   const [alerts, setAlerts] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  // Filters
   const [pubFilter, setPubFilter] = useState("");
-  const [search, setSearch] = useState("");
-  const [range, setRange] = useState("24h");
+  const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState(null);
 
-  const limit = 200;
+  const limit = 300;
 
-  const loadAlerts = async () => {
+  // Safe localStorage getter
+  const getLS = (key) => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(key);
+  };
+
+  /* =====================================
+     LOAD ALERTS
+  ===================================== */
+  const load = async () => {
     setLoading(true);
-    
+
     try {
       const params = {
         ...(pubFilter ? { pub_id: pubFilter.toUpperCase() } : {}),
-        ...(search ? { q: search } : {}),
-        range,
-        limit
+        ...(q ? { q } : {}),
+        range: "24h",
+        limit,
+        offset: 0,
       };
 
-      // Correct backend route
-      const res = await apiClient.get("/fraud-alerts", { params });
+      // ✅ FIXED API PATH
+      const res = await apiClient.get(`/fraud/alerts`, { params });
+
       setAlerts(res.data || []);
     } catch (err) {
-      console.error("Load Alerts ERROR:", err);
+      console.error("Alerts Load ERROR:", err);
+      setAlerts([]);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
+  /* =====================================
+     AUTO REFRESH — EVERY 5 MINUTES
+  ===================================== */
   useEffect(() => {
-    loadAlerts();
-
-    // Auto-refresh every 5 minutes
-    const interval = setInterval(() => loadAlerts(), 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    load();
+    const timer = setInterval(load, 5 * 60 * 1000); // 5 min
+    return () => clearInterval(timer);
   }, []);
 
-  /* -----------------------------
-       ACTION BUTTONS (RIGHT)
-  ------------------------------*/
-
+  /* =====================================
+     RESOLVE ALERT
+  ===================================== */
   const resolveAlert = async (id) => {
-    if (!window.confirm("Mark as resolved?")) return;
+    if (!window.confirm("Mark this alert as resolved?")) return;
+
     try {
       await apiClient.post(`/fraud/alerts/${id}/resolve`, {
-        resolved_by: localStorage.getItem("mob13r_admin") || "ui"
+        resolved_by: getLS("mob13r_admin") || "ui",
       });
-      loadAlerts();
+
+      load();
     } catch (err) {
       console.error("Resolve error:", err);
-      alert("Failed to resolve");
+      alert("Failed to resolve alert.");
     }
   };
 
-  const whitelistPUB = async () => {
-    if (!selected) return alert("Select an alert");
-    if (!selected.pub_id) return alert("PUB missing");
+  /* =====================================
+     WHITELIST PUB
+  ===================================== */
+  const addWhitelist = async () => {
+    const pub = selected?.pub_id || pubFilter;
+    if (!pub) return alert("Select a PUB ID first");
 
-    if (!window.confirm(`Whitelist PUB ${selected.pub_id}?`)) return;
+    if (!window.confirm(`Whitelist PUB ${pub}?`)) return;
 
     try {
       await apiClient.post("/fraud/whitelist", {
-        pub_id: selected.pub_id,
-        note: "Whitelisted from UI"
+        pub_id: pub.toUpperCase(),
+        note: "whitelisted from UI",
+        created_by: getLS("mob13r_admin_id") || null,
       });
-
       alert("PUB Whitelisted");
-      loadAlerts();
+      load();
     } catch (err) {
       console.error("Whitelist error:", err);
-      alert("Failed to whitelist");
+      alert("Whitelist failed");
     }
   };
 
-  const blacklistIP = async () => {
-    if (!selected) return alert("Select alert first");
-    if (!selected.ip_address) return alert("IP missing");
+  /* =====================================
+     BLACKLIST IP
+  ===================================== */
+  const addBlacklist = async () => {
+    const ip = selected?.ip;
+    if (!ip) return alert("Select an alert with an IP");
 
-    if (!window.confirm(`Blacklist IP ${selected.ip_address}?`)) return;
+    if (!window.confirm(`Blacklist IP ${ip}?`)) return;
 
     try {
       await apiClient.post("/fraud/blacklist", {
-        ip: selected.ip_address,
-        note: "Blacklisted from UI"
+        ip,
+        note: "blacklisted from UI",
+        created_by: getLS("mob13r_admin_id") || null,
       });
 
       alert("IP Blacklisted");
-      loadAlerts();
+      load();
     } catch (err) {
       console.error("Blacklist error:", err);
-      alert("Failed to blacklist");
+      alert("Failed to blacklist IP.");
     }
   };
 
-  /* -----------------------------
-       EXPORT CSV / XLSX
-  ------------------------------*/
-
+  /* =====================================
+     EXPORT CSV / XLSX
+  ===================================== */
   const exportFile = async (format = "csv") => {
     try {
       const params = new URLSearchParams({
         ...(pubFilter ? { pub_id: pubFilter.toUpperCase() } : {}),
-        ...(search ? { q: search } : {}),
-        range,
-        format
+        ...(q ? { q } : {}),
+        format,
       }).toString();
 
-      const token = localStorage.getItem("mob13r_token");
+      const token = getLS("mob13r_token");
 
       const response = await fetch(
         `${apiClient.defaults.baseURL}/fraud/export?${params}`,
         {
-          headers: { Authorization: token ? `Bearer ${token}` : "" }
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+          },
         }
       );
 
       if (!response.ok) return alert("Export failed");
-
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
 
@@ -136,101 +153,104 @@ export default function FraudAlerts() {
 
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("Export error:", err);
+      console.error("export error", err);
       alert("Export failed");
     }
   };
 
+  /* =====================================
+     RENDER
+  ===================================== */
+
   return (
     <div className="p-6">
-      
       <h1 className="text-2xl font-bold mb-6">Fraud Alerts</h1>
 
       {/* Filters */}
       <div className="flex gap-3 mb-4">
-        
         <input
-          placeholder="PUB03"
-          className="border p-2 rounded w-28"
+          placeholder="PUB (PUB03)"
           value={pubFilter}
           onChange={(e) => setPubFilter(e.target.value.toUpperCase())}
+          className="border p-2 rounded w-40"
         />
 
         <input
-          placeholder="Search IP / Reason"
-          className="border p-2 rounded w-52"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search IP/UA/Reason..."
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="border p-2 rounded w-60"
         />
 
-        <select
-          value={range}
-          onChange={(e) => setRange(e.target.value)}
-          className="border p-2 rounded"
+        <button
+          onClick={load}
+          className="bg-blue-600 text-white px-4 py-2 rounded"
         >
-          <option value="1h">Last 1 hour</option>
-          <option value="24h">Last 24 hours</option>
-          <option value="7d">Last 7 days</option>
-        </select>
-
-        <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={loadAlerts}>
           Search
         </button>
 
-        {/* Right side buttons */}
-        <div className="flex gap-2 ml-auto">
+        <div className="ml-auto flex gap-2">
           <button
-            className="bg-gray-700 text-white px-3 py-2 rounded"
             onClick={() => exportFile("csv")}
+            className="bg-gray-700 text-white px-3 py-2 rounded"
           >
             Export CSV
           </button>
 
           <button
-            className="bg-gray-700 text-white px-3 py-2 rounded"
             onClick={() => exportFile("xlsx")}
+            className="bg-gray-700 text-white px-3 py-2 rounded"
           >
             Export XLSX
           </button>
         </div>
       </div>
 
-      {/* GRID */}
+      {/* Main Grid */}
       <div className="grid grid-cols-4 gap-4">
-
-        {/* TABLE */}
-        <div className="col-span-3 bg-white rounded shadow overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-100 sticky top-0">
+        {/* Table */}
+        <div className="col-span-3 bg-white rounded shadow">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-100">
               <tr>
                 <th className="p-2">PUB</th>
                 <th className="p-2">IP</th>
+                <th className="p-2">Geo</th>
+                <th className="p-2">Carrier</th>
                 <th className="p-2">Reason</th>
-                <th className="p-2">Risk</th>
+                <th className="p-2">Severity</th>
+                <th className="p-2">Resolved</th>
                 <th className="p-2">Time</th>
               </tr>
             </thead>
 
             <tbody>
               {loading && (
-                <tr><td colSpan={5} className="text-center p-4">Loading…</td></tr>
+                <tr>
+                  <td colSpan={8} className="p-4 text-center">
+                    Loading...
+                  </td>
+                </tr>
               )}
 
               {!loading &&
-                alerts.map((a) => (
+                alerts.map((r) => (
                   <tr
-                    key={a.id}
+                    key={r.id}
                     className={`border-t cursor-pointer ${
-                      selected?.id === a.id ? "bg-yellow-50" : ""
+                      selected?.id === r.id ? "bg-yellow-50" : ""
                     }`}
-                    onClick={() => setSelected(a)}
+                    onClick={() => setSelected(r)}
                   >
-                    <td className="p-2">{a.publisher_name}</td>
-                    <td className="p-2 font-mono">{a.ip_address}</td>
-                    <td className="p-2">{a.reason}</td>
-                    <td className="p-2">{a.risk_score}</td>
+                    <td className="p-2">{r.pub_id}</td>
+                    <td className="p-2 font-mono">{r.ip}</td>
+                    <td className="p-2">{r.geo}</td>
+                    <td className="p-2">{r.carrier}</td>
+                    <td className="p-2">{r.reason}</td>
+                    <td className="p-2">{r.severity}</td>
+                    <td className="p-2">{r.resolved ? "Yes" : "No"}</td>
                     <td className="p-2">
-                      {new Date(a.created_at).toLocaleString()}
+                      {new Date(r.created_at).toLocaleString()}
                     </td>
                   </tr>
                 ))}
@@ -238,51 +258,64 @@ export default function FraudAlerts() {
           </table>
         </div>
 
-        {/* SIDE PANEL */}
-        <div className="bg-white p-4 rounded shadow h-fit">
+        {/* Side Panel */}
+        <div className="bg-white p-4 rounded shadow">
           <h3 className="font-semibold mb-2">Selected Alert</h3>
 
-          {!selected ? (
-            <div className="text-gray-400 text-sm">Select a row</div>
-          ) : (
+          {!selected && (
+            <div className="text-sm text-gray-500">Select a row</div>
+          )}
+
+          {selected && (
             <>
-              <div className="text-sm mb-1"><b>PUB:</b> {selected.publisher_name}</div>
-              <div className="text-sm mb-1"><b>Advertiser:</b> {selected.advertiser_name}</div>
-              <div className="text-sm mb-1"><b>IP:</b> {selected.ip_address}</div>
-
               <div className="text-sm mb-1">
-                <b>Reason:</b> {selected.reason}
+                <strong>PUB:</strong> {selected.pub_id}
               </div>
 
               <div className="text-sm mb-1">
-                <b>Risk:</b> {selected.risk_score}
+                <strong>IP:</strong> {selected.ip}
               </div>
 
-              <div className="text-sm mb-1 text-xs">
-                <b>Meta:</b>
-                <pre className="bg-gray-100 p-2 rounded mt-1">
+              <div className="text-sm mb-1">
+                <strong>UA:</strong>
+                <div className="text-xs break-all">{selected.ua}</div>
+              </div>
+
+              <div className="text-sm mb-1">
+                <strong>Reason:</strong> {selected.reason}
+              </div>
+
+              <div className="text-sm mb-1">
+                <strong>Severity:</strong> {selected.severity}
+              </div>
+
+              <div className="text-sm mb-1">
+                <strong>Meta:</strong>
+                <pre className="text-xs bg-gray-100 p-2 rounded">
                   {JSON.stringify(selected.meta || {}, null, 2)}
                 </pre>
               </div>
 
-              <div className="mt-4 flex flex-col gap-2">
-                <button
-                  className="bg-green-600 text-white px-3 py-2 rounded"
-                  onClick={() => resolveAlert(selected.id)}
-                >
-                  Resolve
-                </button>
+              <div className="flex flex-col gap-2 mt-3">
+                {!selected.resolved && (
+                  <button
+                    onClick={() => resolveAlert(selected.id)}
+                    className="bg-green-600 text-white px-3 py-2 rounded"
+                  >
+                    Resolve
+                  </button>
+                )}
 
                 <button
+                  onClick={addWhitelist}
                   className="bg-blue-600 text-white px-3 py-2 rounded"
-                  onClick={whitelistPUB}
                 >
                   Whitelist PUB
                 </button>
 
                 <button
+                  onClick={addBlacklist}
                   className="bg-red-600 text-white px-3 py-2 rounded"
-                  onClick={blacklistIP}
                 >
                   Blacklist IP
                 </button>
@@ -290,7 +323,6 @@ export default function FraudAlerts() {
             </>
           )}
         </div>
-
       </div>
     </div>
   );
