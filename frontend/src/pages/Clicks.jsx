@@ -22,7 +22,7 @@ export default function ClicksPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  const API = "/analytics/clicks";
+  const API = "/api/analytics/clicks";   // FIXED ENDPOINT
 
   const fetchData = async () => {
     try {
@@ -30,7 +30,7 @@ export default function ClicksPage() {
 
       const params = {
         pub_id: pubId || undefined,
-        offer_id: offerId || undefined,
+        offer_id: offerId ? Number(offerId) : undefined, // FIXED
         geo: geo || undefined,
         carrier: carrier || undefined,
         q: q || undefined,
@@ -78,15 +78,13 @@ export default function ClicksPage() {
     try {
       const params = {
         pub_id: pubId || undefined,
-        offer_id: offerId || undefined,
+        offer_id: offerId ? Number(offerId) : undefined,
         geo: geo || undefined,
         carrier: carrier || undefined,
         q: q || undefined,
         from,
         to,
         group,
-        limit,
-        offset,
         format: "csv",
       };
 
@@ -115,10 +113,7 @@ export default function ClicksPage() {
   const tdStyle = { textAlign: "center", padding: "10px 6px" };
 
   return (
-    <div
-      className="p-6 w-full overflow-x-hidden"
-      style={{ maxWidth: "100%", boxSizing: "border-box" }}
-    >
+    <div className="p-6 w-full overflow-x-hidden" style={{ maxWidth: "100%" }}>
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>Clicks Analytics</CardTitle>
@@ -153,7 +148,7 @@ export default function ClicksPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto w-full" style={{ maxWidth: "100%" }}>
+          <div className="overflow-x-auto w-full">
             <table className="w-full border-collapse" style={{ minWidth: 1300 }}>
               <thead>
                 <tr>
