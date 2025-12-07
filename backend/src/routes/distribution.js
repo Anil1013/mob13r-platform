@@ -138,15 +138,23 @@ async function validateRuleOnServer({
 async function resolveOffer({ pub_code, tracking_link_id, geo, carrier, device }) {
   const rulesQuery = `
     SELECT
-      dr.*,
-      o.name AS offer_name,
-      o.type AS offer_type,
-      o.tracking_url AS offer_tracking_url,
-      o.advertiser_name,
-      ptl.publisher_name
-    FROM distribution_rules dr
-    JOIN offers o ON o.offer_id = dr.offer_id
-    LEFT JOIN publisher_tracking_links ptl ON ptl.id = dr.tracking_link_id
+  dr.*,
+  o.name AS offer_name,
+  o.type AS offer_type,
+  o.tracking_url AS offer_tracking_url,
+  o.advertiser_name,
+  p.name AS publisher_name
+FROM distribution_rules dr
+JOIN offers o 
+  ON o.offer_id = dr.offer_id
+LEFT JOIN publishers p 
+  ON p.id = (
+      SELECT publisher_id 
+      FROM publisher_tracking_links 
+      WHERE id = dr.tracking_link_id
+      LIMIT 1
+  )
+
     WHERE dr.pub_code = $1
       AND dr.tracking_link_id = $2
       AND dr.is_active = TRUE
