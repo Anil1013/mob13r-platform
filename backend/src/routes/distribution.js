@@ -3,7 +3,6 @@
 import express from "express";
 import pool from "../db.js";
 import authJWT from "../middleware/authJWT.js";
-import fraudCheck from "../middleware/fraudCheck.js";
 
 const router = express.Router();
 
@@ -624,49 +623,42 @@ router.get("/resolve", async (req, res) => {
    - 302 redirects to offer.tracking_url
 ------------------------------------------------------------------ */
 
-router.get("/click", fraudCheck, async (req, res) => {
+router.get("/click", async (req, res) => {
   try {
     const { pub_id, geo, carrier } = req.query;
 
     if (!pub_id) {
-      return res.status(400).send("Missing pub_id");
+      return res
+        .status(400)
+        .send("Missing pub_id. Example: /click?pub_id=PUB03&geo=BD&carrier=Robi");
     }
 
-    // ------------------------------
-    // Detect device
-    // ------------------------------
+    // Auto-detect device from UA (can be overridden via ?device=)
     const uaHeader = req.headers["user-agent"] || "";
     let deviceAuto = "ALL";
     if (/Android/i.test(uaHeader)) deviceAuto = "ANDROID";
     else if (/iPhone|iPad|iPod/i.test(uaHeader)) deviceAuto = "IOS";
     else if (/Windows|Macintosh|Linux/i.test(uaHeader)) deviceAuto = "DESKTOP";
 
-    const device = (req.query.device || deviceAuto).toString();
+    const device = (req.query.device || deviceAuto || "ALL").toString();
 
-    // ------------------------------
-    // Detect Source IP
-    // ------------------------------
-    const ipHeader =
-      (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "")
-        .toString()
-        .split(",")[0]
-        .trim();
-
-    // ------------------------------
-    // Find Tracking Link
-    // ------------------------------
+    // 1) Find appropriate tracking link for this pub + geo + carrier
     const trackingSql = `
       SELECT *
       FROM publisher_tracking_links
       WHERE pub_code = $1
         AND status = 'active'
       ORDER BY
-        CASE WHEN UPPER(geo) = UPPER($2) THEN 0
-             WHEN geo = 'ALL' THEN 1
-             ELSE 2 END,
-        CASE WHEN UPPER(carrier) = UPPER($3) THEN 0
-             WHEN carrier = 'ALL' THEN 1
-             ELSE 2 END,
+        CASE
+          WHEN UPPER(geo) = UPPER($2) THEN 0
+          WHEN geo = 'ALL' THEN 1
+          ELSE 2
+        END,
+        CASE
+          WHEN UPPER(carrier) = UPPER($3) THEN 0
+          WHEN carrier = 'ALL' THEN 1
+          ELSE 2
+        END,
         id ASC
       LIMIT 1
     `;
@@ -683,9 +675,7 @@ router.get("/click", fraudCheck, async (req, res) => {
 
     const link = trackingRows[0];
 
-    // ------------------------------
-    // Resolve Offer
-    // ------------------------------
+    // 2) Resolve best offer using distribution rules
     const resolution = await resolveOffer({
       pub_code: pub_id,
       tracking_link_id: link.id,
@@ -694,46 +684,19 @@ router.get("/click", fraudCheck, async (req, res) => {
       device,
     });
 
-    const offerId = resolution.offer_id || null;
-
-    // ------------------------------
-    // INSERT CLICK into analytics_clicks
-    // ------------------------------
-    try {
-      await pool.query(
-        `
-        INSERT INTO analytics_clicks
-          (pub_id, offer_id, ip, ua, geo, carrier, params, created_at)
-        VALUES
-          ($1,$2,$3,$4,$5,$6,$7,NOW())
-      `,
-        [
-          pub_id,
-          offerId,
-          ipHeader,
-          uaHeader,
-          geo || null,
-          carrier || null,
-          JSON.stringify(req.query || {}),
-        ]
-      );
-    } catch (err) {
-      console.error("analytics_clicks insert error:", err);
-    }
-
-    // ------------------------------
-    // If no rule matched → redirect fallback
-    // ------------------------------
     if (resolution.error || !resolution.url) {
-      return res.redirect(
-        302,
-        link.landing_page_url || link.tracking_url || "https://google.com"
-      );
+      return res
+        .status(302)
+        .redirect(link.landing_page_url || link.tracking_url || "https://google.com");
     }
 
-    // ------------------------------
-    // Required Params Forwarding
-    // ------------------------------
+    // 3) Build params to forward based on required_params JSONB
+    const ipHeader =
+      (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "")
+        .toString()
+        .split(",")[0]
+        .trim();
+
     const q = req.query;
 
     const actual = {
@@ -760,14 +723,11 @@ router.get("/click", fraudCheck, async (req, res) => {
 
     const redirectUrl = appendQueryParams(resolution.url, forward);
 
-    // ------------------------------
-    // Final Redirect
-    // ------------------------------
     return res.redirect(302, redirectUrl);
-
   } catch (err) {
-    console.error("FINAL CLICK ERROR:", err);
+    console.error("click error:", err);
     res.status(500).send("Internal server error");
   }
 });
 
+export default router;
