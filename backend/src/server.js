@@ -21,6 +21,7 @@ import publisherTrackingRoutes from "./routes/publisherTracking.js";
 import fraudRoutes from "./routes/fraud.js";
 import distributionRoutes from "./routes/distribution.js";
 import analyticsClicks from "./routes/analyticsClicks.js";
+import inappRoutes from "./routes/inapp.js";
 
 import authJWT from "./middleware/authJWT.js";
 
@@ -69,6 +70,7 @@ app.use("/api/stats", authJWT, statsRoutes);
 app.use("/api/templates", authJWT, templateRoutes);
 app.use("/api/tracking", authJWT, publisherTrackingRoutes);
 app.use("/api/fraud", authJWT, fraudRoutes);
+app.use("/inapp", inappRoutes);
 
 /* ANALYTICS */
 app.use("/api/analytics", authJWT, analyticsRoutes);
