@@ -43,14 +43,14 @@ const MENU = [
       { label: "Postbacks", icon: Repeat, to: "/postbacks" },
       { label: "Fraud Alerts", icon: ShieldAlert, to: "/fraud-alerts" },
       { label: "Fraud Analytics", icon: AlertTriangle, to: "/fraud-analytics" },
-      {
-        label: "Traffic Distribution",
-        icon: TrendingUp,
-        to: "/traffic-distribution",
-      },
+      { label: "Traffic Distribution", icon: TrendingUp, to: "/traffic-distribution" },
+
+      // ⭐ ADDED — API Docs
+      { label: "API Docs", icon: FileText, to: "/api-docs" },
     ],
   },
 ];
+
 
 export default function Sidebar() {
   const navigate = useNavigate();
