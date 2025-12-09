@@ -1,8 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Bell, User, Sun, Moon, LogOut, Settings, ChevronDown } from "lucide-react";
+import {
+  Bell,
+  User,
+  Sun,
+  Moon,
+  LogOut,
+  Settings,
+  ChevronDown,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-function Header() {
+export default function Header() {
   const navigate = useNavigate();
   const [dark, setDark] = useState(localStorage.getItem("theme") === "dark");
   const [open, setOpen] = useState(false);
@@ -16,7 +24,7 @@ function Header() {
     localStorage.setItem("theme", dark ? "dark" : "light");
   }, [dark]);
 
-  // Close dropdown when clicking outside
+  // Close dropdown on outside click
   useEffect(() => {
     function handleClick(e) {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
@@ -34,40 +42,60 @@ function Header() {
   };
 
   return (
-    <header className="flex items-center justify-between px-6 py-4
-      bg-white dark:bg-gray-900 shadow-md border-b border-gray-200 dark:border-gray-800
-      sticky top-0 z-50 backdrop-blur-md">
-
-      {/* LEFT SIDE – LOGO + TITLE */}
-      <div className="flex items-center gap-3">
-        <img src="/logo.png" alt="logo" className="w-12 h-12" />
+    <header
+      className="
+        sticky top-0 z-40 w-full
+        px-6 py-4 flex items-center justify-between
+        bg-white/40 dark:bg-black/30
+        backdrop-blur-xl
+        border-b border-white/20 dark:border-white/10
+        shadow-[0_4px_20px_-3px_rgba(0,0,0,0.07)]
+      "
+    >
+      {/* LEFT — Logo + Title */}
+      <div className="flex items-center gap-4">
+        <img
+          src="/logo.png"
+          alt="logo"
+          className="w-12 h-12 rounded-xl shadow-md shadow-black/10"
+        />
 
         <div>
-          <h1 className="text-xl font-semibold dark:text-white text-gray-900">
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white tracking-tight">
             Mob13r Dashboard
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
             Welcome, {adminEmail}
           </p>
         </div>
       </div>
 
-      {/* RIGHT SIDE */}
+      {/* RIGHT — Icons */}
       <div className="flex items-center gap-5">
 
         {/* Notifications */}
-        <button className="relative p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition">
-          <Bell size={20} className="text-gray-700 dark:text-gray-200" />
-          <span className="absolute top-1 right-1 inline-flex h-2 w-2 bg-red-500 rounded-full"></span>
+        <button
+          className="
+            relative p-2 rounded-xl 
+            hover:bg-white/30 dark:hover:bg-white/10 
+            transition shadow-sm
+          "
+        >
+          <Bell size={20} className="text-gray-800 dark:text-gray-200" />
+          <span className="absolute top-1 right-1 h-2 w-2 bg-red-600 rounded-full shadow" />
         </button>
 
         {/* Theme Toggle */}
         <button
           onClick={() => setDark(!dark)}
-          className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition"
+          className="
+            p-2 rounded-xl 
+            hover:bg-white/30 dark:hover:bg-white/10 
+            transition shadow-sm
+          "
         >
           {dark ? (
-            <Sun size={20} className="text-yellow-400" />
+            <Sun size={20} className="text-yellow-300" />
           ) : (
             <Moon size={20} className="text-gray-700 dark:text-gray-200" />
           )}
@@ -77,48 +105,58 @@ function Header() {
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setOpen(!open)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800
-                       rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+            className="
+              flex items-center gap-2 px-4 py-2 
+              bg-white/30 dark:bg-white/10
+              rounded-xl shadow-sm 
+              hover:bg-white/40 dark:hover:bg-white/20
+              transition backdrop-blur-sm
+            "
           >
-            <User size={18} className="text-gray-700 dark:text-gray-200" />
-            <span className="text-gray-700 dark:text-gray-200 font-medium text-sm">
-              {adminEmail.split("@")[0]}
+            <User size={18} className="text-gray-900 dark:text-gray-200" />
+            <span className="text-gray-800 dark:text-gray-200 text-sm font-medium">
+              {adminEmail.split('@')[0]}
             </span>
             <ChevronDown size={16} className="text-gray-600 dark:text-gray-300" />
           </button>
 
-          {/* DROPDOWN MENU */}
           {open && (
-            <div className="absolute right-0 mt-2 w-44 bg-white dark:bg-gray-900
-                            border border-gray-200 dark:border-gray-700
-                            shadow-lg rounded-lg py-2 animate-fadeIn">
-
-              <button className="flex w-full items-center gap-2 px-4 py-2 
-                                 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">
+            <div
+              className="
+                absolute right-0 mt-3 w-48 
+                bg-white/50 dark:bg-black/30 
+                backdrop-blur-xl
+                border border-white/20 
+                shadow-lg rounded-xl overflow-hidden
+                animate-fadeIn
+              "
+            >
+              <button className="flex w-full items-center gap-2 px-4 py-3 
+                                 hover:bg-black/5 dark:hover:bg-white/10 
+                                 text-gray-700 dark:text-gray-200 text-sm">
                 <User size={16} /> My Profile
               </button>
 
-              <button className="flex w-full items-center gap-2 px-4 py-2 
-                                 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">
+              <button className="flex w-full items-center gap-2 px-4 py-3 
+                                 hover:bg-black/5 dark:hover:bg-white/10 
+                                 text-gray-700 dark:text-gray-200 text-sm">
                 <Settings size={16} /> Settings
               </button>
 
-              <hr className="my-2 border-gray-200 dark:border-gray-700" />
+              <hr className="border-white/20" />
 
               <button
                 onClick={handleLogout}
-                className="flex w-full items-center gap-2 px-4 py-2 text-red-500 
-                           hover:bg-red-50 dark:hover:bg-red-900/20"
+                className="flex w-full items-center gap-2 px-4 py-3 
+                           text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20
+                           text-sm font-medium"
               >
                 <LogOut size={16} /> Logout
               </button>
             </div>
           )}
         </div>
-
       </div>
     </header>
   );
 }
-
-export default Header;
