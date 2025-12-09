@@ -66,14 +66,21 @@ router.post("/", authJWT, async (req, res) => {
       cap_total,
       hold_percent,
       landing_page_url,
+      // ⬇⬇ NEW: INAPP ke liye required hai
+      offer_id,
     } = req.body;
 
     if (!publisher_id || !geo || !carrier) {
-      return res.status(400).json({ error: "publisher_id, geo, and carrier are required" });
+      return res
+        .status(400)
+        .json({ error: "publisher_id, geo, and carrier are required" });
     }
 
     // Fetch publisher name
-    const pubQuery = await pool.query("SELECT name FROM publishers WHERE id=$1", [publisher_id]);
+    const pubQuery = await pool.query(
+      "SELECT name FROM publishers WHERE id=$1",
+      [publisher_id]
+    );
     const publisher_name = pubQuery.rows[0]?.name || "Unknown Publisher";
 
     // 🔹 Generate next PUB ID automatically
@@ -88,8 +95,9 @@ router.post("/", authJWT, async (req, res) => {
       nextPubId = `PUB${newCode}`;
     }
 
-    // 🔹 Base domain for tracking URLs
-    const base = process.env.BASE_TRACKING_URL || "https://backend.mob13r.com";
+    // 🔹 Base domain for tracking URLs (CPA / normal click)
+    const base =
+      process.env.BASE_TRACKING_URL || "https://backend.mob13r.com";
 
     let tracking_url = null,
       pin_send_url = null,
@@ -97,13 +105,70 @@ router.post("/", authJWT, async (req, res) => {
       check_status_url = null,
       portal_url = null;
 
-    if (type === "INAPP") {
-      pin_send_url = `${base}/inapp/sendpin?pub_id=${nextPubId}&geo=${geo}&carrier=${carrier}&msisdn=<coll_msisdn>&user_ip=<coll_userip>&ua=<coll_ua>`;
-      pin_verify_url = `${base}/inapp/verifypin?pub_id=${nextPubId}&geo=${geo}&carrier=${carrier}&msisdn=<coll_msisdn>&user_ip=<coll_userip>&ua=<coll_ua>`;
-      check_status_url = `${base}/inapp/checkstatus?pub_id=${nextPubId}&geo=${geo}&carrier=${carrier}&msisdn=<coll_msisdn>`;
-      portal_url = `${base}/inapp/portal?pub_id=${nextPubId}`;
-    } else {
+    /* ======================================================
+       🟢 NON-INAPP FLOWS (CPA / CPI / CPL / CPS)
+       ====================================================== */
+    if (type !== "INAPP") {
       tracking_url = `${base}/click?pub_id=${nextPubId}&geo=${geo}&carrier=${carrier}`;
+    }
+
+    /* ======================================================
+       🔥 INAPP FLOW (USE OFFER_TEMPLATE)
+       ====================================================== */
+    if (type === "INAPP") {
+      // INAPP ke liye offer_id mandatory
+      if (!offer_id) {
+        return res
+          .status(400)
+          .json({ error: "offer_id is required for INAPP tracking links" });
+      }
+
+      // 1) Offer se template ID nikaalo
+      const offerRes = await pool.query(
+        "SELECT inapp_template_id FROM offers WHERE offer_id = $1",
+        [offer_id]
+      );
+
+      if (!offerRes.rows.length) {
+        return res
+          .status(400)
+          .json({ error: "Offer not found for given offer_id" });
+      }
+
+      const templateId = offerRes.rows[0].inapp_template_id;
+      if (!templateId) {
+        return res.status(400).json({
+          error: "This INAPP offer does not have any INAPP template configured",
+        });
+      }
+
+      // 2) Template se operator URLs lo
+      const tplRes = await pool.query(
+        `
+        SELECT pin_send_url, pin_verify_url, status_check_url, portal_url
+        FROM offer_templates
+        WHERE id = $1
+      `,
+        [templateId]
+      );
+
+      if (!tplRes.rows.length) {
+        return res
+          .status(400)
+          .json({ error: "INAPP template not found in offer_templates" });
+      }
+
+      const tpl = tplRes.rows[0];
+
+      // 3) Operator base URLs + dynamic pub_id + placeholders
+      //    <coll_*> placeholders aapke partner system ke liye reserved rahenge
+      pin_send_url = `${tpl.pin_send_url}?pub_id=${nextPubId}&msisdn=<coll_msisdn>&ip=<coll_userip>&ua=<coll_ua>`;
+
+      pin_verify_url = `${tpl.pin_verify_url}?pub_id=${nextPubId}&msisdn=<coll_msisdn>&pin=<coll_pin>&ip=<coll_userip>&ua=<coll_ua>`;
+
+      check_status_url = `${tpl.status_check_url}?pub_id=${nextPubId}&msisdn=<coll_msisdn>`;
+
+      portal_url = `${tpl.portal_url}?pub_id=${nextPubId}`;
     }
 
     // 🔹 Insert record
