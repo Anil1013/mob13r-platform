@@ -1,58 +1,66 @@
 import express from "express";
 import axios from "axios";
-import InappTemplate from "../models/InappTemplate.js";   // your Mongo model
+import pool from "../db.js";
 
 const router = express.Router();
 
-/* ------------------------------------------------------
-    UTILITY — GET TEMPLATE FOR pub_id
------------------------------------------------------- */
+/* =======================================================
+   🔍 LOAD TEMPLATE FROM publisher_tracking_links
+======================================================= */
 async function getTemplate(pub_id) {
-  const tpl = await InappTemplate.findOne({ pub_id });
-  if (!tpl) throw new Error("Template not found for pub_id " + pub_id);
-  return tpl;
+  const q = `
+    SELECT pin_send_url, pin_verify_url, check_status_url, portal_url, required_params
+    FROM publisher_tracking_links
+    WHERE pub_code = $1
+  `;
+  const result = await pool.query(q, [pub_id]);
+
+  if (!result.rows.length) {
+    throw new Error("No INAPP template found for pub_id " + pub_id);
+  }
+
+  return result.rows[0];
 }
 
-/* ------------------------------------------------------
-    FORMAT URL BASED ON TEMPLATE FIELDS
------------------------------------------------------- */
-function buildOperatorURL(base, params) {
-  const search = Object.entries(params)
+/* =======================================================
+   🔧 Build Operator URL
+======================================================= */
+function buildURL(base, params) {
+  const qs = Object.entries(params)
     .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
     .join("&");
-
-  return `${base}?${search}`;
+  return `${base}?${qs}`;
 }
 
-/* ------------------------------------------------------
-    SEND PIN
------------------------------------------------------- */
+/* =======================================================
+   📌 SEND PIN
+======================================================= */
 router.get("/sendpin", async (req, res) => {
   try {
-    const { pub_id, msisdn, ip, ua } = req.query;
+    const { pub_id, msisdn, user_ip, ua } = req.query;
 
     const tpl = await getTemplate(pub_id);
 
     const operatorParams = {
       pub_id,
       msisdn,
-      ip,
+      ip: user_ip,
       ua,
     };
 
-    const finalURL = buildOperatorURL(tpl.pin_send_url, operatorParams);
+    const finalURL = buildURL(tpl.pin_send_url, operatorParams);
 
-    console.log("📡 SENDPIN → Operator URL:", finalURL);
+    console.log("📡 SENDPIN →", finalURL);
 
-    const operatorRes = await axios.get(finalURL, { timeout: 10000 });
+    const response = await axios.get(finalURL, { timeout: 10000 });
 
     return res.json({
       success: true,
       operator_url_called: finalURL,
-      operator_response: operatorRes.data,
+      operator_response: response.data,
     });
   } catch (err) {
-    console.log("🔥 SENDPIN ERROR:", err.message);
+    console.log("❌ SENDPIN ERROR:", err.message);
 
     return res.json({
       success: false,
@@ -62,36 +70,36 @@ router.get("/sendpin", async (req, res) => {
   }
 });
 
-/* ------------------------------------------------------
-    VERIFY PIN
------------------------------------------------------- */
+/* =======================================================
+   🔐 VERIFY PIN
+======================================================= */
 router.get("/verifypin", async (req, res) => {
   try {
-    const { pub_id, msisdn, otp, ip, ua } = req.query;
+    const { pub_id, msisdn, pin, user_ip, ua } = req.query;
 
     const tpl = await getTemplate(pub_id);
 
     const operatorParams = {
       pub_id,
       msisdn,
-      otp,
-      ip,
+      pin,
+      ip: user_ip,
       ua,
     };
 
-    const finalURL = buildOperatorURL(tpl.pin_verify_url, operatorParams);
+    const finalURL = buildURL(tpl.pin_verify_url, operatorParams);
 
-    console.log("📡 VERIFYPIN → Operator URL:", finalURL);
+    console.log("📡 VERIFYPIN →", finalURL);
 
-    const operatorRes = await axios.get(finalURL, { timeout: 10000 });
+    const response = await axios.get(finalURL, { timeout: 10000 });
 
     return res.json({
       success: true,
       operator_url_called: finalURL,
-      operator_response: operatorRes.data,
+      operator_response: response.data,
     });
   } catch (err) {
-    console.log("🔥 VERIFY ERROR:", err.message);
+    console.log("❌ VERIFY ERROR:", err.message);
 
     return res.json({
       success: false,
@@ -101,35 +109,33 @@ router.get("/verifypin", async (req, res) => {
   }
 });
 
-/* ------------------------------------------------------
-    CHECK STATUS
------------------------------------------------------- */
+/* =======================================================
+   📊 STATUS CHECK
+======================================================= */
 router.get("/checkstatus", async (req, res) => {
   try {
-    const { pub_id, msisdn, ip, ua } = req.query;
+    const { pub_id, msisdn } = req.query;
 
     const tpl = await getTemplate(pub_id);
 
     const operatorParams = {
       pub_id,
       msisdn,
-      ip,
-      ua,
     };
 
-    const finalURL = buildOperatorURL(tpl.status_url, operatorParams);
+    const finalURL = buildURL(tpl.check_status_url, operatorParams);
 
-    console.log("📡 STATUS → Operator URL:", finalURL);
+    console.log("📡 STATUS →", finalURL);
 
-    const operatorRes = await axios.get(finalURL, { timeout: 10000 });
+    const response = await axios.get(finalURL, { timeout: 10000 });
 
     return res.json({
       success: true,
       operator_url_called: finalURL,
-      operator_response: operatorRes.data,
+      operator_response: response.data,
     });
   } catch (err) {
-    console.log("🔥 STATUS ERROR:", err.message);
+    console.log("❌ STATUS ERROR:", err.message);
 
     return res.json({
       success: false,
@@ -139,29 +145,27 @@ router.get("/checkstatus", async (req, res) => {
   }
 });
 
-/* ------------------------------------------------------
-    PORTAL URL (REDIRECT)
------------------------------------------------------- */
+/* =======================================================
+   🌐 PORTAL REDIRECT
+======================================================= */
 router.get("/portal", async (req, res) => {
   try {
-    const { pub_id, msisdn, ip, ua } = req.query;
+    const { pub_id, msisdn } = req.query;
 
     const tpl = await getTemplate(pub_id);
 
     const operatorParams = {
       pub_id,
       msisdn,
-      ip,
-      ua,
     };
 
-    const finalURL = buildOperatorURL(tpl.portal_url, operatorParams);
+    const finalURL = buildURL(tpl.portal_url, operatorParams);
 
-    console.log("📡 PORTAL →:", finalURL);
+    console.log("📡 PORTAL →", finalURL);
 
     return res.redirect(finalURL);
   } catch (err) {
-    return res.send("Portal redirect failed: " + err.message);
+    res.send("Portal redirect failed: " + err.message);
   }
 });
 
