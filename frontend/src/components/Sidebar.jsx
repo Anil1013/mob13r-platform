@@ -33,6 +33,7 @@ const MENU = [
       { label: "Offers", icon: Gift, to: "/offers" },
       { label: "Templates", icon: FileText, to: "/templates" },
       { label: "Landing Builder", icon: Layers, to: "/landing-builder" },
+      { label: "API Docs", icon: FileText, to: "/api-docs" },
     ],
   },
   {
@@ -48,6 +49,7 @@ const MENU = [
       { label: "Fraud Analytics", icon: AlertTriangle, to: "/fraud-analytics" },
 
       { label: "Traffic Distribution", icon: TrendingUp, to: "/traffic-distribution" },
+      
     ],
   },
 ];
