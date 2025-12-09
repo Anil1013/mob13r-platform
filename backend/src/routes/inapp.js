@@ -1,123 +1,303 @@
 import express from "express";
-import pool from "../db.js";
 import axios from "axios";
+import pool from "../db.js";
 
 const router = express.Router();
 
-/* =====================================================
-   INAPP - SEND PIN
-   ===================================================== */
-router.get("/sendpin", async (req, res) => {
-  try {
-    const { pub_id, msisdn, user_ip, ua } = req.query;
+/* ----------------------------------------
+   Helper Functions
+---------------------------------------- */
+function generateSessionKey() {
+  return "SK_" + Math.random().toString(36).substring(2, 12);
+}
 
+function getClientIP(req) {
+  return (
+    (req.headers["x-forwarded-for"] ||
+      req.socket.remoteAddress ||
+      "").toString().split(",")[0]
+  );
+}
+
+/* ----------------------------------------
+   Log to Database
+---------------------------------------- */
+async function logInapp(data) {
+  const query = `
+    INSERT INTO inapp_logs 
+    (type, pub_id, msisdn, pin, ip, ua, session_key, sub_pub_id,
+     operator_url, operator_response, success, error)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+  `;
+
+  await pool.query(query, [
+    data.type,
+    data.pub_id,
+    data.msisdn || null,
+    data.pin || null,
+    data.ip || null,
+    data.ua || null,
+    data.sessionKey || null,
+    data.sub_pub_id || null,
+    data.operator_url || null,
+    data.operator_response || null,
+    data.success,
+    data.error || null,
+  ]);
+}
+
+/* ----------------------------------------
+   SEND PIN
+---------------------------------------- */
+router.get("/sendpin", async (req, res) => {
+  const { pub_id, msisdn, ua } = req.query;
+  let { ip, sessionKey, sub_pub_id } = req.query;
+
+  sessionKey = sessionKey || generateSessionKey();
+  sub_pub_id = sub_pub_id || "0";
+  ip = ip || getClientIP(req);
+
+  try {
     if (!pub_id || !msisdn) {
       return res.json({ success: false, message: "Missing pub_id or msisdn" });
     }
 
-    // Find tracking link by PUB
-    const linkRes = await pool.query(
-      "SELECT pin_send_url FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1",
+    const dbRes = await pool.query(
+      `SELECT pin_send_url FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1`,
       [pub_id]
     );
 
-    if (!linkRes.rows.length) {
-      return res.json({ success: false, message: "Invalid pub_id" });
+    if (!dbRes.rowCount) {
+      return res.json({ success: false, message: "No template found" });
     }
 
-    const operatorUrl = linkRes.rows[0].pin_send_url
-      .replace("<msisdn>", msisdn)
-      .replace("<ip>", user_ip || "")
-      .replace("<ua>", ua || "");
+    const url = new URL(dbRes.rows[0].pin_send_url);
+    url.searchParams.set("pub_id", pub_id);
+    url.searchParams.set("msisdn", msisdn);
+    url.searchParams.set("ip", ip);
+    url.searchParams.set("ua", ua || "");
+    url.searchParams.set("sessionKey", sessionKey);
+    url.searchParams.set("sub_pub_id", sub_pub_id);
 
-    const response = await axios.get(operatorUrl);
-    return res.json(response.data);
+    const operator = await axios.get(url.toString(), {
+      timeout: 15000,
+      validateStatus: () => true,
+    });
 
+    // Log success
+    await logInapp({
+      type: "sendpin",
+      pub_id,
+      msisdn,
+      ua,
+      ip,
+      sessionKey,
+      sub_pub_id,
+      operator_url: url.toString(),
+      operator_response: operator.data,
+      success: true,
+    });
+
+    return res.json({
+      success: true,
+      request_url: url.toString(),
+      operator_response: operator.data,
+    });
   } catch (err) {
-    console.error("SENDPIN ERROR", err.message);
-    return res.json({ success: false, message: "OTP not sent", error: err.message });
+    // Log failure
+    await logInapp({
+      type: "sendpin",
+      pub_id,
+      msisdn,
+      ua,
+      ip,
+      sessionKey,
+      sub_pub_id,
+      operator_url: null,
+      operator_response: null,
+      success: false,
+      error: err.message,
+    });
+
+    return res.json({
+      success: false,
+      message: "OTP not sent",
+      error: err.message,
+    });
   }
 });
 
-/* =====================================================
-   INAPP - VERIFY PIN
-   ===================================================== */
+/* ----------------------------------------
+   VERIFY PIN
+---------------------------------------- */
 router.get("/verifypin", async (req, res) => {
-  try {
-    const { pub_id, msisdn, pin, user_ip, ua } = req.query;
+  const { pub_id, msisdn, pin, ua } = req.query;
+  let { ip, sessionKey, sub_pub_id } = req.query;
 
+  sessionKey = sessionKey || generateSessionKey();
+  sub_pub_id = sub_pub_id || "0";
+  ip = ip || getClientIP(req);
+
+  try {
     if (!pub_id || !msisdn || !pin) {
-      return res.json({ success: false, message: "Missing params" });
+      return res.json({ success: false, message: "Missing inputs" });
     }
 
-    const linkRes = await pool.query(
-      "SELECT pin_verify_url FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1",
+    const dbRes = await pool.query(
+      `SELECT pin_verify_url FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1`,
       [pub_id]
     );
 
-    if (!linkRes.rows.length) {
-      return res.json({ success: false, message: "Invalid pub_id" });
-    }
+    const url = new URL(dbRes.rows[0].pin_verify_url);
+    url.searchParams.set("pub_id", pub_id);
+    url.searchParams.set("msisdn", msisdn);
+    url.searchParams.set("pin", pin);
+    url.searchParams.set("ip", ip);
+    url.searchParams.set("ua", ua || "");
+    url.searchParams.set("sessionKey", sessionKey);
+    url.searchParams.set("sub_pub_id", sub_pub_id);
 
-    const operatorUrl = linkRes.rows[0].pin_verify_url
-      .replace("<msisdn>", msisdn)
-      .replace("<otp>", pin)
-      .replace("<ip>", user_ip || "")
-      .replace("<ua>", ua || "");
+    const operator = await axios.get(url.toString(), {
+      timeout: 15000,
+      validateStatus: () => true,
+    });
 
-    const response = await axios.get(operatorUrl);
-    return res.json(response.data);
+    // Log verify
+    await logInapp({
+      type: "verifypin",
+      pub_id,
+      msisdn,
+      pin,
+      ua,
+      ip,
+      sessionKey,
+      sub_pub_id,
+      operator_url: url.toString(),
+      operator_response: operator.data,
+      success: true,
+    });
+
+    return res.json({
+      success: true,
+      operator_response: operator.data,
+    });
   } catch (err) {
-    return res.json({ success: false, message: "OTP verification failed", error: err.message });
+    await logInapp({
+      type: "verifypin",
+      pub_id,
+      msisdn,
+      pin,
+      ua,
+      ip,
+      sessionKey,
+      sub_pub_id,
+      operator_response: null,
+      success: false,
+      error: err.message,
+    });
+
+    return res.json({
+      success: false,
+      message: "Verification failed",
+      error: err.message,
+    });
   }
 });
 
-/* =====================================================
-   INAPP - CHECK STATUS
-   ===================================================== */
+/* ----------------------------------------
+   CHECK STATUS
+---------------------------------------- */
 router.get("/checkstatus", async (req, res) => {
-  try {
-    const { pub_id, msisdn } = req.query;
+  const { pub_id, msisdn } = req.query;
+  let { ip, sessionKey, sub_pub_id } = req.query;
 
-    const linkRes = await pool.query(
-      "SELECT check_status_url FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1",
+  sessionKey = sessionKey || generateSessionKey();
+  sub_pub_id = sub_pub_id || "0";
+  ip = ip || getClientIP(req);
+
+  try {
+    const dbRes = await pool.query(
+      `SELECT check_status_url FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1`,
       [pub_id]
     );
 
-    if (!linkRes.rows.length) {
-      return res.json({ success: false, message: "Invalid pub_id" });
-    }
+    const url = new URL(dbRes.rows[0].check_status_url);
+    url.searchParams.set("pub_id", pub_id);
+    url.searchParams.set("msisdn", msisdn);
+    url.searchParams.set("ip", ip);
+    url.searchParams.set("sessionKey", sessionKey);
+    url.searchParams.set("sub_pub_id", sub_pub_id);
 
-    const operatorUrl = linkRes.rows[0].check_status_url.replace("<msisdn>", msisdn);
+    const operator = await axios.get(url.toString(), {
+      timeout: 15000,
+      validateStatus: () => true,
+    });
 
-    const response = await axios.get(operatorUrl);
-    return res.json(response.data);
+    await logInapp({
+      type: "checkstatus",
+      pub_id,
+      msisdn,
+      ua: null,
+      ip,
+      sessionKey,
+      sub_pub_id,
+      operator_url: url.toString(),
+      operator_response: operator.data,
+      success: true,
+    });
+
+    return res.json({
+      success: true,
+      operator_response: operator.data,
+    });
   } catch (err) {
-    return res.json({ success: false, message: "Status check failed" });
+    await logInapp({
+      type: "checkstatus",
+      pub_id,
+      msisdn,
+      ip,
+      sessionKey,
+      sub_pub_id,
+      success: false,
+      error: err.message,
+    });
+
+    return res.json({ success: false, error: err.message });
   }
 });
 
-/* =====================================================
-   INAPP - PORTAL REDIRECT
-   ===================================================== */
+/* ----------------------------------------
+   PORTAL
+---------------------------------------- */
 router.get("/portal", async (req, res) => {
-  try {
-    const { pub_id } = req.query;
+  const { pub_id } = req.query;
 
-    const linkRes = await pool.query(
-      "SELECT portal_url FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1",
+  try {
+    const dbRes = await pool.query(
+      `SELECT portal_url FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1`,
       [pub_id]
     );
 
-    if (!linkRes.rows.length) {
-      return res.json({ success: false, message: "Invalid pub_id" });
-    }
+    const url = new URL(dbRes.rows[0].portal_url);
+    url.searchParams.set("pub_id", pub_id);
 
-    const portalUrl = linkRes.rows[0].portal_url;
-    return res.redirect(portalUrl);
+    await logInapp({
+      type: "portal",
+      pub_id,
+      success: true,
+      operator_url: url.toString(),
+    });
 
+    return res.redirect(url.toString());
   } catch (err) {
-    return res.json({ success: false, message: "Portal error" });
+    await logInapp({
+      type: "portal",
+      pub_id,
+      success: false,
+      error: err.message,
+    });
+
+    return res.send("Portal redirect failed");
   }
 });
 
