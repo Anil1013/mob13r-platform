@@ -6,7 +6,7 @@ const router = express.Router();
 
 /* ======================================================
    🟢 GET ALL TRACKING LINKS
-   ====================================================== */
+====================================================== */
 router.get("/", authJWT, async (req, res) => {
   try {
     const { publisher_id, geo, carrier, name, type } = req.query;
@@ -52,7 +52,7 @@ router.get("/", authJWT, async (req, res) => {
 
 /* ======================================================
    🟡 CREATE NEW TRACKING URL (Auto PUBxx Logic)
-   ====================================================== */
+====================================================== */
 router.post("/", authJWT, async (req, res) => {
   try {
     const {
@@ -66,8 +66,7 @@ router.post("/", authJWT, async (req, res) => {
       cap_total,
       hold_percent,
       landing_page_url,
-      // ⬇⬇ NEW: INAPP ke liye required hai
-      offer_id,
+      offer_id, // required for INAPP
     } = req.body;
 
     if (!publisher_id || !geo || !carrier) {
@@ -83,7 +82,7 @@ router.post("/", authJWT, async (req, res) => {
     );
     const publisher_name = pubQuery.rows[0]?.name || "Unknown Publisher";
 
-    // 🔹 Generate next PUB ID automatically
+    // Generate next PUBxx
     const last = await pool.query(
       "SELECT pub_code FROM publisher_tracking_links ORDER BY id DESC LIMIT 1"
     );
@@ -95,9 +94,7 @@ router.post("/", authJWT, async (req, res) => {
       nextPubId = `PUB${newCode}`;
     }
 
-    // 🔹 Base domain for tracking URLs (CPA / normal click)
-    const base =
-      process.env.BASE_TRACKING_URL || "https://backend.mob13r.com";
+    const base = process.env.BASE_TRACKING_URL || "https://backend.mob13r.com";
 
     let tracking_url = null,
       pin_send_url = null,
@@ -106,72 +103,62 @@ router.post("/", authJWT, async (req, res) => {
       portal_url = null;
 
     /* ======================================================
-       🟢 NON-INAPP FLOWS (CPA / CPI / CPL / CPS)
-       ====================================================== */
+       🟢 NON-INAPP TYPE
+    ====================================================== */
     if (type !== "INAPP") {
       tracking_url = `${base}/click?pub_id=${nextPubId}&geo=${geo}&carrier=${carrier}`;
     }
 
     /* ======================================================
-       🔥 INAPP FLOW (USE OFFER_TEMPLATE)
-       ====================================================== */
+       🔥 INAPP TYPE (USE INTERNAL INAPP URLS)
+    ====================================================== */
     if (type === "INAPP") {
-      // INAPP ke liye offer_id mandatory
       if (!offer_id) {
         return res
           .status(400)
           .json({ error: "offer_id is required for INAPP tracking links" });
       }
 
-      // 1) Offer se template ID nikaalo
+      // Load template ID for this offer
       const offerRes = await pool.query(
         "SELECT inapp_template_id FROM offers WHERE offer_id = $1",
         [offer_id]
       );
 
       if (!offerRes.rows.length) {
-        return res
-          .status(400)
-          .json({ error: "Offer not found for given offer_id" });
+        return res.status(400).json({ error: "Offer not found" });
       }
 
       const templateId = offerRes.rows[0].inapp_template_id;
       if (!templateId) {
         return res.status(400).json({
-          error: "This INAPP offer does not have any INAPP template configured",
+          error: "This INAPP offer does not have any INAPP template assigned",
         });
       }
 
-      // 2) Template se operator URLs lo
-      const tplRes = await pool.query(
-        `
-        SELECT pin_send_url, pin_verify_url, status_check_url, portal_url
-        FROM offer_templates
-        WHERE id = $1
-      `,
-        [templateId]
-      );
+      // Load template URLs (operator URLs NOT USED for publisher)
+      const tpl = (
+        await pool.query(
+          `
+          SELECT pin_send_url, pin_verify_url, status_check_url, portal_url
+          FROM offer_templates
+          WHERE id = $1
+        `,
+          [templateId]
+        )
+      ).rows[0];
 
-      if (!tplRes.rows.length) {
-        return res
-          .status(400)
-          .json({ error: "INAPP template not found in offer_templates" });
-      }
+      // INTERNAL BASE URL
+      const inapp = `${base}/inapp`;
 
-      const tpl = tplRes.rows[0];
-
-      // 3) Operator base URLs + dynamic pub_id + placeholders
-      //    <coll_*> placeholders aapke partner system ke liye reserved rahenge
-      pin_send_url = `${tpl.pin_send_url}?pub_id=${nextPubId}&msisdn=<coll_msisdn>&ip=<coll_userip>&ua=<coll_ua>`;
-
-      pin_verify_url = `${tpl.pin_verify_url}?pub_id=${nextPubId}&msisdn=<coll_msisdn>&pin=<coll_pin>&ip=<coll_userip>&ua=<coll_ua>`;
-
-      check_status_url = `${tpl.status_check_url}?pub_id=${nextPubId}&msisdn=<coll_msisdn>`;
-
-      portal_url = `${tpl.portal_url}?pub_id=${nextPubId}`;
+      // 🔥 publisher ko hamare inapp URLs dene hain (NOT operator)
+      pin_send_url = `${inapp}/sendpin?pub_id=${nextPubId}&msisdn=<msisdn>&user_ip=<ip>&ua=<ua>`;
+      pin_verify_url = `${inapp}/verifypin?pub_id=${nextPubId}&msisdn=<msisdn>&pin=<otp>&user_ip=<ip>&ua=<ua>`;
+      check_status_url = `${inapp}/checkstatus?pub_id=${nextPubId}&msisdn=<msisdn>`;
+      portal_url = `${inapp}/portal?pub_id=${nextPubId}`;
     }
 
-    // 🔹 Insert record
+    // Insert DB record
     const insertQuery = `
       INSERT INTO publisher_tracking_links
       (pub_code, publisher_id, publisher_name, name, geo, carrier, type, payout,
@@ -212,7 +199,7 @@ router.post("/", authJWT, async (req, res) => {
 
 /* ======================================================
    🟠 UPDATE TRACKING LINK
-   ====================================================== */
+====================================================== */
 router.put("/:id", authJWT, async (req, res) => {
   try {
     const { id } = req.params;
