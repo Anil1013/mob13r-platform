@@ -151,7 +151,6 @@ router.post("/", authJWT, async (req, res) => {
 
       const inapp = `${base}/inapp`;
 
-      // FINAL URLS FOR PUBLISHER
       pin_send_url = `${inapp}/sendpin?pub_id=${nextPubId}&msisdn=<msisdn>&user_ip=<ip>&ua=<ua>`;
       pin_verify_url = `${inapp}/verifypin?pub_id=${nextPubId}&msisdn=<msisdn>&pin=<otp>&user_ip=<ip>&ua=<ua>`;
       check_status_url = `${inapp}/checkstatus?pub_id=${nextPubId}&msisdn=<msisdn>`;
@@ -198,11 +197,12 @@ router.post("/", authJWT, async (req, res) => {
 });
 
 /* ======================================================
-   UPDATE TRACKING LINK
+   UPDATE TRACKING LINK (FULL FIX)
 ====================================================== */
 router.put("/:id", authJWT, async (req, res) => {
   try {
     const { id } = req.params;
+
     const {
       name,
       type,
@@ -212,15 +212,34 @@ router.put("/:id", authJWT, async (req, res) => {
       hold_percent,
       landing_page_url,
       status,
+      tracking_url,
+      pin_send_url,
+      pin_verify_url,
+      check_status_url,
+      portal_url
     } = req.body;
 
     const query = `
       UPDATE publisher_tracking_links
-      SET name=$1, type=$2, payout=$3, cap_daily=$4, cap_total=$5,
-          hold_percent=$6, landing_page_url=$7, status=$8, updated_at=NOW()
-      WHERE id=$9 RETURNING *;
+      SET name=$1,
+          type=$2,
+          payout=$3,
+          cap_daily=$4,
+          cap_total=$5,
+          hold_percent=$6,
+          landing_page_url=$7,
+          status=$8,
+          tracking_url=$9,
+          pin_send_url=$10,
+          pin_verify_url=$11,
+          check_status_url=$12,
+          portal_url=$13,
+          updated_at=NOW()
+      WHERE id=$14
+      RETURNING *;
     `;
-    const { rows } = await pool.query(query, [
+
+    const params = [
       name,
       type,
       payout,
@@ -229,9 +248,17 @@ router.put("/:id", authJWT, async (req, res) => {
       hold_percent,
       landing_page_url,
       status,
-      id,
-    ]);
+      tracking_url || null,
+      pin_send_url || null,
+      pin_verify_url || null,
+      check_status_url || null,
+      portal_url || null,
+      id
+    ];
+
+    const { rows } = await pool.query(query, params);
     res.json(rows[0]);
+
   } catch (err) {
     console.error("PUT /api/tracking/:id error:", err);
     res.status(500).json({ error: err.message });
