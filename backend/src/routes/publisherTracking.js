@@ -17,6 +17,7 @@ router.get("/", authJWT, async (req, res) => {
       LEFT JOIN publishers pub ON pub.id = ptl.publisher_id
       WHERE 1=1
     `;
+
     const params = [];
 
     if (publisher_id) {
@@ -70,9 +71,9 @@ router.post("/", authJWT, async (req, res) => {
     } = req.body;
 
     if (!publisher_id || !geo || !carrier) {
-      return res
-        .status(400)
-        .json({ error: "publisher_id, geo, and carrier are required" });
+      return res.status(400).json({
+        error: "publisher_id, geo, and carrier are required",
+      });
     }
 
     // Fetch publisher name
@@ -100,7 +101,12 @@ router.post("/", authJWT, async (req, res) => {
       pin_send_url = null,
       pin_verify_url = null,
       check_status_url = null,
-      portal_url = null;
+      portal_url = null,
+      operator_pin_send_url = null,
+      operator_pin_verify_url = null,
+      operator_status_url = null,
+      operator_portal_url = null,
+      required_params = null;
 
     /* ======================================================
        NON-INAPP TYPE
@@ -110,42 +116,53 @@ router.post("/", authJWT, async (req, res) => {
     }
 
     /* ======================================================
-       INAPP TYPE + REQUIRED PARAMS
+       INAPP TYPE (FULL TEMPLATE SUPPORT)
     ======================================================= */
-    let required_params = null;
-
     if (type === "INAPP") {
-      if (!offer_id) {
-        return res.status(400).json({
-          error: "offer_id is required for INAPP tracking links",
-        });
-      }
+      if (!offer_id)
+        return res.status(400).json({ error: "offer_id is required for INAPP tracking links" });
 
       const offerRes = await pool.query(
-        "SELECT inapp_template_id FROM offers WHERE offer_id = $1",
+        "SELECT inapp_template_id FROM offers WHERE offer_id=$1",
         [offer_id]
       );
 
-      if (!offerRes.rows.length) {
+      if (!offerRes.rows.length)
         return res.status(400).json({ error: "Offer not found" });
-      }
 
       const templateId = offerRes.rows[0].inapp_template_id;
 
-      if (!templateId) {
+      if (!templateId)
         return res.status(400).json({
           error: "This INAPP offer does not have any INAPP template assigned",
         });
-      }
 
+      // Load operator URLs from offer_templates
+      const tpl = (
+        await pool.query(
+          `
+        SELECT pin_send_url, pin_verify_url, check_status_url, portal_url
+        FROM offer_templates
+        WHERE id=$1
+      `,
+          [templateId]
+        )
+      ).rows[0];
+
+      operator_pin_send_url = tpl.pin_send_url;
+      operator_pin_verify_url = tpl.pin_verify_url;
+      operator_status_url = tpl.check_status_url;
+      operator_portal_url = tpl.portal_url;
+
+      // OUR INTERNAL URLs for publisher
       const inapp = `${base}/inapp`;
 
-      pin_send_url = `${inapp}/sendpin?pub_id=${nextPubId}&msisdn=<msisdn>&user_ip=<ip>&ua=<ua>`;
-      pin_verify_url = `${inapp}/verifypin?pub_id=${nextPubId}&msisdn=<msisdn>&pin=<otp>&user_ip=<ip>&ua=<ua>`;
-      check_status_url = `${inapp}/checkstatus?pub_id=${nextPubId}&msisdn=<msisdn>`;
+      pin_send_url = `${inapp}/sendpin?pub_id=${nextPubId}`;
+      pin_verify_url = `${inapp}/verifypin?pub_id=${nextPubId}`;
+      check_status_url = `${inapp}/checkstatus?pub_id=${nextPubId}`;
       portal_url = `${inapp}/portal?pub_id=${nextPubId}`;
 
-      // REQUIRED PARAMS AUTO
+      // AUTO required params
       required_params = {
         ip: true,
         ua: true,
@@ -155,15 +172,19 @@ router.post("/", authJWT, async (req, res) => {
       };
     }
 
-    // Insert record
+    /* ======================================================
+       INSERT RECORD
+    ======================================================= */
     const insertQuery = `
       INSERT INTO publisher_tracking_links
       (pub_code, publisher_id, publisher_name, name, geo, carrier, type, payout,
        cap_daily, cap_total, hold_percent, landing_page_url,
        tracking_url, pin_send_url, pin_verify_url, check_status_url, portal_url,
+       operator_pin_send_url, operator_pin_verify_url, operator_status_url, operator_portal_url,
        required_params,
        created_at, updated_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW(),NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
+              $19,$20,$21,$22,$23,NOW(),NOW())
       RETURNING *;
     `;
 
@@ -174,7 +195,7 @@ router.post("/", authJWT, async (req, res) => {
       name,
       geo,
       carrier,
-      type || "CPA",
+      type,
       payout || 0,
       cap_daily || 0,
       cap_total || 0,
@@ -185,14 +206,15 @@ router.post("/", authJWT, async (req, res) => {
       pin_verify_url,
       check_status_url,
       portal_url,
+      operator_pin_send_url,
+      operator_pin_verify_url,
+      operator_status_url,
+      operator_portal_url,
       required_params ? JSON.stringify(required_params) : null,
-      // created_at NOW()
-      // updated_at NOW()
     ];
 
     const { rows } = await pool.query(insertQuery, values);
     res.status(201).json(rows[0]);
-
   } catch (err) {
     console.error("POST /api/tracking error:", err);
     res.status(500).json({ error: err.message });
@@ -219,7 +241,7 @@ router.put("/:id", authJWT, async (req, res) => {
       pin_send_url,
       pin_verify_url,
       check_status_url,
-      portal_url
+      portal_url,
     } = req.body;
 
     const query = `
@@ -256,12 +278,11 @@ router.put("/:id", authJWT, async (req, res) => {
       pin_verify_url || null,
       check_status_url || null,
       portal_url || null,
-      id
+      id,
     ];
 
     const { rows } = await pool.query(query, params);
     res.json(rows[0]);
-
   } catch (err) {
     console.error("PUT /api/tracking/:id error:", err);
     res.status(500).json({ error: err.message });
