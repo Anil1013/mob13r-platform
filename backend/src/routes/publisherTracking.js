@@ -102,6 +102,10 @@ router.post("/", authJWT, async (req, res) => {
       pin_verify_url = null,
       check_status_url = null,
       portal_url = null,
+      operator_pin_send_url = null,
+      operator_pin_verify_url = null,
+      operator_status_url = null,
+      operator_portal_url = null,
       required_params = null;
 
     /* ======================================================
@@ -112,7 +116,7 @@ router.post("/", authJWT, async (req, res) => {
     }
 
     /* ======================================================
-       INAPP TYPE
+       INAPP TYPE (FULL TEMPLATE SUPPORT)
     ======================================================= */
     if (type === "INAPP") {
       if (!offer_id)
@@ -133,29 +137,44 @@ router.post("/", authJWT, async (req, res) => {
           error: "This INAPP offer does not have any INAPP template assigned",
         });
 
-      // OUR INTERNAL URLs for publisher → ALWAYS BACKEND ROUTES
-         
-const inapp = `${base}/inapp`;
+      // Load operator URLs from offer_templates
+      const tpl = (
+        await pool.query(
+          `
+        SELECT pin_send_url, pin_verify_url, check_status_url, portal_url
+        FROM offer_templates
+        WHERE id=$1
+      `,
+          [templateId]
+        )
+      ).rows[0];
 
-// FULL FINAL URLs STORED INTO DATABASE
-pin_send_url =
-  `${inapp}/sendpin?pub_id=${nextPubId}` +
-  `&msisdn=<msisdn>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
+      operator_pin_send_url = tpl.pin_send_url;
+      operator_pin_verify_url = tpl.pin_verify_url;
+      operator_status_url = tpl.check_status_url;
+      operator_portal_url = tpl.portal_url;
 
-pin_verify_url =
-  `${inapp}/verifypin?pub_id=${nextPubId}` +
-  `&msisdn=<msisdn>&pin=<otp>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
+      /* ============================================
+         👉 FINAL FRONTEND DISPLAY URLs
+         EXACT FORMAT YOU REQUESTED
+      ============================================ */
+      pin_send_url =
+        `/inapp/sendpin?pub_id=${nextPubId}` +
+        `&msisdn=<msisdn>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
 
-check_status_url =
-  `${inapp}/checkstatus?pub_id=${nextPubId}` +
-  `&msisdn=<msisdn>`;
+      pin_verify_url =
+        `/inapp/verifypin?pub_id=${nextPubId}` +
+        `&msisdn=<msisdn>&pin=<otp>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
 
-portal_url =
-  `${inapp}/portal?pub_id=${nextPubId}` +
-  `&msisdn=<msisdn>&click_id=<click_id>`;
+      check_status_url =
+        `/inapp/checkstatus?pub_id=${nextPubId}` +
+        `&msisdn=<msisdn>`;
 
-       
-      // AUTO required params
+      portal_url =
+        `/inapp/portal?pub_id=${nextPubId}` +
+        `&msisdn=<msisdn>&click_id=<click_id>`;
+
+      // auto-required params
       required_params = {
         ip: true,
         ua: true,
@@ -166,16 +185,18 @@ portal_url =
     }
 
     /* ======================================================
-       INSERT RECORD (MATCH EXACT DB COLUMNS)
+       INSERT RECORD
     ======================================================= */
     const insertQuery = `
       INSERT INTO publisher_tracking_links
       (pub_code, publisher_id, publisher_name, name, geo, carrier, type, payout,
        cap_daily, cap_total, hold_percent, landing_page_url,
        tracking_url, pin_send_url, pin_verify_url, check_status_url, portal_url,
+       operator_pin_send_url, operator_pin_verify_url, operator_status_url, operator_portal_url,
        required_params,
        created_at, updated_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW(),NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
+              $19,$20,$21,$22,$23,NOW(),NOW())
       RETURNING *;
     `;
 
@@ -197,6 +218,10 @@ portal_url =
       pin_verify_url,
       check_status_url,
       portal_url,
+      operator_pin_send_url,
+      operator_pin_verify_url,
+      operator_status_url,
+      operator_portal_url,
       required_params ? JSON.stringify(required_params) : null,
     ];
 
