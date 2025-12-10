@@ -66,7 +66,7 @@ router.post("/", authJWT, async (req, res) => {
       cap_total,
       hold_percent,
       landing_page_url,
-      offer_id, // required for INAPP
+      offer_id,
     } = req.body;
 
     if (!publisher_id || !geo || !carrier) {
@@ -110,8 +110,10 @@ router.post("/", authJWT, async (req, res) => {
     }
 
     /* ======================================================
-       INAPP TYPE
+       INAPP TYPE + REQUIRED PARAMS
     ======================================================= */
+    let required_params = null;
+
     if (type === "INAPP") {
       if (!offer_id) {
         return res.status(400).json({
@@ -119,7 +121,6 @@ router.post("/", authJWT, async (req, res) => {
         });
       }
 
-      // Load template ID
       const offerRes = await pool.query(
         "SELECT inapp_template_id FROM offers WHERE offer_id = $1",
         [offer_id]
@@ -137,24 +138,21 @@ router.post("/", authJWT, async (req, res) => {
         });
       }
 
-      // Load template
-      const tpl = (
-        await pool.query(
-          `
-          SELECT pin_send_url, pin_verify_url, check_status_url, portal_url
-          FROM offer_templates
-          WHERE id = $1
-        `,
-          [templateId]
-        )
-      ).rows[0];
-
       const inapp = `${base}/inapp`;
 
       pin_send_url = `${inapp}/sendpin?pub_id=${nextPubId}&msisdn=<msisdn>&user_ip=<ip>&ua=<ua>`;
       pin_verify_url = `${inapp}/verifypin?pub_id=${nextPubId}&msisdn=<msisdn>&pin=<otp>&user_ip=<ip>&ua=<ua>`;
       check_status_url = `${inapp}/checkstatus?pub_id=${nextPubId}&msisdn=<msisdn>`;
       portal_url = `${inapp}/portal?pub_id=${nextPubId}`;
+
+      // REQUIRED PARAMS AUTO
+      required_params = {
+        ip: true,
+        ua: true,
+        msisdn: true,
+        click_id: true,
+        otp: true,
+      };
     }
 
     // Insert record
@@ -163,8 +161,9 @@ router.post("/", authJWT, async (req, res) => {
       (pub_code, publisher_id, publisher_name, name, geo, carrier, type, payout,
        cap_daily, cap_total, hold_percent, landing_page_url,
        tracking_url, pin_send_url, pin_verify_url, check_status_url, portal_url,
+       required_params,
        created_at, updated_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW(),NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW(),NOW())
       RETURNING *;
     `;
 
@@ -186,10 +185,14 @@ router.post("/", authJWT, async (req, res) => {
       pin_verify_url,
       check_status_url,
       portal_url,
+      required_params ? JSON.stringify(required_params) : null,
+      // created_at NOW()
+      // updated_at NOW()
     ];
 
     const { rows } = await pool.query(insertQuery, values);
     res.status(201).json(rows[0]);
+
   } catch (err) {
     console.error("POST /api/tracking error:", err);
     res.status(500).json({ error: err.message });
@@ -197,7 +200,7 @@ router.post("/", authJWT, async (req, res) => {
 });
 
 /* ======================================================
-   UPDATE TRACKING LINK (FULL FIX)
+   UPDATE TRACKING LINK
 ====================================================== */
 router.put("/:id", authJWT, async (req, res) => {
   try {
