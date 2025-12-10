@@ -202,10 +202,19 @@ router.put("/:id", authJWT, async (req, res) => {
 
     const query = `
       UPDATE publisher_tracking_links
-      SET name=$1, type=$2, payout=$3, cap_daily=$4, cap_total=$5, hold_percent=$6,
-          landing_page_url=$7, status=$8,
-          tracking_url=$9, pin_send_url=$10, pin_verify_url=$11,
-          check_status_url=$12, portal_url=$13,
+      SET name=$1,
+          type=$2,
+          payout=$3,
+          cap_daily=$4,
+          cap_total=$5,
+          hold_percent=$6,
+          landing_page_url=$7,
+          status=$8,
+          tracking_url=$9,
+          pin_send_url=$10,
+          pin_verify_url=$11,
+          check_status_url=$12,
+          portal_url=$13,
           updated_at=NOW()
       WHERE id=$14
       RETURNING *;
@@ -220,11 +229,13 @@ router.put("/:id", authJWT, async (req, res) => {
       hold_percent,
       landing_page_url,
       status,
-      tracking_url || null,
-      pin_send_url || null,
-      pin_verify_url || null,
-      check_status_url || null,
-      portal_url || null,
+      
+      tracking_url ?? null,
+      pin_send_url ?? null,
+      pin_verify_url ?? null,
+      check_status_url ?? null,
+      portal_url ?? null,
+
       id
     ];
 
