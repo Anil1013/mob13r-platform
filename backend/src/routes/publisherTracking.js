@@ -111,27 +111,28 @@ router.post("/", authJWT, async (req, res) => {
     /* ======================================================
        INAPP TYPE (STATIC CLEAN URLS ONLY)
     ======================================================= */
-    if (type === "INAPP") {
-      if (!offer_id) {
-        return res.status(400).json({ error: "offer_id required for INAPP" });
-      }
+   if (type === "INAPP") {
+  if (!offer_id) {
+    return res.status(400).json({ error: "offer_id required for INAPP" });
+  }
 
-      const inapp = `${base}/inapp`;
+  const inapp = `${base}/inapp`;
 
-      // IMPORTANT: DO NOT STORE PARAMETERS IN DB
-      pin_send_url     = `${inapp}/sendpin?pub_id=${nextPubId}`;
-      pin_verify_url   = `${inapp}/verifypin?pub_id=${nextPubId}`;
-      check_status_url = `${inapp}/checkstatus?pub_id=${nextPubId}`;
-      portal_url       = `${inapp}/portal?pub_id=${nextPubId}`;
+  // FRONTEND DISPLAY URLS (WITH PARAMETERS)
+  pin_send_url = `${inapp}/sendpin?pub_id=${nextPubId}&msisdn=<msisdn>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
+  pin_verify_url = `${inapp}/verifypin?pub_id=${nextPubId}&msisdn=<msisdn>&pin=<otp>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
+  check_status_url = `${inapp}/checkstatus?pub_id=${nextPubId}&msisdn=<msisdn>`;
+  portal_url = `${inapp}/portal?pub_id=${nextPubId}&msisdn=<msisdn>&click_id=<click_id>`;
 
-      required_params = {
-        ip: true,
-        ua: true,
-        msisdn: true,
-        click_id: true,
-        otp: true
-      };
-    }
+  required_params = {
+    ip: true,
+    ua: true,
+    msisdn: true,
+    click_id: true,
+    otp: true
+  };
+}
+
 
     /* ======================================================
        INSERT RECORD
