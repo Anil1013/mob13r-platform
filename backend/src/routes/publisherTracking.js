@@ -134,13 +134,27 @@ router.post("/", authJWT, async (req, res) => {
         });
 
       // OUR INTERNAL URLs for publisher → ALWAYS BACKEND ROUTES
-      const inapp = `${base}/inapp`;
+         
+const inapp = `${base}/inapp`;
 
-      pin_send_url = `${inapp}/sendpin?pub_id=${nextPubId}`;
-      pin_verify_url = `${inapp}/verifypin?pub_id=${nextPubId}`;
-      check_status_url = `${inapp}/checkstatus?pub_id=${nextPubId}`;
-      portal_url = `${inapp}/portal?pub_id=${nextPubId}`;
+// FULL FINAL URLs STORED INTO DATABASE
+pin_send_url =
+  `${inapp}/sendpin?pub_id=${nextPubId}` +
+  `&msisdn=<msisdn>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
 
+pin_verify_url =
+  `${inapp}/verifypin?pub_id=${nextPubId}` +
+  `&msisdn=<msisdn>&pin=<otp>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
+
+check_status_url =
+  `${inapp}/checkstatus?pub_id=${nextPubId}` +
+  `&msisdn=<msisdn>`;
+
+portal_url =
+  `${inapp}/portal?pub_id=${nextPubId}` +
+  `&msisdn=<msisdn>&click_id=<click_id>`;
+
+       
       // AUTO required params
       required_params = {
         ip: true,
