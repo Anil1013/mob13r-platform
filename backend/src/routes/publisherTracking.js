@@ -109,7 +109,7 @@ router.post("/", authJWT, async (req, res) => {
     }
 
     /* ======================================================
-       INAPP TYPE
+       INAPP TYPE (STATIC CLEAN URLS ONLY)
     ======================================================= */
     if (type === "INAPP") {
       if (!offer_id) {
@@ -118,10 +118,11 @@ router.post("/", authJWT, async (req, res) => {
 
       const inapp = `${base}/inapp`;
 
-      pin_send_url = `${inapp}/sendpin?pub_id=${nextPubId}&msisdn=<msisdn>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
-      pin_verify_url = `${inapp}/verifypin?pub_id=${nextPubId}&msisdn=<msisdn>&pin=<otp>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
-      check_status_url = `${inapp}/checkstatus?pub_id=${nextPubId}&msisdn=<msisdn>`;
-      portal_url = `${inapp}/portal?pub_id=${nextPubId}&msisdn=<msisdn>&click_id=<click_id>`;
+      // IMPORTANT: DO NOT STORE PARAMETERS IN DB
+      pin_send_url     = `${inapp}/sendpin?pub_id=${nextPubId}`;
+      pin_verify_url   = `${inapp}/verifypin?pub_id=${nextPubId}`;
+      check_status_url = `${inapp}/checkstatus?pub_id=${nextPubId}`;
+      portal_url       = `${inapp}/portal?pub_id=${nextPubId}`;
 
       required_params = {
         ip: true,
@@ -133,7 +134,7 @@ router.post("/", authJWT, async (req, res) => {
     }
 
     /* ======================================================
-       INSERT RECORD — EXACT COLUMN STRUCTURE
+       INSERT RECORD
     ======================================================= */
     const insertQuery = `
       INSERT INTO publisher_tracking_links
@@ -229,13 +230,11 @@ router.put("/:id", authJWT, async (req, res) => {
       hold_percent,
       landing_page_url,
       status,
-      
       tracking_url ?? null,
       pin_send_url ?? null,
       pin_verify_url ?? null,
       check_status_url ?? null,
       portal_url ?? null,
-
       id
     ];
 
