@@ -11,12 +11,11 @@ export default function Tracking() {
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [isEditing, setIsEditing] = useState(false);
   const [errors, setErrors] = useState([]);
-
-  // track if name is auto-generated or user-edited
   const [autoName, setAutoName] = useState(true);
 
+  // COMPLETE FORM (INCLUDES URL FIELDS)
   const [form, setForm] = useState({
-    id: null, // used only when editing
+    id: null,
     publisher_id: "",
     offer_id: "",
     name: "",
@@ -28,11 +27,17 @@ export default function Tracking() {
     cap_total: "",
     hold_percent: "",
     landing_page_url: "",
+
+    tracking_url: "",
+    pin_send_url: "",
+    pin_verify_url: "",
+    check_status_url: "",
+    portal_url: ""
   });
 
-  /* -------------------------------------------
-     LOAD DATA
-  ------------------------------------------- */
+  /* ===============================
+        LOAD DATA
+  =============================== */
   const fetchData = async () => {
     try {
       const [pubRes, offerRes, trackRes] = await Promise.all([
@@ -54,57 +59,55 @@ export default function Tracking() {
     fetchData();
   }, []);
 
-  /* -------------------------------------------
-     HELPERS
-  ------------------------------------------- */
+  /* ===============================
+        HELPERS
+  =============================== */
 
   const inappOffers = offers.filter((o) => o.type === "INAPP");
 
   const getOfferById = (offer_id) =>
     offers.find((o) => o.offer_id === offer_id);
 
-  // Auto-fill geo/carrier when INAPP offer selected
+  /** Auto-fill geo+carrier when selecting INAPP offer **/
   const handleOfferChange = (offer_id) => {
     const offer = getOfferById(offer_id);
-    let newGeo = form.geo;
-    let newCarrier = form.carrier;
+
+    let geo = form.geo;
+    let carrier = form.carrier;
 
     if (offer && Array.isArray(offer.targets) && offer.targets.length > 0) {
-      const firstTarget = offer.targets[0];
-      // Only override if empty OR autoName is still true (means user hasn't customized)
-      newGeo = firstTarget.geo || form.geo;
-      newCarrier = firstTarget.carrier || form.carrier;
+      const t = offer.targets[0];
+      geo = t.geo || geo;
+      carrier = t.carrier || carrier;
     }
 
-    const updatedForm = {
+    const updated = {
       ...form,
       offer_id,
-      geo: newGeo,
-      carrier: newCarrier,
+      geo,
+      carrier,
     };
 
-    setForm(updatedForm);
-    maybeAutoGenerateName(updatedForm);
+    setForm(updated);
+    maybeAutoGenerateName(updated);
   };
 
-  // Handle field change + autoName logic
+  /** Handle form updates **/
   const updateFormField = (key, value) => {
     const updated = { ...form, [key]: value };
     setForm(updated);
 
-    // If user directly types name -> stop auto generation
     if (key === "name") {
       setAutoName(false);
       return;
     }
 
-    // On some fields, if autoName still true, regenerate
     if (["geo", "carrier", "type", "offer_id"].includes(key)) {
       maybeAutoGenerateName(updated);
     }
   };
 
-  // Auto-generate tracking name, only if user didn't override
+  /** Auto-generate name **/
   const maybeAutoGenerateName = (currentForm) => {
     if (!autoName) return;
 
@@ -118,7 +121,7 @@ export default function Tracking() {
     setForm((prev) => ({ ...prev, name: generated }));
   };
 
-  // Validation
+  /** Validate form before saving **/
   const validateForm = () => {
     const errs = [];
 
@@ -126,18 +129,15 @@ export default function Tracking() {
     if (!form.geo) errs.push("Geo is required.");
     if (!form.carrier) errs.push("Carrier is required.");
 
-    if (!form.type) errs.push("Type is required.");
-
-    if (form.type === "INAPP") {
-      if (!form.offer_id) {
-        errs.push("INAPP type requires selecting an INAPP offer.");
-      }
+    if (form.type === "INAPP" && !form.offer_id) {
+      errs.push("INAPP type requires selecting an offer.");
     }
 
     setErrors(errs);
     return errs.length === 0;
   };
 
+  /** Reset form **/
   const resetForm = () => {
     setForm({
       id: null,
@@ -152,25 +152,47 @@ export default function Tracking() {
       cap_total: "",
       hold_percent: "",
       landing_page_url: "",
+
+      tracking_url: "",
+      pin_send_url: "",
+      pin_verify_url: "",
+      check_status_url: "",
+      portal_url: ""
     });
-    setIsEditing(false);
     setErrors([]);
     setAutoName(true);
+    setIsEditing(false);
   };
 
-  /* -------------------------------------------
-     SAVE / EDIT
-  ------------------------------------------- */
+  /* ===============================
+        SAVE + UPDATE
+  =============================== */
 
   const saveTracking = async () => {
     try {
       if (!validateForm()) return;
 
-      const payload = { ...form };
-      // Backend does not expect id in payload
-      delete payload.id;
+      const payload = {
+        publisher_id: form.publisher_id,
+        offer_id: form.offer_id,
+        name: form.name,
+        geo: form.geo,
+        carrier: form.carrier,
+        type: form.type,
+        payout: form.payout,
+        cap_daily: form.cap_daily,
+        cap_total: form.cap_total,
+        hold_percent: form.hold_percent,
+        landing_page_url: form.landing_page_url,
 
-      if (isEditing && form.id) {
+        tracking_url: form.tracking_url,
+        pin_send_url: form.pin_send_url,
+        pin_verify_url: form.pin_verify_url,
+        check_status_url: form.check_status_url,
+        portal_url: form.portal_url,
+      };
+
+      if (isEditing) {
         await apiClient.put(`/tracking/${form.id}`, payload);
         alert("✅ Tracking URL updated successfully");
       } else {
@@ -186,92 +208,96 @@ export default function Tracking() {
     }
   };
 
-  const editTracking = (item) => {
+  /** Load existing entry into form **/
+  const editTracking = (row) => {
     setForm({
-      id: item.id,
-      publisher_id: item.publisher_id,
-      offer_id: item.offer_id || "",
-      name: item.name || "",
-      geo: item.geo || "",
-      carrier: item.carrier || "",
-      type: item.type || "CPA",
-      payout: item.payout || "",
-      cap_daily: item.cap_daily || "",
-      cap_total: item.cap_total || "",
-      hold_percent: item.hold_percent || "",
-      landing_page_url: item.landing_page_url || "",
+      id: row.id,
+      publisher_id: row.publisher_id,
+      offer_id: row.offer_id || "",
+      name: row.name || "",
+      geo: row.geo || "",
+      carrier: row.carrier || "",
+      type: row.type || "CPA",
+      payout: row.payout || "",
+      cap_daily: row.cap_daily || "",
+      cap_total: row.cap_total || "",
+      hold_percent: row.hold_percent || "",
+      landing_page_url: row.landing_page_url || "",
+
+      tracking_url: row.tracking_url || "",
+      pin_send_url: row.pin_send_url || "",
+      pin_verify_url: row.pin_verify_url || "",
+      check_status_url: row.check_status_url || "",
+      portal_url: row.portal_url || "",
     });
+
     setIsEditing(true);
     setErrors([]);
-    setAutoName(false); // editing existing = respect user name
+    setAutoName(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  /* -------------------------------------------
-     COPY HELPERS
-  ------------------------------------------- */
+  /* ===============================
+        COPY HELPERS
+  =============================== */
 
   const copyToClipboard = (text) => {
-    if (!text) {
-      alert("⚠️ URL not available");
-      return;
-    }
+    if (!text) return alert("⚠ URL not available");
+
     navigator.clipboard
       .writeText(text)
-      .then(() => alert("✅ Copied to clipboard!"))
-      .catch(() => alert("⚠️ Failed to copy"));
+      .then(() => alert("✅ Copied!"))
+      .catch(() => alert("⚠ Failed to copy"));
   };
 
   const copyAllInappUrls = (row) => {
-    const content = [
-      `SendPIN: ${row.pin_send_url || ""}`,
-      `VerifyPIN: ${row.pin_verify_url || ""}`,
-      `Status: ${row.check_status_url || ""}`,
-      `Portal: ${row.portal_url || ""}`,
-    ].join("\n");
-    copyToClipboard(content);
+    const txt = `
+SendPIN: ${row.pin_send_url}
+VerifyPIN: ${row.pin_verify_url}
+Status: ${row.check_status_url}
+Portal: ${row.portal_url}
+    `.trim();
+
+    copyToClipboard(txt);
   };
 
-  /* -------------------------------------------
-     FILTERING / DISPLAY
-  ------------------------------------------- */
+  /* ===============================
+        DISPLAY + FILTER
+  =============================== */
 
   const filteredLinks = trackingLinks.filter((t) => {
-    const lower = search.toLowerCase();
+    const q = search.toLowerCase();
 
-    if (
-      typeFilter !== "ALL" &&
-      t.type &&
-      t.type.toUpperCase() !== typeFilter
-    ) {
+    if (typeFilter !== "ALL" && t.type.toUpperCase() !== typeFilter)
       return false;
-    }
 
     return (
-      t.publisher_name?.toLowerCase().includes(lower) ||
-      t.geo?.toLowerCase().includes(lower) ||
-      t.carrier?.toLowerCase().includes(lower) ||
-      t.name?.toLowerCase().includes(lower)
+      t.publisher_name?.toLowerCase().includes(q) ||
+      t.geo?.toLowerCase().includes(q) ||
+      t.carrier?.toLowerCase().includes(q) ||
+      t.name?.toLowerCase().includes(q)
     );
   });
 
-  const typeClass = (type) => {
-    const t = (type || "").toUpperCase();
-    if (t === "INAPP") return "text-blue-600 font-semibold";
-    if (t === "CPA" || t === "CPI" || t === "CPL" || t === "CPS")
-      return "text-green-600 font-semibold";
-    return "text-gray-700";
+  const typeClass = (t) => {
+    if (!t) return "";
+    const x = t.toUpperCase();
+    if (x === "INAPP") return "text-blue-600 font-semibold";
+    return "text-green-600 font-semibold";
   };
+
+  /* ===============================
+        UI
+  =============================== */
 
   return (
     <div className="p-6">
       <h2 className="text-2xl font-bold mb-3">Publisher Tracking URLs</h2>
 
-      {/* Validation Panel */}
       {errors.length > 0 && (
         <div className="mb-4 border border-red-300 bg-red-50 text-red-700 p-3 rounded">
-          <div className="font-semibold mb-1">Please fix the following:</div>
-          <ul className="list-disc list-inside text-sm">
+          <b>Please fix the following:</b>
+          <ul className="list-disc ml-4 mt-1 text-sm">
             {errors.map((e, i) => (
               <li key={i}>{e}</li>
             ))}
@@ -279,7 +305,7 @@ export default function Tracking() {
         </div>
       )}
 
-      {/* Form Row 1 */}
+      {/* FORM ROW 1 */}
       <div className="grid grid-cols-5 gap-3 mb-4">
         <select
           value={form.publisher_id}
@@ -294,7 +320,6 @@ export default function Tracking() {
           ))}
         </select>
 
-        {/* Offer selection only for INAPP */}
         {form.type === "INAPP" ? (
           <select
             value={form.offer_id}
@@ -310,7 +335,6 @@ export default function Tracking() {
           </select>
         ) : (
           <div className="flex items-center text-xs text-gray-500">
-            {/* Empty space to keep layout grid aligned */}
             No offer needed for non-INAPP
           </div>
         )}
@@ -335,7 +359,7 @@ export default function Tracking() {
         />
       </div>
 
-      {/* Form Row 2 */}
+      {/* FORM ROW 2 */}
       <div className="grid grid-cols-5 gap-3 mb-4">
         <select
           value={form.type}
@@ -375,17 +399,17 @@ export default function Tracking() {
         />
       </div>
 
-      {/* Landing URL */}
+      {/* LANDING URL */}
       <div className="mb-4">
         <input
-          placeholder="Landing Page URL (for fallback click / info)"
+          placeholder="Landing Page URL"
           value={form.landing_page_url}
           onChange={(e) => updateFormField("landing_page_url", e.target.value)}
           className="border p-2 rounded w-1/2"
         />
       </div>
 
-      {/* Actions */}
+      {/* ACTIONS */}
       <div className="mb-6 flex gap-3 items-center">
         <button
           onClick={saveTracking}
@@ -403,15 +427,16 @@ export default function Tracking() {
         )}
       </div>
 
-      {/* Filters */}
+      {/* FILTERS */}
       <div className="flex items-center gap-3 mb-3">
         <input
           type="text"
-          placeholder="🔍 Search pub, geo, carrier, name..."
+          placeholder="🔍 Search pub, geo, carrier, name…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="border p-2 rounded w-1/3"
         />
+
         <select
           className="border p-2 rounded"
           value={typeFilter}
@@ -424,12 +449,13 @@ export default function Tracking() {
           <option value="CPS">CPS</option>
           <option value="INAPP">INAPP</option>
         </select>
+
         <span className="text-xs text-gray-500">
           {filteredLinks.length} tracking link(s)
         </span>
       </div>
 
-      {/* Table */}
+      {/* TABLE */}
       <table className="min-w-full border text-sm">
         <thead className="bg-gray-100">
           <tr>
@@ -447,6 +473,7 @@ export default function Tracking() {
             <th className="p-2">Edit</th>
           </tr>
         </thead>
+
         <tbody>
           {filteredLinks.map((t) => (
             <tr key={t.id} className="border-t hover:bg-gray-50">
@@ -455,42 +482,35 @@ export default function Tracking() {
               <td className="p-2">{t.name}</td>
               <td className="p-2">{t.geo}</td>
               <td className="p-2">{t.carrier}</td>
+
               <td className={`p-2 ${typeClass(t.type)}`}>{t.type}</td>
+
               <td className="p-2">{t.payout}</td>
-              <td className="p-2">
-                {t.cap_daily} / {t.cap_total}
-              </td>
+              <td className="p-2">{t.cap_daily} / {t.cap_total}</td>
               <td className="p-2">{t.hold_percent}%</td>
               <td className="p-2 truncate max-w-[150px]">
                 {t.landing_page_url}
               </td>
+
               <td className="p-2 text-xs text-blue-700">
                 {t.type === "INAPP" ? (
                   <div className="flex flex-col gap-1">
-                    <button
-                      onClick={() => copyToClipboard(t.pin_send_url)}
-                      className="hover:underline text-left"
-                    >
+                    <button onClick={() => copyToClipboard(t.pin_send_url)} className="hover:underline text-left">
                       🔹 SendPIN
                     </button>
-                    <button
-                      onClick={() => copyToClipboard(t.pin_verify_url)}
-                      className="hover:underline text-left"
-                    >
+
+                    <button onClick={() => copyToClipboard(t.pin_verify_url)} className="hover:underline text-left">
                       🔹 VerifyPIN
                     </button>
-                    <button
-                      onClick={() => copyToClipboard(t.check_status_url)}
-                      className="hover:underline text-left"
-                    >
+
+                    <button onClick={() => copyToClipboard(t.check_status_url)} className="hover:underline text-left">
                       🔹 Status
                     </button>
-                    <button
-                      onClick={() => copyToClipboard(t.portal_url)}
-                      className="hover:underline text-left"
-                    >
+
+                    <button onClick={() => copyToClipboard(t.portal_url)} className="hover:underline text-left">
                       🔹 Portal
                     </button>
+
                     <button
                       onClick={() => copyAllInappUrls(t)}
                       className="hover:underline text-left font-semibold mt-1"
@@ -507,6 +527,7 @@ export default function Tracking() {
                   </button>
                 )}
               </td>
+
               <td className="p-2">
                 <button
                   onClick={() => editTracking(t)}
@@ -517,12 +538,10 @@ export default function Tracking() {
               </td>
             </tr>
           ))}
+
           {filteredLinks.length === 0 && (
             <tr>
-              <td
-                colSpan={12}
-                className="p-4 text-center text-sm text-gray-500"
-              >
+              <td colSpan={12} className="p-4 text-center text-gray-500">
                 No tracking links found.
               </td>
             </tr>
