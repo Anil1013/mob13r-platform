@@ -54,7 +54,7 @@ router.get("/sendpin", async (req, res) => {
     }
 
     const track = await getTracking(pub_id);
-    if (!track || !track.operator_pin_send_url) {
+    if (!track || !track.pin_send_url) {
       return res.json({ success: false, message: "Operator SENDPIN URL missing" });
     }
 
