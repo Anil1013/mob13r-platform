@@ -1,171 +1,175 @@
+// File: routes/inappRoutes.js
+
 import express from "express";
 import axios from "axios";
 import pool from "../db.js";
 
 const router = express.Router();
 
-/* =======================================================
-   🔍 LOAD TEMPLATE FROM publisher_tracking_links
-======================================================= */
-async function getTemplate(pub_id) {
-  const q = `
-    SELECT pin_send_url, pin_verify_url, check_status_url, portal_url, required_params
-    FROM publisher_tracking_links
-    WHERE pub_code = $1
-  `;
-  const result = await pool.query(q, [pub_id]);
-
-  if (!result.rows.length) {
-    throw new Error("No INAPP template found for pub_id " + pub_id);
-  }
-
-  return result.rows[0];
+/* ======================================================
+   HELPER: Fetch tracking row using PUB ID
+====================================================== */
+async function getTracking(pub_id) {
+  const q = await pool.query(
+    "SELECT * FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1",
+    [pub_id]
+  );
+  return q.rows.length ? q.rows[0] : null;
 }
 
-/* =======================================================
-   🔧 Build Operator URL
-======================================================= */
-function buildURL(base, params) {
-  const qs = Object.entries(params)
-    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
-    .join("&");
-  return `${base}?${qs}`;
+/* ======================================================
+   HELPER: Replace placeholders (<msisdn>, <ip> etc.)
+          AND append final query parameters safely
+====================================================== */
+function buildFinalUrl(baseUrl, params = {}) {
+  let url = baseUrl;
+
+  // Replace template placeholders (<msisdn>, <ip>, <ua>, <otp>, <click_id>)
+  Object.entries(params).forEach(([key, value]) => {
+    if (!value) return;
+    url = url.replace(`<${key}>`, encodeURIComponent(value));
+  });
+
+  // Now append query params properly
+  const finalUrl = new URL(url);
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      finalUrl.searchParams.set(key, value.toString());
+    }
+  });
+
+  return finalUrl.toString();
 }
 
-/* =======================================================
-   📌 SEND PIN
-======================================================= */
+/* ======================================================
+   SENDPIN
+====================================================== */
 router.get("/sendpin", async (req, res) => {
   try {
-    const { pub_id, msisdn, user_ip, ua } = req.query;
+    const { pub_id, msisdn, ip, ua, click_id } = req.query;
 
-    const tpl = await getTemplate(pub_id);
+    if (!pub_id || !msisdn) {
+      return res.json({ success: false, message: "pub_id and msisdn are required" });
+    }
 
-    const operatorParams = {
-      pub_id,
+    const track = await getTracking(pub_id);
+    if (!track || !track.operator_pin_send_url) {
+      return res.json({ success: false, message: "Operator SENDPIN URL missing" });
+    }
+
+    const finalUrl = buildFinalUrl(track.operator_pin_send_url, {
       msisdn,
-      ip: user_ip,
+      ip,
       ua,
-    };
-
-    const finalURL = buildURL(tpl.pin_send_url, operatorParams);
-
-    console.log("📡 SENDPIN →", finalURL);
-
-    const response = await axios.get(finalURL, { timeout: 10000 });
-
-    return res.json({
-      success: true,
-      operator_url_called: finalURL,
-      operator_response: response.data,
+      click_id
     });
+
+    console.log("📤 SENDPIN →", finalUrl);
+
+    const response = await axios.get(finalUrl, { timeout: 15000 });
+    return res.json(response.data);
+
   } catch (err) {
-    console.log("❌ SENDPIN ERROR:", err.message);
-
-    return res.json({
-      success: false,
-      message: "OTP not sent",
-      error: err.message,
-    });
+    console.error("SENDPIN ERROR:", err.message);
+    return res.json({ success: false, message: "OTP not sent", error: err.message });
   }
 });
 
-/* =======================================================
-   🔐 VERIFY PIN
-======================================================= */
+/* ======================================================
+   VERIFYPIN
+====================================================== */
 router.get("/verifypin", async (req, res) => {
   try {
-    const { pub_id, msisdn, pin, user_ip, ua } = req.query;
+    const { pub_id, msisdn, pin, ip, ua, click_id } = req.query;
 
-    const tpl = await getTemplate(pub_id);
+    if (!pub_id || !msisdn || !pin) {
+      return res.json({ success: false, message: "pub_id, msisdn, pin required" });
+    }
 
-    const operatorParams = {
-      pub_id,
+    const track = await getTracking(pub_id);
+    if (!track || !track.operator_pin_verify_url) {
+      return res.json({ success: false, message: "Operator VERIFYPIN URL missing" });
+    }
+
+    const finalUrl = buildFinalUrl(track.operator_pin_verify_url, {
       msisdn,
-      pin,
-      ip: user_ip,
+      otp: pin, // backend uses <otp> placeholder
+      ip,
       ua,
-    };
-
-    const finalURL = buildURL(tpl.pin_verify_url, operatorParams);
-
-    console.log("📡 VERIFYPIN →", finalURL);
-
-    const response = await axios.get(finalURL, { timeout: 10000 });
-
-    return res.json({
-      success: true,
-      operator_url_called: finalURL,
-      operator_response: response.data,
+      click_id
     });
+
+    console.log("📤 VERIFYPIN →", finalUrl);
+
+    const response = await axios.get(finalUrl, { timeout: 15000 });
+    return res.json(response.data);
+
   } catch (err) {
-    console.log("❌ VERIFY ERROR:", err.message);
-
-    return res.json({
-      success: false,
-      message: "OTP verify failed",
-      error: err.message,
-    });
+    console.error("VERIFYPIN ERROR:", err.message);
+    return res.json({ success: false, error: err.message });
   }
 });
 
-/* =======================================================
-   📊 STATUS CHECK
-======================================================= */
+/* ======================================================
+   CHECK STATUS
+====================================================== */
 router.get("/checkstatus", async (req, res) => {
   try {
     const { pub_id, msisdn } = req.query;
 
-    const tpl = await getTemplate(pub_id);
+    if (!pub_id || !msisdn) {
+      return res.json({ success: false, message: "pub_id & msisdn required" });
+    }
 
-    const operatorParams = {
-      pub_id,
-      msisdn,
-    };
+    const track = await getTracking(pub_id);
+    if (!track || !track.operator_status_url) {
+      return res.json({ success: false, message: "Operator STATUS URL missing" });
+    }
 
-    const finalURL = buildURL(tpl.check_status_url, operatorParams);
-
-    console.log("📡 STATUS →", finalURL);
-
-    const response = await axios.get(finalURL, { timeout: 10000 });
-
-    return res.json({
-      success: true,
-      operator_url_called: finalURL,
-      operator_response: response.data,
+    const finalUrl = buildFinalUrl(track.operator_status_url, {
+      msisdn
     });
+
+    console.log("📤 CHECK STATUS →", finalUrl);
+
+    const response = await axios.get(finalUrl, { timeout: 15000 });
+    return res.json(response.data);
+
   } catch (err) {
-    console.log("❌ STATUS ERROR:", err.message);
-
-    return res.json({
-      success: false,
-      message: "Status check failed",
-      error: err.message,
-    });
+    console.error("CHECK STATUS ERROR:", err.message);
+    return res.json({ success: false, error: err.message });
   }
 });
 
-/* =======================================================
-   🌐 PORTAL REDIRECT
-======================================================= */
+/* ======================================================
+   PORTAL REDIRECT
+====================================================== */
 router.get("/portal", async (req, res) => {
   try {
-    const { pub_id, msisdn } = req.query;
+    const { pub_id, msisdn, click_id } = req.query;
 
-    const tpl = await getTemplate(pub_id);
+    if (!pub_id || !msisdn) {
+      return res.json({ success: false, message: "pub_id & msisdn required" });
+    }
 
-    const operatorParams = {
-      pub_id,
+    const track = await getTracking(pub_id);
+    if (!track || !track.operator_portal_url) {
+      return res.json({ success: false, message: "Operator PORTAL URL missing" });
+    }
+
+    const finalUrl = buildFinalUrl(track.operator_portal_url, {
       msisdn,
-    };
+      click_id
+    });
 
-    const finalURL = buildURL(tpl.portal_url, operatorParams);
+    console.log("📤 PORTAL REDIRECT →", finalUrl);
 
-    console.log("📡 PORTAL →", finalURL);
+    return res.redirect(finalUrl);
 
-    return res.redirect(finalURL);
   } catch (err) {
-    res.send("Portal redirect failed: " + err.message);
+    console.error("PORTAL ERROR:", err.message);
+    return res.json({ success: false, error: err.message });
   }
 });
 
