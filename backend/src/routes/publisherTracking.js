@@ -1,12 +1,14 @@
+// File: routes/publisherTracking.js
+
 import express from "express";
 import pool from "../db.js";
 import authJWT from "../middleware/authJWT.js";
 
 const router = express.Router();
 
-/* ======================================================
+/* ------------------------------------------------------
    GET ALL TRACKING LINKS
-====================================================== */
+------------------------------------------------------ */
 router.get("/", authJWT, async (req, res) => {
   try {
     const { publisher_id, geo, carrier, name, type } = req.query;
@@ -17,6 +19,7 @@ router.get("/", authJWT, async (req, res) => {
       LEFT JOIN publishers pub ON pub.id = ptl.publisher_id
       WHERE 1=1
     `;
+
     const params = [];
 
     if (publisher_id) {
@@ -40,20 +43,20 @@ router.get("/", authJWT, async (req, res) => {
       query += ` AND ptl.type = $${params.length}`;
     }
 
-    query += " ORDER BY ptl.id DESC";
+    query += ` ORDER BY ptl.id DESC`;
 
     const { rows } = await pool.query(query, params);
     res.json(rows);
+
   } catch (err) {
-    console.error("GET /api/tracking error:", err);
+    console.error("GET /tracking error:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-
-/* ======================================================
+/* ------------------------------------------------------
    CREATE NEW TRACKING URL (AUTO PUBxx)
-====================================================== */
+------------------------------------------------------ */
 router.post("/", authJWT, async (req, res) => {
   try {
     const {
@@ -70,24 +73,16 @@ router.post("/", authJWT, async (req, res) => {
       offer_id
     } = req.body;
 
-    if (!publisher_id || !geo || !carrier) {
-      return res.status(400).json({ error: "publisher_id, geo, and carrier are required" });
-    }
+    if (!publisher_id || !geo || !carrier)
+      return res.status(400).json({ error: "publisher_id, geo and carrier are required" });
 
-    /* ------------------------------
-       Fetch Publisher Name
-    ------------------------------ */
-    const pubQuery = await pool.query(
-      "SELECT name FROM publishers WHERE id=$1",
-      [publisher_id]
-    );
+    /* Fetch publisher name */
+    const pubQuery = await pool.query(`SELECT name FROM publishers WHERE id=$1`, [publisher_id]);
     const publisher_name = pubQuery.rows[0]?.name || "Unknown Publisher";
 
-    /* ------------------------------
-       Generate next PUB Code
-    ------------------------------ */
+    /* Generate next PUBxx */
     const last = await pool.query(
-      "SELECT pub_code FROM publisher_tracking_links ORDER BY id DESC LIMIT 1"
+      `SELECT pub_code FROM publisher_tracking_links ORDER BY id DESC LIMIT 1`
     );
 
     let nextPubId = "PUB01";
@@ -98,29 +93,29 @@ router.post("/", authJWT, async (req, res) => {
 
     const base = process.env.BASE_TRACKING_URL || "https://backend.mob13r.com";
 
-    let tracking_url = null,
-        pin_send_url = null,
-        pin_verify_url = null,
-        check_status_url = null,
-        portal_url = null,
-        required_params = null;
+    let tracking_url = null;
+    let pin_send_url = null;
+    let pin_verify_url = null;
+    let check_status_url = null;
+    let portal_url = null;
+    let required_params = null;
 
-    /* ======================================================
-       NON-INAPP TRACKING URL
-    ======================================================= */
+    /* ------------------------------------------------------
+       NON-INAPP CLICK URL
+    ------------------------------------------------------ */
     if (type !== "INAPP") {
       tracking_url = `${base}/click?pub_id=${nextPubId}&geo=${geo}&carrier=${carrier}`;
     }
 
-    /* ======================================================
-       INAPP URL TEMPLATE GENERATION
-    ======================================================= */
+    /* ------------------------------------------------------
+       INAPP TEMPLATE URL GENERATION
+    ------------------------------------------------------ */
     if (type === "INAPP") {
-      if (!offer_id) return res.status(400).json({ error: "offer_id required for INAPP" });
+      if (!offer_id)
+        return res.status(400).json({ error: "offer_id required for INAPP" });
 
       const inapp = `${base}/inapp`;
 
-      // Store templated URLs
       pin_send_url =
         `${inapp}/sendpin?pub_id=${nextPubId}` +
         `&msisdn=<msisdn>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
@@ -137,6 +132,7 @@ router.post("/", authJWT, async (req, res) => {
         `${inapp}/portal?pub_id=${nextPubId}` +
         `&msisdn=<msisdn>&click_id=<click_id>`;
 
+      // Auto required params
       required_params = {
         ip: true,
         ua: true,
@@ -146,9 +142,9 @@ router.post("/", authJWT, async (req, res) => {
       };
     }
 
-    /* ======================================================
-       INSERT NEW TRACK LINK
-    ======================================================= */
+    /* ------------------------------------------------------
+       INSERT RECORD
+    ------------------------------------------------------ */
     const insertQuery = `
       INSERT INTO publisher_tracking_links
       (pub_code, publisher_id, publisher_name, name, geo, carrier, type, payout,
@@ -185,15 +181,14 @@ router.post("/", authJWT, async (req, res) => {
     res.status(201).json(rows[0]);
 
   } catch (err) {
-    console.error("POST /api/tracking error:", err);
+    console.error("POST /tracking error:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-
-/* ======================================================
-   UPDATE TRACKING LINK
-====================================================== */
+/* ------------------------------------------------------
+   UPDATE TRACKING LINK — URLs STAY SAFE (COALESCE)
+------------------------------------------------------ */
 router.put("/:id", authJWT, async (req, res) => {
   try {
     const { id } = req.params;
@@ -224,11 +219,11 @@ router.put("/:id", authJWT, async (req, res) => {
           hold_percent=$6,
           landing_page_url=$7,
           status=$8,
-          tracking_url=$9,
-          pin_send_url=$10,
-          pin_verify_url=$11,
-          check_status_url=$12,
-          portal_url=$13,
+          tracking_url = COALESCE($9, tracking_url),
+          pin_send_url = COALESCE($10, pin_send_url),
+          pin_verify_url = COALESCE($11, pin_verify_url),
+          check_status_url = COALESCE($12, check_status_url),
+          portal_url = COALESCE($13, portal_url),
           updated_at=NOW()
       WHERE id=$14
       RETURNING *;
@@ -243,11 +238,11 @@ router.put("/:id", authJWT, async (req, res) => {
       hold_percent,
       landing_page_url,
       status,
-      tracking_url ?? null,
-      pin_send_url ?? null,
-      pin_verify_url ?? null,
-      check_status_url ?? null,
-      portal_url ?? null,
+      tracking_url,
+      pin_send_url,
+      pin_verify_url,
+      check_status_url,
+      portal_url,
       id
     ];
 
@@ -255,7 +250,7 @@ router.put("/:id", authJWT, async (req, res) => {
     res.json(rows[0]);
 
   } catch (err) {
-    console.error("PUT /api/tracking/:id error:", err);
+    console.error("PUT /tracking/:id error:", err);
     res.status(500).json({ error: err.message });
   }
 });
