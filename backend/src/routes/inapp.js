@@ -5,149 +5,199 @@ import axios from "axios";
 
 const router = express.Router();
 
-/* ======================================================
-   Helper: Build Operator Parameters
-   - If value matches publisher param → replace dynamically
-   - If value is constant (like "6") → send as-is
-====================================================== */
-function buildOperatorParams(operatorParams, publisherInput) {
-  const finalParams = {};
+// Cache to store sendpin results so verifypin can use them
+const sendPinMemory = {}; // key = click_id
 
-  for (const operatorKey in operatorParams) {
-    const mapValue = operatorParams[operatorKey];
+/* --------------------------------------------------------
+   Helper: Load Publisher Tracking + Template Parameters
+--------------------------------------------------------- */
+async function loadPublisher(pub_id) {
+  const q = await pool.query(
+    `SELECT *
+     FROM publisher_tracking_links
+     WHERE pub_code=$1 LIMIT 1`,
+    [pub_id]
+  );
+  return q.rows[0] || null;
+}
 
-    // Case 1: mapping exists → take from publisher data
-    if (publisherInput[mapValue]) {
-      finalParams[operatorKey] = publisherInput[mapValue];
-    }
-    // Case 2: fixed constant → send as-is
-    else {
-      finalParams[operatorKey] = mapValue;
+/* --------------------------------------------------------
+   Helper: Build Final Params (new parameter system)
+--------------------------------------------------------- */
+function buildParams(mapping, publisherData, hardcoded = {}, carryOver = {}) {
+  const final = {};
+
+  // 1. Values from mapping (template)
+  for (const operatorKey in mapping) {
+    const publisherKey = mapping[operatorKey];
+
+    if (publisherData[publisherKey]) {
+      final[operatorKey] = publisherData[publisherKey];
     }
   }
 
-  return finalParams;
+  // 2. Add hardcoded template values
+  Object.assign(final, hardcoded);
+
+  // 3. Add carry-over from sendpin (session_key, trx_id etc)
+  Object.assign(final, carryOver);
+
+  return final;
 }
 
-/* ======================================================
+/* --------------------------------------------------------
    SEND PIN
-====================================================== */
+--------------------------------------------------------- */
 router.get("/sendpin", async (req, res) => {
   try {
     const { pub_id, msisdn, ip, ua, click_id } = req.query;
 
-    const q = await pool.query(
-      "SELECT operator_pin_send_url, operator_parameters FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1",
-      [pub_id]
-    );
-
-    if (!q.rows.length) {
-      return res.status(400).json({ error: "Invalid pub_id" });
+    const publisher = await loadPublisher(pub_id);
+    if (!publisher) {
+      return res.json({ success: false, message: "Publisher not found" });
     }
 
-    const { operator_pin_send_url, operator_parameters } = q.rows[0];
+    if (!publisher.operator_pin_send_url) {
+      return res.json({ success: false, message: "Operator SENDPIN URL missing" });
+    }
 
-    // Build parameters for operator
-    const publisherInput = { msisdn, ip, ua, click_id, pin: req.query.pin };
-    const operatorParams = buildOperatorParams(operator_parameters, publisherInput);
+    const template = publisher.operator_parameters || {};
 
-    const fullUrl = operator_pin_send_url;
-    const operatorResp = await axios.get(fullUrl, { params: operatorParams });
+    const mapping = template.sendpin || {};            // mapping for sendpin
+    const hardcoded = template.fixed || {};            // fixed template values (if any)
+    const carryOver = {};                              // nothing yet for sendpin
+
+    const publisherData = { ...req.query };
+
+    // Build final operator parameter payload
+    const finalParams = buildParams(mapping, publisherData, hardcoded, carryOver);
+
+    // Call operator endpoint
+    const operatorResp = await axios.post(
+      publisher.operator_pin_send_url,
+      finalParams,
+      { timeout: 8000 }
+    );
+
+    // Store response for verifypin
+    if (click_id) {
+      sendPinMemory[click_id] = operatorResp.data || {};
+    }
 
     return res.json({
       success: true,
-      operator_url_called: fullUrl,
-      operator_params_sent: operatorParams,
+      operator_url_called: publisher.operator_pin_send_url,
+      operator_params_sent: finalParams,
       operator_response: operatorResp.data
     });
   } catch (err) {
-    console.error("SENDPIN error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("SENDPIN ERROR:", err);
+    return res.json({ success: false, message: err.message });
   }
 });
 
-/* ======================================================
+/* --------------------------------------------------------
    VERIFY PIN
-====================================================== */
+--------------------------------------------------------- */
 router.get("/verifypin", async (req, res) => {
   try {
     const { pub_id, msisdn, pin, ip, ua, click_id } = req.query;
 
-    const q = await pool.query(
-      "SELECT operator_pin_verify_url, operator_parameters FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1",
-      [pub_id]
+    const publisher = await loadPublisher(pub_id);
+    if (!publisher) {
+      return res.json({ success: false, message: "Publisher not found" });
+    }
+
+    if (!publisher.operator_pin_verify_url) {
+      return res.json({ success: false, message: "Operator VERIFYPIN URL missing" });
+    }
+
+    const template = publisher.operator_parameters || {};
+
+    const mapping = template.verifypin || {};          // mapping for verify
+    const hardcoded = template.fixed || {};            // fixed values
+    const carryOver = sendPinMemory[click_id] || {};   // data from sendpin
+
+    const publisherData = { ...req.query };
+
+    // Build final operator parameter payload
+    const finalParams = buildParams(mapping, publisherData, hardcoded, carryOver);
+
+    // Call operator verify endpoint
+    const operatorResp = await axios.post(
+      publisher.operator_pin_verify_url,
+      finalParams,
+      { timeout: 8000 }
     );
-
-    const data = q.rows[0];
-
-    const publisherInput = { msisdn, pin, ip, ua, click_id };
-    const operatorParams = buildOperatorParams(data.operator_parameters, publisherInput);
-
-    const operatorResp = await axios.get(data.operator_pin_verify_url, { params: operatorParams });
 
     return res.json({
       success: true,
-      operator_url_called: data.operator_pin_verify_url,
-      operator_params_sent: operatorParams,
+      operator_url_called: publisher.operator_pin_verify_url,
+      operator_params_sent: finalParams,
       operator_response: operatorResp.data
     });
   } catch (err) {
-    console.error("VERIFYPIN error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("VERIFY ERROR:", err);
+    return res.json({ success: false, message: err.message });
   }
 });
 
-/* ======================================================
+/* --------------------------------------------------------
    CHECK STATUS
-====================================================== */
+--------------------------------------------------------- */
 router.get("/checkstatus", async (req, res) => {
   try {
     const { pub_id, msisdn } = req.query;
 
-    const q = await pool.query(
-      "SELECT operator_status_url, operator_parameters FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1",
-      [pub_id]
+    const publisher = await loadPublisher(pub_id);
+    if (!publisher) {
+      return res.json({ success: false, message: "Publisher not found" });
+    }
+
+    if (!publisher.operator_status_url) {
+      return res.json({ success: false, message: "Operator STATUS URL missing" });
+    }
+
+    // Basic operator call (status usually only needs MSISDN)
+    const operatorResp = await axios.get(
+      `${publisher.operator_status_url}?msisdn=${msisdn}`,
+      { timeout: 8000 }
     );
-
-    const data = q.rows[0];
-
-    const publisherInput = { msisdn };
-    const operatorParams = buildOperatorParams(data.operator_parameters, publisherInput);
-
-    const operatorResp = await axios.get(data.operator_status_url, { params: operatorParams });
 
     return res.json({
       success: true,
-      operator_params_sent: operatorParams,
+      operator_url_called: publisher.operator_status_url,
       operator_response: operatorResp.data
     });
   } catch (err) {
-    console.error("STATUS error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("STATUS ERROR:", err);
+    return res.json({ success: false, message: err.message });
   }
 });
 
-/* ======================================================
+/* --------------------------------------------------------
    PORTAL REDIRECT
-====================================================== */
+--------------------------------------------------------- */
 router.get("/portal", async (req, res) => {
   try {
     const { pub_id, msisdn, click_id } = req.query;
 
-    const q = await pool.query(
-      "SELECT operator_portal_url, operator_parameters FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1",
-      [pub_id]
-    );
+    const publisher = await loadPublisher(pub_id);
+    if (!publisher) {
+      return res.json({ success: false, message: "Publisher not found" });
+    }
 
-    const data = q.rows[0];
+    if (!publisher.operator_portal_url) {
+      return res.json({ success: false, message: "Operator PORTAL URL missing" });
+    }
 
-    const publisherInput = { msisdn, click_id };
-    const operatorParams = buildOperatorParams(data.operator_parameters, publisherInput);
+    const redirectUrl =
+      `${publisher.operator_portal_url}?msisdn=${msisdn}&click_id=${click_id}`;
 
-    return res.redirect(data.operator_portal_url + "?" + new URLSearchParams(operatorParams).toString());
+    return res.redirect(redirectUrl);
   } catch (err) {
-    console.error("PORTAL error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("PORTAL ERROR:", err);
+    return res.json({ success: false, message: err.message });
   }
 });
 
