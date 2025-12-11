@@ -74,14 +74,18 @@ router.post("/", authJWT, async (req, res) => {
       return res.status(400).json({ error: "publisher_id, geo, and carrier are required" });
     }
 
-    // Fetch publisher name
+    /* ------------------------------
+       Fetch Publisher Name
+    ------------------------------ */
     const pubQuery = await pool.query(
       "SELECT name FROM publishers WHERE id=$1",
       [publisher_id]
     );
     const publisher_name = pubQuery.rows[0]?.name || "Unknown Publisher";
 
-    // Generate next PUBxx
+    /* ------------------------------
+       Generate next PUB Code
+    ------------------------------ */
     const last = await pool.query(
       "SELECT pub_code FROM publisher_tracking_links ORDER BY id DESC LIMIT 1"
     );
@@ -102,40 +106,48 @@ router.post("/", authJWT, async (req, res) => {
         required_params = null;
 
     /* ======================================================
-       NON-INAPP TYPE
+       NON-INAPP TRACKING URL
     ======================================================= */
     if (type !== "INAPP") {
       tracking_url = `${base}/click?pub_id=${nextPubId}&geo=${geo}&carrier=${carrier}`;
     }
 
     /* ======================================================
-       INAPP TYPE (STATIC CLEAN URLS ONLY)
+       INAPP URL TEMPLATE GENERATION
     ======================================================= */
-   if (type === "INAPP") {
-  if (!offer_id) {
-    return res.status(400).json({ error: "offer_id required for INAPP" });
-  }
+    if (type === "INAPP") {
+      if (!offer_id) return res.status(400).json({ error: "offer_id required for INAPP" });
 
-  const inapp = `${base}/inapp`;
+      const inapp = `${base}/inapp`;
 
-  // FRONTEND DISPLAY URLS (WITH PARAMETERS)
-  pin_send_url = `${inapp}/sendpin?pub_id=${nextPubId}&msisdn=<msisdn>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
-  pin_verify_url = `${inapp}/verifypin?pub_id=${nextPubId}&msisdn=<msisdn>&pin=<otp>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
-  check_status_url = `${inapp}/checkstatus?pub_id=${nextPubId}&msisdn=<msisdn>`;
-  portal_url = `${inapp}/portal?pub_id=${nextPubId}&msisdn=<msisdn>&click_id=<click_id>`;
+      // Store templated URLs
+      pin_send_url =
+        `${inapp}/sendpin?pub_id=${nextPubId}` +
+        `&msisdn=<msisdn>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
 
-  required_params = {
-    ip: true,
-    ua: true,
-    msisdn: true,
-    click_id: true,
-    otp: true
-  };
-}
+      pin_verify_url =
+        `${inapp}/verifypin?pub_id=${nextPubId}` +
+        `&msisdn=<msisdn>&pin=<otp>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
 
+      check_status_url =
+        `${inapp}/checkstatus?pub_id=${nextPubId}` +
+        `&msisdn=<msisdn>`;
+
+      portal_url =
+        `${inapp}/portal?pub_id=${nextPubId}` +
+        `&msisdn=<msisdn>&click_id=<click_id>`;
+
+      required_params = {
+        ip: true,
+        ua: true,
+        msisdn: true,
+        click_id: true,
+        otp: true
+      };
+    }
 
     /* ======================================================
-       INSERT RECORD
+       INSERT NEW TRACK LINK
     ======================================================= */
     const insertQuery = `
       INSERT INTO publisher_tracking_links
