@@ -1,208 +1,153 @@
 // routes/inappRoutes.js
 import express from "express";
-import axios from "axios";
 import pool from "../db.js";
+import axios from "axios";
 
 const router = express.Router();
 
-/* -------------------------------------------------------
-   Helper: Load publisher tracking + operator mapping
-------------------------------------------------------- */
-async function loadTracking(pub_id) {
-  const q = await pool.query(
-    `SELECT 
-        pub_code,
-        operator_pin_send_url,
-        operator_pin_verify_url,
-        operator_status_url,
-        operator_portal_url,
-        required_params
-     FROM publisher_tracking_links
-     WHERE pub_code = $1 LIMIT 1`,
-    [pub_id]
-  );
+/* ======================================================
+   Helper: Build Operator Parameters
+   - If value matches publisher param → replace dynamically
+   - If value is constant (like "6") → send as-is
+====================================================== */
+function buildOperatorParams(operatorParams, publisherInput) {
+  const finalParams = {};
 
-  return q.rows[0] || null;
-}
+  for (const operatorKey in operatorParams) {
+    const mapValue = operatorParams[operatorKey];
 
-/* -------------------------------------------------------
-   Helper: Map publisher params → operator params
-------------------------------------------------------- */
-function buildOperatorParams(mapping, publisherValues) {
-  const operatorParams = {};
-
-  if (!mapping) return operatorParams;
-  if (!mapping.operator) return operatorParams;
-
-  const opMap = mapping.operator; // { cid:"click_id", msisdn:"msisdn", ... }
-
-  for (const operatorKey of Object.keys(opMap)) {
-    const pubField = opMap[operatorKey]; // e.g. click_id
-    if (publisherValues[pubField] !== undefined) {
-      operatorParams[operatorKey] = publisherValues[pubField];
+    // Case 1: mapping exists → take from publisher data
+    if (publisherInput[mapValue]) {
+      finalParams[operatorKey] = publisherInput[mapValue];
+    }
+    // Case 2: fixed constant → send as-is
+    else {
+      finalParams[operatorKey] = mapValue;
     }
   }
 
-  return operatorParams;
+  return finalParams;
 }
 
-/* -------------------------------------------------------
-   Helper: Call operator URL with GET or POST automatically
-------------------------------------------------------- */
-async function callOperator(url, params) {
-  try {
-    // If URL contains ? assume GET
-    if (url.includes("?")) {
-      const response = await axios.get(url, { params });
-      return response.data;
-    }
-
-    // Otherwise POST
-    const response = await axios.post(url, params);
-    return response.data;
-  } catch (err) {
-    return { success: false, message: "Operator error", error: err.message };
-  }
-}
-
-/* -------------------------------------------------------
-   /inapp/sendpin
-------------------------------------------------------- */
+/* ======================================================
+   SEND PIN
+====================================================== */
 router.get("/sendpin", async (req, res) => {
   try {
     const { pub_id, msisdn, ip, ua, click_id } = req.query;
 
-    if (!pub_id) return res.json({ success: false, message: "pub_id missing" });
-
-    const data = await loadTracking(pub_id);
-    if (!data || !data.operator_pin_send_url)
-      return res.json({ success: false, message: "Operator SENDPIN URL missing" });
-
-    // Build operator parameters using mapping
-    const operatorParams = buildOperatorParams(data.required_params, {
-      msisdn,
-      ip,
-      ua,
-      click_id,
-    });
-
-    const operatorResponse = await callOperator(
-      data.operator_pin_send_url,
-      operatorParams
+    const q = await pool.query(
+      "SELECT operator_pin_send_url, operator_parameters FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1",
+      [pub_id]
     );
 
-    res.json({
-      success: true,
-      operator_url_called: data.operator_pin_send_url,
-      operator_params_sent: operatorParams,
-      operator_response: operatorResponse
-    });
+    if (!q.rows.length) {
+      return res.status(400).json({ error: "Invalid pub_id" });
+    }
 
+    const { operator_pin_send_url, operator_parameters } = q.rows[0];
+
+    // Build parameters for operator
+    const publisherInput = { msisdn, ip, ua, click_id, pin: req.query.pin };
+    const operatorParams = buildOperatorParams(operator_parameters, publisherInput);
+
+    const fullUrl = operator_pin_send_url;
+    const operatorResp = await axios.get(fullUrl, { params: operatorParams });
+
+    return res.json({
+      success: true,
+      operator_url_called: fullUrl,
+      operator_params_sent: operatorParams,
+      operator_response: operatorResp.data
+    });
   } catch (err) {
-    console.error("SENDPIN ERROR:", err);
-    res.json({ success: false, message: err.message });
+    console.error("SENDPIN error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-/* -------------------------------------------------------
-   /inapp/verifypin
-------------------------------------------------------- */
+/* ======================================================
+   VERIFY PIN
+====================================================== */
 router.get("/verifypin", async (req, res) => {
   try {
     const { pub_id, msisdn, pin, ip, ua, click_id } = req.query;
 
-    const data = await loadTracking(pub_id);
-    if (!data || !data.operator_pin_verify_url)
-      return res.json({ success: false, message: "Operator VERIFY URL missing" });
-
-    const operatorParams = buildOperatorParams(data.required_params, {
-      msisdn,
-      ip,
-      ua,
-      click_id,
-      pin
-    });
-
-    const operatorResponse = await callOperator(
-      data.operator_pin_verify_url,
-      operatorParams
+    const q = await pool.query(
+      "SELECT operator_pin_verify_url, operator_parameters FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1",
+      [pub_id]
     );
 
-    res.json({
+    const data = q.rows[0];
+
+    const publisherInput = { msisdn, pin, ip, ua, click_id };
+    const operatorParams = buildOperatorParams(data.operator_parameters, publisherInput);
+
+    const operatorResp = await axios.get(data.operator_pin_verify_url, { params: operatorParams });
+
+    return res.json({
       success: true,
       operator_url_called: data.operator_pin_verify_url,
       operator_params_sent: operatorParams,
-      operator_response: operatorResponse,
+      operator_response: operatorResp.data
     });
-
   } catch (err) {
-    console.error("VERIFYPIN ERROR:", err);
-    res.json({ success: false, message: err.message });
+    console.error("VERIFYPIN error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-/* -------------------------------------------------------
-   /inapp/checkstatus
-------------------------------------------------------- */
+/* ======================================================
+   CHECK STATUS
+====================================================== */
 router.get("/checkstatus", async (req, res) => {
   try {
     const { pub_id, msisdn } = req.query;
 
-    const data = await loadTracking(pub_id);
-    if (!data || !data.operator_status_url)
-      return res.json({ success: false, message: "Operator STATUS URL missing" });
-
-    const operatorParams = buildOperatorParams(data.required_params, { msisdn });
-
-    const operatorResponse = await callOperator(
-      data.operator_status_url,
-      operatorParams
+    const q = await pool.query(
+      "SELECT operator_status_url, operator_parameters FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1",
+      [pub_id]
     );
 
-    res.json({
-      success: true,
-      operator_url_called: data.operator_status_url,
-      operator_params_sent: operatorParams,
-      operator_response: operatorResponse
-    });
+    const data = q.rows[0];
 
+    const publisherInput = { msisdn };
+    const operatorParams = buildOperatorParams(data.operator_parameters, publisherInput);
+
+    const operatorResp = await axios.get(data.operator_status_url, { params: operatorParams });
+
+    return res.json({
+      success: true,
+      operator_params_sent: operatorParams,
+      operator_response: operatorResp.data
+    });
   } catch (err) {
-    console.error("STATUS ERROR:", err);
-    res.json({ success: false, message: err.message });
+    console.error("STATUS error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-/* -------------------------------------------------------
-   /inapp/portal
-------------------------------------------------------- */
+/* ======================================================
+   PORTAL REDIRECT
+====================================================== */
 router.get("/portal", async (req, res) => {
   try {
     const { pub_id, msisdn, click_id } = req.query;
 
-    const data = await loadTracking(pub_id);
-    if (!data || !data.operator_portal_url)
-      return res.json({ success: false, message: "Operator PORTAL URL missing" });
-
-    const operatorParams = buildOperatorParams(data.required_params, {
-      msisdn,
-      click_id
-    });
-
-    const operatorResponse = await callOperator(
-      data.operator_portal_url,
-      operatorParams
+    const q = await pool.query(
+      "SELECT operator_portal_url, operator_parameters FROM publisher_tracking_links WHERE pub_code=$1 LIMIT 1",
+      [pub_id]
     );
 
-    res.json({
-      success: true,
-      operator_url_called: data.operator_portal_url,
-      operator_params_sent: operatorParams,
-      operator_response: operatorResponse
-    });
+    const data = q.rows[0];
 
+    const publisherInput = { msisdn, click_id };
+    const operatorParams = buildOperatorParams(data.operator_parameters, publisherInput);
+
+    return res.redirect(data.operator_portal_url + "?" + new URLSearchParams(operatorParams).toString());
   } catch (err) {
-    console.error("PORTAL ERROR:", err);
-    res.json({ success: false, message: err.message });
+    console.error("PORTAL error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
