@@ -44,14 +44,13 @@ router.get("/", authJWT, async (req, res) => {
 
 /* ======================================================
    CREATE NEW TRACKING URL (AUTO PUBxx) - copies operator template
-   expects offer_id for INAPP
 ====================================================== */
 router.post("/", authJWT, async (req, res) => {
   try {
     const {
       publisher_id, name, geo, carrier, type,
-      payout, cap_daily, cap_total, hold_percent, landing_page_url,
-      offer_id
+      payout, cap_daily, cap_total, hold_percent,
+      landing_page_url, offer_id
     } = req.body;
 
     if (!publisher_id || !geo || !carrier) {
@@ -70,35 +69,37 @@ router.post("/", authJWT, async (req, res) => {
 
     const base = process.env.BASE_TRACKING_URL || "https://backend.mob13r.com";
 
-    // Publisher-visible URLs (copy/paste friendly)
+    // Publisher visible URLs
     let tracking_url = null;
     let pin_send_url = null;
     let pin_verify_url = null;
     let check_status_url = null;
     let portal_url = null;
 
-    // Operator URLs + parameters mapping (from offer_templates)
+    // operator URLs from template
     let operator_pin_send_url = null;
     let operator_pin_verify_url = null;
     let operator_status_url = null;
     let operator_portal_url = null;
-    let operator_parameters = null; // JSON mapping e.g. { "cid":"click_id", "msisdn":"msisdn" }
+    let operator_parameters = null;
 
     // NON-INAPP
     if (type !== "INAPP") {
       tracking_url = `${base}/click?pub_id=${nextPubId}&geo=${geo}&carrier=${carrier}`;
     }
 
-    // INAPP - must copy template info from offer_templates (operator URLs + parameter mapping)
+    // INAPP Logic
     if (type === "INAPP") {
       if (!offer_id) return res.status(400).json({ error: "offer_id required for INAPP" });
 
+      // Load template ID
       const offerQ = await pool.query("SELECT inapp_template_id FROM offers WHERE offer_id=$1 LIMIT 1", [offer_id]);
       if (!offerQ.rows.length) return res.status(400).json({ error: "Offer not found" });
 
       const templateId = offerQ.rows[0].inapp_template_id;
       if (!templateId) return res.status(400).json({ error: "INAPP offer has no template assigned" });
 
+      // Load template
       const tplQ = await pool.query(
         `SELECT pin_send_url, pin_verify_url, check_status_url, portal_url, parameters
          FROM offer_templates WHERE id=$1 LIMIT 1`, [templateId]
@@ -107,14 +108,13 @@ router.post("/", authJWT, async (req, res) => {
 
       const tpl = tplQ.rows[0];
 
-      // Save operator URLs (these are the operator endpoints you call)
       operator_pin_send_url = tpl.pin_send_url || null;
       operator_pin_verify_url = tpl.pin_verify_url || null;
       operator_status_url = tpl.check_status_url || null;
       operator_portal_url = tpl.portal_url || null;
-      operator_parameters = tpl.parameters || null; // expected jsonb mapping like {"cid":"click_id","msisdn":"msisdn"}
+      operator_parameters = tpl.parameters || null;
 
-      // Publisher-facing inapp endpoints with placeholders for copy/paste
+      // URLs publisher will copy/paste
       const inapp = `${base}/inapp`;
       pin_send_url = `${inapp}/sendpin?pub_id=${nextPubId}&msisdn=<msisdn>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
       pin_verify_url = `${inapp}/verifypin?pub_id=${nextPubId}&msisdn=<msisdn>&pin=<otp>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
@@ -122,23 +122,31 @@ router.post("/", authJWT, async (req, res) => {
       portal_url = `${inapp}/portal?pub_id=${nextPubId}&msisdn=<msisdn>&click_id=<click_id>`;
     }
 
+    // Build required params JSON
     const required_params = type === "INAPP"
-      ? { ip: true, ua: true, msisdn: true, click_id: true, otp: true }
+      ? {
+          ip: true,
+          ua: true,
+          msisdn: true,
+          click_id: true,
+          otp: true,
+          operator: operator_parameters || {}
+        }
       : null;
 
-    // Insert into DB (operator_* and operator_parameters saved)
+    // Insert into DB
     const insertQuery = `
       INSERT INTO publisher_tracking_links
       (pub_code, publisher_id, publisher_name, name, geo, carrier, type, payout,
        cap_daily, cap_total, hold_percent, landing_page_url,
        tracking_url, pin_send_url, pin_verify_url, check_status_url, portal_url,
        operator_pin_send_url, operator_pin_verify_url, operator_status_url, operator_portal_url,
-       operator_parameters, required_params, status, created_at, updated_at)
+       required_params, status, created_at, updated_at)
       VALUES
       ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
        $13,$14,$15,$16,$17,
        $18,$19,$20,$21,
-       $22,$23,$24,NOW(),NOW())
+       $22,$23,NOW(),NOW())
       RETURNING *;
     `;
 
@@ -164,13 +172,13 @@ router.post("/", authJWT, async (req, res) => {
       operator_pin_verify_url,
       operator_status_url,
       operator_portal_url,
-      operator_parameters ? JSON.stringify(operator_parameters) : null,
       required_params ? JSON.stringify(required_params) : null,
       "active"
     ];
 
     const { rows } = await pool.query(insertQuery, values);
     res.status(201).json(rows[0]);
+
   } catch (err) {
     console.error("POST /tracking error:", err);
     res.status(500).json({ error: err.message });
@@ -178,16 +186,20 @@ router.post("/", authJWT, async (req, res) => {
 });
 
 /* ======================================================
-   UPDATE TRACKING LINK — preserve operator_* unless overwritten
+   UPDATE TRACKING LINK
 ====================================================== */
 router.put("/:id", authJWT, async (req, res) => {
   try {
     const { id } = req.params;
+
     const {
-      name, type, payout, cap_daily, cap_total, hold_percent, landing_page_url, status,
-      tracking_url, pin_send_url, pin_verify_url, check_status_url, portal_url,
-      operator_pin_send_url, operator_pin_verify_url, operator_status_url, operator_portal_url,
-      operator_parameters, required_params
+      name, type, payout, cap_daily, cap_total,
+      hold_percent, landing_page_url, status,
+      tracking_url, pin_send_url, pin_verify_url,
+      check_status_url, portal_url,
+      operator_pin_send_url, operator_pin_verify_url,
+      operator_status_url, operator_portal_url,
+      required_params
     } = req.body;
 
     const query = `
@@ -210,18 +222,24 @@ router.put("/:id", authJWT, async (req, res) => {
         operator_pin_verify_url = COALESCE($15, operator_pin_verify_url),
         operator_status_url = COALESCE($16, operator_status_url),
         operator_portal_url = COALESCE($17, operator_portal_url),
-        operator_parameters = COALESCE($18, operator_parameters),
-        required_params = COALESCE($19, required_params),
+        required_params = COALESCE($18, required_params),
         updated_at = NOW()
-      WHERE id = $20
+      WHERE id = $19
       RETURNING *;
     `;
 
     const params = [
-      name, type, payout, cap_daily, cap_total, hold_percent, landing_page_url, status,
-      tracking_url ?? null, pin_send_url ?? null, pin_verify_url ?? null, check_status_url ?? null, portal_url ?? null,
-      operator_pin_send_url ?? null, operator_pin_verify_url ?? null, operator_status_url ?? null, operator_portal_url ?? null,
-      operator_parameters ? JSON.stringify(operator_parameters) : null,
+      name, type, payout, cap_daily, cap_total,
+      hold_percent, landing_page_url, status,
+      tracking_url ?? null,
+      pin_send_url ?? null,
+      pin_verify_url ?? null,
+      check_status_url ?? null,
+      portal_url ?? null,
+      operator_pin_send_url ?? null,
+      operator_pin_verify_url ?? null,
+      operator_status_url ?? null,
+      operator_portal_url ?? null,
       required_params ? JSON.stringify(required_params) : null,
       id
     ];
@@ -229,6 +247,7 @@ router.put("/:id", authJWT, async (req, res) => {
     const { rows } = await pool.query(query, params);
     if (!rows.length) return res.status(404).json({ error: "Tracking link not found" });
     res.json(rows[0]);
+
   } catch (err) {
     console.error("PUT /tracking/:id error:", err);
     res.status(500).json({ error: err.message });
