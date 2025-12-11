@@ -1,13 +1,13 @@
-// File: routes/publisherTracking.js
+// routes/publisherTracking.js
 import express from "express";
 import pool from "../db.js";
 import authJWT from "../middleware/authJWT.js";
 
 const router = express.Router();
 
-/* ======================================================
-   Helper: get publisher name by id
-====================================================== */
+/* -------------------------
+   Helpers
+------------------------- */
 async function getPublisherName(id) {
   const q = await pool.query("SELECT name FROM publishers WHERE id=$1", [id]);
   return q.rows[0]?.name || "Unknown Publisher";
@@ -19,7 +19,6 @@ async function getPublisherName(id) {
 router.get("/", authJWT, async (req, res) => {
   try {
     const { publisher_id, geo, carrier, name, type } = req.query;
-
     let query = `
       SELECT ptl.*, pub.name AS publisher_name
       FROM publisher_tracking_links ptl
@@ -28,29 +27,13 @@ router.get("/", authJWT, async (req, res) => {
     `;
     const params = [];
 
-    if (publisher_id) {
-      params.push(publisher_id);
-      query += ` AND ptl.publisher_id = $${params.length}`;
-    }
-    if (geo) {
-      params.push(geo);
-      query += ` AND ptl.geo = $${params.length}`;
-    }
-    if (carrier) {
-      params.push(carrier);
-      query += ` AND ptl.carrier = $${params.length}`;
-    }
-    if (name) {
-      params.push(`%${name}%`);
-      query += ` AND LOWER(ptl.name) LIKE LOWER($${params.length})`;
-    }
-    if (type) {
-      params.push(type);
-      query += ` AND ptl.type = $${params.length}`;
-    }
+    if (publisher_id) { params.push(publisher_id); query += ` AND ptl.publisher_id = $${params.length}`; }
+    if (geo) { params.push(geo); query += ` AND ptl.geo = $${params.length}`; }
+    if (carrier) { params.push(carrier); query += ` AND ptl.carrier = $${params.length}`; }
+    if (name) { params.push(`%${name}%`); query += ` AND LOWER(ptl.name) LIKE LOWER($${params.length})`; }
+    if (type) { params.push(type); query += ` AND ptl.type = $${params.length}`; }
 
     query += " ORDER BY ptl.id DESC";
-
     const { rows } = await pool.query(query, params);
     res.json(rows);
   } catch (err) {
@@ -61,22 +44,14 @@ router.get("/", authJWT, async (req, res) => {
 
 /* ======================================================
    CREATE NEW TRACKING URL (AUTO PUBxx) - copies operator template
-   * expects offer_id for INAPP so it can fetch operator template
+   expects offer_id for INAPP
 ====================================================== */
 router.post("/", authJWT, async (req, res) => {
   try {
     const {
-      publisher_id,
-      name,
-      geo,
-      carrier,
-      type,
-      payout,
-      cap_daily,
-      cap_total,
-      hold_percent,
-      landing_page_url,
-      offer_id, // REQUIRED for INAPP
+      publisher_id, name, geo, carrier, type,
+      payout, cap_daily, cap_total, hold_percent, landing_page_url,
+      offer_id
     } = req.body;
 
     if (!publisher_id || !geo || !carrier) {
@@ -85,70 +60,61 @@ router.post("/", authJWT, async (req, res) => {
 
     const publisher_name = await getPublisherName(publisher_id);
 
-    // Generate next PUBxx
+    // Generate next PUB code
     const last = await pool.query("SELECT pub_code FROM publisher_tracking_links ORDER BY id DESC LIMIT 1");
     let nextPubId = "PUB01";
     if (last.rows.length > 0 && last.rows[0].pub_code) {
-      const lastCode = parseInt(last.rows[0].pub_code.replace(/^PUB/i, "") || "0");
+      const lastCode = parseInt(String(last.rows[0].pub_code).replace(/^PUB/i, "") || "0");
       nextPubId = "PUB" + String(lastCode + 1).padStart(2, "0");
     }
 
     const base = process.env.BASE_TRACKING_URL || "https://backend.mob13r.com";
 
-    // publisher-visible URLs (internal inapp endpoints)
+    // Publisher-visible URLs (copy/paste friendly)
     let tracking_url = null;
     let pin_send_url = null;
     let pin_verify_url = null;
     let check_status_url = null;
     let portal_url = null;
 
-    // operator URLs (copied from offer_templates) + operator parameter mapping
+    // Operator URLs + parameters mapping (from offer_templates)
     let operator_pin_send_url = null;
     let operator_pin_verify_url = null;
     let operator_status_url = null;
     let operator_portal_url = null;
-    let operator_parameters = null; // jsonb mapping: { "operatorParam": "publisherParam", ... }
+    let operator_parameters = null; // JSON mapping e.g. { "cid":"click_id", "msisdn":"msisdn" }
 
-    // NON-INAPP: set click tracking URL
+    // NON-INAPP
     if (type !== "INAPP") {
       tracking_url = `${base}/click?pub_id=${nextPubId}&geo=${geo}&carrier=${carrier}`;
     }
 
-    // INAPP: must have offer_id -> load offer_templates
+    // INAPP - must copy template info from offer_templates (operator URLs + parameter mapping)
     if (type === "INAPP") {
-      if (!offer_id) {
-        return res.status(400).json({ error: "offer_id is required for INAPP tracking links" });
-      }
+      if (!offer_id) return res.status(400).json({ error: "offer_id required for INAPP" });
 
-      // Load offer to find inapp_template_id
       const offerQ = await pool.query("SELECT inapp_template_id FROM offers WHERE offer_id=$1 LIMIT 1", [offer_id]);
-      if (!offerQ.rows.length) {
-        return res.status(400).json({ error: "Offer not found" });
-      }
-      const templateId = offerQ.rows[0].inapp_template_id;
-      if (!templateId) {
-        return res.status(400).json({ error: "INAPP offer has no template assigned" });
-      }
+      if (!offerQ.rows.length) return res.status(400).json({ error: "Offer not found" });
 
-      // Load template
+      const templateId = offerQ.rows[0].inapp_template_id;
+      if (!templateId) return res.status(400).json({ error: "INAPP offer has no template assigned" });
+
       const tplQ = await pool.query(
         `SELECT pin_send_url, pin_verify_url, check_status_url, portal_url, parameters
-         FROM offer_templates WHERE id=$1 LIMIT 1`,
-        [templateId]
+         FROM offer_templates WHERE id=$1 LIMIT 1`, [templateId]
       );
-      if (!tplQ.rows.length) {
-        return res.status(400).json({ error: "Offer template not found" });
-      }
+      if (!tplQ.rows.length) return res.status(400).json({ error: "Offer template not found" });
+
       const tpl = tplQ.rows[0];
 
-      // Save operator URLs directly from template so inappRoutes can use them
+      // Save operator URLs (these are the operator endpoints you call)
       operator_pin_send_url = tpl.pin_send_url || null;
       operator_pin_verify_url = tpl.pin_verify_url || null;
       operator_status_url = tpl.check_status_url || null;
       operator_portal_url = tpl.portal_url || null;
-      operator_parameters = tpl.parameters || null; // expected jsonb mapping like {"cid":"click_id", "msisdn":"msisdn"}
+      operator_parameters = tpl.parameters || null; // expected jsonb mapping like {"cid":"click_id","msisdn":"msisdn"}
 
-      // Publisher-facing inapp endpoints (copy/paste friendly) — these include placeholders for publisher to replace
+      // Publisher-facing inapp endpoints with placeholders for copy/paste
       const inapp = `${base}/inapp`;
       pin_send_url = `${inapp}/sendpin?pub_id=${nextPubId}&msisdn=<msisdn>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
       pin_verify_url = `${inapp}/verifypin?pub_id=${nextPubId}&msisdn=<msisdn>&pin=<otp>&ip=<ip>&ua=<ua>&click_id=<click_id>`;
@@ -156,12 +122,11 @@ router.post("/", authJWT, async (req, res) => {
       portal_url = `${inapp}/portal?pub_id=${nextPubId}&msisdn=<msisdn>&click_id=<click_id>`;
     }
 
-    // required params (auto-detect for INAPP)
     const required_params = type === "INAPP"
       ? { ip: true, ua: true, msisdn: true, click_id: true, otp: true }
       : null;
 
-    // Insert
+    // Insert into DB (operator_* and operator_parameters saved)
     const insertQuery = `
       INSERT INTO publisher_tracking_links
       (pub_code, publisher_id, publisher_name, name, geo, carrier, type, payout,
@@ -213,33 +178,16 @@ router.post("/", authJWT, async (req, res) => {
 });
 
 /* ======================================================
-   UPDATE TRACKING LINK — do not overwrite operator_* unless provided
-   Use COALESCE so existing operator urls stay available if frontend doesn't send them
+   UPDATE TRACKING LINK — preserve operator_* unless overwritten
 ====================================================== */
 router.put("/:id", authJWT, async (req, res) => {
   try {
     const { id } = req.params;
-
     const {
-      name,
-      type,
-      payout,
-      cap_daily,
-      cap_total,
-      hold_percent,
-      landing_page_url,
-      status,
-      tracking_url,
-      pin_send_url,
-      pin_verify_url,
-      check_status_url,
-      portal_url,
-      operator_pin_send_url,
-      operator_pin_verify_url,
-      operator_status_url,
-      operator_portal_url,
-      operator_parameters,
-      required_params
+      name, type, payout, cap_daily, cap_total, hold_percent, landing_page_url, status,
+      tracking_url, pin_send_url, pin_verify_url, check_status_url, portal_url,
+      operator_pin_send_url, operator_pin_verify_url, operator_status_url, operator_portal_url,
+      operator_parameters, required_params
     } = req.body;
 
     const query = `
@@ -270,23 +218,9 @@ router.put("/:id", authJWT, async (req, res) => {
     `;
 
     const params = [
-      name,
-      type,
-      payout,
-      cap_daily,
-      cap_total,
-      hold_percent,
-      landing_page_url,
-      status,
-      tracking_url ?? null,
-      pin_send_url ?? null,
-      pin_verify_url ?? null,
-      check_status_url ?? null,
-      portal_url ?? null,
-      operator_pin_send_url ?? null,
-      operator_pin_verify_url ?? null,
-      operator_status_url ?? null,
-      operator_portal_url ?? null,
+      name, type, payout, cap_daily, cap_total, hold_percent, landing_page_url, status,
+      tracking_url ?? null, pin_send_url ?? null, pin_verify_url ?? null, check_status_url ?? null, portal_url ?? null,
+      operator_pin_send_url ?? null, operator_pin_verify_url ?? null, operator_status_url ?? null, operator_portal_url ?? null,
       operator_parameters ? JSON.stringify(operator_parameters) : null,
       required_params ? JSON.stringify(required_params) : null,
       id
