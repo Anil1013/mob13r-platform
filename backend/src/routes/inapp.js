@@ -5,8 +5,8 @@ import axios from "axios";
 
 const router = express.Router();
 
-// Memory store → used to pass operator response from sendpin → verifypin
-const sendPinMemory = {};
+// Memory store → saves SendPin operator response per click_id
+const sendPinMemory = {}; // { click_id: { sessionKey: "12345", ... } }
 
 /* --------------------------------------------------------
    Helper: Load Publisher
@@ -20,39 +20,37 @@ async function loadPublisher(pub_id) {
 }
 
 /* --------------------------------------------------------
-   Helper: Build Operator Parameters
+   Helper: Build Operator Parameter Payload
 --------------------------------------------------------- */
-function buildParams(mapping, publisherData, fixed = {}, carry = {}) {
+function buildParams(mapping, src, fixed = {}, carry = {}) {
   const final = {};
 
-  // Mapped parameters
+  // 1. Map dynamic parameters
   for (const operatorKey in mapping) {
-    const pubKey = mapping[operatorKey];
-    if (publisherData[pubKey] !== undefined) {
-      final[operatorKey] = publisherData[pubKey];
+    const userKey = mapping[operatorKey];
+    if (src[userKey] !== undefined && src[userKey] !== null) {
+      final[operatorKey] = src[userKey];
     }
   }
 
-  // Add fixed template params
+  // 2. Add fixed parameters (template.fixed)
   Object.assign(final, fixed);
 
-  // Add carryover (sessionKey, trxId, etc.)
+  // 3. Add carryover values from sendpin (like sessionKey)
   Object.assign(final, carry);
 
   return final;
 }
 
 /* --------------------------------------------------------
-   Helper: Convert Params → Query String
+   Helper: Convert object → query string
 --------------------------------------------------------- */
-function toQueryString(params = {}) {
-  const q = new URLSearchParams();
-  for (const key in params) {
-    if (params[key] !== undefined && params[key] !== null) {
-      q.append(key, params[key]);
-    }
+function toQueryString(obj = {}) {
+  const qs = new URLSearchParams();
+  for (const key in obj) {
+    qs.append(key, obj[key]);
   }
-  return q.toString();
+  return qs.toString();
 }
 
 /* --------------------------------------------------------
@@ -67,58 +65,51 @@ router.get("/sendpin", async (req, res) => {
       return res.json({ success: false, message: "Publisher not found" });
 
     const template = publisher.operator_parameters || {};
-    const mode = template.mode || "GET"; // Default GET for operator
+    const mode = template.mode || "POST";
 
     const mapping = template.sendpin || {};
     const fixed = template.fixed || {};
-
     const operatorUrl = publisher.operator_pin_send_url;
+
     if (!operatorUrl)
-      return res.json({ success: false, message: "Operator SendPin URL missing" });
+      return res.json({
+        success: false,
+        message: "Operator SendPin URL missing",
+      });
 
+    // Build request parameters
     const publisherData = { ...req.query };
-
-    // Build final operator params
     const finalParams = buildParams(mapping, publisherData, fixed, {});
 
     let operatorResp;
+    let fullUrl = operatorUrl;
 
-    /* ------------------ GET MODE ------------------ */
     if (mode === "GET") {
       const qs = toQueryString(finalParams);
-      const fullUrl = `${operatorUrl}?${qs}`;
+      fullUrl = `${operatorUrl}?${qs}`;
+      operatorResp = await axios.get(fullUrl, { timeout: 8000 });
 
-      console.log("📡 SENDPIN GET =>", fullUrl);
-
-      operatorResp = await axios.get(fullUrl, { timeout: 10000 });
-
-      // Save for verify
-      if (click_id) sendPinMemory[click_id] = operatorResp.data || {};
-
-      return res.json({
-        success: true,
-        mode: "GET",
-        operator_url_called: fullUrl,
-        operator_params_sent: finalParams,
-        operator_response: operatorResp.data
+      console.log("📡 SENDPIN GET →", fullUrl);
+    } else {
+      operatorResp = await axios.post(operatorUrl, finalParams, {
+        timeout: 8000,
       });
+
+      console.log("📡 SENDPIN POST →", operatorUrl, finalParams);
     }
 
-    /* ------------------ POST MODE ------------------ */
-    operatorResp = await axios.post(operatorUrl, finalParams, { timeout: 10000 });
-
-    console.log("📡 SENDPIN POST =>", operatorUrl, finalParams);
-
-    if (click_id) sendPinMemory[click_id] = operatorResp.data || {};
+    // Save operator response for verifypin
+    if (click_id) {
+      sendPinMemory[click_id] = operatorResp.data || {};
+    }
 
     return res.json({
       success: true,
-      mode: "POST",
-      operator_url_called: operatorUrl,
+      mode,
+      operator_url_called: fullUrl,
       operator_params_sent: finalParams,
-      operator_response: operatorResp.data
+      operator_response: operatorResp.data,
     });
-
   } catch (err) {
     console.error("SENDPIN ERROR:", err);
     return res.json({ success: false, message: err.message });
@@ -137,56 +128,50 @@ router.get("/verifypin", async (req, res) => {
       return res.json({ success: false, message: "Publisher not found" });
 
     const template = publisher.operator_parameters || {};
-    const mode = template.mode || "GET";
+    const mode = template.mode || "POST";
 
     const mapping = template.verifypin || {};
     const fixed = template.fixed || {};
-
     const operatorUrl = publisher.operator_pin_verify_url;
+
     if (!operatorUrl)
-      return res.json({ success: false, message: "Operator VerifyPin URL missing" });
+      return res.json({
+        success: false,
+        message: "Operator VerifyPin URL missing",
+      });
 
     const publisherData = { ...req.query };
 
-    // Load carry-over (sessionKey, trxId, etc.)
+    // Carry-over values from SendPin (sessionKey, trx_id, etc.)
     const carry = sendPinMemory[click_id] || {};
 
-    // Build verify params
+    // Build final verify payload
     const finalParams = buildParams(mapping, publisherData, fixed, carry);
 
     let operatorResp;
+    let fullUrl = operatorUrl;
 
-    /* ------------------ GET MODE ------------------ */
     if (mode === "GET") {
       const qs = toQueryString(finalParams);
-      const fullUrl = `${operatorUrl}?${qs}`;
+      fullUrl = `${operatorUrl}?${qs}`;
+      operatorResp = await axios.get(fullUrl, { timeout: 8000 });
 
-      console.log("📡 VERIFYPIN GET =>", fullUrl);
-
-      operatorResp = await axios.get(fullUrl, { timeout: 10000 });
-
-      return res.json({
-        success: true,
-        mode: "GET",
-        operator_url_called: fullUrl,
-        operator_params_sent: finalParams,
-        operator_response: operatorResp.data
+      console.log("📡 VERIFYPIN GET →", fullUrl);
+    } else {
+      operatorResp = await axios.post(operatorUrl, finalParams, {
+        timeout: 8000,
       });
+
+      console.log("📡 VERIFYPIN POST →", operatorUrl, finalParams);
     }
-
-    /* ------------------ POST MODE ------------------ */
-    operatorResp = await axios.post(operatorUrl, finalParams, { timeout: 10000 });
-
-    console.log("📡 VERIFYPIN POST =>", operatorUrl, finalParams);
 
     return res.json({
       success: true,
-      mode: "POST",
-      operator_url_called: operatorUrl,
+      mode,
+      operator_url_called: fullUrl,
       operator_params_sent: finalParams,
-      operator_response: operatorResp.data
+      operator_response: operatorResp.data,
     });
-
   } catch (err) {
     console.error("VERIFY ERROR:", err);
     return res.json({ success: false, message: err.message });
