@@ -27,7 +27,7 @@ import FraudAlerts from "./pages/FraudAlerts.jsx";
 import FraudAnalytics from "./pages/FraudAnalytics.jsx";   // ✅ NEW
 import LandingBuilder from "./pages/LandingBuilder.jsx";
 import TrafficDistribution from "./pages/TrafficDistribution.jsx";
-import InappReport from "../pages/InappReport";
+import InappReport from "./pages/InappReport";
 import Login from "./pages/Login.jsx";
 
 export default function App() {
