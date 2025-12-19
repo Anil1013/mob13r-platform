@@ -16,38 +16,55 @@ export default function InappReport() {
     setLoading(true);
     try {
       const res = await apiClient.get("/reports/inapp", {
-        params: { from, to, pub_id: pubId, offer_id: offerId },
+        params: {
+          from,
+          to,
+          pub_id: pubId || undefined,
+          offer_id: offerId || undefined,
+        },
       });
-      setRows(res.data || []);
+      setRows(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("INAPP report error", err);
-      alert("Failed to load report");
+      alert("Failed to load INAPP report");
+      setRows([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
+  // Initial load
   useEffect(() => {
     fetchReport();
   }, []);
 
+  /* ================= CSV EXPORT ================= */
   const exportCSV = () => {
     if (!rows.length) return;
 
     const headers = Object.keys(rows[0]).join(",");
+
     const data = rows
-      .map((r) =>
-        Object.values(r)
-          .map((v) => `"${v ?? ""}"`)
+      .map((row) =>
+        Object.values(row)
+          .map((val) => {
+            if (val === null || val === undefined) return '""';
+            return `"${String(val).replace(/"/g, '""')}"`;
+          })
           .join(",")
       )
       .join("\n");
 
-    const blob = new Blob([headers + "\n" + data], { type: "text/csv" });
+    const blob = new Blob([headers + "\n" + data], {
+      type: "text/csv;charset=utf-8;",
+    });
+
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `inapp-report-${from}-to-${to}.csv`;
     a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   return (
@@ -58,38 +75,53 @@ export default function InappReport() {
 
       <CardContent>
         {/* Filters */}
-        <div className="flex flex-wrap gap-3 mb-4">
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        <div className="flex flex-wrap gap-3 mb-4 items-end">
+          <div>
+            <label className="text-xs block">From</label>
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+
+          <div>
+            <label className="text-xs block">To</label>
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+
           <input
             placeholder="PUB_ID"
             value={pubId}
             onChange={(e) => setPubId(e.target.value)}
           />
+
           <input
             placeholder="Offer ID"
             value={offerId}
             onChange={(e) => setOfferId(e.target.value)}
           />
 
-          <button onClick={fetchReport}>Search</button>
-          <button onClick={exportCSV}>Export CSV</button>
+          <button onClick={fetchReport} disabled={loading}>
+            {loading ? "Loading..." : "Search"}
+          </button>
+
+          <button onClick={exportCSV} disabled={!rows.length}>
+            Export CSV
+          </button>
         </div>
 
         {/* Table */}
         {loading ? (
-          <p>Loading...</p>
+          <p>Loading report…</p>
+        ) : !rows.length ? (
+          <p className="text-sm text-gray-500">No data found for selected filters.</p>
         ) : (
           <div className="overflow-auto">
-            <table className="w-full border">
+            <table className="w-full border text-sm">
               <thead>
                 <tr>
-                  {rows[0] &&
-                    Object.keys(rows[0]).map((h) => (
-                      <th key={h} className="border px-2 py-1 text-left">
-                        {h}
-                      </th>
-                    ))}
+                  {Object.keys(rows[0]).map((h) => (
+                    <th key={h} className="border px-2 py-1 text-left bg-gray-50">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -97,7 +129,7 @@ export default function InappReport() {
                   <tr key={i}>
                     {Object.values(row).map((v, j) => (
                       <td key={j} className="border px-2 py-1">
-                        {v}
+                        {String(v ?? "")}
                       </td>
                     ))}
                   </tr>
