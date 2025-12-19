@@ -27,6 +27,7 @@ import FraudAlerts from "./pages/FraudAlerts.jsx";
 import FraudAnalytics from "./pages/FraudAnalytics.jsx";   // ✅ NEW
 import LandingBuilder from "./pages/LandingBuilder.jsx";
 import TrafficDistribution from "./pages/TrafficDistribution.jsx";
+import InappReport from "../pages/InappReport";
 import Login from "./pages/Login.jsx";
 
 export default function App() {
@@ -88,6 +89,7 @@ export default function App() {
             <Route path="/fraud-analytics" element={<FraudAnalytics />} />   {/* ✅ NEW */}
             <Route path="/landing-builder" element={<LandingBuilder />} />
             <Route path="/traffic-distribution" element={<TrafficDistribution />} />
+            <Route path="/reports/inapp" element={<InappReport />} />
 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
