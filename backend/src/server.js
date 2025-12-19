@@ -22,7 +22,7 @@ import fraudRoutes from "./routes/fraud.js";
 import distributionRoutes from "./routes/distribution.js";
 import analyticsClicks from "./routes/analyticsClicks.js";
 import inappRoutes from "./routes/inapp.js";
-import inappReportRoutes from "./routes/InappReport.js";
+import inappReportRoutes from "./routes/inappReport.js";
 
 import authJWT from "./middleware/authJWT.js";
 
