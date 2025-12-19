@@ -22,7 +22,7 @@ import fraudRoutes from "./routes/fraud.js";
 import distributionRoutes from "./routes/distribution.js";
 import analyticsClicks from "./routes/analyticsClicks.js";
 import inappRoutes from "./routes/inapp.js";
-import InappReport from "./routes/InappReport.js";
+import inappReportRoutes from "./routes/InappReport.js";
 
 import authJWT from "./middleware/authJWT.js";
 
@@ -72,7 +72,7 @@ app.use("/api/templates", authJWT, templateRoutes);
 app.use("/api/tracking", authJWT, publisherTrackingRoutes);
 app.use("/api/fraud", authJWT, fraudRoutes);
 app.use("/inapp", inappRoutes);
-app.use("/api", InappReport);
+app.use("/api", inappReportRoutes);
 
 /* ANALYTICS */
 app.use("/api/analytics", authJWT, analyticsRoutes);
