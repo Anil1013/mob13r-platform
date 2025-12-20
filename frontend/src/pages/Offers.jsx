@@ -1,69 +1,111 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 
-/* 🔑 ID Generator */
-const generateOfferId = (geo, carrier, count) =>
-  `OFF-${geo.slice(0, 2).toUpperCase()}-${carrier
-    .slice(0, 4)
-    .toUpperCase()}-${String(count + 1).padStart(3, "0")}`;
+/* ===============================
+   UTIL: Offer ID Generator
+================================ */
+const generateOfferId = (geo, carrier, plan, index) => {
+  return `OFF-${geo.slice(0,2).toUpperCase()}-${carrier
+    .slice(0,4)
+    .toUpperCase()}-${plan.toUpperCase()}-${String(index+1).padStart(3,"0")}`;
+};
 
+/* ===============================
+   MAIN COMPONENT
+================================ */
 export default function Offers() {
+
+  /* -----------------------------
+     OFFERS STATE
+     (GET / POST ready)
+  ------------------------------*/
   const [offers, setOffers] = useState([]);
   const [showForm, setShowForm] = useState(false);
 
+  /* -----------------------------
+     NEW OFFER FORM STATE
+  ------------------------------*/
   const [form, setForm] = useState({
     name: "",
-    geo: "",
-    carrier: "",
+    advertiser: "Shemaroo",
+    geo: "Kuwait",
+    carrier: "Zain",
+    plan: "weekly",
     payout: "",
     revenue: "",
     status: "Active",
-    pinSend: "",
-    pinVerify: "",
-    statusCheck: "",
+
+    // API CONFIG
+    pinSendUrl: "",
+    pinVerifyUrl: "",
+    statusCheckUrl: "",
     portalUrl: "",
+
+    // Anti-fraud
+    fraudJs: "",
+    partnerId: "",
+    serviceId: "",
   });
 
-  const handleChange = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+  /* -----------------------------
+     SIMULATED GET (API READY)
+  ------------------------------*/
+  useEffect(() => {
+    // 🔁 Later replace with real GET API
+    const apiResponse = [
+      {
+        name: "Shemaroo Weekly Pack",
+        advertiser: "Shemaroo",
+        geo: "Kuwait",
+        carrier: "Zain",
+        plan: "weekly",
+        payout: 0.8,
+        revenue: 1.5,
+        status: "Active",
 
-  const saveOffer = () => {
-    if (!form.name || !form.geo || !form.carrier) {
-      alert("Name, Geo & Carrier required");
-      return;
-    }
+        apis: {
+          pinSend: "https://stc-kw.kidzo.mpx.mobi/api/v2/pin/send",
+          pinVerify: "https://stc-kw.kidzo.mpx.mobi/api/v2/pin/verify",
+          statusCheck: "https://selapi.selvasportal.com/api/service/check-status",
+          portal: "https://stc.kw.kidzo.mobi/",
+        },
 
+        antifraud: {
+          js: "https://fd.sla-alacrity.com/d513e9e03227.js",
+          partnerId: "partner:977bade4-42dc-4c4c-b957-3c8ac2fa4a2b",
+          serviceId: "campaign:52d659a55c4e41953de8ed68d57f06ef89d6a217",
+        },
+      }
+    ];
+
+    setOffers(apiResponse);
+  }, []);
+
+  /* -----------------------------
+     HANDLE FORM SUBMIT (POST)
+  ------------------------------*/
+  const handleSubmit = () => {
     const newOffer = {
-      id: generateOfferId(form.geo, form.carrier, offers.length),
-      name: form.name,
-      geo: form.geo,
-      carrier: form.carrier,
-      payout: form.payout,
-      revenue: form.revenue,
-      status: form.status,
+      ...form,
+      payout: Number(form.payout),
+      revenue: Number(form.revenue),
       apis: {
-        pinSend: form.pinSend,
-        pinVerify: form.pinVerify,
-        statusCheck: form.statusCheck,
-        portalUrl: form.portalUrl,
+        pinSend: form.pinSendUrl,
+        pinVerify: form.pinVerifyUrl,
+        statusCheck: form.statusCheckUrl,
+        portal: form.portalUrl,
+      },
+      antifraud: {
+        js: form.fraudJs,
+        partnerId: form.partnerId,
+        serviceId: form.serviceId,
       },
     };
 
-    setOffers([...offers, newOffer]);
+    // 🔁 Later replace with POST API
+    setOffers(prev => [...prev, newOffer]);
     setShowForm(false);
-    setForm({
-      name: "",
-      geo: "",
-      carrier: "",
-      payout: "",
-      revenue: "",
-      status: "Active",
-      pinSend: "",
-      pinVerify: "",
-      statusCheck: "",
-      portalUrl: "",
-    });
   };
 
   return (
@@ -77,11 +119,13 @@ export default function Offers() {
           <div style={styles.top}>
             <h2>Offers</h2>
             <button style={styles.addBtn} onClick={() => setShowForm(true)}>
-              + Add Offer
+              + Create Offer
             </button>
           </div>
 
-          {/* OFFER TABLE */}
+          {/* =======================
+              OFFERS TABLE
+          ======================== */}
           <table style={styles.table}>
             <thead>
               <tr>
@@ -89,107 +133,86 @@ export default function Offers() {
                 <th>Name</th>
                 <th>Geo</th>
                 <th>Carrier</th>
+                <th>Payout</th>
+                <th>Revenue</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {offers.map((o) => (
-                <tr key={o.id}>
-                  <td style={styles.mono}>{o.id}</td>
+              {offers.map((o, i) => (
+                <tr key={i}>
+                  <td style={styles.mono}>
+                    {generateOfferId(o.geo, o.carrier, o.plan, i)}
+                  </td>
                   <td>{o.name}</td>
                   <td>{o.geo}</td>
                   <td>{o.carrier}</td>
-                  <td>{o.status}</td>
-                </tr>
-              ))}
-              {offers.length === 0 && (
-                <tr>
-                  <td colSpan="5" style={styles.empty}>
-                    No offers added yet
+                  <td>${o.payout}</td>
+                  <td>${o.revenue}</td>
+                  <td>
+                    <span style={{
+                      ...styles.status,
+                      background: o.status === "Active" ? "#16a34a" : "#ca8a04"
+                    }}>
+                      {o.status}
+                    </span>
                   </td>
                 </tr>
-              )}
+              ))}
             </tbody>
           </table>
 
-          {/* CREATE / EDIT FORM */}
+          {/* =======================
+              CREATE OFFER FORM
+          ======================== */}
           {showForm && (
             <div style={styles.form}>
-              <h3>Create Offer (Paste APIs from Document)</h3>
+              <h3>Create Offer</h3>
 
-              <input name="name" placeholder="Offer Name" onChange={handleChange} />
-              <input name="geo" placeholder="Geo (Kuwait)" onChange={handleChange} />
-              <input
-                name="carrier"
-                placeholder="Carrier (Zain)"
-                onChange={handleChange}
-              />
-              <input name="payout" placeholder="Payout" onChange={handleChange} />
-              <input name="revenue" placeholder="Revenue" onChange={handleChange} />
+              <input placeholder="Offer Name"
+                onChange={e => setForm({...form, name:e.target.value})} />
 
-              <textarea
-                name="pinSend"
-                placeholder="PIN Send API (paste full URL)"
-                onChange={handleChange}
-              />
-              <textarea
-                name="pinVerify"
-                placeholder="PIN Verify API"
-                onChange={handleChange}
-              />
-              <textarea
-                name="statusCheck"
-                placeholder="Status Check API"
-                onChange={handleChange}
-              />
-              <textarea
-                name="portalUrl"
-                placeholder="Portal URL"
-                onChange={handleChange}
-              />
+              <input placeholder="PIN Send API URL"
+                onChange={e => setForm({...form, pinSendUrl:e.target.value})} />
 
-              <div style={styles.formActions}>
-                <button onClick={saveOffer}>Save Offer</button>
-                <button onClick={() => setShowForm(false)}>Cancel</button>
-              </div>
+              <input placeholder="PIN Verify API URL"
+                onChange={e => setForm({...form, pinVerifyUrl:e.target.value})} />
+
+              <input placeholder="Status Check API URL"
+                onChange={e => setForm({...form, statusCheckUrl:e.target.value})} />
+
+              <input placeholder="Portal URL"
+                onChange={e => setForm({...form, portalUrl:e.target.value})} />
+
+              <input placeholder="Anti-Fraud JS URL"
+                onChange={e => setForm({...form, fraudJs:e.target.value})} />
+
+              <input placeholder="Partner ID"
+                onChange={e => setForm({...form, partnerId:e.target.value})} />
+
+              <input placeholder="Service ID"
+                onChange={e => setForm({...form, serviceId:e.target.value})} />
+
+              <button onClick={handleSubmit}>Save Offer</button>
             </div>
           )}
+
         </div>
       </div>
     </div>
   );
 }
 
-/* ================= STYLES ================= */
-
+/* ===============================
+   STYLES
+================================ */
 const styles = {
-  main: { flex: 1, background: "#020617", minHeight: "100vh" },
-  content: { padding: "24px", color: "#fff" },
-  top: {
-    display: "flex",
-    justifyContent: "space-between",
-    marginBottom: "16px",
-  },
-  addBtn: {
-    background: "#2563eb",
-    border: "none",
-    padding: "8px 14px",
-    color: "#fff",
-    borderRadius: "8px",
-    cursor: "pointer",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    marginBottom: "24px",
-  },
-  mono: { fontFamily: "monospace", fontSize: "12px", color: "#93c5fd" },
-  empty: { textAlign: "center", color: "#94a3b8", padding: "20px" },
-
-  form: {
-    border: "1px solid #1e293b",
-    padding: "20px",
-    borderRadius: "12px",
-  },
-  formActions: { display: "flex", gap: "12px", marginTop: "12px" },
+  main: { flex:1, background:"#020617", minHeight:"100vh" },
+  content: { padding:"24px", color:"#fff" },
+  top: { display:"flex", justifyContent:"space-between", alignItems:"center" },
+  addBtn: { background:"#2563eb", color:"#fff", padding:"8px 14px", border:"none", borderRadius:8 },
+  table: { width:"100%", marginTop:20, borderCollapse:"collapse", textAlign:"center" },
+  mono: { fontFamily:"monospace", fontSize:12, color:"#93c5fd" },
+  status: { padding:"4px 12px", borderRadius:999, color:"#fff" },
+  form: { marginTop:30, background:"#020617", padding:20, border:"1px solid #1e293b", borderRadius:12 }
 };
