@@ -28,7 +28,7 @@ export default function Login() {
 
       const data = await res.json();
 
-      // ✅ SAVE JWT
+      // ✅ JWT store karo
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
 
@@ -43,10 +43,10 @@ export default function Login() {
   return (
     <div className="login-wrapper">
       <form className="login-card" onSubmit={handleSubmit}>
-        <img src="/logo.png" alt="Mob13r Digital Media" className="logo" />
+        <img src="/logo.png" alt="Mob13r" className="logo" />
 
-        <h2 className="lora-title">Mob13r Admin Panel</h2>
-        <p className="subtitle lora-subtitle">Secure Login</p>
+        <h2>Mob13r Admin Panel</h2>
+        <p>Secure Login</p>
 
         {error && <div className="error">{error}</div>}
 
@@ -66,8 +66,8 @@ export default function Login() {
           required
         />
 
-        <button type="submit" disabled={loading}>
-          {loading ? "Signing in..." : "Login"}
+        <button disabled={loading}>
+          {loading ? "Logging in..." : "Login"}
         </button>
       </form>
     </div>
