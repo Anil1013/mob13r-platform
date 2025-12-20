@@ -20,10 +20,10 @@ export default function Login() {
   return (
     <div className="login-wrapper">
       <form className="login-card" onSubmit={handleSubmit}>
-        <img src="/logo.png" alt="Mob13r" className="logo" />
+        <img src="/logo.png" alt="Mob13r Digital Media" className="logo" />
 
-        <h2>Mob13r Admin Panel</h2>
-        <p className="subtitle">Secure Login</p>
+        <h2 className="lora-title">Mob13r Admin Panel</h2>
+        <p className="subtitle lora-subtitle">Secure Login</p>
 
         {error && <div className="error">{error}</div>}
 
