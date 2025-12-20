@@ -1,7 +1,10 @@
 import pkg from "pg";
 import dotenv from "dotenv";
 
-dotenv.config();
+// ✅ Only load .env locally (NOT in production)
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config();
+}
 
 const { Pool } = pkg;
 
@@ -10,14 +13,16 @@ const pool = new Pool({
   user: process.env.DB_USER,
   password: process.env.DB_PASS,
   database: process.env.DB_NAME,
-  port: process.env.DB_PORT,
-  ssl: process.env.NODE_ENV === "production"
-    ? { rejectUnauthorized: false }
-    : false,
+  port: Number(process.env.DB_PORT) || 5432,
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
 });
 
 pool.on("connect", () => {
   console.log("✅ PostgreSQL connected");
+  console.log("📦 DB:", process.env.DB_NAME);
 });
 
 pool.on("error", (err) => {
