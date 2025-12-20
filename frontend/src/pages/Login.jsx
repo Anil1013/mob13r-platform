@@ -13,17 +13,19 @@ export default function Login() {
     if (email === "admin@mob13r.com" && password === "Admin@123") {
       navigate("/dashboard");
     } else {
-      setError("Invalid credentials");
+      setError("Invalid email or password");
     }
   };
 
   return (
-    <div style={styles.wrapper}>
-      <form style={styles.card} onSubmit={handleSubmit}>
-        <img src="/logo.png" alt="Mob13r" style={styles.logo} />
-        <h2>Mob13r Admin Login</h2>
+    <div className="login-wrapper">
+      <form className="login-card" onSubmit={handleSubmit}>
+        <img src="/logo.png" alt="Mob13r" className="logo" />
 
-        {error && <p style={styles.error}>{error}</p>}
+        <h2>Mob13r Admin Panel</h2>
+        <p className="subtitle">Secure Login</p>
+
+        {error && <div className="error">{error}</div>}
 
         <input
           type="email"
@@ -35,7 +37,7 @@ export default function Login() {
 
         <input
           type="password"
-          placeholder="Admin@123"
+          placeholder="••••••••"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -46,32 +48,3 @@ export default function Login() {
     </div>
   );
 }
-
-const styles = {
-  wrapper: {
-    minHeight: "100vh",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    background: "#020617",
-  },
-  card: {
-    background: "#0f172a",
-    padding: "32px",
-    borderRadius: "12px",
-    width: "320px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "12px",
-    color: "#fff",
-    textAlign: "center",
-  },
-  logo: {
-    width: "100px",
-    margin: "0 auto 10px",
-  },
-  error: {
-    color: "#f87171",
-    fontSize: "14px",
-  },
-};
