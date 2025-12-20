@@ -1,44 +1,32 @@
-import { useNavigate } from "react-router-dom";
+import Sidebar from "../components/layout/Sidebar";
+import Header from "../components/layout/Header";
 
 export default function Dashboard() {
-  const navigate = useNavigate();
-
-  const handleLogout = () => {
-    navigate("/login");
-  };
-
   return (
-    <div style={styles.wrapper}>
-      <div style={styles.header}>
-        <h1>Mob13r Dashboard</h1>
-        <button onClick={handleLogout} style={styles.logout}>
-          Logout
-        </button>
-      </div>
+    <div style={{ display: "flex", minHeight: "100vh" }}>
+      {/* LEFT SIDEBAR */}
+      <Sidebar />
 
-      <p>Offers, publishers, analytics coming next…</p>
+      {/* RIGHT CONTENT */}
+      <div style={styles.content}>
+        <Header />
+
+        <div style={styles.body}>
+          <h2>Welcome to Mob13r Dashboard</h2>
+          <p>Offers, publishers, analytics coming next…</p>
+        </div>
+      </div>
     </div>
   );
 }
 
 const styles = {
-  wrapper: {
-    padding: "32px",
+  content: {
+    flex: 1,
+    background: "#020617",
     color: "#fff",
   },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "24px",
-  },
-  logout: {
-    background: "#dc2626",
-    border: "none",
-    padding: "10px 16px",
-    borderRadius: "8px",
-    color: "#fff",
-    cursor: "pointer",
-    fontWeight: 600,
+  body: {
+    padding: "24px",
   },
 };
