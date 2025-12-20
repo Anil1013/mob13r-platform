@@ -1,35 +1,35 @@
-// services/offers.js
+/**
+ * NOTE:
+ * Real API calls will go to BACKEND only.
+ * Frontend never calls telco APIs directly.
+ */
 
 export const getOffers = async () => {
-  // future: return fetch("/api/offers").then(res => res.json())
-  return [
-    {
-      id: "OFF-1001",
-      name: "Shemaroo Weekly Pack",
-      advertiser: "Shemaroo",
-      geo: "Kuwait",
-      carrier: "Zain",
-      payout: 0.5,
-      revenue: 1.2,
-      status: "Active",
-      method: "POST",
-    },
-    {
-      id: "OFF-1002",
-      name: "Zain Sports Bundle",
-      advertiser: "Zain",
-      geo: "Kuwait",
-      carrier: "Zain",
-      payout: 0.7,
-      revenue: 1.5,
-      status: "Paused",
-      method: "GET",
-    },
-  ];
+  // later: GET /api/offers
+  return [];
 };
 
-export const saveOffer = async (offer) => {
-  console.log("Saving offer:", offer);
-  // future: POST / PUT API
-  return true;
+export const createOffer = async (offer) => {
+  // later: POST /api/offers
+  console.log("CREATE OFFER:", offer);
+  return { success: true };
+};
+
+export const updateOffer = async (id, offer) => {
+  // later: PUT /api/offers/:id
+  console.log("UPDATE OFFER:", id, offer);
+  return { success: true };
+};
+
+export const executePinSend = async (offer, payload) => {
+  // backend will map payload → operator API
+  console.log("PIN SEND", offer.id, payload);
+};
+
+export const executePinVerify = async (offer, payload) => {
+  console.log("PIN VERIFY", offer.id, payload);
+};
+
+export const checkStatus = async (offer, payload) => {
+  console.log("STATUS CHECK", offer.id, payload);
 };
