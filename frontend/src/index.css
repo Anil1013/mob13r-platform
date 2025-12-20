@@ -66,3 +66,15 @@ body {
   margin-bottom: 12px;
   font-size: 14px;
 }
+
+.lora-title {
+  font-family: "Lora", serif;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.lora-subtitle {
+  font-family: "Lora", serif;
+  font-weight: 500;
+}
+
