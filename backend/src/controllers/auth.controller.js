@@ -11,7 +11,7 @@ export const login = async (req, res) => {
 
   const valid = await bcrypt.compare(
     password,
-    "$2b$10$Q9qQ1gE0H2zJYxkU2v8Z1eZ9E2GZ0uD6K8E4wJt0X0Rz7Z5N8b9Wq" // Admin@123 hash
+    "$2b$10$svgCr6DiTJu/a8wZC2ZWLhuC6sA6IK6Hu8ALykd8KfjcECYEq7Fa" // Admin@123 hash
   );
 
   if (!valid) {
@@ -29,3 +29,4 @@ export const login = async (req, res) => {
     user: { email, role: "admin" },
   });
 };
+
