@@ -1,5 +1,0 @@
-CREATE TABLE IF NOT EXISTS admin_keys (
-  id SERIAL PRIMARY KEY,
-  api_key TEXT UNIQUE,
-  created_at TIMESTAMP DEFAULT NOW()
-);
