@@ -1,85 +1,82 @@
 export default function OfferConfig({ offer, onClose }) {
+  if (!offer) return null;
+
   return (
     <div style={styles.overlay}>
       <div style={styles.card}>
         <h2 style={styles.heading}>Offer Execution Flow</h2>
+        <p style={styles.sub}>
+          {offer.name} • {offer.geo} • {offer.carrier}
+        </p>
 
-        {/* OFFER SUMMARY */}
-        <div style={styles.summary}>
-          <div><b>Offer:</b> {offer.name}</div>
-          <div><b>Geo:</b> {offer.geo}</div>
-          <div><b>Carrier:</b> {offer.carrier}</div>
-          <div><b>API Mode:</b> {offer.apiMode}</div>
-          <div>
-            <b>Fraud Protection:</b>{" "}
-            {offer.fraudEnabled ? "Enabled" : "Disabled"}
-          </div>
-        </div>
-
-        {/* FLOW */}
-        <FlowStep
-          title="1. Check Status API"
+        {/* STEP 1 */}
+        <Step
+          title="1. Check Status"
+          method={offer.apiMode}
           url={offer.statusCheckUrl}
           params={["service_id", "msisdn", "partner_id", "transaction_id"]}
         />
 
-        <FlowStep
-          title="2. PIN / OTP Send"
+        {/* STEP 2 */}
+        <Step
+          title="2. PIN Send"
+          method={offer.apiMode}
           url={offer.pinSendUrl}
           params={offer.pinSendParams}
         />
 
-        <FlowStep
+        {/* STEP 3 */}
+        <Step
           title="3. PIN Verify"
+          method={offer.apiMode}
           url={offer.pinVerifyUrl}
           params={offer.pinVerifyParams}
         />
 
-        <FlowStep
-          title="4. Product Redirect"
-          url="Generated dynamically after OTP success"
-          params={["transaction_id"]}
-          highlight
-        />
+        {/* STEP 4 */}
+        {offer.fraudEnabled && (
+          <div style={styles.step}>
+            <h4 style={styles.stepTitle}>4. Anti-Fraud</h4>
+            <div style={styles.kv}>Partner: {offer.fraudPartner}</div>
+            <div style={styles.kv}>Service: {offer.fraudService}</div>
+          </div>
+        )}
 
-        <div style={styles.actions}>
-          <button onClick={onClose} style={styles.close}>
-            Close
-          </button>
+        {/* STEP 5 */}
+        <div style={styles.step}>
+          <h4 style={styles.stepTitle}>5. Redirect to Product</h4>
+          <div style={styles.kv}>Redirect after OTP success</div>
         </div>
+
+        <button style={styles.close} onClick={onClose}>
+          Close
+        </button>
       </div>
     </div>
   );
 }
 
-/* -------- FLOW STEP COMPONENT -------- */
+/* ---------- SMALL UI BLOCK ---------- */
 
-const FlowStep = ({ title, url, params = [], highlight }) => (
-  <div
-    style={{
-      ...styles.step,
-      borderColor: highlight ? "#16a34a" : "#1e293b",
-    }}
-  >
+const Step = ({ title, method, url, params }) => (
+  <div style={styles.step}>
     <h4 style={styles.stepTitle}>{title}</h4>
-
-    <div style={styles.url}>
-      <span style={styles.label}>URL:</span>
-      <span style={styles.value}>{url || "Not configured"}</span>
-    </div>
-
-    <div>
-      <span style={styles.label}>Parameters:</span>
-      <ul style={styles.params}>
-        {params?.length
-          ? params.map((p) => <li key={p}>{p}</li>)
-          : <li>None</li>}
-      </ul>
+    <div style={styles.kv}>Method: {method}</div>
+    <div style={styles.kv}>URL: {url || "—"}</div>
+    <div style={styles.params}>
+      Params:
+      {params && params.length
+        ? params.map((p) => (
+            <span key={p} style={styles.param}>
+              {p}
+            </span>
+          ))
+        : " —"}
     </div>
   </div>
 );
 
-/* -------- STYLES -------- */
+/* ---------- STYLES ---------- */
 
 const styles = {
   overlay: {
@@ -92,64 +89,57 @@ const styles = {
     zIndex: 60,
   },
   card: {
-    width: "760px",
+    width: "680px",
     maxHeight: "90vh",
     overflowY: "auto",
     background: "#020617",
-    padding: "28px",
     borderRadius: "14px",
+    padding: "24px",
     color: "#fff",
   },
   heading: {
     textAlign: "center",
-    marginBottom: "18px",
+    marginBottom: "6px",
   },
-  summary: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: "10px",
-    fontSize: "14px",
+  sub: {
+    textAlign: "center",
+    fontSize: "13px",
+    color: "#94a3b8",
     marginBottom: "20px",
-    color: "#cbd5f5",
   },
   step: {
     border: "1px solid #1e293b",
     borderRadius: "10px",
     padding: "14px",
-    marginBottom: "14px",
+    marginBottom: "12px",
   },
   stepTitle: {
-    color: "#38bdf8",
     marginBottom: "8px",
+    color: "#38bdf8",
     fontSize: "14px",
   },
-  url: {
-    marginBottom: "6px",
-  },
-  label: {
-    fontSize: "12px",
-    color: "#94a3b8",
-    marginRight: "6px",
-  },
-  value: {
+  kv: {
     fontSize: "13px",
-    color: "#e5e7eb",
+    marginBottom: "4px",
   },
   params: {
-    paddingLeft: "18px",
-    fontSize: "13px",
-  },
-  actions: {
     display: "flex",
-    justifyContent: "flex-end",
-    marginTop: "20px",
+    flexWrap: "wrap",
+    gap: "6px",
+    fontSize: "12px",
+  },
+  param: {
+    background: "#1e293b",
+    padding: "4px 8px",
+    borderRadius: "6px",
   },
   close: {
+    marginTop: "16px",
+    width: "100%",
+    padding: "10px",
     background: "#334155",
     border: "none",
-    padding: "10px 18px",
     borderRadius: "8px",
     color: "#fff",
-    cursor: "pointer",
   },
 };
