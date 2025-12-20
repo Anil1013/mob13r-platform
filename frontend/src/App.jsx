@@ -4,8 +4,6 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Advertisers from "./pages/Advertisers";
 import Offers from "./pages/Offers";
-
-/* 🔹 Offer Internal Screens */
 import OfferForm from "./pages/OfferForm";
 import OfferConfig from "./pages/OfferConfig";
 
@@ -21,7 +19,7 @@ export default function App() {
         <Route path="/advertisers" element={<Advertisers />} />
         <Route path="/offers" element={<Offers />} />
 
-        {/* Offer Flow (NO sidebar links needed) */}
+        {/* Internal Offer Routes (NOT in sidebar) */}
         <Route path="/offers/new" element={<OfferForm />} />
         <Route path="/offers/:id/edit" element={<OfferForm />} />
         <Route path="/offers/:id/config" element={<OfferConfig />} />
