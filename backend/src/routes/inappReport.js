@@ -4,186 +4,91 @@ import authJWT from "../middleware/authJWT.js";
 
 const router = express.Router();
 
-/* ======================================================
-   🔧 HELPER: Resolve INAPP Context
-====================================================== */
-async function resolveInappContext(pub_code, offer_id) {
-  const q = `
-    SELECT
-      ptl.id       AS tracking_link_id,
-      ptl.publisher_id,
-      ptl.geo,
-      ptl.carrier,
-      ptl.payout   AS publisher_payout,
-      o.payout     AS offer_payout
-    FROM publisher_tracking_links ptl
-    JOIN offers o
-      ON o.offer_id = $2
-    WHERE ptl.pub_code = $1
-      AND ptl.type = 'INAPP'
-      AND ptl.status = 'active'
-    LIMIT 1
-  `;
-  const { rows } = await pool.query(q, [pub_code, offer_id]);
-  if (!rows.length) throw new Error("Invalid INAPP pub_code / offer mapping");
-  return rows[0];
-}
-
-/* ======================================================
-   📩 INAPP: SEND PIN
-====================================================== */
-router.post("/inapp/sendpin", async (req, res) => {
+/*
+ GET /api/reports/inapp?from=2025-12-01&to=2025-12-19
+*/
+router.get("/", authJWT, async (req, res) => {
   try {
-    const { msisdn, offer_id, pub_id } = req.body;
-    if (!msisdn || !offer_id || !pub_id)
-      return res.status(400).json({ error: "Missing params" });
+    const { from, to } = req.query;
 
-    const ctx = await resolveInappContext(pub_id, offer_id);
-
-    const api_status = "success"; // operator response placeholder
-
-    await pool.query(
-      `
-      INSERT INTO pin_send_logs
-      (offer_id, pub_code, tracking_link_id, msisdn, api_status, created_at)
-      VALUES ($1,$2,$3,$4,$5,NOW())
-      `,
-      [offer_id, pub_id, ctx.tracking_link_id, msisdn, api_status]
-    );
-
-    res.json({ success: true });
-
-  } catch (err) {
-    console.error("SENDPIN ERROR:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* ======================================================
-   🔐 INAPP: VERIFY PIN
-====================================================== */
-router.post("/inapp/verifypin", async (req, res) => {
-  try {
-    const { msisdn, pin, offer_id, pub_id } = req.body;
-    if (!msisdn || !pin || !offer_id || !pub_id)
-      return res.status(400).json({ error: "Missing params" });
-
-    const ctx = await resolveInappContext(pub_id, offer_id);
-    const verify_status = "success";
-
-    await pool.query(
-      `
-      INSERT INTO pin_verify_logs
-      (offer_id, pub_code, tracking_link_id, msisdn, pin, verify_status, created_at)
-      VALUES ($1,$2,$3,$4,$5,$6,NOW())
-      `,
-      [offer_id, pub_id, ctx.tracking_link_id, msisdn, pin, verify_status]
-    );
-
-    res.json({ verified: verify_status === "success" });
-
-  } catch (err) {
-    console.error("VERIFYPIN ERROR:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* ======================================================
-   💳 INAPP: SUBSCRIBE
-====================================================== */
-router.post("/inapp/subscribe", async (req, res) => {
-  try {
-    const { msisdn, offer_id, pub_id } = req.body;
-    if (!msisdn || !offer_id || !pub_id)
-      return res.status(400).json({ error: "Missing params" });
-
-    const ctx = await resolveInappContext(pub_id, offer_id);
-    const status = "success";
-
-    await pool.query(
-      `
-      INSERT INTO subscription_logs
-      (offer_id, pub_code, tracking_link_id, msisdn, status, activation_time)
-      VALUES ($1,$2,$3,$4,$5,NOW())
-      `,
-      [offer_id, pub_id, ctx.tracking_link_id, msisdn, status]
-    );
-
-    res.json({ subscribed: true });
-
-  } catch (err) {
-    console.error("SUBSCRIBE ERROR:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* ======================================================
-   📊 INAPP FINAL REPORT (CR + PROFIT)
-====================================================== */
-router.get("/reports/inapp", authJWT, async (req, res) => {
-  try {
     const query = `
       SELECT
-        ps.pub_code AS "PUB_ID",
-        o.advertiser_name AS "Advertiser Name",
-        o.offer_id AS "Offer ID",
-        o.name AS "Offer Name",
-        DATE(ps.created_at) AS "Report Date",
+        ptl.pub_code                            AS pub_id,
+        pub.name                               AS publisher_name,
+        o.advertiser_name,
+        o.offer_id,
+        o.name                                 AS offer_name,
+        DATE(ps.created_at)                    AS report_date,
 
-        COUNT(ps.id) AS "Pin Request Count",
-        COUNT(DISTINCT ps.msisdn) AS "Unique Pin Request Count",
+        COUNT(ps.id)                           AS pin_request_count,
+        COUNT(DISTINCT ps.msisdn)              AS unique_pin_request_count,
 
-        COUNT(ps.id) FILTER (WHERE ps.api_status='success') AS "Pin Send Count",
-        COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.api_status='success')
-          AS "Unique Pin Send Count",
+        COUNT(ps.id) FILTER (WHERE ps.status = true)
+                                               AS pin_send_count,
+        COUNT(DISTINCT ps.msisdn)
+          FILTER (WHERE ps.status = true)
+                                               AS unique_pin_send_count,
 
-        COUNT(pv.id) AS "Pin Validation RequestCount",
-        COUNT(DISTINCT pv.msisdn) AS "Unique Pin Validation RequestCount",
+        COUNT(pv.id)                           AS pin_validation_request_count,
+        COUNT(DISTINCT pv.msisdn)
+                                               AS unique_pin_validation_request_count,
 
-        COUNT(pv.id) FILTER (WHERE pv.verify_status='success')
-          AS "Pin Validate Count",
+        COUNT(pv.id) FILTER (WHERE pv.status = true)
+                                               AS pin_validate_count,
 
-        COUNT(DISTINCT sl.msisdn) AS "Send Conversion Count",
+        COUNT(c.id)                            AS send_conversion_count,
 
-        ROUND(
-          COUNT(pv.id) FILTER (WHERE pv.verify_status='success') * 100.0 /
-          NULLIF(COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.api_status='success'),0),
-        2) AS "CR IN (%)",
+        /* 💰 AMOUNTS */
+        COUNT(c.id) * o.payout                 AS advertiser_amount,
+        COUNT(c.id) * ptl.payout               AS publisher_amount,
 
-        ROUND(
-          COUNT(DISTINCT sl.msisdn) * 100.0 /
-          NULLIF(COUNT(pv.id) FILTER (WHERE pv.verify_status='success'),0),
-        2) AS "CR OUT (%)",
+        MAX(ps.created_at)                     AS last_ping_gen_time,
+        MAX(ps.created_at)
+          FILTER (WHERE ps.status = true)
+                                               AS last_ping_gen_success_time,
 
-        COUNT(DISTINCT sl.msisdn) * o.payout AS "Advertiser Amount",
-        COUNT(DISTINCT sl.msisdn) * ptl.payout AS "Publisher Cost",
-
-        (COUNT(DISTINCT sl.msisdn) * o.payout)
-        - (COUNT(DISTINCT sl.msisdn) * ptl.payout) AS "Profit"
+        MAX(pv.created_at)                     AS last_pinverification_datetime,
+        MAX(pv.created_at)
+          FILTER (WHERE pv.status = true)
+                                               AS last_success_pinverification_datetime
 
       FROM pin_send_logs ps
-      JOIN offers o ON o.offer_id = ps.offer_id
-      JOIN publisher_tracking_links ptl ON ptl.id = ps.tracking_link_id
-
       LEFT JOIN pin_verify_logs pv
-        ON pv.msisdn = ps.msisdn AND pv.offer_id = ps.offer_id
+        ON pv.session_key = ps.session_key
 
-      LEFT JOIN subscription_logs sl
-        ON sl.msisdn = ps.msisdn AND sl.offer_id = ps.offer_id AND sl.status='success'
+      LEFT JOIN conversions c
+        ON c.session_key = ps.session_key
+
+      JOIN publisher_tracking_links ptl
+        ON ptl.pub_code = ps.pub_id
+
+      JOIN publishers pub
+        ON pub.id = ptl.publisher_id
+
+      JOIN offers o
+        ON o.offer_id = ps.offer_id
+
+      WHERE ps.created_at::date BETWEEN $1 AND $2
 
       GROUP BY
-        ps.pub_code, o.advertiser_name, o.offer_id, o.name,
-        o.payout, ptl.payout, DATE(ps.created_at)
+        ptl.pub_code,
+        pub.name,
+        o.advertiser_name,
+        o.offer_id,
+        o.name,
+        o.payout,
+        ptl.payout,
+        DATE(ps.created_at)
 
-      ORDER BY "Report Date" DESC;
+      ORDER BY report_date DESC;
     `;
 
-    const { rows } = await pool.query(query);
+    const { rows } = await pool.query(query, [from, to]);
     res.json(rows);
 
   } catch (err) {
-    console.error("INAPP REPORT ERROR:", err);
-    res.status(500).json({ error: err.message });
+    console.error("❌ Inapp Report Error:", err);
+    res.status(500).json({ error: "Failed to fetch inapp report" });
   }
 });
 
