@@ -1,50 +1,51 @@
 import React, { useEffect, useState } from "react";
 import apiClient from "../api/apiClient";
-import { format } from "date-fns";
 
 export default function InappReport() {
-  const today = format(new Date(), "yyyy-MM-dd");
+  const today = new Date().toISOString().slice(0, 10);
+
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
+  const [pubId, setPubId] = useState("");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const loadReport = async () => {
+  const fetchReport = async () => {
     setLoading(true);
     try {
       const res = await apiClient.get("/reports/inapp", {
-        params: { from, to },
+        params: { from, to, pub_id: pubId },
       });
-      setRows(res.data);
-    } catch (err) {
-      console.error("Failed to load inapp report", err);
-    } finally {
-      setLoading(false);
+      setRows(res.data || []);
+    } catch (e) {
+      alert("Failed to load INAPP report");
     }
+    setLoading(false);
   };
 
   useEffect(() => {
-    loadReport();
+    fetchReport();
   }, []);
 
   return (
-    <div className="p-6">
-      <h1 className="text-xl font-bold mb-4">📊 Inapp Report</h1>
+    <div>
+      <h2>📊 INAPP Report</h2>
 
-      <div className="flex gap-2 mb-4">
+      <div style={{ marginBottom: 10 }}>
         <input type="date" value={from} onChange={e => setFrom(e.target.value)} />
         <input type="date" value={to} onChange={e => setTo(e.target.value)} />
-        <button onClick={loadReport} className="px-3 py-1 bg-blue-600 text-white rounded">
-          Load
-        </button>
+        <input placeholder="PUB_ID" value={pubId} onChange={e => setPubId(e.target.value)} />
+        <button onClick={fetchReport}>Search</button>
       </div>
 
-      <div className="overflow-auto">
-        <table className="min-w-full border text-xs">
-          <thead className="bg-gray-100">
+      {loading ? (
+        <p>Loading...</p>
+      ) : (
+        <table border="1" cellPadding="6">
+          <thead>
             <tr>
-              {Object.keys(rows[0] || {}).map(k => (
-                <th key={k} className="border px-2 py-1 text-left">{k}</th>
+              {rows[0] && Object.keys(rows[0]).map(h => (
+                <th key={h}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -52,17 +53,13 @@ export default function InappReport() {
             {rows.map((r, i) => (
               <tr key={i}>
                 {Object.values(r).map((v, j) => (
-                  <td key={j} className="border px-2 py-1">
-                    {v ?? "-"}
-                  </td>
+                  <td key={j}>{v ?? "-"}</td>
                 ))}
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
-
-      {loading && <p className="mt-2">Loading...</p>}
+      )}
     </div>
   );
 }
