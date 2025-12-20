@@ -1,47 +1,33 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
+import OfferForm from "../components/offers/OfferForm";
+import { getOffers } from "../services/offers";
 import { useNavigate } from "react-router-dom";
 
 export default function Offers() {
+  const [offers, setOffers] = useState([]);
+  const [showForm, setShowForm] = useState(false);
   const navigate = useNavigate();
 
-  const [offers] = useState([
-    {
-      id: "OFF-1001",
-      name: "Shemaroo Weekly",
-      geo: "Kuwait",
-      carrier: "Zain",
-      payout: 0.5,
-      revenue: 1.2,
-      status: "Active",
-      method: "POST",
-    },
-    {
-      id: "OFF-1002",
-      name: "Zain Sports",
-      geo: "Kuwait",
-      carrier: "Zain",
-      payout: 0.7,
-      revenue: 1.5,
-      status: "Paused",
-      method: "GET",
-    },
-  ]);
+  useEffect(() => {
+    getOffers().then(setOffers);
+  }, []);
 
   return (
     <div style={{ display: "flex" }}>
       <Sidebar />
-      <div style={styles.main}>
+
+      <div style={{ flex: 1, background: "#020617", minHeight: "100vh" }}>
         <Header />
 
-        <div style={styles.content}>
-          <div style={styles.topBar}>
+        <div style={{ padding: "24px", color: "#fff" }}>
+          <div style={styles.top}>
             <h2>Offers</h2>
-            <button style={styles.createBtn} onClick={() => navigate("/offers/create")}>
-              + Create Offer
-            </button>
+            <button onClick={() => setShowForm(true)}>+ Create Offer</button>
           </div>
+
+          {showForm && <OfferForm onClose={() => setShowForm(false)} />}
 
           <table style={styles.table}>
             <thead>
@@ -52,9 +38,8 @@ export default function Offers() {
                 <th>Carrier</th>
                 <th>Payout</th>
                 <th>Revenue</th>
-                <th>Method</th>
                 <th>Status</th>
-                <th>Config</th>
+                <th>Flow</th>
               </tr>
             </thead>
             <tbody>
@@ -66,22 +51,13 @@ export default function Offers() {
                   <td>{o.carrier}</td>
                   <td>${o.payout}</td>
                   <td>${o.revenue}</td>
-                  <td>{o.method}</td>
                   <td>
-                    <span
-                      style={{
-                        ...styles.status,
-                        background: o.status === "Active" ? "#16a34a" : "#ca8a04",
-                      }}
-                    >
+                    <span style={o.status === "Active" ? styles.active : styles.paused}>
                       {o.status}
                     </span>
                   </td>
                   <td>
-                    <button
-                      style={styles.link}
-                      onClick={() => navigate(`/offers/${o.id}/config`)}
-                    >
+                    <button onClick={() => navigate(`/offers/${o.id}`)}>
                       Configure
                     </button>
                   </td>
@@ -89,6 +65,7 @@ export default function Offers() {
               ))}
             </tbody>
           </table>
+
         </div>
       </div>
     </div>
@@ -96,30 +73,23 @@ export default function Offers() {
 }
 
 const styles = {
-  main: { flex: 1, background: "#020617", minHeight: "100vh" },
-  content: { padding: "24px", color: "#fff" },
-  topBar: { display: "flex", justifyContent: "space-between", marginBottom: "20px" },
-  createBtn: {
-    background: "#2563eb",
-    color: "#fff",
-    padding: "10px 16px",
-    borderRadius: "8px",
-    border: "none",
-    cursor: "pointer",
+  top: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginBottom: "16px",
   },
-  table: { width: "100%", borderCollapse: "collapse" },
-  status: {
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  active: {
+    background: "#16a34a",
     padding: "4px 10px",
     borderRadius: "999px",
-    fontSize: "12px",
-    color: "#fff",
   },
-  link: {
-    background: "transparent",
-    border: "1px solid #38bdf8",
-    color: "#38bdf8",
-    padding: "6px 10px",
-    borderRadius: "6px",
-    cursor: "pointer",
+  paused: {
+    background: "#ca8a04",
+    padding: "4px 10px",
+    borderRadius: "999px",
   },
 };
