@@ -1,27 +1,24 @@
 import { useState } from "react";
 
-export default function OfferForm({ onClose, onSave, initialData = null }) {
-  const [offer, setOffer] = useState(
-    initialData || {
-      name: "",
-      advertiser: "",
-      geo: "",
-      carrier: "",
-      plan: "",
-      payout: "",
-      revenue: "",
-      method: "POST",
-      parameters: "",
-      enableAntiFraud: false,
-      antiFraudScript: "",
-      status: "Active",
-    }
-  );
+export default function OfferForm({ onClose, onSave }) {
+  const [form, setForm] = useState({
+    name: "",
+    advertiser: "",
+    geo: "",
+    carrier: "",
+    plan: "",
+    payout: "",
+    revenue: "",
+    method: "POST",
+    endpoint: "",
+    parameters: "",
+    antiFraud: false,
+  });
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setOffer({
-      ...offer,
+    setForm({
+      ...form,
       [name]: type === "checkbox" ? checked : value,
     });
   };
@@ -29,138 +26,113 @@ export default function OfferForm({ onClose, onSave, initialData = null }) {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // 🔮 Future API hook
-    if (onSave) {
-      onSave({
-        ...offer,
-        id: initialData?.id || `OFF-${Date.now()}`,
-      });
-    }
+    const payload = {
+      ...form,
+      id: "OFF_" + Date.now(), // 🔑 Unique Offer ID
+    };
 
+    onSave?.(payload);
     onClose();
   };
 
   return (
     <div style={styles.overlay}>
-      <div style={styles.modal}>
-        <h2 style={styles.heading}>
-          {initialData ? "Edit Offer" : "Create Offer"}
-        </h2>
+      <form style={styles.card} onSubmit={handleSubmit}>
+        <h2 style={styles.title}>Create / Edit Offer</h2>
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          {/* BASIC INFO */}
-          <div style={styles.grid}>
-            <input
-              style={styles.input}
-              name="name"
-              placeholder="Offer Name"
-              value={offer.name}
-              onChange={handleChange}
-              required
-            />
-            <input
-              style={styles.input}
-              name="advertiser"
-              placeholder="Advertiser"
-              value={offer.advertiser}
-              onChange={handleChange}
-              required
-            />
-            <input
-              style={styles.input}
-              name="geo"
-              placeholder="Geo (e.g. Kuwait)"
-              value={offer.geo}
-              onChange={handleChange}
-            />
-            <input
-              style={styles.input}
-              name="carrier"
-              placeholder="Carrier (e.g. Zain)"
-              value={offer.carrier}
-              onChange={handleChange}
-            />
-            <input
-              style={styles.input}
-              name="plan"
-              placeholder="Plan (Daily / Weekly / Monthly)"
-              value={offer.plan}
-              onChange={handleChange}
-            />
-            <select
-              name="method"
-              value={offer.method}
-              onChange={handleChange}
-              style={styles.input}
-            >
-              <option value="POST">POST</option>
-              <option value="GET">GET</option>
-            </select>
-          </div>
+        {/* BASIC INFO */}
+        <div style={styles.grid}>
+          <input
+            name="name"
+            placeholder="Offer Name"
+            value={form.name}
+            onChange={handleChange}
+            required
+          />
+          <input
+            name="advertiser"
+            placeholder="Advertiser Name"
+            value={form.advertiser}
+            onChange={handleChange}
+            required
+          />
+          <input
+            name="geo"
+            placeholder="Geo (e.g. Kuwait)"
+            value={form.geo}
+            onChange={handleChange}
+          />
+          <input
+            name="carrier"
+            placeholder="Carrier (e.g. Zain)"
+            value={form.carrier}
+            onChange={handleChange}
+          />
+          <input
+            name="plan"
+            placeholder="Plan (Daily / Weekly / Monthly)"
+            value={form.plan}
+            onChange={handleChange}
+          />
+          <input
+            name="payout"
+            placeholder="Payout ($)"
+            value={form.payout}
+            onChange={handleChange}
+          />
+          <input
+            name="revenue"
+            placeholder="Revenue ($)"
+            value={form.revenue}
+            onChange={handleChange}
+          />
+        </div>
 
-          {/* PAYOUT */}
-          <div style={styles.grid}>
-            <input
-              style={styles.input}
-              name="payout"
-              placeholder="Payout"
-              value={offer.payout}
-              onChange={handleChange}
-            />
-            <input
-              style={styles.input}
-              name="revenue"
-              placeholder="Revenue"
-              value={offer.revenue}
-              onChange={handleChange}
-            />
-          </div>
+        {/* API CONFIG */}
+        <div style={styles.section}>
+          <label>Request Method</label>
+          <select name="method" value={form.method} onChange={handleChange}>
+            <option>POST</option>
+            <option>GET</option>
+          </select>
 
-          {/* PARAMETERS */}
-          <textarea
-            style={styles.textarea}
-            name="parameters"
-            placeholder="Request Parameters (from documents)
-Example:
-msisdn={msisdn}
-operator={operator}
-transaction_id={txn_id}"
-            value={offer.parameters}
+          <input
+            name="endpoint"
+            placeholder="API Endpoint URL"
+            value={form.endpoint}
             onChange={handleChange}
           />
 
-          {/* ANTI FRAUD */}
-          <label style={styles.checkboxRow}>
-            <input
-              type="checkbox"
-              name="enableAntiFraud"
-              checked={offer.enableAntiFraud}
-              onChange={handleChange}
-            />
-            Enable Anti-Fraud
-          </label>
+          <textarea
+            name="parameters"
+            placeholder="Request Parameters (JSON format)"
+            value={form.parameters}
+            onChange={handleChange}
+            rows={5}
+          />
+        </div>
 
-          {offer.enableAntiFraud && (
-            <textarea
-              style={styles.textarea}
-              name="antiFraudScript"
-              placeholder="Paste Anti-Fraud Script / Pixel here"
-              value={offer.antiFraudScript}
-              onChange={handleChange}
-            />
-          )}
+        {/* ANTI FRAUD */}
+        <div style={styles.checkbox}>
+          <input
+            type="checkbox"
+            name="antiFraud"
+            checked={form.antiFraud}
+            onChange={handleChange}
+          />
+          <span>Enable Anti-Fraud</span>
+        </div>
 
-          {/* ACTIONS */}
-          <div style={styles.actions}>
-            <button type="button" style={styles.cancel} onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" style={styles.save}>
-              Save Offer
-            </button>
-          </div>
-        </form>
-      </div>
+        {/* ACTIONS */}
+        <div style={styles.actions}>
+          <button type="button" onClick={onClose} style={styles.cancel}>
+            Cancel
+          </button>
+          <button type="submit" style={styles.save}>
+            Save Offer
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -177,72 +149,56 @@ const styles = {
     justifyContent: "center",
     zIndex: 50,
   },
-  modal: {
+  card: {
     width: "720px",
     background: "#020617",
-    borderRadius: "16px",
-    padding: "28px",
     border: "1px solid #1e293b",
+    borderRadius: "14px",
+    padding: "24px",
     color: "#fff",
   },
-  heading: {
-    fontSize: "22px",
-    marginBottom: "20px",
+  title: {
     textAlign: "center",
-  },
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "14px",
+    marginBottom: "20px",
+    fontSize: "22px",
   },
   grid: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: "12px",
   },
-  input: {
-    padding: "12px",
-    background: "#020617",
-    border: "1px solid #1e293b",
-    borderRadius: "8px",
-    color: "#fff",
+  section: {
+    marginTop: "20px",
+    display: "grid",
+    gap: "10px",
   },
-  textarea: {
-    minHeight: "90px",
-    padding: "12px",
-    background: "#020617",
-    border: "1px solid #1e293b",
-    borderRadius: "8px",
-    color: "#fff",
-    resize: "vertical",
-  },
-  checkboxRow: {
+  checkbox: {
+    marginTop: "16px",
     display: "flex",
-    alignItems: "center",
     gap: "8px",
-    fontSize: "14px",
+    alignItems: "center",
   },
   actions: {
+    marginTop: "24px",
     display: "flex",
     justifyContent: "flex-end",
     gap: "12px",
-    marginTop: "10px",
   },
   cancel: {
-    padding: "10px 16px",
-    background: "#020617",
-    border: "1px solid #334155",
-    borderRadius: "8px",
+    background: "#1e293b",
+    border: "none",
     color: "#fff",
+    padding: "10px 16px",
+    borderRadius: "8px",
     cursor: "pointer",
   },
   save: {
-    padding: "10px 18px",
     background: "#2563eb",
     border: "none",
-    borderRadius: "8px",
     color: "#fff",
-    fontWeight: 600,
+    padding: "10px 18px",
+    borderRadius: "8px",
     cursor: "pointer",
+    fontWeight: 600,
   },
 };
