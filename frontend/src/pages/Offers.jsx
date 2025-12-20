@@ -1,91 +1,134 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 
-const generateOfferId = (geo, carrier, index) =>
-  `OFF-${geo.slice(0,2).toUpperCase()}-${carrier.slice(0,4).toUpperCase()}-${String(index+1).padStart(3,"0")}`;
+/* 🔑 ID Generator */
+const generateOfferId = (geo, carrier, plan, index) =>
+  `OFF-${geo.slice(0,2).toUpperCase()}-${carrier
+    .slice(0,4)
+    .toUpperCase()}-${plan.toUpperCase()}-${String(index+1).padStart(3,"0")}`;
 
 export default function Offers() {
-  const [offers, setOffers] = useState([]);
 
+  /* 🔁 GET / POST READY */
+  const [offers, setOffers] = useState([]);
   const [form, setForm] = useState({
     name: "",
-    geo: "",
-    carrier: "",
-    plan: "Weekly",
+    geo: "Kuwait",
+    carrier: "Zain",
+    plan: "monthly",
     payout: "",
     revenue: "",
+    landingPage: "",
     fraudEnabled: true,
     partnerId: "",
     serviceId: "",
-    checkStatusUrl: "",
-    sendOtpUrl: "",
-    verifyOtpUrl: "",
-    portalUrl: ""
   });
 
-  const handleChange = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+  /* 🔁 SIMULATE GET */
+  useEffect(() => {
+    const apiResponse = [
+      {
+        name: "Shemaroo Miniplex",
+        geo: "Kuwait",
+        carrier: "Zain",
+        plan: "monthly",
+        payout: 2.5,
+        revenue: 4.0,
+        landingPage: "https://miniplx.com",
+        fraudEnabled: true,
+        partnerId: "partner:977bade4-42dc-4c4c-b957-3c8ac2fa4a2b",
+        serviceId: "campaign:c4ed200275a5b38934b17f30cc79a8ef45eac926",
+      },
+    ];
+    setOffers(apiResponse);
+  }, []);
 
+  /* ➕ CREATE OFFER (POST READY) */
   const addOffer = () => {
-    const newOffer = {
-      offerId: generateOfferId(form.geo, form.carrier, offers.length),
-      ...form,
-      status: "Active"
-    };
-    setOffers([...offers, newOffer]);
-    setForm({});
+    setOffers(prev => [...prev, form]);
+    setForm({
+      name: "",
+      geo: "Kuwait",
+      carrier: "Zain",
+      plan: "monthly",
+      payout: "",
+      revenue: "",
+      landingPage: "",
+      fraudEnabled: true,
+      partnerId: "",
+      serviceId: "",
+    });
   };
 
   return (
-    <div style={{ display: "flex" }}>
+    <div style={{ display:"flex" }}>
       <Sidebar />
-      <div style={{ flex: 1, background: "#020617", minHeight: "100vh" }}>
+      <div style={styles.main}>
         <Header />
 
-        <div style={{ padding: 24, color: "#fff" }}>
-          <h2>Create / Manage Offers</h2>
+        <div style={styles.content}>
+          <h2>Offers</h2>
+          <p style={{ color:"#94a3b8" }}>
+            Full API + Fraud + Parameters Config (GET & POST Ready)
+          </p>
 
           {/* CREATE FORM */}
-          <div style={card}>
-            <input name="name" placeholder="Offer Name" onChange={handleChange} />
-            <input name="geo" placeholder="Geo (Kuwait)" onChange={handleChange} />
-            <input name="carrier" placeholder="Carrier (Zain)" onChange={handleChange} />
-            <input name="payout" placeholder="Payout" onChange={handleChange} />
-            <input name="revenue" placeholder="Revenue" onChange={handleChange} />
-            <input name="partnerId" placeholder="Fraud Partner ID" onChange={handleChange} />
-            <input name="serviceId" placeholder="Fraud Service ID" onChange={handleChange} />
-            <input name="checkStatusUrl" placeholder="Check Status API URL" onChange={handleChange} />
-            <input name="sendOtpUrl" placeholder="Send OTP API URL" onChange={handleChange} />
-            <input name="verifyOtpUrl" placeholder="Verify OTP API URL" onChange={handleChange} />
-            <input name="portalUrl" placeholder="Portal URL API" onChange={handleChange} />
+          <div style={styles.card}>
+            <h3>Create Offer</h3>
 
-            <button onClick={addOffer}>Save Offer</button>
+            <input placeholder="Offer Name"
+              value={form.name}
+              onChange={e=>setForm({...form,name:e.target.value})} />
+
+            <input placeholder="Landing Page URL"
+              value={form.landingPage}
+              onChange={e=>setForm({...form,landingPage:e.target.value})} />
+
+            <input placeholder="Payout"
+              value={form.payout}
+              onChange={e=>setForm({...form,payout:e.target.value})} />
+
+            <input placeholder="Revenue"
+              value={form.revenue}
+              onChange={e=>setForm({...form,revenue:e.target.value})} />
+
+            <input placeholder="Fraud Partner ID"
+              value={form.partnerId}
+              onChange={e=>setForm({...form,partnerId:e.target.value})} />
+
+            <input placeholder="Fraud Service ID"
+              value={form.serviceId}
+              onChange={e=>setForm({...form,serviceId:e.target.value})} />
+
+            <button onClick={addOffer}>Add Offer</button>
           </div>
 
-          {/* LIST */}
-          <table style={{ width: "100%", marginTop: 20 }}>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Geo</th>
-                <th>Carrier</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {offers.map((o) => (
-                <tr key={o.offerId}>
-                  <td>{o.offerId}</td>
-                  <td>{o.name}</td>
-                  <td>{o.geo}</td>
-                  <td>{o.carrier}</td>
-                  <td>{o.status}</td>
+          {/* OFFERS TABLE */}
+          <div style={styles.card}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th>ID</th><th>Name</th><th>Plan</th>
+                  <th>Payout</th><th>Revenue</th><th>Fraud</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {offers.map((o,i)=>(
+                  <tr key={i}>
+                    <td style={styles.mono}>
+                      {generateOfferId(o.geo,o.carrier,o.plan,i)}
+                    </td>
+                    <td>{o.name}</td>
+                    <td>{o.plan}</td>
+                    <td>${o.payout}</td>
+                    <td>${o.revenue}</td>
+                    <td>{o.fraudEnabled ? "Enabled" : "Off"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
         </div>
       </div>
@@ -93,12 +136,11 @@ export default function Offers() {
   );
 }
 
-const card = {
-  background: "#020617",
-  border: "1px solid #1e293b",
-  padding: 16,
-  borderRadius: 12,
-  display: "grid",
-  gridTemplateColumns: "repeat(2, 1fr)",
-  gap: 12
+/* 🎨 Styles */
+const styles = {
+  main:{flex:1,background:"#020617",minHeight:"100vh"},
+  content:{padding:24,color:"#fff"},
+  card:{border:"1px solid #1e293b",padding:16,borderRadius:12,marginBottom:20},
+  table:{width:"100%",borderCollapse:"collapse",textAlign:"center"},
+  mono:{fontFamily:"monospace",fontSize:12,color:"#93c5fd"}
 };
