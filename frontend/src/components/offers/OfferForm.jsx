@@ -1,22 +1,32 @@
 import { useState } from "react";
 
-export default function OfferForm({ onClose, onSave }) {
-  const [form, setForm] = useState({
+export default function OfferForm({ onClose }) {
+  const [offer, setOffer] = useState({
     name: "",
     advertiser: "",
     geo: "",
     carrier: "",
-    plan: "",
     payout: "",
     revenue: "",
-    status: "Active",
-    enableAntiFraud: false,
+    apiMode: "POST",
+
+    pinSendUrl: "",
+    pinSendParams: "",
+
+    pinVerifyUrl: "",
+    pinVerifyParams: "",
+
+    statusCheckUrl: "",
+
+    fraudEnabled: false,
+    fraudPartner: "",
+    fraudService: "",
   });
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setForm({
-      ...form,
+    setOffer({
+      ...offer,
       [name]: type === "checkbox" ? checked : value,
     });
   };
@@ -24,198 +34,210 @@ export default function OfferForm({ onClose, onSave }) {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    const payload = {
-      id: crypto.randomUUID(), // 🔑 unique offer id
-      ...form,
-      createdAt: new Date().toISOString(),
-    };
+    console.log("FINAL OFFER CONFIG:", {
+      ...offer,
+      pinSendParams: offer.pinSendParams.split(","),
+      pinVerifyParams: offer.pinVerifyParams.split(","),
+    });
 
-    console.log("Offer Payload:", payload);
-
-    if (onSave) onSave(payload);
     onClose();
   };
 
   return (
     <div style={styles.overlay}>
-      <div style={styles.modal}>
-        <h2 style={styles.title}>Create / Edit Offer</h2>
+      <form style={styles.card} onSubmit={handleSubmit}>
+        <h2 style={styles.heading}>Create Offer</h2>
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          {/* Row 1 */}
-          <div style={styles.row}>
-            <input
-              style={styles.input}
-              placeholder="Offer Name"
-              name="name"
-              value={form.name}
-              onChange={handleChange}
-              required
-            />
+        {/* BASIC INFO */}
+        <Section title="Basic Information">
+          <Input label="Offer Name" name="name" value={offer.name} onChange={handleChange} />
+          <Input label="Advertiser" name="advertiser" value={offer.advertiser} onChange={handleChange} />
+          <Row>
+            <Input label="Geo" name="geo" value={offer.geo} onChange={handleChange} />
+            <Input label="Carrier" name="carrier" value={offer.carrier} onChange={handleChange} />
+          </Row>
+          <Row>
+            <Input label="Payout" name="payout" value={offer.payout} onChange={handleChange} />
+            <Input label="Revenue" name="revenue" value={offer.revenue} onChange={handleChange} />
+          </Row>
+        </Section>
 
-            <input
-              style={styles.input}
-              placeholder="Advertiser"
-              name="advertiser"
-              value={form.advertiser}
-              onChange={handleChange}
-              required
-            />
-          </div>
+        {/* API MODE */}
+        <Section title="API Mode">
+          <select name="apiMode" value={offer.apiMode} onChange={handleChange} style={styles.select}>
+            <option value="POST">POST</option>
+            <option value="GET">GET</option>
+          </select>
+        </Section>
 
-          {/* Row 2 */}
-          <div style={styles.row}>
-            <input
-              style={styles.input}
-              placeholder="Geo (e.g. Kuwait)"
-              name="geo"
-              value={form.geo}
-              onChange={handleChange}
-            />
+        {/* PIN SEND */}
+        <Section title="PIN Send API">
+          <Input label="PIN Send URL" name="pinSendUrl" value={offer.pinSendUrl} onChange={handleChange} />
+          <Input
+            label="Parameters (comma separated)"
+            name="pinSendParams"
+            placeholder="msisdn,token,cycle,pixel"
+            value={offer.pinSendParams}
+            onChange={handleChange}
+          />
+        </Section>
 
-            <input
-              style={styles.input}
-              placeholder="Carrier (e.g. Zain)"
-              name="carrier"
-              value={form.carrier}
-              onChange={handleChange}
-            />
-          </div>
+        {/* PIN VERIFY */}
+        <Section title="PIN Verify API">
+          <Input label="PIN Verify URL" name="pinVerifyUrl" value={offer.pinVerifyUrl} onChange={handleChange} />
+          <Input
+            label="Parameters (comma separated)"
+            name="pinVerifyParams"
+            placeholder="msisdn,pin,token"
+            value={offer.pinVerifyParams}
+            onChange={handleChange}
+          />
+        </Section>
 
-          {/* Row 3 */}
-          <div style={styles.row}>
-            <input
-              style={styles.input}
-              placeholder="Plan (Daily / Weekly / Monthly)"
-              name="plan"
-              value={form.plan}
-              onChange={handleChange}
-            />
+        {/* STATUS */}
+        <Section title="Status Check API">
+          <Input label="Status Check URL" name="statusCheckUrl" value={offer.statusCheckUrl} onChange={handleChange} />
+        </Section>
 
-            <input
-              style={styles.input}
-              placeholder="Payout ($)"
-              name="payout"
-              value={form.payout}
-              onChange={handleChange}
-            />
-          </div>
-
-          {/* Row 4 */}
-          <div style={styles.row}>
-            <input
-              style={styles.input}
-              placeholder="Revenue ($)"
-              name="revenue"
-              value={form.revenue}
-              onChange={handleChange}
-            />
-
-            <select
-              style={styles.input}
-              name="status"
-              value={form.status}
-              onChange={handleChange}
-            >
-              <option value="Active">Active</option>
-              <option value="Paused">Paused</option>
-            </select>
-          </div>
-
-          {/* Anti Fraud */}
+        {/* FRAUD */}
+        <Section title="Anti-Fraud (Optional)">
           <label style={styles.checkbox}>
             <input
               type="checkbox"
-              name="enableAntiFraud"
-              checked={form.enableAntiFraud}
+              name="fraudEnabled"
+              checked={offer.fraudEnabled}
               onChange={handleChange}
             />
-            Enable Anti-Fraud
+            Enable Fraud Protection
           </label>
 
-          {/* Actions */}
-          <div style={styles.actions}>
-            <button type="button" style={styles.cancel} onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" style={styles.save}>
-              Save Offer
-            </button>
-          </div>
-        </form>
-      </div>
+          {offer.fraudEnabled && (
+            <>
+              <Input label="Fraud Partner ID" name="fraudPartner" value={offer.fraudPartner} onChange={handleChange} />
+              <Input label="Fraud Service ID" name="fraudService" value={offer.fraudService} onChange={handleChange} />
+            </>
+          )}
+        </Section>
+
+        {/* ACTIONS */}
+        <div style={styles.actions}>
+          <button type="button" onClick={onClose} style={styles.cancel}>
+            Cancel
+          </button>
+          <button type="submit" style={styles.save}>
+            Save Offer
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
 
-/* ---------------- STYLES ---------------- */
+/* ---------- SMALL COMPONENTS ---------- */
+
+const Section = ({ title, children }) => (
+  <div style={styles.section}>
+    <h4 style={styles.sectionTitle}>{title}</h4>
+    {children}
+  </div>
+);
+
+const Input = ({ label, ...props }) => (
+  <div style={styles.inputGroup}>
+    <label style={styles.label}>{label}</label>
+    <input {...props} style={styles.input} />
+  </div>
+);
+
+const Row = ({ children }) => (
+  <div style={styles.row}>{children}</div>
+);
+
+/* ---------- STYLES ---------- */
 
 const styles = {
   overlay: {
     position: "fixed",
     inset: 0,
-    background: "rgba(2,6,23,0.85)",
+    background: "rgba(0,0,0,0.6)",
     display: "flex",
-    alignItems: "center",
     justifyContent: "center",
-    zIndex: 1000,
+    alignItems: "center",
+    zIndex: 50,
   },
-  modal: {
+  card: {
     width: "720px",
+    maxHeight: "90vh",
+    overflowY: "auto",
     background: "#020617",
-    borderRadius: "16px",
-    padding: "32px",
+    padding: "28px",
+    borderRadius: "14px",
     color: "#fff",
-    border: "1px solid #1e293b",
   },
-  title: {
-    marginBottom: "24px",
+  heading: {
     textAlign: "center",
+    marginBottom: "20px",
   },
-  form: {
+  section: {
+    marginBottom: "20px",
+  },
+  sectionTitle: {
+    marginBottom: "10px",
+    color: "#38bdf8",
+    fontSize: "14px",
+  },
+  inputGroup: {
     display: "flex",
     flexDirection: "column",
-    gap: "16px",
+    marginBottom: "10px",
   },
-  row: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: "16px",
+  label: {
+    fontSize: "12px",
+    color: "#94a3b8",
+    marginBottom: "4px",
   },
   input: {
-    padding: "12px",
+    padding: "10px",
     borderRadius: "8px",
     border: "1px solid #1e293b",
     background: "#020617",
     color: "#fff",
+  },
+  select: {
+    width: "100%",
+    padding: "10px",
+    borderRadius: "8px",
+    background: "#020617",
+    color: "#fff",
+    border: "1px solid #1e293b",
+  },
+  row: {
+    display: "flex",
+    gap: "12px",
   },
   checkbox: {
     display: "flex",
-    gap: "10px",
-    alignItems: "center",
+    gap: "8px",
     fontSize: "14px",
+    alignItems: "center",
   },
   actions: {
     display: "flex",
-    justifyContent: "flex-end",
-    gap: "12px",
-    marginTop: "12px",
+    justifyContent: "space-between",
+    marginTop: "20px",
   },
   cancel: {
-    background: "#1e293b",
-    color: "#fff",
-    padding: "10px 16px",
+    background: "#334155",
+    padding: "10px 18px",
     borderRadius: "8px",
     border: "none",
-    cursor: "pointer",
+    color: "#fff",
   },
   save: {
-    background: "#2563eb",
-    color: "#fff",
-    padding: "10px 20px",
+    background: "#16a34a",
+    padding: "10px 18px",
     borderRadius: "8px",
     border: "none",
-    cursor: "pointer",
-    fontWeight: 600,
+    color: "#fff",
   },
 };
