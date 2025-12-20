@@ -2,163 +2,196 @@ import { useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 
-const generateOfferId = () => {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `OFF-${date}-${rand}`;
-};
-
 export default function Offers() {
   const [offers, setOffers] = useState([]);
   const [showForm, setShowForm] = useState(false);
 
   const [form, setForm] = useState({
-    id: "",
     name: "",
     advertiser: "",
     geo: "",
     carrier: "",
-    plan: "",
-    price: "",
     payout: "",
     revenue: "",
     status: "Active",
-    method: "POST",
-    pinSendUrl: "",
-    pinVerifyUrl: "",
-    statusCheckUrl: "",
-    portalUrl: "",
-    antiFraudEnabled: false,
+
+    execution: {
+      landing: { url: "", method: "GET" },
+      pinSend: { url: "", method: "POST", params: "" },
+      pinVerify: { url: "", method: "POST", params: "" },
+      statusCheck: { url: "", method: "GET" },
+      portalUrl: "",
+      antifraudEnabled: false,
+      antifraudScript: "",
+    },
   });
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setForm({ ...form, [name]: type === "checkbox" ? checked : value });
+  const handleChange = (e) =>
+    setForm({ ...form, [e.target.name]: e.target.value });
+
+  const handleExecChange = (section, key, value) => {
+    setForm({
+      ...form,
+      execution: {
+        ...form.execution,
+        [section]: {
+          ...form.execution[section],
+          [key]: value,
+        },
+      },
+    });
   };
 
-  const handleSubmit = () => {
+  const saveOffer = () => {
     const newOffer = {
+      id: `OFF-${Date.now()}`,
       ...form,
-      id: generateOfferId(),
     };
     setOffers([...offers, newOffer]);
     setShowForm(false);
-    setForm({
-      ...form,
-      name: "",
-      advertiser: "",
-      geo: "",
-      carrier: "",
-      plan: "",
-      price: "",
-      payout: "",
-      revenue: "",
-      pinSendUrl: "",
-      pinVerifyUrl: "",
-      statusCheckUrl: "",
-      portalUrl: "",
-      antiFraudEnabled: false,
-    });
   };
 
   return (
     <div style={{ display: "flex" }}>
       <Sidebar />
-
       <div style={styles.main}>
         <Header />
 
         <div style={styles.content}>
           <div style={styles.topBar}>
             <h2>Offers</h2>
-            <button style={styles.createBtn} onClick={() => setShowForm(!showForm)}>
+            <button style={styles.createBtn} onClick={() => setShowForm(true)}>
               + Create Offer
             </button>
           </div>
 
-          {/* OFFERS TABLE */}
-          <div style={styles.card}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Name</th>
-                  <th>Geo</th>
-                  <th>Carrier</th>
-                  <th>Payout</th>
-                  <th>Revenue</th>
-                  <th>Status</th>
+          {/* OFFER LIST */}
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Geo</th>
+                <th>Carrier</th>
+                <th>Payout</th>
+                <th>Revenue</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {offers.map((o) => (
+                <tr key={o.id}>
+                  <td>{o.id}</td>
+                  <td>{o.name}</td>
+                  <td>{o.geo}</td>
+                  <td>{o.carrier}</td>
+                  <td>${o.payout}</td>
+                  <td>${o.revenue}</td>
+                  <td>
+                    <span
+                      style={{
+                        ...styles.badge,
+                        background:
+                          o.status === "Active" ? "#16a34a" : "#ca8a04",
+                      }}
+                    >
+                      {o.status}
+                    </span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {offers.map((o) => (
-                  <tr key={o.id}>
-                    <td>{o.id}</td>
-                    <td>{o.name}</td>
-                    <td>{o.geo}</td>
-                    <td>{o.carrier}</td>
-                    <td>${o.payout}</td>
-                    <td>${o.revenue}</td>
-                    <td>
-                      <span
-                        style={{
-                          ...styles.status,
-                          background:
-                            o.status === "Active" ? "#16a34a" : "#ca8a04",
-                        }}
-                      >
-                        {o.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-                {offers.length === 0 && (
-                  <tr>
-                    <td colSpan="7" style={{ textAlign: "center", padding: "20px" }}>
-                      No offers created yet
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
 
-          {/* CREATE / EDIT FORM */}
+          {/* CREATE / EDIT OFFER */}
           {showForm && (
-            <div style={styles.formCard}>
+            <div style={styles.card}>
               <h3>Create / Edit Offer</h3>
 
               <div style={styles.grid}>
-                <input name="name" placeholder="Offer Name" onChange={handleChange} />
-                <input name="advertiser" placeholder="Advertiser" onChange={handleChange} />
-                <input name="geo" placeholder="Geo (Kuwait)" onChange={handleChange} />
-                <input name="carrier" placeholder="Carrier (Zain)" onChange={handleChange} />
-                <input name="plan" placeholder="Plan (Daily / Weekly)" onChange={handleChange} />
-                <input name="price" placeholder="Price" onChange={handleChange} />
-                <input name="payout" placeholder="Payout" onChange={handleChange} />
-                <input name="revenue" placeholder="Revenue" onChange={handleChange} />
-
-                <select name="method" onChange={handleChange}>
-                  <option value="POST">POST</option>
-                  <option value="GET">GET</option>
-                </select>
-
-                <input name="pinSendUrl" placeholder="PIN Send API URL" onChange={handleChange} />
-                <input name="pinVerifyUrl" placeholder="PIN Verify API URL" onChange={handleChange} />
-                <input name="statusCheckUrl" placeholder="Status Check API URL" onChange={handleChange} />
-                <input name="portalUrl" placeholder="Portal / Landing URL" onChange={handleChange} />
+                <input placeholder="Offer Name" name="name" onChange={handleChange} />
+                <input placeholder="Advertiser" name="advertiser" onChange={handleChange} />
+                <input placeholder="Geo" name="geo" onChange={handleChange} />
+                <input placeholder="Carrier" name="carrier" onChange={handleChange} />
+                <input placeholder="Payout" name="payout" onChange={handleChange} />
+                <input placeholder="Revenue" name="revenue" onChange={handleChange} />
               </div>
 
-              <label style={styles.checkbox}>
+              <h4>Execution Flow</h4>
+
+              <div style={styles.section}>
+                <strong>Landing Page</strong>
+                <input
+                  placeholder="Landing URL"
+                  onChange={(e) =>
+                    handleExecChange("landing", "url", e.target.value)
+                  }
+                />
+              </div>
+
+              <div style={styles.section}>
+                <strong>PIN Send API</strong>
+                <input
+                  placeholder="PIN Send URL"
+                  onChange={(e) =>
+                    handleExecChange("pinSend", "url", e.target.value)
+                  }
+                />
+                <textarea
+                  placeholder="Params (JSON)"
+                  onChange={(e) =>
+                    handleExecChange("pinSend", "params", e.target.value)
+                  }
+                />
+              </div>
+
+              <div style={styles.section}>
+                <strong>PIN Verify API</strong>
+                <input
+                  placeholder="PIN Verify URL"
+                  onChange={(e) =>
+                    handleExecChange("pinVerify", "url", e.target.value)
+                  }
+                />
+              </div>
+
+              <div style={styles.section}>
+                <strong>Status Check API</strong>
+                <input
+                  placeholder="Status Check URL"
+                  onChange={(e) =>
+                    handleExecChange("statusCheck", "url", e.target.value)
+                  }
+                />
+              </div>
+
+              <div style={styles.section}>
+                <strong>Portal URL</strong>
+                <input
+                  placeholder="Success Portal URL"
+                  onChange={(e) =>
+                    setForm({ ...form, execution: { ...form.execution, portalUrl: e.target.value } })
+                  }
+                />
+              </div>
+
+              <label>
                 <input
                   type="checkbox"
-                  name="antiFraudEnabled"
-                  onChange={handleChange}
-                />
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      execution: {
+                        ...form.execution,
+                        antifraudEnabled: e.target.checked,
+                      },
+                    })
+                  }
+                />{" "}
                 Enable Anti-Fraud
               </label>
 
-              <button style={styles.saveBtn} onClick={handleSubmit}>
+              <button style={styles.saveBtn} onClick={saveOffer}>
                 Save Offer
               </button>
             </div>
@@ -169,74 +202,15 @@ export default function Offers() {
   );
 }
 
-/* ================= STYLES ================= */
-
 const styles = {
-  main: {
-    flex: 1,
-    background: "#020617",
-    minHeight: "100vh",
-  },
-  content: {
-    padding: "24px",
-    color: "#fff",
-  },
-  topBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "16px",
-  },
-  createBtn: {
-    background: "#2563eb",
-    border: "none",
-    color: "#fff",
-    padding: "10px 16px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontWeight: 600,
-  },
-  card: {
-    border: "1px solid #1e293b",
-    borderRadius: "12px",
-    overflow: "hidden",
-    marginBottom: "24px",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    textAlign: "center",
-  },
-  status: {
-    padding: "4px 12px",
-    borderRadius: "999px",
-    fontSize: "12px",
-    fontWeight: 600,
-    color: "#fff",
-  },
-  formCard: {
-    border: "1px solid #1e293b",
-    borderRadius: "12px",
-    padding: "20px",
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: "12px",
-    marginBottom: "16px",
-  },
-  checkbox: {
-    display: "flex",
-    gap: "8px",
-    marginBottom: "16px",
-  },
-  saveBtn: {
-    background: "#16a34a",
-    border: "none",
-    color: "#fff",
-    padding: "10px 20px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontWeight: 600,
-  },
+  main: { flex: 1, background: "#020617", minHeight: "100vh" },
+  content: { padding: "24px", color: "#fff" },
+  topBar: { display: "flex", justifyContent: "space-between", marginBottom: "16px" },
+  createBtn: { background: "#2563eb", color: "#fff", padding: "10px 16px", border: "none", borderRadius: "8px" },
+  table: { width: "100%", borderCollapse: "collapse", marginBottom: "24px" },
+  badge: { padding: "4px 10px", borderRadius: "999px", color: "#fff" },
+  card: { border: "1px solid #1e293b", borderRadius: "12px", padding: "16px" },
+  grid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" },
+  section: { marginTop: "12px" },
+  saveBtn: { marginTop: "16px", background: "#16a34a", color: "#fff", padding: "10px", borderRadius: "8px" },
 };
