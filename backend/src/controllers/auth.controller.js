@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import pool from "../db.js";
+import pool from "../config/db.js"; // ✅ FIXED
 
 export const login = async (req, res) => {
   try {
@@ -31,10 +31,7 @@ export const login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      {
-        adminId: admin.id,
-        role: admin.role
-      },
+      { adminId: admin.id, role: admin.role },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
