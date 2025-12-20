@@ -22,13 +22,11 @@ export default function Login() {
         body: JSON.stringify({ email, password }),
       });
 
-      if (!res.ok) {
-        throw new Error("Invalid email or password");
-      }
+      if (!res.ok) throw new Error("Invalid email or password");
 
       const data = await res.json();
 
-      // ✅ JWT store karo
+      // 🔐 Save JWT
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
 
@@ -66,7 +64,7 @@ export default function Login() {
           required
         />
 
-        <button disabled={loading}>
+        <button type="submit" disabled={loading}>
           {loading ? "Logging in..." : "Login"}
         </button>
       </form>
