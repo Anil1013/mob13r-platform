@@ -1,30 +1,56 @@
-import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import pool from "../db.js";
 
 export const login = async (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  if (email !== "admin@mob13r.com") {
-    return res.status(401).json({ message: "Invalid credentials" });
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password required" });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    const result = await pool.query(
+      `SELECT id, email, password_hash, role
+       FROM admins
+       WHERE email = $1`,
+      [cleanEmail]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: "Invalid email" });
+    }
+
+    const admin = result.rows[0];
+
+    const isMatch = await bcrypt.compare(password, admin.password_hash);
+    if (!isMatch) {
+      return res.status(400).json({ error: "Invalid password" });
+    }
+
+    const token = jwt.sign(
+      {
+        adminId: admin.id,
+        role: admin.role
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    return res.json({
+      success: true,
+      token,
+      admin: {
+        id: admin.id,
+        email: admin.email,
+        role: admin.role
+      }
+    });
+
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
+    res.status(500).json({ error: "Server error" });
   }
-
-  const ADMIN_HASH =
-    "$2b$10$vgCr6DiTJu/a8wZC2ZWLhuC6sA6IK6Hu8ALykdk8KfjcECYQa7Fa";
-
-  const valid = await bcrypt.compare(password, ADMIN_HASH);
-
-  if (!valid) {
-    return res.status(401).json({ message: "Invalid credentials" });
-  }
-
-  const token = jwt.sign(
-    { email, role: "admin" },
-    process.env.JWT_SECRET,
-    { expiresIn: "24h" }
-  );
-
-  res.json({
-    token,
-    user: { email, role: "admin" },
-  });
 };
