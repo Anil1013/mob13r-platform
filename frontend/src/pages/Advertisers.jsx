@@ -1,38 +1,53 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
+import {
+  getAdvertisers,
+  createAdvertiser,
+  toggleAdvertiserStatus,
+  deleteAdvertiser,
+} from "../services/advertisers";
 
 export default function Advertisers() {
-  const [advertisers, setAdvertisers] = useState([
-    {
-      id: 1,
-      name: "Shemaroo",
-      email: "ops@shemaroo.com",
-      status: "Active",
-      createdAt: "01 Nov 2024",
-    },
-    {
-      id: 2,
-      name: "Zain Kuwait",
-      email: "api@zain.com",
-      status: "Paused",
-      createdAt: "18 Oct 2024",
-    },
-  ]);
+  const [advertisers, setAdvertisers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "" });
 
-  const toggleStatus = (id) => {
-    setAdvertisers((prev) =>
-      prev.map((a) =>
-        a.id === id
-          ? { ...a, status: a.status === "Active" ? "Paused" : "Active" }
-          : a
-      )
-    );
+  /* ================= LOAD DATA ================= */
+  const loadAdvertisers = async () => {
+    try {
+      const data = await getAdvertisers();
+      setAdvertisers(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const deleteAdvertiser = (id) => {
-    if (confirm("Are you sure you want to delete this advertiser?")) {
-      setAdvertisers((prev) => prev.filter((a) => a.id !== id));
+  useEffect(() => {
+    loadAdvertisers();
+  }, []);
+
+  /* ================= HANDLERS ================= */
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    await createAdvertiser(form);
+    setForm({ name: "", email: "" });
+    setShowModal(false);
+    loadAdvertisers();
+  };
+
+  const handleToggle = async (id) => {
+    await toggleAdvertiserStatus(id);
+    loadAdvertisers();
+  };
+
+  const handleDelete = async (id) => {
+    if (confirm("Delete advertiser?")) {
+      await deleteAdvertiser(id);
+      loadAdvertisers();
     }
   };
 
@@ -48,156 +63,174 @@ export default function Advertisers() {
             <div>
               <h2 style={styles.title}>Advertisers</h2>
               <p style={styles.subtitle}>
-                Manage advertisers, brands, and partners here.
+                Manage advertisers, brands, and partners
               </p>
             </div>
 
-            <button style={styles.addBtn}>+ Add Advertiser</button>
+            <button onClick={() => setShowModal(true)} style={styles.addBtn}>
+              + Add Advertiser
+            </button>
           </div>
 
           <div style={styles.card}>
             <table style={styles.table}>
               <thead>
                 <tr>
-                  <th style={styles.th}>Name</th>
-                  <th style={styles.th}>Email</th>
-                  <th style={styles.th}>Status</th>
-                  <th style={styles.th}>Created</th>
-                  <th style={styles.th}>Actions</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
 
               <tbody>
+                {loading && (
+                  <tr>
+                    <td colSpan="4" style={styles.empty}>Loading…</td>
+                  </tr>
+                )}
+
+                {!loading && advertisers.length === 0 && (
+                  <tr>
+                    <td colSpan="4" style={styles.empty}>
+                      No advertisers found
+                    </td>
+                  </tr>
+                )}
+
                 {advertisers.map((a) => (
                   <tr key={a.id}>
-                    <td style={styles.td}>{a.name}</td>
-                    <td style={styles.td}>{a.email}</td>
-
-                    <td style={styles.td}>
+                    <td>{a.name}</td>
+                    <td>{a.email}</td>
+                    <td>
                       <span
                         style={{
                           ...styles.status,
                           background:
-                            a.status === "Active"
-                              ? "#16a34a"
-                              : "#ca8a04",
+                            a.status === "Active" ? "#16a34a" : "#ca8a04",
                         }}
                       >
                         {a.status}
                       </span>
                     </td>
-
-                    <td style={styles.td}>{a.createdAt}</td>
-
-                    <td style={styles.td}>
+                    <td>
                       <button
-                        style={styles.actionBtn}
-                        onClick={() => toggleStatus(a.id)}
+                        style={styles.action}
+                        onClick={() => handleToggle(a.id)}
                       >
                         Toggle
                       </button>
-
                       <button
-                        style={{ ...styles.actionBtn, color: "#dc2626" }}
-                        onClick={() => deleteAdvertiser(a.id)}
+                        style={{ ...styles.action, color: "#dc2626" }}
+                        onClick={() => handleDelete(a.id)}
                       >
                         Delete
                       </button>
                     </td>
                   </tr>
                 ))}
-
-                {advertisers.length === 0 && (
-                  <tr>
-                    <td colSpan="5" style={styles.empty}>
-                      No advertisers found
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
         </div>
       </div>
+
+      {/* ================= MODAL ================= */}
+      {showModal && (
+        <div style={styles.overlay}>
+          <form style={styles.modal} onSubmit={handleCreate}>
+            <h3>Add Advertiser</h3>
+
+            <input
+              placeholder="Advertiser Name"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required
+            />
+
+            <input
+              placeholder="Email"
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              required
+            />
+
+            <div style={styles.modalActions}>
+              <button type="button" onClick={() => setShowModal(false)}>
+                Cancel
+              </button>
+              <button type="submit">Save</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
 
 /* ================= STYLES ================= */
-
 const styles = {
-  main: {
-    flex: 1,
-    background: "#020617",
-    minHeight: "100vh",
-  },
-  content: {
-    padding: "24px",
-    color: "#fff",
-  },
+  main: { flex: 1, background: "#020617", minHeight: "100vh" },
+  content: { padding: 24, color: "#fff" },
   topRow: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "20px",
+    marginBottom: 20,
   },
-  title: {
-    fontSize: "26px",
-    marginBottom: "4px",
-  },
-  subtitle: {
-    color: "#94a3b8",
-  },
+  title: { fontSize: 26 },
+  subtitle: { color: "#94a3b8" },
   addBtn: {
     background: "#2563eb",
-    border: "none",
     padding: "10px 16px",
-    borderRadius: "8px",
+    borderRadius: 8,
+    border: "none",
     color: "#fff",
     fontWeight: 600,
     cursor: "pointer",
   },
   card: {
-    background: "#020617",
     border: "1px solid #1e293b",
-    borderRadius: "12px",
+    borderRadius: 12,
     overflow: "hidden",
   },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    textAlign: "center",
-  },
-  th: {
-    padding: "14px",
-    fontSize: "13px",
-    color: "#94a3b8",
-    borderBottom: "1px solid #1e293b",
-  },
-  td: {
-    padding: "14px",
-    fontSize: "14px",
-    borderBottom: "1px solid #1e293b",
-    verticalAlign: "middle",
-  },
+  table: { width: "100%", borderCollapse: "collapse", textAlign: "center" },
   status: {
     padding: "4px 12px",
-    borderRadius: "999px",
-    fontSize: "12px",
-    fontWeight: 600,
+    borderRadius: 999,
+    fontSize: 12,
     color: "#fff",
   },
-  actionBtn: {
-    background: "transparent",
+  action: {
+    background: "none",
     border: "none",
     color: "#38bdf8",
     cursor: "pointer",
-    marginRight: "12px",
-    fontWeight: 600,
+    marginRight: 12,
   },
-  empty: {
-    padding: "24px",
-    color: "#94a3b8",
-    textAlign: "center",
+  empty: { padding: 24, color: "#94a3b8" },
+
+  /* MODAL */
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.6)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modal: {
+    background: "#020617",
+    padding: 24,
+    borderRadius: 12,
+    width: 360,
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  modalActions: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginTop: 12,
   },
 };
