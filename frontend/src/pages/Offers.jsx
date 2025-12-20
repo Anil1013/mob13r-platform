@@ -2,30 +2,69 @@ import { useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 
-/* 🔑 Offer ID Generator */
-const generateOfferId = (geo, carrier, index) =>
+/* 🔑 ID Generator */
+const generateOfferId = (geo, carrier, count) =>
   `OFF-${geo.slice(0, 2).toUpperCase()}-${carrier
     .slice(0, 4)
-    .toUpperCase()}-${String(index + 1).padStart(3, "0")}`;
+    .toUpperCase()}-${String(count + 1).padStart(3, "0")}`;
 
 export default function Offers() {
-  const [offers, setOffers] = useState([
-    {
-      name: "Shemaroo Weekly Pack",
-      geo: "Kuwait",
-      carrier: "Zain",
-      payout: 0.5,
-      revenue: 1.2,
-      status: "Active",
+  const [offers, setOffers] = useState([]);
+  const [showForm, setShowForm] = useState(false);
 
+  const [form, setForm] = useState({
+    name: "",
+    geo: "",
+    carrier: "",
+    payout: "",
+    revenue: "",
+    status: "Active",
+    pinSend: "",
+    pinVerify: "",
+    statusCheck: "",
+    portalUrl: "",
+  });
+
+  const handleChange = (e) =>
+    setForm({ ...form, [e.target.name]: e.target.value });
+
+  const saveOffer = () => {
+    if (!form.name || !form.geo || !form.carrier) {
+      alert("Name, Geo & Carrier required");
+      return;
+    }
+
+    const newOffer = {
+      id: generateOfferId(form.geo, form.carrier, offers.length),
+      name: form.name,
+      geo: form.geo,
+      carrier: form.carrier,
+      payout: form.payout,
+      revenue: form.revenue,
+      status: form.status,
       apis: {
-        pinSend: "https://api.example.com/pin/send",
-        pinVerify: "https://api.example.com/pin/verify",
-        statusCheck: "https://api.example.com/status",
-        portalUrl: "https://portal.example.com/subscribe",
+        pinSend: form.pinSend,
+        pinVerify: form.pinVerify,
+        statusCheck: form.statusCheck,
+        portalUrl: form.portalUrl,
       },
-    },
-  ]);
+    };
+
+    setOffers([...offers, newOffer]);
+    setShowForm(false);
+    setForm({
+      name: "",
+      geo: "",
+      carrier: "",
+      payout: "",
+      revenue: "",
+      status: "Active",
+      pinSend: "",
+      pinVerify: "",
+      statusCheck: "",
+      portalUrl: "",
+    });
+  };
 
   return (
     <div style={{ display: "flex" }}>
@@ -35,125 +74,122 @@ export default function Offers() {
         <Header />
 
         <div style={styles.content}>
-          <h2 style={styles.title}>Offers</h2>
-          <p style={styles.subtitle}>
-            Each offer includes PIN flow & portal configuration
-          </p>
+          <div style={styles.top}>
+            <h2>Offers</h2>
+            <button style={styles.addBtn} onClick={() => setShowForm(true)}>
+              + Add Offer
+            </button>
+          </div>
 
-          {offers.map((offer, index) => (
-            <div key={index} style={styles.card}>
-              <div style={styles.headerRow}>
-                <strong>{offer.name}</strong>
-                <span style={styles.mono}>
-                  {generateOfferId(offer.geo, offer.carrier, index)}
-                </span>
-              </div>
+          {/* OFFER TABLE */}
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Geo</th>
+                <th>Carrier</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {offers.map((o) => (
+                <tr key={o.id}>
+                  <td style={styles.mono}>{o.id}</td>
+                  <td>{o.name}</td>
+                  <td>{o.geo}</td>
+                  <td>{o.carrier}</td>
+                  <td>{o.status}</td>
+                </tr>
+              ))}
+              {offers.length === 0 && (
+                <tr>
+                  <td colSpan="5" style={styles.empty}>
+                    No offers added yet
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
 
-              <div style={styles.grid}>
-                <Field label="Geo" value={offer.geo} />
-                <Field label="Carrier" value={offer.carrier} />
-                <Field label="Payout" value={`$${offer.payout}`} />
-                <Field label="Revenue" value={`$${offer.revenue}`} />
-                <Field label="Status" value={offer.status} />
-              </div>
+          {/* CREATE / EDIT FORM */}
+          {showForm && (
+            <div style={styles.form}>
+              <h3>Create Offer (Paste APIs from Document)</h3>
 
-              <div style={styles.apiBox}>
-                <ApiField title="PIN Send API" value={offer.apis.pinSend} />
-                <ApiField title="PIN Verify API" value={offer.apis.pinVerify} />
-                <ApiField
-                  title="Status Check API"
-                  value={offer.apis.statusCheck}
-                />
-                <ApiField title="Portal URL" value={offer.apis.portalUrl} />
+              <input name="name" placeholder="Offer Name" onChange={handleChange} />
+              <input name="geo" placeholder="Geo (Kuwait)" onChange={handleChange} />
+              <input
+                name="carrier"
+                placeholder="Carrier (Zain)"
+                onChange={handleChange}
+              />
+              <input name="payout" placeholder="Payout" onChange={handleChange} />
+              <input name="revenue" placeholder="Revenue" onChange={handleChange} />
+
+              <textarea
+                name="pinSend"
+                placeholder="PIN Send API (paste full URL)"
+                onChange={handleChange}
+              />
+              <textarea
+                name="pinVerify"
+                placeholder="PIN Verify API"
+                onChange={handleChange}
+              />
+              <textarea
+                name="statusCheck"
+                placeholder="Status Check API"
+                onChange={handleChange}
+              />
+              <textarea
+                name="portalUrl"
+                placeholder="Portal URL"
+                onChange={handleChange}
+              />
+
+              <div style={styles.formActions}>
+                <button onClick={saveOffer}>Save Offer</button>
+                <button onClick={() => setShowForm(false)}>Cancel</button>
               </div>
             </div>
-          ))}
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-/* ---------- Small Reusable Components ---------- */
-
-const Field = ({ label, value }) => (
-  <div>
-    <div style={styles.label}>{label}</div>
-    <div>{value}</div>
-  </div>
-);
-
-const ApiField = ({ title, value }) => (
-  <div style={styles.apiRow}>
-    <div style={styles.apiTitle}>{title}</div>
-    <code style={styles.code}>{value}</code>
-  </div>
-);
-
-/* ---------------- STYLES ---------------- */
+/* ================= STYLES ================= */
 
 const styles = {
-  main: {
-    flex: 1,
-    background: "#020617",
-    minHeight: "100vh",
-  },
-  content: {
-    padding: "24px",
-    color: "#fff",
-  },
-  title: {
-    fontSize: "26px",
-    marginBottom: "6px",
-  },
-  subtitle: {
-    color: "#94a3b8",
-    marginBottom: "20px",
-  },
-  card: {
-    border: "1px solid #1e293b",
-    borderRadius: "12px",
-    padding: "16px",
-    marginBottom: "20px",
-  },
-  headerRow: {
+  main: { flex: 1, background: "#020617", minHeight: "100vh" },
+  content: { padding: "24px", color: "#fff" },
+  top: {
     display: "flex",
     justifyContent: "space-between",
-    marginBottom: "12px",
-  },
-  mono: {
-    fontFamily: "monospace",
-    color: "#93c5fd",
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(5, 1fr)",
-    gap: "16px",
     marginBottom: "16px",
   },
-  label: {
-    fontSize: "12px",
-    color: "#94a3b8",
+  addBtn: {
+    background: "#2563eb",
+    border: "none",
+    padding: "8px 14px",
+    color: "#fff",
+    borderRadius: "8px",
+    cursor: "pointer",
   },
-  apiBox: {
-    borderTop: "1px solid #1e293b",
-    paddingTop: "12px",
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+    marginBottom: "24px",
   },
-  apiRow: {
-    marginBottom: "10px",
+  mono: { fontFamily: "monospace", fontSize: "12px", color: "#93c5fd" },
+  empty: { textAlign: "center", color: "#94a3b8", padding: "20px" },
+
+  form: {
+    border: "1px solid #1e293b",
+    padding: "20px",
+    borderRadius: "12px",
   },
-  apiTitle: {
-    fontSize: "13px",
-    color: "#94a3b8",
-    marginBottom: "4px",
-  },
-  code: {
-    display: "block",
-    background: "#020617",
-    padding: "8px",
-    borderRadius: "6px",
-    fontSize: "12px",
-    color: "#e5e7eb",
-    overflowX: "auto",
-  },
+  formActions: { display: "flex", gap: "12px", marginTop: "12px" },
 };
