@@ -72,7 +72,7 @@ app.use("/api/templates", authJWT, templateRoutes);
 app.use("/api/tracking", authJWT, publisherTrackingRoutes);
 app.use("/api/fraud", authJWT, fraudRoutes);
 app.use("/inapp", inappRoutes);
-app.use("/api", inappReportRoutes);
+app.use("/api/reports/inapp", inappReportRoutes);
 
 /* ANALYTICS */
 app.use("/api/analytics", authJWT, analyticsRoutes);
