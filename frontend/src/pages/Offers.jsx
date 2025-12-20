@@ -1,111 +1,83 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 
-/* ===============================
-   UTIL: Offer ID Generator
-================================ */
-const generateOfferId = (geo, carrier, plan, index) => {
-  return `OFF-${geo.slice(0,2).toUpperCase()}-${carrier
-    .slice(0,4)
-    .toUpperCase()}-${plan.toUpperCase()}-${String(index+1).padStart(3,"0")}`;
-};
+/* =========================
+   UTIL: OFFER ID GENERATOR
+========================= */
+const generateOfferId = (geo, carrier, index) =>
+  `OFF-${geo.slice(0, 2).toUpperCase()}-${carrier
+    .slice(0, 4)
+    .toUpperCase()}-${String(index + 1).padStart(3, "0")}`;
 
-/* ===============================
-   MAIN COMPONENT
-================================ */
 export default function Offers() {
-
-  /* -----------------------------
-     OFFERS STATE
-     (GET / POST ready)
-  ------------------------------*/
+  /* =========================
+     STATE
+  ========================= */
   const [offers, setOffers] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingOffer, setEditingOffer] = useState(null);
 
-  /* -----------------------------
-     NEW OFFER FORM STATE
-  ------------------------------*/
-  const [form, setForm] = useState({
-    name: "",
-    advertiser: "Shemaroo",
-    geo: "Kuwait",
-    carrier: "Zain",
-    plan: "weekly",
-    payout: "",
-    revenue: "",
-    status: "Active",
-
-    // API CONFIG
-    pinSendUrl: "",
-    pinVerifyUrl: "",
-    statusCheckUrl: "",
-    portalUrl: "",
-
-    // Anti-fraud
-    fraudJs: "",
-    partnerId: "",
-    serviceId: "",
-  });
-
-  /* -----------------------------
-     SIMULATED GET (API READY)
-  ------------------------------*/
+  /* =========================
+     FETCH OFFERS (GET READY)
+     👉 Later replace with API
+  ========================= */
   useEffect(() => {
-    // 🔁 Later replace with real GET API
-    const apiResponse = [
+    // GET /api/offers
+    setOffers([
       {
         name: "Shemaroo Weekly Pack",
-        advertiser: "Shemaroo",
+        advertiserId: "ADV-001",
         geo: "Kuwait",
         carrier: "Zain",
-        plan: "weekly",
-        payout: 0.8,
-        revenue: 1.5,
+        payout: 0.5,
+        revenue: 1.2,
         status: "Active",
 
         apis: {
-          pinSend: "https://stc-kw.kidzo.mpx.mobi/api/v2/pin/send",
-          pinVerify: "https://stc-kw.kidzo.mpx.mobi/api/v2/pin/verify",
-          statusCheck: "https://selapi.selvasportal.com/api/service/check-status",
-          portal: "https://stc.kw.kidzo.mobi/",
+          pinSend: {
+            url: "https://stc-kw.kidzo.mpx.mobi/api/v2/pin/send",
+            method: "POST",
+            params: ["msisdn", "token", "cycle", "pixel", "contentURL", "confirmButtonHTMLId"],
+          },
+          pinVerify: {
+            url: "https://stc-kw.kidzo.mpx.mobi/api/v2/pin/verify",
+            method: "POST",
+            params: ["msisdn", "pin", "token", "cycle"],
+          },
+          statusCheck: {
+            url: "https://selapi.selvasportal.com:444/api/service/check-status",
+            method: "POST",
+          },
+          portalUrl: {
+            url: "https://selapi.selvasportal.com:444/api/service/product-url",
+            method: "POST",
+          },
         },
 
         antifraud: {
-          js: "https://fd.sla-alacrity.com/d513e9e03227.js",
-          partnerId: "partner:977bade4-42dc-4c4c-b957-3c8ac2fa4a2b",
-          serviceId: "campaign:52d659a55c4e41953de8ed68d57f06ef89d6a217",
+          enabled: true,
+          scriptUrl: "https://fd.sla-alacrity.com/d513e9e03227.js",
+          partner: "partner:977bade4-42dc-4c4c-b957-3c8ac2fa4a2b",
+          service: "campaign:c4ed200275a5b38934b17f30cc79a8ef45eac926",
         },
-      }
-    ];
-
-    setOffers(apiResponse);
+      },
+    ]);
   }, []);
 
-  /* -----------------------------
-     HANDLE FORM SUBMIT (POST)
-  ------------------------------*/
-  const handleSubmit = () => {
-    const newOffer = {
-      ...form,
-      payout: Number(form.payout),
-      revenue: Number(form.revenue),
-      apis: {
-        pinSend: form.pinSendUrl,
-        pinVerify: form.pinVerifyUrl,
-        statusCheck: form.statusCheckUrl,
-        portal: form.portalUrl,
-      },
-      antifraud: {
-        js: form.fraudJs,
-        partnerId: form.partnerId,
-        serviceId: form.serviceId,
-      },
-    };
-
-    // 🔁 Later replace with POST API
-    setOffers(prev => [...prev, newOffer]);
+  /* =========================
+     SAVE OFFER (POST READY)
+  ========================= */
+  const saveOffer = (offer) => {
+    if (editingOffer !== null) {
+      setOffers((prev) =>
+        prev.map((o, i) => (i === editingOffer ? offer : o))
+      );
+    } else {
+      setOffers((prev) => [...prev, offer]);
+    }
     setShowForm(false);
+    setEditingOffer(null);
   };
 
   return (
@@ -119,100 +91,218 @@ export default function Offers() {
           <div style={styles.top}>
             <h2>Offers</h2>
             <button style={styles.addBtn} onClick={() => setShowForm(true)}>
-              + Create Offer
+              + Add Offer
             </button>
           </div>
 
-          {/* =======================
+          {/* =========================
               OFFERS TABLE
-          ======================== */}
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Geo</th>
-                <th>Carrier</th>
-                <th>Payout</th>
-                <th>Revenue</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {offers.map((o, i) => (
-                <tr key={i}>
-                  <td style={styles.mono}>
-                    {generateOfferId(o.geo, o.carrier, o.plan, i)}
-                  </td>
-                  <td>{o.name}</td>
-                  <td>{o.geo}</td>
-                  <td>{o.carrier}</td>
-                  <td>${o.payout}</td>
-                  <td>${o.revenue}</td>
-                  <td>
-                    <span style={{
-                      ...styles.status,
-                      background: o.status === "Active" ? "#16a34a" : "#ca8a04"
-                    }}>
-                      {o.status}
-                    </span>
-                  </td>
+          ========================= */}
+          <div style={styles.card}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Geo</th>
+                  <th>Carrier</th>
+                  <th>Payout</th>
+                  <th>Revenue</th>
+                  <th>Status</th>
+                  <th>Fraud</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
 
-          {/* =======================
-              CREATE OFFER FORM
-          ======================== */}
+              <tbody>
+                {offers.map((o, index) => (
+                  <tr key={index}>
+                    <td style={styles.mono}>
+                      {generateOfferId(o.geo, o.carrier, index)}
+                    </td>
+                    <td>{o.name}</td>
+                    <td>{o.geo}</td>
+                    <td>{o.carrier}</td>
+                    <td>${o.payout}</td>
+                    <td>${o.revenue}</td>
+                    <td>
+                      <span
+                        style={{
+                          ...styles.badge,
+                          background: o.status === "Active" ? "#16a34a" : "#ca8a04",
+                        }}
+                      >
+                        {o.status}
+                      </span>
+                    </td>
+                    <td>
+                      {o.antifraud.enabled ? (
+                        <span style={{ ...styles.badge, background: "#2563eb" }}>
+                          Enabled
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td>
+                      <button
+                        style={styles.linkBtn}
+                        onClick={() => {
+                          setEditingOffer(index);
+                          setShowForm(true);
+                        }}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* =========================
+              OFFER FORM
+          ========================= */}
           {showForm && (
-            <div style={styles.form}>
-              <h3>Create Offer</h3>
-
-              <input placeholder="Offer Name"
-                onChange={e => setForm({...form, name:e.target.value})} />
-
-              <input placeholder="PIN Send API URL"
-                onChange={e => setForm({...form, pinSendUrl:e.target.value})} />
-
-              <input placeholder="PIN Verify API URL"
-                onChange={e => setForm({...form, pinVerifyUrl:e.target.value})} />
-
-              <input placeholder="Status Check API URL"
-                onChange={e => setForm({...form, statusCheckUrl:e.target.value})} />
-
-              <input placeholder="Portal URL"
-                onChange={e => setForm({...form, portalUrl:e.target.value})} />
-
-              <input placeholder="Anti-Fraud JS URL"
-                onChange={e => setForm({...form, fraudJs:e.target.value})} />
-
-              <input placeholder="Partner ID"
-                onChange={e => setForm({...form, partnerId:e.target.value})} />
-
-              <input placeholder="Service ID"
-                onChange={e => setForm({...form, serviceId:e.target.value})} />
-
-              <button onClick={handleSubmit}>Save Offer</button>
-            </div>
+            <OfferForm
+              initialData={editingOffer !== null ? offers[editingOffer] : null}
+              onSave={saveOffer}
+              onClose={() => {
+                setShowForm(false);
+                setEditingOffer(null);
+              }}
+            />
           )}
-
         </div>
       </div>
     </div>
   );
 }
 
-/* ===============================
+/* =========================
+   OFFER FORM COMPONENT
+========================= */
+function OfferForm({ initialData, onSave, onClose }) {
+  const [form, setForm] = useState(
+    initialData || {
+      name: "",
+      advertiserId: "",
+      geo: "",
+      carrier: "",
+      payout: "",
+      revenue: "",
+      status: "Active",
+      apis: {
+        pinSend: { url: "", method: "POST", params: "" },
+        pinVerify: { url: "", method: "POST", params: "" },
+        statusCheck: { url: "", method: "POST" },
+        portalUrl: { url: "", method: "POST" },
+      },
+      antifraud: {
+        enabled: false,
+        scriptUrl: "",
+        partner: "",
+        service: "",
+      },
+    }
+  );
+
+  return (
+    <div style={styles.modal}>
+      <div style={styles.modalCard}>
+        <h3>{initialData ? "Edit Offer" : "Create Offer"}</h3>
+
+        <input placeholder="Offer Name" value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })} />
+
+        <input placeholder="Advertiser ID" value={form.advertiserId}
+          onChange={(e) => setForm({ ...form, advertiserId: e.target.value })} />
+
+        <input placeholder="Geo (Kuwait)" value={form.geo}
+          onChange={(e) => setForm({ ...form, geo: e.target.value })} />
+
+        <input placeholder="Carrier (Zain)" value={form.carrier}
+          onChange={(e) => setForm({ ...form, carrier: e.target.value })} />
+
+        <input placeholder="Payout" value={form.payout}
+          onChange={(e) => setForm({ ...form, payout: e.target.value })} />
+
+        <input placeholder="Revenue" value={form.revenue}
+          onChange={(e) => setForm({ ...form, revenue: e.target.value })} />
+
+        <h4>PIN Send API URL</h4>
+        <input value={form.apis.pinSend.url}
+          onChange={(e) =>
+            setForm({
+              ...form,
+              apis: {
+                ...form.apis,
+                pinSend: { ...form.apis.pinSend, url: e.target.value },
+              },
+            })
+          }
+        />
+
+        <h4>Anti-Fraud (Optional)</h4>
+        <label>
+          <input
+            type="checkbox"
+            checked={form.antifraud.enabled}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                antifraud: { ...form.antifraud, enabled: e.target.checked },
+              })
+            }
+          /> Enable Anti-Fraud
+        </label>
+
+        <input placeholder="Fraud Script URL" value={form.antifraud.scriptUrl}
+          onChange={(e) =>
+            setForm({
+              ...form,
+              antifraud: { ...form.antifraud, scriptUrl: e.target.value },
+            })
+          }
+        />
+
+        <div style={styles.actions}>
+          <button onClick={() => onSave(form)}>Save</button>
+          <button onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================
    STYLES
-================================ */
+========================= */
 const styles = {
-  main: { flex:1, background:"#020617", minHeight:"100vh" },
-  content: { padding:"24px", color:"#fff" },
-  top: { display:"flex", justifyContent:"space-between", alignItems:"center" },
-  addBtn: { background:"#2563eb", color:"#fff", padding:"8px 14px", border:"none", borderRadius:8 },
-  table: { width:"100%", marginTop:20, borderCollapse:"collapse", textAlign:"center" },
-  mono: { fontFamily:"monospace", fontSize:12, color:"#93c5fd" },
-  status: { padding:"4px 12px", borderRadius:999, color:"#fff" },
-  form: { marginTop:30, background:"#020617", padding:20, border:"1px solid #1e293b", borderRadius:12 }
+  main: { flex: 1, background: "#020617", minHeight: "100vh" },
+  content: { padding: 24, color: "#fff" },
+  top: { display: "flex", justifyContent: "space-between", marginBottom: 20 },
+  addBtn: { background: "#2563eb", color: "#fff", padding: "8px 14px", border: 0 },
+  card: { border: "1px solid #1e293b", borderRadius: 12, overflow: "hidden" },
+  table: { width: "100%", borderCollapse: "collapse", textAlign: "center" },
+  mono: { fontFamily: "monospace", fontSize: 12, color: "#93c5fd" },
+  badge: { padding: "4px 10px", borderRadius: 999, color: "#fff", fontSize: 12 },
+  linkBtn: { background: "none", color: "#38bdf8", border: 0, cursor: "pointer" },
+
+  modal: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,.6)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalCard: {
+    background: "#020617",
+    padding: 24,
+    width: 520,
+    borderRadius: 12,
+  },
+  actions: { display: "flex", gap: 12, marginTop: 20 },
 };
