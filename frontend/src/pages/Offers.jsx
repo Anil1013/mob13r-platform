@@ -1,34 +1,50 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import OfferForm from "../components/offers/OfferForm";
-import { getOffers } from "../services/offers";
-import { useNavigate } from "react-router-dom";
+import OfferConfig from "../components/offers/OfferConfig";
 
 export default function Offers() {
-  const [offers, setOffers] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const navigate = useNavigate();
+  const [selectedOffer, setSelectedOffer] = useState(null);
 
-  useEffect(() => {
-    getOffers().then(setOffers);
-  }, []);
+  const offers = [
+    {
+      id: "OFF-1001",
+      name: "Shemaroo Weekly Pack",
+      geo: "Kuwait",
+      carrier: "Zain",
+      payout: 0.5,
+      revenue: 1.2,
+      status: "Active",
+    },
+    {
+      id: "OFF-1002",
+      name: "Zain Sports Bundle",
+      geo: "Kuwait",
+      carrier: "Zain",
+      payout: 0.7,
+      revenue: 1.5,
+      status: "Paused",
+    },
+  ];
 
   return (
     <div style={{ display: "flex" }}>
       <Sidebar />
 
-      <div style={{ flex: 1, background: "#020617", minHeight: "100vh" }}>
+      <div style={styles.main}>
         <Header />
 
-        <div style={{ padding: "24px", color: "#fff" }}>
-          <div style={styles.top}>
+        <div style={styles.content}>
+          <div style={styles.headerRow}>
             <h2>Offers</h2>
-            <button onClick={() => setShowForm(true)}>+ Create Offer</button>
+            <button onClick={() => setShowForm(true)} style={styles.createBtn}>
+              + Create Offer
+            </button>
           </div>
 
-          {showForm && <OfferForm onClose={() => setShowForm(false)} />}
-
+          {/* TABLE */}
           <table style={styles.table}>
             <thead>
               <tr>
@@ -39,7 +55,7 @@ export default function Offers() {
                 <th>Payout</th>
                 <th>Revenue</th>
                 <th>Status</th>
-                <th>Flow</th>
+                <th>Config</th>
               </tr>
             </thead>
             <tbody>
@@ -52,12 +68,21 @@ export default function Offers() {
                   <td>${o.payout}</td>
                   <td>${o.revenue}</td>
                   <td>
-                    <span style={o.status === "Active" ? styles.active : styles.paused}>
+                    <span
+                      style={{
+                        ...styles.status,
+                        background:
+                          o.status === "Active" ? "#16a34a" : "#ca8a04",
+                      }}
+                    >
                       {o.status}
                     </span>
                   </td>
                   <td>
-                    <button onClick={() => navigate(`/offers/${o.id}`)}>
+                    <button
+                      style={styles.link}
+                      onClick={() => setSelectedOffer(o)}
+                    >
                       Configure
                     </button>
                   </td>
@@ -66,6 +91,13 @@ export default function Offers() {
             </tbody>
           </table>
 
+          {showForm && <OfferForm onClose={() => setShowForm(false)} />}
+          {selectedOffer && (
+            <OfferConfig
+              offer={selectedOffer}
+              onClose={() => setSelectedOffer(null)}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -73,23 +105,32 @@ export default function Offers() {
 }
 
 const styles = {
-  top: {
+  main: { flex: 1, background: "#020617", minHeight: "100vh" },
+  content: { padding: 24, color: "#fff" },
+  headerRow: {
     display: "flex",
     justifyContent: "space-between",
-    marginBottom: "16px",
+    marginBottom: 16,
   },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
+  createBtn: {
+    background: "#2563eb",
+    color: "#fff",
+    padding: "10px 16px",
+    borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
   },
-  active: {
-    background: "#16a34a",
+  table: { width: "100%", borderCollapse: "collapse" },
+  status: {
     padding: "4px 10px",
-    borderRadius: "999px",
+    borderRadius: 999,
+    fontSize: 12,
+    color: "#fff",
   },
-  paused: {
-    background: "#ca8a04",
-    padding: "4px 10px",
-    borderRadius: "999px",
+  link: {
+    color: "#38bdf8",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
   },
 };
