@@ -2,94 +2,60 @@ import { useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 
-/* ================= OFFER CONFIG ================= */
-
-const offers = [
-  {
-    id: "OFF-KW-ZAIN-001",
-    name: "ShemarooMe Weekly",
-    geo: "Kuwait",
-    carrier: "Zain",
-
-    service_id: "2c80d832-2710-4603-84d1-2b6b81bba849",
-    partner_id: "c8698098-a640-4e58-b585-c793c1a360de",
-
-    payout: 0.8,
-    revenue: 1.5,
-
-    apis: {
-      checkStatus: {
-        method: "POST",
-        url: "/api/check-status", // backend proxy
-      },
-      sendOtp: {
-        method: "POST",
-        url: "/api/send-otp",
-      },
-      verifyOtp: {
-        method: "POST",
-        url: "/api/verify-otp",
-      },
-      productUrl: {
-        method: "POST",
-        url: "/api/product-url",
-      },
-    },
-  },
-];
-
-/* ================= MAIN COMPONENT ================= */
+/* 🔑 ID Generator */
+const generateOfferId = (geo, carrier, index) =>
+  `OFF-${geo.slice(0,2).toUpperCase()}-${carrier.slice(0,4).toUpperCase()}-${String(index+1).padStart(3,"0")}`;
 
 export default function Offers() {
-  const [selectedOffer, setSelectedOffer] = useState(null);
-  const [msisdn, setMsisdn] = useState("");
-  const [otp, setOtp] = useState("");
-  const [step, setStep] = useState("IDLE");
-  const [log, setLog] = useState("");
+  const [offers, setOffers] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    advertiser: "",
+    geo: "",
+    carrier: "",
+    plan: "",
+    price: "",
+    payout: "",
+    revenue: "",
+    antifraudEnabled: false,
+    antifraudScript: "",
+    partnerId: "",
+    serviceId: ""
+  });
 
-  const transaction_id = crypto.randomUUID();
-
-  /* ================= EXECUTION HANDLERS ================= */
-
-  const checkStatus = async () => {
-    setStep("CHECK_STATUS");
-
-    setLog("Checking subscription status...");
-    // BACKEND CALL HERE
-    setTimeout(() => {
-      setLog("New user detected");
-      setStep("SEND_OTP");
-    }, 1000);
+  /* CREATE OFFER */
+  const createOffer = () => {
+    const newOffer = {
+      id: generateOfferId(form.geo, form.carrier, offers.length),
+      ...form,
+      status: "Active",
+      apis: {
+        checkStatus: {},
+        sendOtp: {},
+        verifyOtp: {},
+        portal: {}
+      }
+    };
+    setOffers([...offers, newOffer]);
+    setShowForm(false);
   };
-
-  const sendOtp = async () => {
-    setLog("Sending OTP (Fraud token included)");
-    setStep("VERIFY_OTP");
-  };
-
-  const verifyOtp = async () => {
-    setLog("OTP verified successfully");
-    setStep("REDIRECT");
-  };
-
-  const redirectUser = async () => {
-    setLog("Redirecting to product URL...");
-    window.open("https://www.shemaroome.com/", "_blank");
-  };
-
-  /* ================= UI ================= */
 
   return (
     <div style={{ display: "flex" }}>
       <Sidebar />
-
       <div style={styles.main}>
         <Header />
 
         <div style={styles.content}>
-          <h2>Offers</h2>
+          <div style={styles.top}>
+            <h2>Offers</h2>
+            <button onClick={() => setShowForm(true)} style={styles.add}>
+              + Create Offer
+            </button>
+          </div>
 
-          {/* OFFER LIST */}
+          {/* OFFER TABLE */}
           <table style={styles.table}>
             <thead>
               <tr>
@@ -97,68 +63,54 @@ export default function Offers() {
                 <th>Name</th>
                 <th>Geo</th>
                 <th>Carrier</th>
-                <th>Execute</th>
+                <th>Payout</th>
+                <th>Revenue</th>
+                <th>Status</th>
               </tr>
             </thead>
-
             <tbody>
-              {offers.map((o) => (
+              {offers.map(o => (
                 <tr key={o.id}>
                   <td>{o.id}</td>
                   <td>{o.name}</td>
                   <td>{o.geo}</td>
                   <td>{o.carrier}</td>
-                  <td>
-                    <button
-                      style={styles.btn}
-                      onClick={() => {
-                        setSelectedOffer(o);
-                        setStep("INPUT");
-                      }}
-                    >
-                      Run Flow
-                    </button>
-                  </td>
+                  <td>${o.payout}</td>
+                  <td>${o.revenue}</td>
+                  <td>{o.status}</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          {/* EXECUTION PANEL */}
-          {selectedOffer && (
-            <div style={styles.panel}>
-              <h3>Offer Execution Flow</h3>
+          {/* CREATE FORM */}
+          {showForm && (
+            <div style={styles.form}>
+              <h3>Create / Edit Offer</h3>
 
-              <input
-                placeholder="MSISDN (965XXXXXXX)"
-                value={msisdn}
-                onChange={(e) => setMsisdn(e.target.value)}
-              />
+              <input placeholder="Offer Name" onChange={e => setForm({...form,name:e.target.value})}/>
+              <input placeholder="Advertiser" onChange={e => setForm({...form,advertiser:e.target.value})}/>
+              <input placeholder="Geo (Kuwait)" onChange={e => setForm({...form,geo:e.target.value})}/>
+              <input placeholder="Carrier (Zain)" onChange={e => setForm({...form,carrier:e.target.value})}/>
+              <input placeholder="Plan (Daily / Weekly / Monthly)" onChange={e => setForm({...form,plan:e.target.value})}/>
+              <input placeholder="Price" onChange={e => setForm({...form,price:e.target.value})}/>
+              <input placeholder="Payout" onChange={e => setForm({...form,payout:e.target.value})}/>
+              <input placeholder="Revenue" onChange={e => setForm({...form,revenue:e.target.value})}/>
 
-              {step === "VERIFY_OTP" && (
-                <input
-                  placeholder="OTP"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                />
+              <label>
+                <input type="checkbox" onChange={e=>setForm({...form,antifraudEnabled:e.target.checked})}/>
+                Enable Anti-Fraud
+              </label>
+
+              {form.antifraudEnabled && (
+                <>
+                  <input placeholder="Fraud Script URL" onChange={e=>setForm({...form,antifraudScript:e.target.value})}/>
+                  <input placeholder="Partner ID" onChange={e=>setForm({...form,partnerId:e.target.value})}/>
+                  <input placeholder="Service ID" onChange={e=>setForm({...form,serviceId:e.target.value})}/>
+                </>
               )}
 
-              <div style={styles.actions}>
-                {step === "INPUT" && (
-                  <button onClick={checkStatus}>Check Status</button>
-                )}
-                {step === "SEND_OTP" && (
-                  <button onClick={sendOtp}>Send OTP</button>
-                )}
-                {step === "VERIFY_OTP" && (
-                  <button onClick={verifyOtp}>Verify OTP</button>
-                )}
-                {step === "REDIRECT" && (
-                  <button onClick={redirectUser}>Redirect</button>
-                )}
-              </div>
-
-              <pre style={styles.log}>{log}</pre>
+              <button onClick={createOffer}>Save Offer</button>
             </div>
           )}
         </div>
@@ -167,47 +119,12 @@ export default function Offers() {
   );
 }
 
-/* ================= STYLES ================= */
-
+/* STYLES */
 const styles = {
-  main: {
-    flex: 1,
-    background: "#020617",
-    minHeight: "100vh",
-  },
-  content: {
-    padding: "24px",
-    color: "#fff",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    textAlign: "center",
-  },
-  btn: {
-    background: "#2563eb",
-    color: "#fff",
-    padding: "6px 12px",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-  },
-  panel: {
-    marginTop: "24px",
-    padding: "16px",
-    border: "1px solid #1e293b",
-    borderRadius: "12px",
-  },
-  actions: {
-    marginTop: "12px",
-    display: "flex",
-    gap: "10px",
-  },
-  log: {
-    marginTop: "12px",
-    background: "#020617",
-    padding: "10px",
-    fontSize: "12px",
-    color: "#94a3b8",
-  },
+  main:{flex:1,background:"#020617",minHeight:"100vh"},
+  content:{padding:24,color:"#fff"},
+  top:{display:"flex",justifyContent:"space-between",marginBottom:16},
+  add:{background:"#2563eb",color:"#fff",border:"none",padding:"8px 14px"},
+  table:{width:"100%",textAlign:"center",borderCollapse:"collapse"},
+  form:{marginTop:20,background:"#020617",border:"1px solid #1e293b",padding:16}
 };
