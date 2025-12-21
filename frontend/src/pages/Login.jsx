@@ -33,10 +33,15 @@ export default function Login() {
         throw new Error(data.message || "Invalid email or password");
       }
 
-      // 🔐 JWT token save
-      localStorage.setItem("token", data.token);
+        // 🔐 Save token
+localStorage.setItem("token", data.token);
 
-      navigate("/dashboard");
+// ⏱ Save expiry (20 minutes)
+const expiryTime = Date.now() + 20 * 60 * 1000;
+localStorage.setItem("token_expiry", expiryTime);
+
+navigate("/dashboard");
+
     } catch (err) {
       setError(err.message);
     } finally {
@@ -82,3 +87,4 @@ export default function Login() {
     </div>
   );
 }
+
