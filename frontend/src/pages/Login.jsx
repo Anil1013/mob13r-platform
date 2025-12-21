@@ -16,7 +16,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/auth/login`, {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -30,7 +30,7 @@ export default function Login() {
         throw new Error(data.message || "Login failed");
       }
 
-      // 🔐 SAVE JWT
+      // 🔐 JWT save
       localStorage.setItem("token", data.token);
 
       navigate("/dashboard");
@@ -44,6 +44,17 @@ export default function Login() {
   return (
     <div className="login-wrapper">
       <form className="login-card" onSubmit={handleSubmit}>
+
+        {/* ✅ LOGO from public folder */}
+        <img
+          src="/logo.png"
+          alt="Mob13r Logo"
+          style={{
+            width: "130px",
+            marginBottom: "16px",
+          }}
+        />
+
         <h2>Mob13r Admin Panel</h2>
 
         {error && <div className="error">{error}</div>}
