@@ -2,20 +2,17 @@ import express from "express";
 import cors from "cors";
 import authRoutes from "./routes/auth.routes.js";
 
-const app = express;
+const app = express(); // ✅ FIXED: express()
 
-/* 🔥 HARD CORS FIX */
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://dashboard.mob13r.com");
-  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.header("Access-Control-Allow-Credentials", "true");
+/* 🔥 CORS */
+app.use(cors({
+  origin: ["https://dashboard.mob13r.com"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true
+}));
 
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-  next();
-});
+app.options("*", cors());
 
 app.use(express.json());
 
