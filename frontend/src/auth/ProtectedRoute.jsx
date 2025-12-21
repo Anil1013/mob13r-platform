@@ -1,27 +1,29 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, Outlet } from "react-router-dom";
 
-/**
- * 🔐 JWT Protected Route
- * - localStorage se token check
- * - token nahi → /login
- * - token hai → page allow
- */
-export default function ProtectedRoute({ children }) {
+const TOKEN_DURATION = 20 * 60 * 1000; // ⏱ 20 minutes
+
+export default function ProtectedRoute() {
   const token = localStorage.getItem("token");
+  const expiry = localStorage.getItem("token_expiry");
 
-  // ❌ Token nahi hai
-  if (!token) {
+  // ❌ Token missing
+  if (!token || !expiry) {
+    clearSession();
     return <Navigate to="/login" replace />;
   }
 
-  // ✅ Token hai
-  return children;
+  // ⏱ Expired?
+  const now = Date.now();
+  if (now > Number(expiry)) {
+    clearSession();
+    return <Navigate to="/login" replace />;
+  }
+
+  // ✅ Token valid
+  return <Outlet />;
 }
 
-/**
- * 🚪 Logout helper (optional use)
- */
-export const logout = () => {
+function clearSession() {
   localStorage.removeItem("token");
-  window.location.href = "/login";
-};
+  localStorage.removeItem("token_expiry");
+}
