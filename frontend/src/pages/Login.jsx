@@ -21,16 +21,19 @@ export default function Login() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+        }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.message || "Login failed");
+        throw new Error(data.message || "Invalid email or password");
       }
 
-      // 🔐 JWT save
+      // 🔐 JWT token save
       localStorage.setItem("token", data.token);
 
       navigate("/dashboard");
@@ -45,14 +48,11 @@ export default function Login() {
     <div className="login-wrapper">
       <form className="login-card" onSubmit={handleSubmit}>
 
-        {/* ✅ LOGO from public folder */}
+        {/* LOGO from public folder */}
         <img
           src="/logo.png"
           alt="Mob13r Logo"
-          style={{
-            width: "130px",
-            marginBottom: "16px",
-          }}
+          style={{ width: "130px", marginBottom: "16px" }}
         />
 
         <h2>Mob13r Admin Panel</h2>
