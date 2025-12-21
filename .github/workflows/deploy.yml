@@ -18,19 +18,22 @@ jobs:
         with:
           node-version: 22
 
-      - name: Zip source
+      - name: Install backend deps
         run: |
-          zip -r deploy.zip . \
-          -x "*.git*" \
-          -x "node_modules/*"
+          cd backend
+          npm install --omit=dev
+
+      - name: Zip application
+        run: |
+          zip -r app.zip . -x "*.git*"
 
       - name: Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
         with:
-          aws_access_key: \${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws_secret_key: \${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          region: \${{ secrets.AWS_REGION }}
-          application_name: \${{ secrets.EB_APPLICATION_NAME }}
-          environment_name: \${{ secrets.EB_ENVIRONMENT_NAME }}
-          version_label: github-\${{ github.run_number }}
-          deployment_package: deploy.zip
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          application_name: Mb13r-backend
+          environment_name: Mb13r-backend-env
+          region: ap-south-1
+          version_label: github-${{ github.sha }}
+          deployment_package: app.zip
