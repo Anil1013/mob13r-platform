@@ -2,21 +2,20 @@ import express from "express";
 import cors from "cors";
 import authRoutes from "./routes/auth.routes.js";
 
-const app = express();
+const app = express;
 
-/* 🔥 CORS FIX — VERY IMPORTANT */
-app.use(cors({
-  origin: [
-    "https://dashboard.mob13r.com",
-    "http://localhost:5173"
-  ],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true
-}));
+/* 🔥 HARD CORS FIX */
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "https://dashboard.mob13r.com");
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Credentials", "true");
 
-// Preflight requests allow
-app.options("*", cors());
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+  next();
+});
 
 app.use(express.json());
 
@@ -24,7 +23,6 @@ app.get("/health", (req, res) => {
   res.json({ status: "OK" });
 });
 
-/* API routes */
 app.use("/api/auth", authRoutes);
 
 export default app;
