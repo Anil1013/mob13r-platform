@@ -1,0 +1,7 @@
+{
+  "name": "mob13r-platform",
+  "private": true,
+  "scripts": {
+    "start": "cd backend && node src/server.js"
+  }
+}
