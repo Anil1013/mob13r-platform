@@ -10,38 +10,15 @@ export default function App() {
   return (
     <HashRouter>
       <Routes>
-
         <Route path="/login" element={<Login />} />
 
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/advertisers"
-          element={
-            <ProtectedRoute>
-              <Advertisers />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/offers"
-          element={
-            <ProtectedRoute>
-              <Offers />
-            </ProtectedRoute>
-          }
-        />
+        <Route element={<ProtectedRoute />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/advertisers" element={<Advertisers />} />
+          <Route path="/offers" element={<Offers />} />
+        </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />
-
       </Routes>
     </HashRouter>
   );
