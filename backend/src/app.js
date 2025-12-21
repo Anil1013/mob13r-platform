@@ -2,17 +2,15 @@ import express from "express";
 import cors from "cors";
 import authRoutes from "./routes/auth.routes.js";
 
-const app = express(); // ✅ FIXED: express()
+const app = express();
 
-/* 🔥 CORS */
+/* ✅ CORS — Express v5 compatible */
 app.use(cors({
-  origin: ["https://dashboard.mob13r.com"],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  origin: "https://dashboard.mob13r.com",
+  methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }));
-
-app.options("*", cors());
 
 app.use(express.json());
 
