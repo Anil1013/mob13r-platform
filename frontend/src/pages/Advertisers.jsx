@@ -11,8 +11,10 @@ import {
 export default function Advertisers() {
   const [advertisers, setAdvertisers] = useState([]);
   const [loading, setLoading] = useState(true);
+
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: "", email: "" });
+  const [saving, setSaving] = useState(false);
 
   /* ================= LOAD DATA ================= */
   const loadAdvertisers = async () => {
@@ -21,6 +23,7 @@ export default function Advertisers() {
       setAdvertisers(data);
     } catch (err) {
       console.error(err);
+      alert("Failed to load advertisers");
     } finally {
       setLoading(false);
     }
@@ -30,24 +33,40 @@ export default function Advertisers() {
     loadAdvertisers();
   }, []);
 
-  /* ================= HANDLERS ================= */
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    await createAdvertiser(form);
-    setForm({ name: "", email: "" });
-    setShowModal(false);
-    loadAdvertisers();
-  };
-
+  /* ================= ACTIONS ================= */
   const handleToggle = async (id) => {
-    await toggleAdvertiserStatus(id);
-    loadAdvertisers();
+    try {
+      await toggleAdvertiserStatus(id);
+      loadAdvertisers();
+    } catch {
+      alert("Failed to update status");
+    }
   };
 
   const handleDelete = async (id) => {
-    if (confirm("Delete advertiser?")) {
+    if (!confirm("Are you sure you want to delete this advertiser?")) return;
+
+    try {
       await deleteAdvertiser(id);
       loadAdvertisers();
+    } catch {
+      alert("Failed to delete advertiser");
+    }
+  };
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+
+    try {
+      await createAdvertiser(form);
+      setForm({ name: "", email: "" });
+      setShowModal(false);
+      loadAdvertisers();
+    } catch (err) {
+      alert("Failed to create advertiser");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -63,11 +82,11 @@ export default function Advertisers() {
             <div>
               <h2 style={styles.title}>Advertisers</h2>
               <p style={styles.subtitle}>
-                Manage advertisers, brands, and partners
+                Manage advertisers, brands, and partners here.
               </p>
             </div>
 
-            <button onClick={() => setShowModal(true)} style={styles.addBtn}>
+            <button style={styles.addBtn} onClick={() => setShowModal(true)}>
               + Add Advertiser
             </button>
           </div>
@@ -76,17 +95,19 @@ export default function Advertisers() {
             <table style={styles.table}>
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+                  <th style={styles.th}>Name</th>
+                  <th style={styles.th}>Email</th>
+                  <th style={styles.th}>Status</th>
+                  <th style={styles.th}>Actions</th>
                 </tr>
               </thead>
 
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan="4" style={styles.empty}>Loading…</td>
+                    <td colSpan="4" style={styles.empty}>
+                      Loading advertisers…
+                    </td>
                   </tr>
                 )}
 
@@ -98,37 +119,43 @@ export default function Advertisers() {
                   </tr>
                 )}
 
-                {advertisers.map((a) => (
-                  <tr key={a.id}>
-                    <td>{a.name}</td>
-                    <td>{a.email}</td>
-                    <td>
-                      <span
-                        style={{
-                          ...styles.status,
-                          background:
-                            a.status === "Active" ? "#16a34a" : "#ca8a04",
-                        }}
-                      >
-                        {a.status}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        style={styles.action}
-                        onClick={() => handleToggle(a.id)}
-                      >
-                        Toggle
-                      </button>
-                      <button
-                        style={{ ...styles.action, color: "#dc2626" }}
-                        onClick={() => handleDelete(a.id)}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {!loading &&
+                  advertisers.map((a) => (
+                    <tr key={a.id}>
+                      <td style={styles.td}>{a.name}</td>
+                      <td style={styles.td}>{a.email}</td>
+
+                      <td style={styles.td}>
+                        <span
+                          style={{
+                            ...styles.status,
+                            background:
+                              a.status === "Active"
+                                ? "#16a34a"
+                                : "#ca8a04",
+                          }}
+                        >
+                          {a.status}
+                        </span>
+                      </td>
+
+                      <td style={styles.td}>
+                        <button
+                          style={styles.actionBtn}
+                          onClick={() => handleToggle(a.id)}
+                        >
+                          Toggle
+                        </button>
+
+                        <button
+                          style={{ ...styles.actionBtn, color: "#dc2626" }}
+                          onClick={() => handleDelete(a.id)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -144,7 +171,9 @@ export default function Advertisers() {
             <input
               placeholder="Advertiser Name"
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, name: e.target.value })
+              }
               required
             />
 
@@ -152,15 +181,22 @@ export default function Advertisers() {
               placeholder="Email"
               type="email"
               value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, email: e.target.value })
+              }
               required
             />
 
             <div style={styles.modalActions}>
-              <button type="button" onClick={() => setShowModal(false)}>
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+              >
                 Cancel
               </button>
-              <button type="submit">Save</button>
+              <button type="submit" disabled={saving}>
+                {saving ? "Saving..." : "Save"}
+              </button>
             </div>
           </form>
         </div>
@@ -169,46 +205,66 @@ export default function Advertisers() {
   );
 }
 
-/* ================= STYLES ================= */
+/* ================= STYLES (UNCHANGED DESIGN) ================= */
+
 const styles = {
   main: { flex: 1, background: "#020617", minHeight: "100vh" },
-  content: { padding: 24, color: "#fff" },
+  content: { padding: "24px", color: "#fff" },
   topRow: {
     display: "flex",
     justifyContent: "space-between",
-    marginBottom: 20,
+    alignItems: "center",
+    marginBottom: "20px",
   },
-  title: { fontSize: 26 },
+  title: { fontSize: "26px", marginBottom: "4px" },
   subtitle: { color: "#94a3b8" },
   addBtn: {
     background: "#2563eb",
-    padding: "10px 16px",
-    borderRadius: 8,
     border: "none",
+    padding: "10px 16px",
+    borderRadius: "8px",
     color: "#fff",
     fontWeight: 600,
     cursor: "pointer",
   },
   card: {
+    background: "#020617",
     border: "1px solid #1e293b",
-    borderRadius: 12,
+    borderRadius: "12px",
     overflow: "hidden",
   },
   table: { width: "100%", borderCollapse: "collapse", textAlign: "center" },
+  th: {
+    padding: "14px",
+    fontSize: "13px",
+    color: "#94a3b8",
+    borderBottom: "1px solid #1e293b",
+  },
+  td: {
+    padding: "14px",
+    fontSize: "14px",
+    borderBottom: "1px solid #1e293b",
+  },
   status: {
     padding: "4px 12px",
-    borderRadius: 999,
-    fontSize: 12,
+    borderRadius: "999px",
+    fontSize: "12px",
+    fontWeight: 600,
     color: "#fff",
   },
-  action: {
-    background: "none",
+  actionBtn: {
+    background: "transparent",
     border: "none",
     color: "#38bdf8",
     cursor: "pointer",
-    marginRight: 12,
+    marginRight: "12px",
+    fontWeight: 600,
   },
-  empty: { padding: 24, color: "#94a3b8" },
+  empty: {
+    padding: "24px",
+    color: "#94a3b8",
+    textAlign: "center",
+  },
 
   /* MODAL */
   overlay: {
@@ -221,16 +277,17 @@ const styles = {
   },
   modal: {
     background: "#020617",
-    padding: 24,
-    borderRadius: 12,
-    width: 360,
+    padding: "24px",
+    borderRadius: "12px",
+    width: "360px",
     display: "flex",
     flexDirection: "column",
-    gap: 12,
+    gap: "12px",
+    color: "#fff",
   },
   modalActions: {
     display: "flex",
     justifyContent: "space-between",
-    marginTop: 12,
+    marginTop: "12px",
   },
 };
