@@ -32,12 +32,15 @@ export async function createAdvertiser(data) {
 
 /* ===================== TOGGLE STATUS ===================== */
 export async function toggleAdvertiserStatus(id) {
-  const res = await fetch(`${API_URL}/api/advertisers/${id}/status`, {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${getToken()}`,
-    },
-  });
+  const res = await fetch(
+    `${API_URL}/api/advertisers/${id}/status`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+      },
+    }
+  );
 
   if (!res.ok) throw new Error("Failed to update status");
   return res.json();
