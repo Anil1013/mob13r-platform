@@ -4,28 +4,42 @@ import Header from "../components/layout/Header";
 import OfferForm from "../components/offers/OfferForm";
 import OfferConfig from "../components/offers/OfferConfig";
 
-/* ✅ FUTURE API SERVICE */
 import { getOffers, createOffer } from "../services/offers";
 
 export default function Offers() {
   const [offers, setOffers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState(null);
 
-  /* 🔄 LOAD OFFERS (GET) */
-  useEffect(() => {
-    const loadOffers = async () => {
+  /* ================= LOAD OFFERS ================= */
+  const loadOffers = async () => {
+    try {
+      setLoading(true);
       const data = await getOffers();
-      setOffers(data);
-    };
+      setOffers(data || []);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load offers");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadOffers();
   }, []);
 
-  /* ➕ CREATE OFFER (POST) */
+  /* ================= CREATE OFFER ================= */
   const handleCreateOffer = async (newOffer) => {
-    const saved = await createOffer(newOffer);
-    setOffers((prev) => [...prev, saved]);
-    setShowForm(false);
+    try {
+      await createOffer(newOffer);
+      setShowForm(false);
+      loadOffers(); // ✅ always reload from DB
+    } catch (err) {
+      alert("Failed to create offer");
+    }
   };
 
   return (
@@ -44,6 +58,9 @@ export default function Offers() {
             </button>
           </div>
 
+          {/* ERROR */}
+          {error && <div style={styles.error}>{error}</div>}
+
           {/* TABLE CARD */}
           <div style={styles.card}>
             <table style={styles.table}>
@@ -51,6 +68,7 @@ export default function Offers() {
                 <tr>
                   <th>ID</th>
                   <th>Name</th>
+                  <th>Advertiser</th>
                   <th>Geo</th>
                   <th>Carrier</th>
                   <th>Payout</th>
@@ -61,45 +79,55 @@ export default function Offers() {
               </thead>
 
               <tbody>
-                {offers.length === 0 && (
+                {loading && (
                   <tr>
-                    <td colSpan="8" style={styles.empty}>
+                    <td colSpan="9" style={styles.empty}>
+                      Loading offers...
+                    </td>
+                  </tr>
+                )}
+
+                {!loading && offers.length === 0 && (
+                  <tr>
+                    <td colSpan="9" style={styles.empty}>
                       No offers created yet
                     </td>
                   </tr>
                 )}
 
-                {offers.map((o) => (
-                  <tr key={o.id}>
-                    <td style={styles.mono}>{o.id}</td>
-                    <td>{o.name}</td>
-                    <td>{o.geo}</td>
-                    <td>{o.carrier}</td>
-                    <td>${o.payout}</td>
-                    <td>${o.revenue}</td>
-                    <td>
-                      <span
-                        style={{
-                          ...styles.status,
-                          background:
-                            o.status === "Active"
-                              ? "#16a34a"
-                              : "#ca8a04",
-                        }}
-                      >
-                        {o.status}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        style={styles.link}
-                        onClick={() => setSelectedOffer(o)}
-                      >
-                        Configure
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {!loading &&
+                  offers.map((o) => (
+                    <tr key={o.id}>
+                      <td style={styles.mono}>{o.id}</td>
+                      <td>{o.name}</td>
+                      <td>{o.advertiser_name || "—"}</td>
+                      <td>{o.geo || "—"}</td>
+                      <td>{o.carrier || "—"}</td>
+                      <td>${o.payout ?? "—"}</td>
+                      <td>${o.revenue ?? "—"}</td>
+                      <td>
+                        <span
+                          style={{
+                            ...styles.status,
+                            background:
+                              o.status === "Active"
+                                ? "#16a34a"
+                                : "#ca8a04",
+                          }}
+                        >
+                          {o.status}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          style={styles.link}
+                          onClick={() => setSelectedOffer(o)}
+                        >
+                          Configure
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -124,7 +152,8 @@ export default function Offers() {
   );
 }
 
-/* 🎨 STYLES (CENTER + CLEAN) */
+/* ================= STYLES ================= */
+
 const styles = {
   main: {
     flex: 1,
@@ -189,5 +218,12 @@ const styles = {
     padding: 24,
     color: "#94a3b8",
     textAlign: "center",
+  },
+  error: {
+    background: "#7f1d1d",
+    padding: "10px",
+    borderRadius: 8,
+    marginBottom: 16,
+    color: "#fecaca",
   },
 };
