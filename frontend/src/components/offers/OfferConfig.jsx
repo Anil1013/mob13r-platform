@@ -5,8 +5,12 @@ export default function OfferConfig({ offer, onClose }) {
     <div style={styles.overlay}>
       <div style={styles.card}>
         <h2 style={styles.heading}>Offer Execution Flow</h2>
+
         <p style={styles.sub}>
-          {offer.name} • {offer.geo} • {offer.carrier}
+          {offer.name}
+          {offer.advertiser_name && ` • ${offer.advertiser_name}`}
+          {offer.geo && ` • ${offer.geo}`}
+          {offer.carrier && ` • ${offer.carrier}`}
         </p>
 
         {/* STEP 1 */}
@@ -22,7 +26,7 @@ export default function OfferConfig({ offer, onClose }) {
           title="2. PIN Send"
           method={offer.apiMode}
           url={offer.pinSendUrl}
-          params={offer.pinSendParams}
+          params={normalizeParams(offer.pinSendParams)}
         />
 
         {/* STEP 3 */}
@@ -30,15 +34,19 @@ export default function OfferConfig({ offer, onClose }) {
           title="3. PIN Verify"
           method={offer.apiMode}
           url={offer.pinVerifyUrl}
-          params={offer.pinVerifyParams}
+          params={normalizeParams(offer.pinVerifyParams)}
         />
 
         {/* STEP 4 */}
         {offer.fraudEnabled && (
           <div style={styles.step}>
             <h4 style={styles.stepTitle}>4. Anti-Fraud</h4>
-            <div style={styles.kv}>Partner: {offer.fraudPartner}</div>
-            <div style={styles.kv}>Service: {offer.fraudService}</div>
+            <div style={styles.kv}>
+              Partner: {offer.fraudPartner || "—"}
+            </div>
+            <div style={styles.kv}>
+              Service: {offer.fraudService || "—"}
+            </div>
           </div>
         )}
 
@@ -56,27 +64,41 @@ export default function OfferConfig({ offer, onClose }) {
   );
 }
 
-/* ---------- SMALL UI BLOCK ---------- */
+/* ================= HELPERS ================= */
+
+const normalizeParams = (params) => {
+  if (!params) return [];
+  if (Array.isArray(params)) return params;
+  if (typeof params === "string")
+    return params.split(",").map((p) => p.trim());
+  return [];
+};
+
+/* ================= SMALL UI BLOCK ================= */
 
 const Step = ({ title, method, url, params }) => (
   <div style={styles.step}>
     <h4 style={styles.stepTitle}>{title}</h4>
-    <div style={styles.kv}>Method: {method}</div>
+
+    <div style={styles.kv}>Method: {method || "—"}</div>
     <div style={styles.kv}>URL: {url || "—"}</div>
+
     <div style={styles.params}>
       Params:
-      {params && params.length
-        ? params.map((p) => (
-            <span key={p} style={styles.param}>
-              {p}
-            </span>
-          ))
-        : " —"}
+      {params && params.length ? (
+        params.map((p) => (
+          <span key={p} style={styles.param}>
+            {p}
+          </span>
+        ))
+      ) : (
+        <span style={{ marginLeft: 6 }}>—</span>
+      )}
     </div>
   </div>
 );
 
-/* ---------- STYLES ---------- */
+/* ================= STYLES (UNCHANGED) ================= */
 
 const styles = {
   overlay: {
