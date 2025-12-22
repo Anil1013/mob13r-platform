@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getAdvertisers } from "../../services/advertisers";
 
-export default function OfferForm({ onClose }) {
+export default function OfferForm({ onClose, onSave }) {
+  const [advertisers, setAdvertisers] = useState([]);
+
   const [offer, setOffer] = useState({
     name: "",
-    advertiser: "",
+    advertiser_id: "",
     geo: "",
     carrier: "",
     payout: "",
@@ -23,6 +26,16 @@ export default function OfferForm({ onClose }) {
     fraudService: "",
   });
 
+  /* ================= LOAD ADVERTISERS ================= */
+  useEffect(() => {
+    const loadAdvertisers = async () => {
+      const data = await getAdvertisers();
+      setAdvertisers(data);
+    };
+    loadAdvertisers();
+  }, []);
+
+  /* ================= HANDLE CHANGE ================= */
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setOffer({
@@ -31,16 +44,21 @@ export default function OfferForm({ onClose }) {
     });
   };
 
+  /* ================= SUBMIT ================= */
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    console.log("FINAL OFFER CONFIG:", {
+    onSave({
       ...offer,
-      pinSendParams: offer.pinSendParams.split(","),
-      pinVerifyParams: offer.pinVerifyParams.split(","),
+      payout: Number(offer.payout),
+      revenue: Number(offer.revenue),
+      pinSendParams: offer.pinSendParams
+        ? offer.pinSendParams.split(",").map((p) => p.trim())
+        : [],
+      pinVerifyParams: offer.pinVerifyParams
+        ? offer.pinVerifyParams.split(",").map((p) => p.trim())
+        : [],
     });
-
-    onClose();
   };
 
   return (
@@ -50,21 +68,67 @@ export default function OfferForm({ onClose }) {
 
         {/* BASIC INFO */}
         <Section title="Basic Information">
-          <Input label="Offer Name" name="name" value={offer.name} onChange={handleChange} />
-          <Input label="Advertiser" name="advertiser" value={offer.advertiser} onChange={handleChange} />
+          <Input
+            label="Offer Name"
+            name="name"
+            value={offer.name}
+            onChange={handleChange}
+            required
+          />
+
+          {/* ADVERTISER DROPDOWN */}
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Advertiser</label>
+            <select
+              name="advertiser_id"
+              value={offer.advertiser_id}
+              onChange={handleChange}
+              style={styles.select}
+              required
+            >
+              <option value="">Select advertiser</option>
+              {advertisers.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <Row>
             <Input label="Geo" name="geo" value={offer.geo} onChange={handleChange} />
-            <Input label="Carrier" name="carrier" value={offer.carrier} onChange={handleChange} />
+            <Input
+              label="Carrier"
+              name="carrier"
+              value={offer.carrier}
+              onChange={handleChange}
+            />
           </Row>
+
           <Row>
-            <Input label="Payout" name="payout" value={offer.payout} onChange={handleChange} />
-            <Input label="Revenue" name="revenue" value={offer.revenue} onChange={handleChange} />
+            <Input
+              label="Payout"
+              name="payout"
+              value={offer.payout}
+              onChange={handleChange}
+            />
+            <Input
+              label="Revenue"
+              name="revenue"
+              value={offer.revenue}
+              onChange={handleChange}
+            />
           </Row>
         </Section>
 
         {/* API MODE */}
         <Section title="API Mode">
-          <select name="apiMode" value={offer.apiMode} onChange={handleChange} style={styles.select}>
+          <select
+            name="apiMode"
+            value={offer.apiMode}
+            onChange={handleChange}
+            style={styles.select}
+          >
             <option value="POST">POST</option>
             <option value="GET">GET</option>
           </select>
@@ -72,7 +136,12 @@ export default function OfferForm({ onClose }) {
 
         {/* PIN SEND */}
         <Section title="PIN Send API">
-          <Input label="PIN Send URL" name="pinSendUrl" value={offer.pinSendUrl} onChange={handleChange} />
+          <Input
+            label="PIN Send URL"
+            name="pinSendUrl"
+            value={offer.pinSendUrl}
+            onChange={handleChange}
+          />
           <Input
             label="Parameters (comma separated)"
             name="pinSendParams"
@@ -84,7 +153,12 @@ export default function OfferForm({ onClose }) {
 
         {/* PIN VERIFY */}
         <Section title="PIN Verify API">
-          <Input label="PIN Verify URL" name="pinVerifyUrl" value={offer.pinVerifyUrl} onChange={handleChange} />
+          <Input
+            label="PIN Verify URL"
+            name="pinVerifyUrl"
+            value={offer.pinVerifyUrl}
+            onChange={handleChange}
+          />
           <Input
             label="Parameters (comma separated)"
             name="pinVerifyParams"
@@ -96,7 +170,12 @@ export default function OfferForm({ onClose }) {
 
         {/* STATUS */}
         <Section title="Status Check API">
-          <Input label="Status Check URL" name="statusCheckUrl" value={offer.statusCheckUrl} onChange={handleChange} />
+          <Input
+            label="Status Check URL"
+            name="statusCheckUrl"
+            value={offer.statusCheckUrl}
+            onChange={handleChange}
+          />
         </Section>
 
         {/* FRAUD */}
@@ -113,8 +192,18 @@ export default function OfferForm({ onClose }) {
 
           {offer.fraudEnabled && (
             <>
-              <Input label="Fraud Partner ID" name="fraudPartner" value={offer.fraudPartner} onChange={handleChange} />
-              <Input label="Fraud Service ID" name="fraudService" value={offer.fraudService} onChange={handleChange} />
+              <Input
+                label="Fraud Partner ID"
+                name="fraudPartner"
+                value={offer.fraudPartner}
+                onChange={handleChange}
+              />
+              <Input
+                label="Fraud Service ID"
+                name="fraudService"
+                value={offer.fraudService}
+                onChange={handleChange}
+              />
             </>
           )}
         </Section>
@@ -133,7 +222,7 @@ export default function OfferForm({ onClose }) {
   );
 }
 
-/* ---------- SMALL COMPONENTS ---------- */
+/* ================= SMALL COMPONENTS ================= */
 
 const Section = ({ title, children }) => (
   <div style={styles.section}>
@@ -153,7 +242,7 @@ const Row = ({ children }) => (
   <div style={styles.row}>{children}</div>
 );
 
-/* ---------- STYLES ---------- */
+/* ================= STYLES (UNCHANGED) ================= */
 
 const styles = {
   overlay: {
