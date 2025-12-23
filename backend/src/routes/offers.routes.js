@@ -13,14 +13,11 @@ router.use(auth);
 router.get("/", async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT
-        o.*,
-        a.name AS advertiser_name
+      SELECT o.*, a.name AS advertiser_name
       FROM offers o
       JOIN advertisers a ON a.id = o.advertiser_id
       ORDER BY o.created_at DESC
     `);
-
     res.json(rows);
   } catch (err) {
     console.error("GET OFFERS ERROR:", err);
@@ -43,17 +40,17 @@ router.post("/", async (req, res) => {
       apiMode,
 
       pinSendUrl,
-      pinSendParams,
-
+      pinSendParams = [],
       pinVerifyUrl,
-      pinVerifyParams,
-
+      pinVerifyParams = [],
       statusCheckUrl,
 
-      fraudEnabled,
+      fraudEnabled = false,
       fraudPartner,
       fraudService,
     } = req.body;
+
+    const api_mode = apiMode;
 
     const { rows } = await pool.query(
       `
@@ -62,30 +59,21 @@ router.post("/", async (req, res) => {
         name, geo, carrier,
         payout, revenue,
         api_mode,
-
-        pin_send_url,
-        pin_send_params,
-
-        pin_verify_url,
-        pin_verify_params,
-
+        pin_send_url, pin_send_params,
+        pin_verify_url, pin_verify_params,
         status_check_url,
-
-        fraud_enabled,
-        fraud_partner,
-        fraud_service
+        fraud_enabled, fraud_partner, fraud_service
       )
       VALUES (
         $1,$2,$3,$4,
-        $5,$6,
-        $7,
+        $5,$6,$7,
         $8,$9,
         $10,$11,
         $12,
         $13,$14,$15
       )
       RETURNING *
-    `,
+      `,
       [
         advertiser_id,
         name,
@@ -93,16 +81,12 @@ router.post("/", async (req, res) => {
         carrier,
         payout,
         revenue,
-        apiMode,
-
+        api_mode,
         pinSendUrl,
         pinSendParams,
-
         pinVerifyUrl,
         pinVerifyParams,
-
         statusCheckUrl,
-
         fraudEnabled,
         fraudPartner,
         fraudService,
@@ -117,12 +101,10 @@ router.post("/", async (req, res) => {
 });
 
 /* =====================================================
-   TOGGLE OFFER STATUS (Active / Paused)
+   TOGGLE OFFER STATUS
 ===================================================== */
 router.patch("/:id/status", async (req, res) => {
   try {
-    const { id } = req.params;
-
     const { rows } = await pool.query(
       `
       UPDATE offers
@@ -132,9 +114,13 @@ router.patch("/:id/status", async (req, res) => {
       END
       WHERE id = $1
       RETURNING *
-    `,
-      [id]
+      `,
+      [req.params.id]
     );
+
+    if (!rows.length) {
+      return res.status(404).json({ message: "Offer not found" });
+    }
 
     res.json(rows[0]);
   } catch (err) {
@@ -151,7 +137,6 @@ router.delete("/:id", async (req, res) => {
     await pool.query("DELETE FROM offers WHERE id = $1", [
       req.params.id,
     ]);
-
     res.json({ success: true });
   } catch (err) {
     console.error("DELETE OFFER ERROR:", err);
