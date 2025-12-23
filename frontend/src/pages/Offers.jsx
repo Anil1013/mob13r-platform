@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import OfferForm from "../components/offers/OfferForm";
@@ -12,6 +14,8 @@ export default function Offers() {
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState(null);
+
+  const navigate = useNavigate();
 
   /* ================= LOAD OFFERS ================= */
   const loadOffers = async () => {
@@ -36,7 +40,7 @@ export default function Offers() {
     try {
       await createOffer(newOffer);
       setShowForm(false);
-      loadOffers(); // ✅ always reload from DB
+      loadOffers(); // reload from DB
     } catch (err) {
       alert("Failed to create offer");
     }
@@ -53,7 +57,10 @@ export default function Offers() {
           {/* HEADER */}
           <div style={styles.headerRow}>
             <h2 style={styles.title}>Offers</h2>
-            <button style={styles.createBtn} onClick={() => setShowForm(true)}>
+            <button
+              style={styles.createBtn}
+              onClick={() => setShowForm(true)}
+            >
               + Create Offer
             </button>
           </div>
@@ -61,7 +68,7 @@ export default function Offers() {
           {/* ERROR */}
           {error && <div style={styles.error}>{error}</div>}
 
-          {/* TABLE CARD */}
+          {/* TABLE */}
           <div style={styles.card}>
             <table style={styles.table}>
               <thead>
@@ -75,13 +82,14 @@ export default function Offers() {
                   <th>Revenue</th>
                   <th>Status</th>
                   <th>Config</th>
+                  <th>Execute</th>
                 </tr>
               </thead>
 
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan="9" style={styles.empty}>
+                    <td colSpan="10" style={styles.empty}>
                       Loading offers...
                     </td>
                   </tr>
@@ -89,7 +97,7 @@ export default function Offers() {
 
                 {!loading && offers.length === 0 && (
                   <tr>
-                    <td colSpan="9" style={styles.empty}>
+                    <td colSpan="10" style={styles.empty}>
                       No offers created yet
                     </td>
                   </tr>
@@ -118,12 +126,26 @@ export default function Offers() {
                           {o.status}
                         </span>
                       </td>
+
+                      {/* CONFIG */}
                       <td>
                         <button
                           style={styles.link}
                           onClick={() => setSelectedOffer(o)}
                         >
                           Configure
+                        </button>
+                      </td>
+
+                      {/* EXECUTE */}
+                      <td>
+                        <button
+                          style={styles.execute}
+                          onClick={() =>
+                            navigate(`/offers/${o.id}/execute`)
+                          }
+                        >
+                          Execute
                         </button>
                       </td>
                     </tr>
@@ -211,6 +233,16 @@ const styles = {
     background: "none",
     border: "none",
     color: "#38bdf8",
+    cursor: "pointer",
+    fontWeight: 600,
+  },
+  execute: {
+    background: "#16a34a",
+    color: "#fff",
+    border: "none",
+    padding: "6px 12px",
+    borderRadius: 6,
+    fontSize: 12,
     cursor: "pointer",
     fontWeight: 600,
   },
