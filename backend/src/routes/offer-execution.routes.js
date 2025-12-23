@@ -1,7 +1,6 @@
 import { Router } from "express";
 import pool from "../db.js";
 import auth from "../middleware/auth.js";
-import fetch from "node-fetch";
 
 const router = Router();
 router.use(auth);
