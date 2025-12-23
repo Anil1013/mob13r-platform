@@ -5,25 +5,33 @@ export default function OfferForm({ onClose, onSave }) {
   const [advertisers, setAdvertisers] = useState([]);
 
   const [offer, setOffer] = useState({
+    /* ================= BASIC ================= */
     name: "",
     advertiser_id: "",
     geo: "",
     carrier: "",
     payout: "",
     revenue: "",
-    apiMode: "POST",
 
-    pinSendUrl: "",
-    pinSendParams: "",
+    /* ================= API ================= */
+    api_mode: "POST",
 
-    pinVerifyUrl: "",
-    pinVerifyParams: "",
+    /* ================= STATUS CHECK ================= */
+    status_check_url: "",
+    status_check_params: "msisdn,transaction_id",
 
-    statusCheckUrl: "",
+    /* ================= PIN SEND ================= */
+    pin_send_url: "",
+    pin_send_params: "msisdn,transaction_id",
 
-    fraudEnabled: false,
-    fraudPartner: "",
-    fraudService: "",
+    /* ================= PIN VERIFY ================= */
+    pin_verify_url: "",
+    pin_verify_params: "msisdn,pin,transaction_id",
+
+    /* ================= FRAUD ================= */
+    fraud_enabled: false,
+    fraud_partner: "",
+    fraud_service: "",
   });
 
   /* ================= LOAD ADVERTISERS ================= */
@@ -52,12 +60,10 @@ export default function OfferForm({ onClose, onSave }) {
       ...offer,
       payout: Number(offer.payout),
       revenue: Number(offer.revenue),
-      pinSendParams: offer.pinSendParams
-        ? offer.pinSendParams.split(",").map((p) => p.trim())
-        : [],
-      pinVerifyParams: offer.pinVerifyParams
-        ? offer.pinVerifyParams.split(",").map((p) => p.trim())
-        : [],
+
+      status_check_params: normalize(offer.status_check_params),
+      pin_send_params: normalize(offer.pin_send_params),
+      pin_verify_params: normalize(offer.pin_verify_params),
     });
   };
 
@@ -66,7 +72,7 @@ export default function OfferForm({ onClose, onSave }) {
       <form style={styles.card} onSubmit={handleSubmit}>
         <h2 style={styles.heading}>Create Offer</h2>
 
-        {/* BASIC INFO */}
+        {/* ================= BASIC INFO ================= */}
         <Section title="Basic Information">
           <Input
             label="Offer Name"
@@ -76,7 +82,7 @@ export default function OfferForm({ onClose, onSave }) {
             required
           />
 
-          {/* ADVERTISER DROPDOWN */}
+          {/* ADVERTISER */}
           <div style={styles.inputGroup}>
             <label style={styles.label}>Advertiser</label>
             <select
@@ -97,35 +103,20 @@ export default function OfferForm({ onClose, onSave }) {
 
           <Row>
             <Input label="Geo" name="geo" value={offer.geo} onChange={handleChange} />
-            <Input
-              label="Carrier"
-              name="carrier"
-              value={offer.carrier}
-              onChange={handleChange}
-            />
+            <Input label="Carrier" name="carrier" value={offer.carrier} onChange={handleChange} />
           </Row>
 
           <Row>
-            <Input
-              label="Payout"
-              name="payout"
-              value={offer.payout}
-              onChange={handleChange}
-            />
-            <Input
-              label="Revenue"
-              name="revenue"
-              value={offer.revenue}
-              onChange={handleChange}
-            />
+            <Input label="Payout" name="payout" value={offer.payout} onChange={handleChange} />
+            <Input label="Revenue" name="revenue" value={offer.revenue} onChange={handleChange} />
           </Row>
         </Section>
 
-        {/* API MODE */}
+        {/* ================= API MODE ================= */}
         <Section title="API Mode">
           <select
-            name="apiMode"
-            value={offer.apiMode}
+            name="api_mode"
+            value={offer.api_mode}
             onChange={handleChange}
             style={styles.select}
           >
@@ -134,81 +125,88 @@ export default function OfferForm({ onClose, onSave }) {
           </select>
         </Section>
 
-        {/* PIN SEND */}
-        <Section title="PIN Send API">
-          <Input
-            label="PIN Send URL"
-            name="pinSendUrl"
-            value={offer.pinSendUrl}
-            onChange={handleChange}
-          />
-          <Input
-            label="Parameters (comma separated)"
-            name="pinSendParams"
-            placeholder="msisdn,token,cycle,pixel"
-            value={offer.pinSendParams}
-            onChange={handleChange}
-          />
-        </Section>
-
-        {/* PIN VERIFY */}
-        <Section title="PIN Verify API">
-          <Input
-            label="PIN Verify URL"
-            name="pinVerifyUrl"
-            value={offer.pinVerifyUrl}
-            onChange={handleChange}
-          />
-          <Input
-            label="Parameters (comma separated)"
-            name="pinVerifyParams"
-            placeholder="msisdn,pin,token"
-            value={offer.pinVerifyParams}
-            onChange={handleChange}
-          />
-        </Section>
-
-        {/* STATUS */}
+        {/* ================= STATUS CHECK ================= */}
         <Section title="Status Check API">
           <Input
             label="Status Check URL"
-            name="statusCheckUrl"
-            value={offer.statusCheckUrl}
+            name="status_check_url"
+            value={offer.status_check_url}
+            onChange={handleChange}
+          />
+          <Input
+            label="Allowed Parameters (comma separated)"
+            name="status_check_params"
+            placeholder="msisdn,transaction_id"
+            value={offer.status_check_params}
             onChange={handleChange}
           />
         </Section>
 
-        {/* FRAUD */}
+        {/* ================= PIN SEND ================= */}
+        <Section title="PIN Send API">
+          <Input
+            label="PIN Send URL"
+            name="pin_send_url"
+            value={offer.pin_send_url}
+            onChange={handleChange}
+          />
+          <Input
+            label="Allowed Parameters (comma separated)"
+            name="pin_send_params"
+            placeholder="msisdn,transaction_id"
+            value={offer.pin_send_params}
+            onChange={handleChange}
+          />
+        </Section>
+
+        {/* ================= PIN VERIFY ================= */}
+        <Section title="PIN Verify API">
+          <Input
+            label="PIN Verify URL"
+            name="pin_verify_url"
+            value={offer.pin_verify_url}
+            onChange={handleChange}
+          />
+          <Input
+            label="Allowed Parameters (comma separated)"
+            name="pin_verify_params"
+            placeholder="msisdn,pin,transaction_id"
+            value={offer.pin_verify_params}
+            onChange={handleChange}
+          />
+        </Section>
+
+        {/* ================= FRAUD ================= */}
         <Section title="Anti-Fraud (Optional)">
           <label style={styles.checkbox}>
             <input
               type="checkbox"
-              name="fraudEnabled"
-              checked={offer.fraudEnabled}
+              name="fraud_enabled"
+              checked={offer.fraud_enabled}
               onChange={handleChange}
             />
             Enable Fraud Protection
           </label>
 
-          {offer.fraudEnabled && (
+          {offer.fraud_enabled && (
             <>
               <Input
                 label="Fraud Partner ID"
-                name="fraudPartner"
-                value={offer.fraudPartner}
+                name="fraud_partner"
+                value={offer.fraud_partner}
                 onChange={handleChange}
               />
               <Input
                 label="Fraud Service ID"
-                name="fraudService"
-                value={offer.fraudService}
+                name="fraud_service"
+                value={offer.fraud_service}
                 onChange={handleChange}
               />
             </>
           )}
         </Section>
 
-        {/* ACTIONS */}
+        {/* ================= ACTIONS ================= */}
         <div style={styles.actions}>
           <button type="button" onClick={onClose} style={styles.cancel}>
             Cancel
@@ -221,6 +219,16 @@ export default function OfferForm({ onClose, onSave }) {
     </div>
   );
 }
+
+/* ================= HELPERS ================= */
+
+const normalize = (value) =>
+  value
+    ? value
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean)
+    : [];
 
 /* ================= SMALL COMPONENTS ================= */
 
@@ -242,7 +250,7 @@ const Row = ({ children }) => (
   <div style={styles.row}>{children}</div>
 );
 
-/* ================= STYLES (UNCHANGED) ================= */
+/* ================= STYLES ================= */
 
 const styles = {
   overlay: {
