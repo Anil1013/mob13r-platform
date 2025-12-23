@@ -1,49 +1,58 @@
+import { useParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 
 import {
+  checkStatus,
   executePinSend,
   executePinVerify,
-  checkStatus,
 } from "../services/offers";
 
 export default function OfferExecute() {
-  const { offerId } = useParams();
+  const { id: offerId } = useParams();
+  const navigate = useNavigate();
 
   const [msisdn, setMsisdn] = useState("");
   const [pin, setPin] = useState("");
-  const [transactionId, setTransactionId] = useState("");
+  const [transactionId, setTransactionId] = useState(null);
 
-  const [step, setStep] = useState("status"); // status | pin-send | pin-verify
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState("");
+  const [logs, setLogs] = useState([]);
 
-  /* ================= STATUS CHECK ================= */
+  /* ================= LOG HELPER ================= */
+  const addLog = (title, data) => {
+    setLogs((prev) => [
+      {
+        title,
+        data,
+        time: new Date().toLocaleTimeString(),
+      },
+      ...prev,
+    ]);
+  };
+
+  /* ================= STEP 1: STATUS CHECK ================= */
   const handleStatusCheck = async () => {
     try {
       setLoading(true);
-      setError("");
 
       const res = await checkStatus(offerId, { msisdn });
 
       setTransactionId(res.transaction_id);
-      setResult(res.response);
-      setStep("pin-send");
+      addLog("Status Check", res.response);
     } catch (err) {
-      setError("Status check failed");
+      addLog("Status Check Failed", err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  /* ================= PIN SEND ================= */
+  /* ================= STEP 2: PIN SEND ================= */
   const handlePinSend = async () => {
     try {
       setLoading(true);
-      setError("");
 
       const res = await executePinSend(offerId, {
         msisdn,
@@ -51,20 +60,18 @@ export default function OfferExecute() {
       });
 
       setTransactionId(res.transaction_id);
-      setResult(res.response);
-      setStep("pin-verify");
+      addLog("PIN Send", res.response);
     } catch (err) {
-      setError("PIN send failed");
+      addLog("PIN Send Failed", err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  /* ================= PIN VERIFY ================= */
+  /* ================= STEP 3: PIN VERIFY ================= */
   const handlePinVerify = async () => {
     try {
       setLoading(true);
-      setError("");
 
       const res = await executePinVerify(offerId, {
         msisdn,
@@ -72,9 +79,9 @@ export default function OfferExecute() {
         transaction_id: transactionId,
       });
 
-      setResult(res.response);
+      addLog("PIN Verify", res.response);
     } catch (err) {
-      setError("PIN verify failed");
+      addLog("PIN Verify Failed", err.message);
     } finally {
       setLoading(false);
     }
@@ -88,90 +95,90 @@ export default function OfferExecute() {
         <Header />
 
         <div style={styles.content}>
-          <h2 style={styles.title}>Offer Execution</h2>
-
-          {/* INPUTS */}
-          <div style={styles.card}>
-            <Input
-              label="MSISDN"
-              value={msisdn}
-              onChange={(e) => setMsisdn(e.target.value)}
-              placeholder="919876543210"
-            />
-
-            {step === "pin-verify" && (
-              <Input
-                label="PIN"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                placeholder="1234"
-              />
-            )}
-
-            {/* ACTION BUTTONS */}
-            <div style={styles.actions}>
-              {step === "status" && (
-                <button
-                  onClick={handleStatusCheck}
-                  disabled={loading || !msisdn}
-                  style={styles.primary}
-                >
-                  Check Status
-                </button>
-              )}
-
-              {step === "pin-send" && (
-                <button
-                  onClick={handlePinSend}
-                  disabled={loading}
-                  style={styles.primary}
-                >
-                  Send PIN
-                </button>
-              )}
-
-              {step === "pin-verify" && (
-                <button
-                  onClick={handlePinVerify}
-                  disabled={loading || !pin}
-                  style={styles.success}
-                >
-                  Verify PIN
-                </button>
-              )}
-            </div>
+          {/* HEADER */}
+          <div style={styles.headerRow}>
+            <h2>Offer Execution</h2>
+            <button style={styles.back} onClick={() => navigate(-1)}>
+              ← Back
+            </button>
           </div>
 
-          {/* TRANSACTION */}
-          {transactionId && (
-            <div style={styles.info}>
-              <strong>Transaction ID:</strong> {transactionId}
+          {/* INPUT CARD */}
+          <div style={styles.card}>
+            <h4 style={styles.cardTitle}>Subscriber Details</h4>
+
+            <input
+              style={styles.input}
+              placeholder="MSISDN (e.g. 9715xxxxxxx)"
+              value={msisdn}
+              onChange={(e) => setMsisdn(e.target.value)}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="PIN (only for verify)"
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+            />
+
+            <div style={styles.buttons}>
+              <button
+                style={styles.primary}
+                disabled={loading || !msisdn}
+                onClick={handleStatusCheck}
+              >
+                1️⃣ Status Check
+              </button>
+
+              <button
+                style={styles.primary}
+                disabled={loading || !transactionId}
+                onClick={handlePinSend}
+              >
+                2️⃣ PIN Send
+              </button>
+
+              <button
+                style={styles.success}
+                disabled={loading || !pin}
+                onClick={handlePinVerify}
+              >
+                3️⃣ PIN Verify
+              </button>
             </div>
-          )}
 
-          {/* RESULT */}
-          {result && (
-            <pre style={styles.result}>
-              {JSON.stringify(result, null, 2)}
-            </pre>
-          )}
+            {transactionId && (
+              <div style={styles.tx}>
+                Transaction ID: <b>{transactionId}</b>
+              </div>
+            )}
+          </div>
 
-          {/* ERROR */}
-          {error && <div style={styles.error}>{error}</div>}
+          {/* LOGS */}
+          <div style={styles.logs}>
+            <h4>Execution Logs</h4>
+
+            {logs.length === 0 && (
+              <div style={styles.empty}>No execution yet</div>
+            )}
+
+            {logs.map((l, i) => (
+              <div key={i} style={styles.logCard}>
+                <div style={styles.logHeader}>
+                  {l.title}
+                  <span style={styles.time}>{l.time}</span>
+                </div>
+                <pre style={styles.pre}>
+                  {JSON.stringify(l.data, null, 2)}
+                </pre>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
   );
 }
-
-/* ================= SMALL COMPONENT ================= */
-
-const Input = ({ label, ...props }) => (
-  <div style={styles.inputGroup}>
-    <label style={styles.label}>{label}</label>
-    <input {...props} style={styles.input} />
-  </div>
-);
 
 /* ================= STYLES ================= */
 
@@ -184,77 +191,99 @@ const styles = {
   content: {
     padding: 24,
     color: "#fff",
-    maxWidth: "600px",
+    maxWidth: "900px",
     margin: "0 auto",
   },
-  title: {
-    fontSize: 24,
+  headerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
+  },
+  back: {
+    background: "#334155",
+    border: "none",
+    color: "#fff",
+    padding: "8px 14px",
+    borderRadius: 6,
+    cursor: "pointer",
   },
   card: {
     border: "1px solid #1e293b",
     borderRadius: 12,
     padding: 20,
-    marginBottom: 20,
+    marginBottom: 24,
   },
-  inputGroup: {
-    display: "flex",
-    flexDirection: "column",
+  cardTitle: {
     marginBottom: 12,
-  },
-  label: {
-    fontSize: 12,
-    color: "#94a3b8",
-    marginBottom: 4,
+    color: "#38bdf8",
   },
   input: {
-    padding: 10,
+    width: "100%",
+    padding: "10px",
+    marginBottom: 10,
     borderRadius: 8,
     border: "1px solid #1e293b",
     background: "#020617",
     color: "#fff",
   },
-  actions: {
-    marginTop: 16,
+  buttons: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    marginTop: 10,
   },
   primary: {
-    width: "100%",
-    padding: 12,
     background: "#2563eb",
-    border: "none",
-    borderRadius: 8,
     color: "#fff",
-    fontWeight: 600,
+    border: "none",
+    padding: "10px 14px",
+    borderRadius: 6,
     cursor: "pointer",
+    fontWeight: 600,
   },
   success: {
-    width: "100%",
-    padding: 12,
     background: "#16a34a",
-    border: "none",
-    borderRadius: 8,
     color: "#fff",
-    fontWeight: 600,
+    border: "none",
+    padding: "10px 14px",
+    borderRadius: 6,
     cursor: "pointer",
+    fontWeight: 600,
   },
-  info: {
+  tx: {
+    marginTop: 12,
     fontSize: 13,
-    color: "#93c5fd",
+    color: "#94a3b8",
+  },
+  logs: {
+    marginTop: 20,
+  },
+  logCard: {
+    border: "1px solid #1e293b",
+    borderRadius: 10,
+    padding: 12,
     marginBottom: 12,
   },
-  result: {
-    background: "#020617",
-    border: "1px solid #1e293b",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 12,
-    whiteSpace: "pre-wrap",
+  logHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginBottom: 6,
+    color: "#38bdf8",
+    fontSize: 13,
   },
-  error: {
-    marginTop: 12,
-    background: "#7f1d1d",
+  time: {
+    color: "#94a3b8",
+  },
+  pre: {
+    background: "#020617",
     padding: 10,
     borderRadius: 8,
-    color: "#fecaca",
+    fontSize: 12,
+    overflowX: "auto",
+  },
+  empty: {
+    color: "#94a3b8",
+    fontSize: 13,
   },
 };
