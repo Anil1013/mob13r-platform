@@ -4,6 +4,7 @@ import cors from "cors";
 import authRoutes from "./routes/auth.routes.js";
 import advertisersRoutes from "./routes/advertisers.routes.js";
 import offersRoutes from "./routes/offers.routes.js";
+import offerExecutionRoutes from "./routes/offer-execution.routes.js";
 
 const app = express();
 
@@ -32,5 +33,6 @@ app.get("/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/advertisers", advertisersRoutes);
 app.use("/api/offers", offersRoutes);
+app.use("/api/offers", offerExecutionRoutes);
 
 export default app;
