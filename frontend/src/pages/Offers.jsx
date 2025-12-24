@@ -23,6 +23,7 @@ export default function Offers() {
       setLoading(true);
       const data = await getOffers();
       setOffers(data || []);
+      setError("");
     } catch (err) {
       console.error(err);
       setError("Failed to load offers");
@@ -40,7 +41,7 @@ export default function Offers() {
     try {
       await createOffer(newOffer);
       setShowForm(false);
-      loadOffers(); // reload from DB
+      loadOffers(); // ✅ reload from DB
     } catch (err) {
       alert("Failed to create offer");
     }
@@ -57,12 +58,24 @@ export default function Offers() {
           {/* HEADER */}
           <div style={styles.headerRow}>
             <h2 style={styles.title}>Offers</h2>
-            <button
-              style={styles.createBtn}
-              onClick={() => setShowForm(true)}
-            >
-              + Create Offer
-            </button>
+
+            <div style={{ display: "flex", gap: 12 }}>
+              {/* VIEW LOGS */}
+              <button
+                style={styles.logsBtn}
+                onClick={() => navigate("/execution-logs")}
+              >
+                View Logs
+              </button>
+
+              {/* CREATE */}
+              <button
+                style={styles.createBtn}
+                onClick={() => setShowForm(true)}
+              >
+                + Create Offer
+              </button>
+            </div>
           </div>
 
           {/* ERROR */}
@@ -113,6 +126,7 @@ export default function Offers() {
                       <td>{o.carrier || "—"}</td>
                       <td>${o.payout ?? "—"}</td>
                       <td>${o.revenue ?? "—"}</td>
+
                       <td>
                         <span
                           style={{
@@ -199,6 +213,15 @@ const styles = {
   },
   createBtn: {
     background: "#2563eb",
+    color: "#fff",
+    padding: "10px 18px",
+    borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
+    fontWeight: 600,
+  },
+  logsBtn: {
+    background: "#334155",
     color: "#fff",
     padding: "10px 18px",
     borderRadius: 8,
