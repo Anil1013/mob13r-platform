@@ -194,4 +194,42 @@ router.post("/:id/pin-verify", async (req, res) => {
   }
 });
 
+/* =====================================================
+   GET EXECUTION LOGS
+   GET /api/offer-executions?offer_id=&transaction_id=
+===================================================== */
+router.get("/", async (req, res) => {
+  try {
+    const { offer_id, transaction_id } = req.query;
+
+    let where = [];
+    let values = [];
+
+    if (offer_id) {
+      values.push(offer_id);
+      where.push(`offer_id = $${values.length}`);
+    }
+
+    if (transaction_id) {
+      values.push(transaction_id);
+      where.push(`transaction_id = $${values.length}`);
+    }
+
+    const query = `
+      SELECT *
+      FROM offer_executions
+      ${where.length ? "WHERE " + where.join(" AND ") : ""}
+      ORDER BY created_at DESC
+      LIMIT 200
+    `;
+
+    const { rows } = await pool.query(query, values);
+    res.json(rows);
+  } catch (err) {
+    console.error("FETCH EXECUTION LOGS ERROR:", err);
+    res.status(500).json({ message: "Failed to fetch logs" });
+  }
+});
+
+
 export default router;
