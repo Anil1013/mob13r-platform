@@ -43,7 +43,7 @@ export default function OfferExecute() {
       setTransactionId(res.transaction_id);
       addLog("Status Check", res.response);
     } catch (err) {
-      addLog("Status Check Failed", err.message);
+      addLog("Status Check Failed", err.message || err);
     } finally {
       setLoading(false);
     }
@@ -62,7 +62,7 @@ export default function OfferExecute() {
       setTransactionId(res.transaction_id);
       addLog("PIN Send", res.response);
     } catch (err) {
-      addLog("PIN Send Failed", err.message);
+      addLog("PIN Send Failed", err.message || err);
     } finally {
       setLoading(false);
     }
@@ -81,7 +81,7 @@ export default function OfferExecute() {
 
       addLog("PIN Verify", res.response);
     } catch (err) {
-      addLog("PIN Verify Failed", err.message);
+      addLog("PIN Verify Failed", err.message || err);
     } finally {
       setLoading(false);
     }
@@ -98,9 +98,28 @@ export default function OfferExecute() {
           {/* HEADER */}
           <div style={styles.headerRow}>
             <h2>Offer Execution</h2>
-            <button style={styles.back} onClick={() => navigate(-1)}>
-              ← Back
-            </button>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              {transactionId && (
+                <button
+                  style={styles.logsBtn}
+                  onClick={() =>
+                    navigate(
+                      `/execution-logs?transaction_id=${transactionId}`
+                    )
+                  }
+                >
+                  View Logs
+                </button>
+              )}
+
+              <button
+                style={styles.back}
+                onClick={() => navigate(-1)}
+              >
+                ← Back
+              </button>
+            </div>
           </div>
 
           {/* INPUT CARD */}
@@ -140,7 +159,7 @@ export default function OfferExecute() {
 
               <button
                 style={styles.success}
-                disabled={loading || !pin}
+                disabled={loading || !pin || !transactionId}
                 onClick={handlePinVerify}
               >
                 3️⃣ PIN Verify
@@ -156,10 +175,12 @@ export default function OfferExecute() {
 
           {/* LOGS */}
           <div style={styles.logs}>
-            <h4>Execution Logs</h4>
+            <h4>Live Execution Logs</h4>
 
             {logs.length === 0 && (
-              <div style={styles.empty}>No execution yet</div>
+              <div style={styles.empty}>
+                No execution yet
+              </div>
             )}
 
             {logs.map((l, i) => (
@@ -168,6 +189,7 @@ export default function OfferExecute() {
                   {l.title}
                   <span style={styles.time}>{l.time}</span>
                 </div>
+
                 <pre style={styles.pre}>
                   {JSON.stringify(l.data, null, 2)}
                 </pre>
@@ -207,6 +229,15 @@ const styles = {
     padding: "8px 14px",
     borderRadius: 6,
     cursor: "pointer",
+  },
+  logsBtn: {
+    background: "#2563eb",
+    border: "none",
+    color: "#fff",
+    padding: "8px 14px",
+    borderRadius: 6,
+    cursor: "pointer",
+    fontWeight: 600,
   },
   card: {
     border: "1px solid #1e293b",
