@@ -6,18 +6,30 @@
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// 🔐 Helper
+/* =====================================================
+   🔐 AUTH HELPERS
+===================================================== */
 const getToken = () => localStorage.getItem("token");
 
+const authHeaders = () => ({
+  Authorization: `Bearer ${getToken()}`,
+});
+
+const jsonAuthHeaders = () => ({
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${getToken()}`,
+});
+
 /* =====================================================
-   GET ALL OFFERS
+   OFFERS CRUD
+===================================================== */
+
+/* ================= GET ALL OFFERS =================
    GET /api/offers
 ===================================================== */
 export const getOffers = async () => {
   const res = await fetch(`${API_URL}/api/offers`, {
-    headers: {
-      Authorization: `Bearer ${getToken()}`,
-    },
+    headers: authHeaders(),
   });
 
   if (!res.ok) {
@@ -27,17 +39,13 @@ export const getOffers = async () => {
   return res.json();
 };
 
-/* =====================================================
-   CREATE OFFER
+/* ================= CREATE OFFER =================
    POST /api/offers
 ===================================================== */
 export const createOffer = async (offer) => {
   const res = await fetch(`${API_URL}/api/offers`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
-    },
+    headers: jsonAuthHeaders(),
     body: JSON.stringify(offer),
   });
 
@@ -48,17 +56,13 @@ export const createOffer = async (offer) => {
   return res.json();
 };
 
-/* =====================================================
-   UPDATE OFFER (FUTURE USE)
+/* ================= UPDATE OFFER (FUTURE) =================
    PUT /api/offers/:id
 ===================================================== */
 export const updateOffer = async (id, offer) => {
   const res = await fetch(`${API_URL}/api/offers/${id}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
-    },
+    headers: jsonAuthHeaders(),
     body: JSON.stringify(offer),
   });
 
@@ -69,16 +73,13 @@ export const updateOffer = async (id, offer) => {
   return res.json();
 };
 
-/* =====================================================
-   TOGGLE OFFER STATUS (Active / Paused)
+/* ================= TOGGLE OFFER STATUS =================
    PATCH /api/offers/:id/status
 ===================================================== */
 export const toggleOfferStatus = async (id) => {
   const res = await fetch(`${API_URL}/api/offers/${id}/status`, {
     method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${getToken()}`,
-    },
+    headers: authHeaders(),
   });
 
   if (!res.ok) {
@@ -88,16 +89,13 @@ export const toggleOfferStatus = async (id) => {
   return res.json();
 };
 
-/* =====================================================
-   DELETE OFFER
+/* ================= DELETE OFFER =================
    DELETE /api/offers/:id
 ===================================================== */
 export const deleteOffer = async (id) => {
   const res = await fetch(`${API_URL}/api/offers/${id}`, {
     method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${getToken()}`,
-    },
+    headers: authHeaders(),
   });
 
   if (!res.ok) {
@@ -108,19 +106,41 @@ export const deleteOffer = async (id) => {
 };
 
 /* =====================================================
-   EXECUTION FLOWS (BACKEND ONLY)
+   OFFER EXECUTION ENGINE (REAL FLOW)
 ===================================================== */
 
-/* 🔁 PIN SEND */
+/* ================= STEP 1: STATUS CHECK =================
+   POST /api/offers/:id/status-check
+   payload → { msisdn, transaction_id? }
+   backend auto adds: ip, ua
+===================================================== */
+export const checkStatus = async (offerId, payload) => {
+  const res = await fetch(
+    `${API_URL}/api/offers/${offerId}/status-check`,
+    {
+      method: "POST",
+      headers: jsonAuthHeaders(),
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error("Status check failed");
+  }
+
+  return res.json();
+};
+
+/* ================= STEP 2: PIN SEND =================
+   POST /api/offers/:id/pin-send
+   payload → { msisdn, transaction_id }
+===================================================== */
 export const executePinSend = async (offerId, payload) => {
   const res = await fetch(
     `${API_URL}/api/offers/${offerId}/pin-send`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
+      headers: jsonAuthHeaders(),
       body: JSON.stringify(payload),
     }
   );
@@ -132,43 +152,22 @@ export const executePinSend = async (offerId, payload) => {
   return res.json();
 };
 
-/* 🔁 PIN VERIFY */
+/* ================= STEP 3: PIN VERIFY =================
+   POST /api/offers/:id/pin-verify
+   payload → { msisdn, pin, transaction_id }
+===================================================== */
 export const executePinVerify = async (offerId, payload) => {
   const res = await fetch(
     `${API_URL}/api/offers/${offerId}/pin-verify`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
+      headers: jsonAuthHeaders(),
       body: JSON.stringify(payload),
     }
   );
 
   if (!res.ok) {
     throw new Error("PIN Verify failed");
-  }
-
-  return res.json();
-};
-
-/* 🔁 STATUS CHECK */
-export const checkStatus = async (offerId, payload) => {
-  const res = await fetch(
-    `${API_URL}/api/offers/${offerId}/status-check`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify(payload),
-    }
-  );
-
-  if (!res.ok) {
-    throw new Error("Status check failed");
   }
 
   return res.json();
