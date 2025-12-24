@@ -231,5 +231,41 @@ router.get("/", async (req, res) => {
   }
 });
 
+/* =====================================================
+   EXPORT EXECUTION LOGS (CSV)
+===================================================== */
+router.get("/export/csv", async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        id,
+        offer_id,
+        step,
+        status,
+        transaction_id,
+        created_at
+      FROM offer_executions
+      ORDER BY created_at DESC
+    `);
+
+    let csv =
+      "id,offer_id,step,status,transaction_id,created_at\n";
+
+    rows.forEach((r) => {
+      csv += `${r.id},${r.offer_id},${r.step},${r.status},${r.transaction_id},${r.created_at}\n`;
+    });
+
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=execution_logs.csv"
+    );
+    res.setHeader("Content-Type", "text/csv");
+
+    res.send(csv);
+  } catch (err) {
+    res.status(500).json({ message: "CSV export failed" });
+  }
+});
+
 
 export default router;
