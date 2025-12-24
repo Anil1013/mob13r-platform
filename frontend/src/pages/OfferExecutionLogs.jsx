@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 
-import { getExecutionLogs } from "../services/executions";
+import {
+  getExecutionLogs,
+  downloadExecutionLogsCSV,
+} from "../services/executions";
 
 export default function OfferExecutionLogs() {
   const [logs, setLogs] = useState([]);
@@ -40,6 +43,15 @@ export default function OfferExecutionLogs() {
     });
   };
 
+  /* ================= DOWNLOAD CSV ================= */
+  const handleDownload = async () => {
+    try {
+      await downloadExecutionLogsCSV(filters);
+    } catch (err) {
+      alert("Failed to download CSV");
+    }
+  };
+
   return (
     <div style={{ display: "flex" }}>
       <Sidebar />
@@ -48,10 +60,19 @@ export default function OfferExecutionLogs() {
         <Header />
 
         <div style={styles.content}>
-          <h2 style={styles.title}>Offer Execution Logs</h2>
-          <p style={styles.sub}>
-            Debug status-check, PIN send & PIN verify flows
-          </p>
+          <div style={styles.headerRow}>
+            <div>
+              <h2 style={styles.title}>Offer Execution Logs</h2>
+              <p style={styles.sub}>
+                Debug status-check, PIN send & PIN verify flows
+              </p>
+            </div>
+
+            {/* DOWNLOAD */}
+            <button style={styles.download} onClick={handleDownload}>
+              ⬇ Download CSV
+            </button>
+          </div>
 
           {/* FILTERS */}
           <div style={styles.filters}>
@@ -133,9 +154,7 @@ export default function OfferExecutionLogs() {
                       </td>
                       <td>
                         <details>
-                          <summary style={styles.link}>
-                            View
-                          </summary>
+                          <summary style={styles.link}>View</summary>
 
                           <pre style={styles.pre}>
 REQUEST:
@@ -176,18 +195,22 @@ const styles = {
     maxWidth: "1300px",
     margin: "0 auto",
   },
+  headerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   title: {
     fontSize: 26,
   },
   sub: {
     fontSize: 13,
     color: "#94a3b8",
-    marginBottom: 16,
   },
   filters: {
     display: "flex",
     gap: 12,
-    marginBottom: 20,
+    margin: "20px 0",
   },
   input: {
     padding: "8px 10px",
@@ -204,6 +227,15 @@ const styles = {
     padding: "8px 16px",
     cursor: "pointer",
     fontWeight: 600,
+  },
+  download: {
+    background: "#16a34a",
+    border: "none",
+    borderRadius: 8,
+    color: "#fff",
+    padding: "10px 16px",
+    cursor: "pointer",
+    fontWeight: 700,
   },
   card: {
     border: "1px solid #1e293b",
