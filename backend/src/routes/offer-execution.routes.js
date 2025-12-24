@@ -267,5 +267,35 @@ router.get("/export/csv", async (req, res) => {
   }
 });
 
+/* =====================================================
+   EXECUTION ANALYTICS
+===================================================== */
+router.get("/analytics", async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        step,
+        COUNT(*) AS total,
+        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS success
+      FROM offer_executions
+      GROUP BY step
+    `);
+
+    const analytics = rows.map((r) => ({
+      step: r.step,
+      total: Number(r.total),
+      success: Number(r.success),
+      rate:
+        r.total > 0
+          ? ((r.success / r.total) * 100).toFixed(2)
+          : "0.00",
+    }));
+
+    res.json(analytics);
+  } catch (err) {
+    res.status(500).json({ message: "Analytics failed" });
+  }
+});
+
 
 export default router;
