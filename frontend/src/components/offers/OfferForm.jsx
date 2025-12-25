@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { getAdvertisers } from "../../services/advertisers";
 
-/* ================= DEFAULT OFFER ================= */
+/* ================= DEFAULT ================= */
 const DEFAULT_OFFER = {
-  /* BASIC */
   name: "",
   advertiser_id: "",
   geo: "",
@@ -12,28 +11,23 @@ const DEFAULT_OFFER = {
   revenue: "",
   is_active: true,
 
-  /* API */
   api_mode: "POST",
 
-  /* STATUS CHECK */
   status_check_url: "",
-  status_check_params: "msisdn,user_ip,ip,ua",
+  status_check_params: [],
 
-  /* PIN SEND */
   pin_send_url: "",
-  pin_send_params: "msisdn,user_ip,ip,ua,pub_id,sub_pub_id",
+  pin_send_params: [],
 
-  /* PIN VERIFY */
   pin_verify_url: "",
-  pin_verify_params: "msisdn,pin,user_ip,ip,ua,sessionKey",
+  pin_verify_params: [],
 
-  /* FLOW */
   redirect_url: "",
+
   step_status_check: true,
   step_pin_send: true,
   step_pin_verify: true,
 
-  /* FRAUD */
   fraud_enabled: false,
   fraud_partner: "",
   fraud_service: "",
@@ -45,10 +39,10 @@ export default function OfferForm({ onClose, onSave, initialData }) {
 
   /* ================= LOAD ADVERTISERS ================= */
   useEffect(() => {
-    getAdvertisers().then((data) => setAdvertisers(data || []));
+    getAdvertisers().then((res) => setAdvertisers(res || []));
   }, []);
 
-  /* ================= LOAD EDIT DATA ================= */
+  /* ================= LOAD EDIT ================= */
   useEffect(() => {
     if (!initialData) {
       setOffer(DEFAULT_OFFER);
@@ -59,9 +53,9 @@ export default function OfferForm({ onClose, onSave, initialData }) {
       ...DEFAULT_OFFER,
       ...initialData,
 
-      status_check_params: arrayToString(initialData.status_check_params),
-      pin_send_params: arrayToString(initialData.pin_send_params),
-      pin_verify_params: arrayToString(initialData.pin_verify_params),
+      status_check_params: toArray(initialData.status_check_params),
+      pin_send_params: toArray(initialData.pin_send_params),
+      pin_verify_params: toArray(initialData.pin_verify_params),
 
       step_status_check: initialData.steps?.status_check ?? true,
       step_pin_send: initialData.steps?.pin_send ?? true,
@@ -69,22 +63,20 @@ export default function OfferForm({ onClose, onSave, initialData }) {
     });
   }, [initialData]);
 
-  /* ================= HANDLE CHANGE ================= */
+  /* ================= HANDLERS ================= */
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setOffer((prev) => ({
-      ...prev,
+    setOffer((p) => ({
+      ...p,
       [name]: type === "checkbox" ? checked : value,
     }));
   };
 
-  /* ================= SUBMIT ================= */
   const handleSubmit = (e) => {
     e.preventDefault();
 
     onSave({
       ...offer,
-
       payout: Number(offer.payout || 0),
       revenue: Number(offer.revenue || 0),
 
@@ -94,11 +86,7 @@ export default function OfferForm({ onClose, onSave, initialData }) {
         pin_verify: offer.step_pin_verify,
       },
 
-      status_check_params: normalize(offer.status_check_params),
-      pin_send_params: normalize(offer.pin_send_params),
-      pin_verify_params: normalize(offer.pin_verify_params),
-
-      redirect_url: offer.redirect_url || null, // ✅ optional
+      redirect_url: offer.redirect_url || null,
     });
   };
 
@@ -111,61 +99,28 @@ export default function OfferForm({ onClose, onSave, initialData }) {
 
         {/* ================= BASIC ================= */}
         <Section title="Basic Information">
-          <Input
-            label="Offer Name"
-            name="name"
-            value={offer.name}
+          <Input label="Offer Name" name="name" value={offer.name} onChange={handleChange} />
+          <Select
+            label="Advertiser"
+            name="advertiser_id"
+            value={offer.advertiser_id}
             onChange={handleChange}
-            required
+            options={advertisers}
           />
-
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Advertiser</label>
-            <select
-              name="advertiser_id"
-              value={offer.advertiser_id}
-              onChange={handleChange}
-              style={styles.select}
-              required
-            >
-              <option value="">Select advertiser</option>
-              {advertisers.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <Row>
             <Input label="Geo" name="geo" value={offer.geo} onChange={handleChange} />
             <Input label="Carrier" name="carrier" value={offer.carrier} onChange={handleChange} />
           </Row>
-
           <Row>
             <Input label="Payout" name="payout" value={offer.payout} onChange={handleChange} />
             <Input label="Revenue" name="revenue" value={offer.revenue} onChange={handleChange} />
           </Row>
-
-          <label style={styles.checkbox}>
-            <input
-              type="checkbox"
-              name="is_active"
-              checked={offer.is_active}
-              onChange={handleChange}
-            />
-            Offer Active
-          </label>
+          <Checkbox label="Offer Active" name="is_active" checked={offer.is_active} onChange={handleChange} />
         </Section>
 
         {/* ================= API MODE ================= */}
         <Section title="API Mode">
-          <select
-            name="api_mode"
-            value={offer.api_mode}
-            onChange={handleChange}
-            style={styles.select}
-          >
+          <select name="api_mode" value={offer.api_mode} onChange={handleChange} style={styles.select}>
             <option value="POST">POST</option>
             <option value="GET">GET</option>
           </select>
@@ -173,98 +128,65 @@ export default function OfferForm({ onClose, onSave, initialData }) {
 
         {/* ================= STATUS CHECK ================= */}
         <Section title="Status Check API">
-          <Input
-            label="Status Check URL"
-            name="status_check_url"
-            value={offer.status_check_url}
-            onChange={handleChange}
-          />
-          <Input
+          <Input label="URL" name="status_check_url" value={offer.status_check_url} onChange={handleChange} />
+          <ParamBuilder
             label="Allowed Parameters"
-            name="status_check_params"
-            value={offer.status_check_params}
-            onChange={handleChange}
+            values={offer.status_check_params}
+            onChange={(v) => setOffer((p) => ({ ...p, status_check_params: v }))}
           />
         </Section>
 
         {/* ================= PIN SEND ================= */}
         <Section title="PIN Send API">
-          <Input
-            label="PIN Send URL"
-            name="pin_send_url"
-            value={offer.pin_send_url}
-            onChange={handleChange}
-          />
-          <Input
+          <Input label="URL" name="pin_send_url" value={offer.pin_send_url} onChange={handleChange} />
+          <ParamBuilder
             label="Allowed Parameters"
-            name="pin_send_params"
-            value={offer.pin_send_params}
-            onChange={handleChange}
+            values={offer.pin_send_params}
+            onChange={(v) => setOffer((p) => ({ ...p, pin_send_params: v }))}
           />
         </Section>
 
         {/* ================= PIN VERIFY ================= */}
         <Section title="PIN Verify API">
-          <Input
-            label="PIN Verify URL"
-            name="pin_verify_url"
-            value={offer.pin_verify_url}
-            onChange={handleChange}
-          />
-          <Input
+          <Input label="URL" name="pin_verify_url" value={offer.pin_verify_url} onChange={handleChange} />
+          <ParamBuilder
             label="Allowed Parameters"
-            name="pin_verify_params"
-            value={offer.pin_verify_params}
-            onChange={handleChange}
+            values={offer.pin_verify_params}
+            onChange={(v) => setOffer((p) => ({ ...p, pin_verify_params: v }))}
           />
         </Section>
 
         {/* ================= REDIRECT ================= */}
-        <Section title="Redirect (Optional)">
-          <Input
-            label="Redirect URL"
-            name="redirect_url"
-            value={offer.redirect_url}
-            onChange={handleChange}
-          />
+        <Section title="Redirect">
+          <Input label="Redirect URL" name="redirect_url" value={offer.redirect_url} onChange={handleChange} />
         </Section>
 
         {/* ================= STEPS ================= */}
         <Section title="Execution Steps">
-          <label style={styles.checkbox}>
-            <input
-              type="checkbox"
-              name="step_status_check"
-              checked={offer.step_status_check}
-              onChange={handleChange}
-            />
-            Enable Status Check
-          </label>
-          <label style={styles.checkbox}>
-            <input
-              type="checkbox"
-              name="step_pin_send"
-              checked={offer.step_pin_send}
-              onChange={handleChange}
-            />
-            Enable PIN Send
-          </label>
-          <label style={styles.checkbox}>
-            <input
-              type="checkbox"
-              name="step_pin_verify"
-              checked={offer.step_pin_verify}
-              onChange={handleChange}
-            />
-            Enable PIN Verify
-          </label>
+          <Checkbox label="Enable Status Check" name="step_status_check" checked={offer.step_status_check} onChange={handleChange} />
+          <Checkbox label="Enable PIN Send" name="step_pin_send" checked={offer.step_pin_send} onChange={handleChange} />
+          <Checkbox label="Enable PIN Verify" name="step_pin_verify" checked={offer.step_pin_verify} onChange={handleChange} />
+        </Section>
+
+        {/* ================= FRAUD ================= */}
+        <Section title="Fraud Configuration">
+          <Checkbox
+            label="Enable Fraud Protection"
+            name="fraud_enabled"
+            checked={offer.fraud_enabled}
+            onChange={handleChange}
+          />
+          {offer.fraud_enabled && (
+            <>
+              <Input label="Fraud Partner" name="fraud_partner" value={offer.fraud_partner} onChange={handleChange} />
+              <Input label="Fraud Service" name="fraud_service" value={offer.fraud_service} onChange={handleChange} />
+            </>
+          )}
         </Section>
 
         {/* ================= ACTIONS ================= */}
         <div style={styles.actions}>
-          <button type="button" onClick={onClose} style={styles.cancel}>
-            Cancel
-          </button>
+          <button type="button" onClick={onClose} style={styles.cancel}>Cancel</button>
           <button type="submit" style={styles.save}>
             {initialData ? "Update Offer" : "Save Offer"}
           </button>
@@ -274,14 +196,45 @@ export default function OfferForm({ onClose, onSave, initialData }) {
   );
 }
 
-/* ================= HELPERS ================= */
-const normalize = (v) =>
-  typeof v === "string"
-    ? v.split(",").map((x) => x.trim()).filter(Boolean)
-    : [];
+/* ================= PARAM BUILDER ================= */
+const ParamBuilder = ({ label, values = [], onChange }) => {
+  const [input, setInput] = useState("");
 
-const arrayToString = (v) =>
-  Array.isArray(v) ? v.join(",") : v || "";
+  const add = (v) => {
+    if (!v || values.includes(v)) return;
+    onChange([...values, v]);
+  };
+
+  return (
+    <div style={styles.inputGroup}>
+      <label style={styles.label}>{label}</label>
+      <div style={styles.chips}>
+        {values.map((p) => (
+          <span key={p} style={styles.chip} onClick={() => onChange(values.filter((x) => x !== p))}>
+            {p} ✕
+          </span>
+        ))}
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              add(input.trim());
+              setInput("");
+            }
+          }}
+          placeholder="type & press enter"
+          style={styles.chipInput}
+        />
+      </div>
+    </div>
+  );
+};
+
+/* ================= HELPERS ================= */
+const toArray = (v) =>
+  Array.isArray(v) ? v : typeof v === "string" ? v.split(",").map((x) => x.trim()) : [];
 
 /* ================= UI ================= */
 const Section = ({ title, children }) => (
@@ -291,66 +244,50 @@ const Section = ({ title, children }) => (
   </div>
 );
 
-const Input = ({ label, ...props }) => (
+const Input = ({ label, ...p }) => (
   <div style={styles.inputGroup}>
     <label style={styles.label}>{label}</label>
-    <input {...props} style={styles.input} />
+    <input {...p} style={styles.input} />
   </div>
+);
+
+const Select = ({ label, options, ...p }) => (
+  <div style={styles.inputGroup}>
+    <label style={styles.label}>{label}</label>
+    <select {...p} style={styles.select}>
+      <option value="">Select</option>
+      {options.map((o) => (
+        <option key={o.id} value={o.id}>{o.name}</option>
+      ))}
+    </select>
+  </div>
+);
+
+const Checkbox = ({ label, ...p }) => (
+  <label style={styles.checkbox}>
+    <input type="checkbox" {...p} /> {label}
+  </label>
 );
 
 const Row = ({ children }) => <div style={styles.row}>{children}</div>;
 
+/* ================= STYLES ================= */
 const styles = {
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,.6)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 50,
-  },
-  card: {
-    width: 740,
-    maxHeight: "90vh",
-    overflowY: "auto",
-    background: "#020617",
-    padding: 28,
-    borderRadius: 14,
-    color: "#fff",
-  },
-  heading: { textAlign: "center", marginBottom: 20 },
-  section: { marginBottom: 20 },
-  sectionTitle: { color: "#38bdf8", fontSize: 14, marginBottom: 10 },
-  inputGroup: { display: "flex", flexDirection: "column", marginBottom: 10 },
-  label: { fontSize: 12, color: "#94a3b8", marginBottom: 4 },
-  input: {
-    padding: 10,
-    borderRadius: 8,
-    border: "1px solid #1e293b",
-    background: "#020617",
-    color: "#fff",
-  },
-  select: {
-    padding: 10,
-    borderRadius: 8,
-    background: "#020617",
-    color: "#fff",
-    border: "1px solid #1e293b",
-  },
-  row: { display: "flex", gap: 12 },
-  checkbox: { display: "flex", gap: 8, alignItems: "center" },
-  actions: { display: "flex", justifyContent: "space-between" },
-  cancel: {
-    background: "#334155",
-    padding: "10px 18px",
-    borderRadius: 8,
-    color: "#fff",
-  },
-  save: {
-    background: "#16a34a",
-    padding: "10px 18px",
-    borderRadius: 8,
-    color: "#fff",
-  },
+  overlay:{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",justifyContent:"center",alignItems:"center",zIndex:50},
+  card:{width:760,maxHeight:"90vh",overflowY:"auto",background:"#020617",padding:28,borderRadius:14,color:"#fff"},
+  heading:{textAlign:"center",marginBottom:20},
+  section:{marginBottom:20},
+  sectionTitle:{color:"#38bdf8",fontSize:14,marginBottom:10},
+  inputGroup:{marginBottom:10},
+  label:{fontSize:12,color:"#94a3b8",marginBottom:4},
+  input:{padding:10,borderRadius:8,border:"1px solid #1e293b",background:"#020617",color:"#fff"},
+  select:{padding:10,borderRadius:8,border:"1px solid #1e293b",background:"#020617",color:"#fff"},
+  row:{display:"flex",gap:12},
+  checkbox:{display:"flex",gap:8,alignItems:"center"},
+  actions:{display:"flex",justifyContent:"space-between"},
+  cancel:{background:"#334155",padding:"10px 18px",borderRadius:8,color:"#fff"},
+  save:{background:"#16a34a",padding:"10px 18px",borderRadius:8,color:"#fff"},
+  chips:{display:"flex",flexWrap:"wrap",gap:6,border:"1px solid #1e293b",padding:6,borderRadius:8},
+  chip:{background:"#1e293b",padding:"4px 8px",borderRadius:6,fontSize:12,cursor:"pointer"},
+  chipInput:{flex:1,minWidth:120,background:"transparent",border:"none",color:"#fff",outline:"none"},
 };
