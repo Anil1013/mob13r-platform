@@ -3,12 +3,14 @@ import pool from "../db.js";
 import auth from "../middleware/auth.js";
 import crypto from "crypto";
 import { buildContext, applyTemplate } from "../utils/templateEngine.js";
+import { isCapReached, incrementHit } from "../utils/capEngine.js";
+import { findFallbackOffer } from "../utils/fallbackEngine.js";
 
 const router = Router();
 router.use(auth);
 
 /* =====================================================
-   SAFE FETCH (TIMEOUT)
+   SAFE FETCH (TIMEOUT PROTECTED)
 ===================================================== */
 const safeFetch = async (url, options = {}, timeout = 15000) => {
   const controller = new AbortController();
@@ -27,6 +29,7 @@ const safeFetch = async (url, options = {}, timeout = 15000) => {
 ===================================================== */
 const getByPath = (obj, path) => {
   if (!path || typeof path !== "string") return undefined;
+
   return path
     .replace(/^\$\./, "")
     .split(".")
@@ -41,9 +44,10 @@ const applyResponseMapper = (mapper = {}, response = {}, ctx = {}) => {
 
   Object.entries(mapper).forEach(([key, jsonPath]) => {
     const value = getByPath(response, jsonPath);
+
     if (value !== undefined) {
-      ctx[key] = value;               // ctx.sessionKey
-      ctx[`coll_${key}`] = value;     // legacy template support
+      ctx[key] = value;               // sessionKey
+      ctx[`coll_${key}`] = value;     // legacy template
       extracted[key] = value;
     }
   });
@@ -87,12 +91,31 @@ const loadOffer = async (id) => {
 
 /* =====================================================
    GENERIC EXECUTION
+   POST /api/offers/:id/:step
 ===================================================== */
 router.post("/:id/:step", async (req, res) => {
   try {
-    const offer = await loadOffer(req.params.id);
+    let offer = await loadOffer(req.params.id);
     if (!offer) {
       return res.status(404).json({ message: "Offer not found" });
+    }
+
+    /* ================= CAP CHECK ================= */
+    let fallbackUsed = false;
+
+    if (await isCapReached(offer)) {
+      const fallback = await findFallbackOffer(offer);
+
+      if (!fallback) {
+        return res.json({
+          success: false,
+          reason: "CAP_REACHED",
+          redirect_url: null,
+        });
+      }
+
+      offer = fallback;
+      fallbackUsed = true;
     }
 
     const apiSteps = offer.api_steps || {};
@@ -111,22 +134,26 @@ router.post("/:id/:step", async (req, res) => {
       ctx.transaction_id = crypto.randomUUID();
     }
 
-    /* ================= AUTO ANTI FRAUD ================= */
+    /* ================= AUTO ANTI-FRAUD ================= */
     if (
       apiSteps.anti_fraud &&
       apiSteps.anti_fraud.enabled &&
       req.params.step !== "anti_fraud"
     ) {
-      await executeStep(apiSteps.anti_fraud, ctx);
+      try {
+        await executeStep(apiSteps.anti_fraud, ctx);
+      } catch (e) {
+        console.warn("Anti-fraud failed:", e.message);
+      }
     }
 
-    /* ================= EXECUTE STEP ================= */
+    /* ================= EXECUTE MAIN STEP ================= */
     const response = await executeStep(stepConfig, ctx);
 
     /* ================= RESPONSE → CONTEXT ================= */
     let extracted = {};
 
-    // 1️⃣ JSON-PATH BASED MAPPER (PREFERRED)
+    // 1️⃣ JSON PATH BASED RESPONSE MAPPER
     if (stepConfig.response_mapper) {
       extracted = applyResponseMapper(
         stepConfig.response_mapper,
@@ -135,7 +162,7 @@ router.post("/:id/:step", async (req, res) => {
       );
     }
 
-    // 2️⃣ FALLBACK: AUTO FLATTEN STRING / NUMBER FIELDS
+    // 2️⃣ AUTO FLATTEN STRING / NUMBER FIELDS
     Object.entries(response || {}).forEach(([k, v]) => {
       if (
         (typeof v === "string" || typeof v === "number") &&
@@ -162,13 +189,19 @@ router.post("/:id/:step", async (req, res) => {
       }
     }
 
+    /* ================= HIT COUNT ================= */
+    if (success) {
+      await incrementHit(offer.id);
+    }
+
     /* ================= FINAL RESPONSE ================= */
     res.json({
       transaction_id: ctx.transaction_id,
       step: req.params.step,
       success,
+      fallbackUsed,
       response,
-      extracted,          // 👈 VISUAL TESTER KEY
+      extracted,                 // 👈 LIVE TEST UI USES THIS
       redirect_url: success ? offer.redirect_url : null,
     });
   } catch (err) {
