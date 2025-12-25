@@ -50,7 +50,7 @@ export default function OfferForm({ offer, onSaved }) {
 
   /* ================= INIT ================= */
   useEffect(() => {
-    apiFetch("/api/advertisers").then(setAdvertisers).catch(console.error);
+    apiFetch("/api/advertisers").then(setAdvertisers);
     apiFetch("/api/offers").then(setOffers).catch(() => {});
 
     if (offer) {
@@ -68,7 +68,7 @@ export default function OfferForm({ offer, onSaved }) {
     }
   }, [offer]);
 
-  /* ================= BASIC SETTERS ================= */
+  /* ================= SETTERS ================= */
   const set = (k, v) => setForm({ ...form, [k]: v });
 
   const setStep = (step, key, val) => {
@@ -103,28 +103,56 @@ export default function OfferForm({ offer, onSaved }) {
     setStep(step, type, obj);
   };
 
-  /* ================= SAVE ================= */
+  /* ================= SAVE (FIXED) ================= */
   const save = async () => {
+    /* 🔒 HARD VALIDATION */
+    if (!form.advertiser_id) {
+      alert("Advertiser is required");
+      return;
+    }
+
+    if (!form.name.trim()) {
+      alert("Offer name is required");
+      return;
+    }
+
+    /* 🔧 CLEAN API STEPS */
+    const cleanedSteps = {};
+
+    Object.entries(form.api_steps || {}).forEach(([k, step]) => {
+      if (step.enabled && !step.url) {
+        cleanedSteps[k] = { ...step, enabled: false };
+      } else {
+        cleanedSteps[k] = step;
+      }
+    });
+
     const payload = {
       ...form,
       payout: Number(form.payout || 0),
       revenue: Number(form.revenue || 0),
       daily_cap: Number(form.daily_cap || 0),
+      api_steps: cleanedSteps,
     };
 
-    if (offer?.id) {
-      await apiFetch(`/api/offers/${offer.id}`, {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      });
-    } else {
-      await apiFetch("/api/offers", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-    }
+    try {
+      if (offer?.id) {
+        await apiFetch(`/api/offers/${offer.id}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await apiFetch("/api/offers", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      }
 
-    onSaved?.();
+      alert("Offer saved successfully");
+      onSaved?.();
+    } catch (err) {
+      alert(err.message || "Save failed");
+    }
   };
 
   /* ================= UI ================= */
@@ -229,10 +257,9 @@ export default function OfferForm({ offer, onSaved }) {
               </label>
             </div>
 
-            {/* ===== METHOD + FULL URL (FIXED) ===== */}
             <div className="flex gap-2 items-center">
               <select
-                className="w-24 shrink-0"
+                className="w-24"
                 value={data.method}
                 onChange={(e) =>
                   setStep(step, "method", e.target.value)
@@ -243,7 +270,7 @@ export default function OfferForm({ offer, onSaved }) {
               </select>
 
               <input
-                className="flex-1 min-w-0 font-mono text-sm"
+                className="flex-1 font-mono text-sm"
                 placeholder="Full API URL"
                 value={data.url || ""}
                 onChange={(e) =>
@@ -251,45 +278,6 @@ export default function OfferForm({ offer, onSaved }) {
                 }
               />
             </div>
-
-            <Section
-              title="Headers"
-              step={step}
-              type="headers"
-              data={data}
-              templates={cfg.templates}
-              addKV={addKV}
-              updateKV={updateKV}
-              removeKV={removeKV}
-            />
-
-            <Section
-              title="Params / Body"
-              step={step}
-              type="params"
-              data={data}
-              templates={cfg.templates}
-              addKV={addKV}
-              updateKV={updateKV}
-              removeKV={removeKV}
-            />
-
-            <input
-              placeholder='Success Matcher (e.g. "status":true)'
-              value={data.success_matcher || ""}
-              onChange={(e) =>
-                setStep(step, "success_matcher", e.target.value)
-              }
-            />
-
-            {offer?.id && data.enabled && (
-              <button
-                className="btn btn-success"
-                onClick={() => setTestStep(step)}
-              >
-                🔴 Live API Test
-              </button>
-            )}
           </div>
         );
       })}
@@ -306,56 +294,6 @@ export default function OfferForm({ offer, onSaved }) {
           onClose={() => setTestStep(null)}
         />
       )}
-    </div>
-  );
-}
-
-/* ================= SUB COMPONENT ================= */
-function Section({
-  title,
-  step,
-  type,
-  data,
-  templates,
-  addKV,
-  updateKV,
-  removeKV,
-}) {
-  const obj = data[type] || {};
-
-  return (
-    <div>
-      <h4 className="font-medium">{title}</h4>
-
-      {Object.entries(obj).map(([k, v]) => (
-        <div key={k} className="flex gap-2 mb-1">
-          <input
-            className="w-1/3"
-            placeholder="key"
-            value={k}
-            onChange={(e) =>
-              updateKV(step, type, e.target.value, v, k)
-            }
-          />
-          <input
-            className="flex-1"
-            placeholder="value"
-            value={v}
-            onChange={(e) =>
-              updateKV(step, type, k, e.target.value, k)
-            }
-          />
-          <button onClick={() => removeKV(step, type, k)}>✕</button>
-        </div>
-      ))}
-
-      <button onClick={() => addKV(step, type)}>
-        + Add {title}
-      </button>
-
-      <div className="text-xs text-gray-500 mt-1">
-        Templates: {templates.map((t) => `<coll_${t}>`).join(", ")}
-      </div>
     </div>
   );
 }
