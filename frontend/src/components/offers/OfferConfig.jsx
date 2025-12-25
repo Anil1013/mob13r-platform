@@ -6,49 +6,52 @@ export default function OfferConfig({ offer, onClose }) {
       <div style={styles.card}>
         <h2 style={styles.heading}>Offer Execution Flow</h2>
 
+        {/* ================= META ================= */}
         <p style={styles.sub}>
           {offer.name}
           {offer.advertiser_name && ` • ${offer.advertiser_name}`}
           {offer.geo && ` • ${offer.geo}`}
           {offer.carrier && ` • ${offer.carrier}`}
+          {!offer.is_active && " • INACTIVE"}
         </p>
 
         {/* ================= STEP 1 ================= */}
-        <Step
-          title="1. Check Status"
-          method={offer.api_mode}
-          url={offer.status_check_url}
-          params={["msisdn", "transaction_id", "ip", "ua"]}
-        />
+        {offer.steps?.status_check && (
+          <Step
+            index={1}
+            title="Status Check"
+            method={offer.api_mode}
+            url={offer.status_check_url}
+            params={offer.status_check_params}
+          />
+        )}
 
         {/* ================= STEP 2 ================= */}
-        <Step
-          title="2. PIN Send"
-          method={offer.api_mode}
-          url={offer.pin_send_url}
-          params={normalizeParams(offer.pin_send_params, [
-            "transaction_id",
-            "ip",
-            "ua",
-          ])}
-        />
+        {offer.steps?.pin_send && (
+          <Step
+            index={2}
+            title="PIN Send"
+            method={offer.api_mode}
+            url={offer.pin_send_url}
+            params={offer.pin_send_params}
+          />
+        )}
 
         {/* ================= STEP 3 ================= */}
-        <Step
-          title="3. PIN Verify"
-          method={offer.api_mode}
-          url={offer.pin_verify_url}
-          params={normalizeParams(offer.pin_verify_params, [
-            "transaction_id",
-            "ip",
-            "ua",
-          ])}
-        />
+        {offer.steps?.pin_verify && (
+          <Step
+            index={3}
+            title="PIN Verify"
+            method={offer.api_mode}
+            url={offer.pin_verify_url}
+            params={offer.pin_verify_params}
+          />
+        )}
 
-        {/* ================= STEP 4 ================= */}
+        {/* ================= FRAUD ================= */}
         {offer.fraud_enabled && (
           <div style={styles.step}>
-            <h4 style={styles.stepTitle}>4. Anti-Fraud</h4>
+            <h4 style={styles.stepTitle}>Anti-Fraud</h4>
             <div style={styles.kv}>
               Partner: {offer.fraud_partner || "—"}
             </div>
@@ -58,14 +61,18 @@ export default function OfferConfig({ offer, onClose }) {
           </div>
         )}
 
-        {/* ================= STEP 5 ================= */}
+        {/* ================= REDIRECT ================= */}
         <div style={styles.step}>
-          <h4 style={styles.stepTitle}>5. Redirect to Product</h4>
+          <h4 style={styles.stepTitle}>Redirect</h4>
           <div style={styles.kv}>
-            Redirect user after successful OTP verification
+            URL: {offer.redirect_url || "—"}
+          </div>
+          <div style={styles.note}>
+            User will be redirected after successful OTP verification
           </div>
         </div>
 
+        {/* ================= ACTION ================= */}
         <button style={styles.close} onClick={onClose}>
           Close
         </button>
@@ -75,47 +82,36 @@ export default function OfferConfig({ offer, onClose }) {
 }
 
 /* =====================================================
-   HELPERS
+   STEP BLOCK
 ===================================================== */
 
-const normalizeParams = (params, alwaysInclude = []) => {
-  let list = [];
+const Step = ({ index, title, method, url, params = [] }) => {
+  const list = Array.isArray(params) ? params : [];
 
-  if (Array.isArray(params)) list = params;
-  else if (typeof params === "string")
-    list = params.split(",").map((p) => p.trim());
+  return (
+    <div style={styles.step}>
+      <h4 style={styles.stepTitle}>
+        {index}. {title}
+      </h4>
 
-  // ensure no duplicates
-  const merged = [...new Set([...list, ...alwaysInclude])];
+      <div style={styles.kv}>Method: {method || "—"}</div>
+      <div style={styles.kv}>URL: {url || "—"}</div>
 
-  return merged;
-};
-
-/* =====================================================
-   SMALL UI BLOCK
-===================================================== */
-
-const Step = ({ title, method, url, params }) => (
-  <div style={styles.step}>
-    <h4 style={styles.stepTitle}>{title}</h4>
-
-    <div style={styles.kv}>Method: {method || "—"}</div>
-    <div style={styles.kv}>URL: {url || "—"}</div>
-
-    <div style={styles.params}>
-      Params:
-      {params && params.length ? (
-        params.map((p) => (
-          <span key={p} style={styles.param}>
-            {p}
-          </span>
-        ))
-      ) : (
-        <span style={{ marginLeft: 6 }}>—</span>
-      )}
+      <div style={styles.params}>
+        Params:
+        {list.length ? (
+          list.map((p) => (
+            <span key={p} style={styles.param}>
+              {p}
+            </span>
+          ))
+        ) : (
+          <span style={{ marginLeft: 6 }}>—</span>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 /* =====================================================
    STYLES
@@ -132,7 +128,7 @@ const styles = {
     zIndex: 60,
   },
   card: {
-    width: "680px",
+    width: "700px",
     maxHeight: "90vh",
     overflowY: "auto",
     background: "#020617",
@@ -170,11 +166,17 @@ const styles = {
     flexWrap: "wrap",
     gap: "6px",
     fontSize: "12px",
+    marginTop: "6px",
   },
   param: {
     background: "#1e293b",
     padding: "4px 8px",
     borderRadius: "6px",
+  },
+  note: {
+    marginTop: "6px",
+    fontSize: "12px",
+    color: "#94a3b8",
   },
   close: {
     marginTop: "16px",
