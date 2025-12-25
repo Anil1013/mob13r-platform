@@ -4,32 +4,29 @@ import auth from "../middleware/auth.js";
 
 const router = Router();
 
-/* 🔐 PROTECT ALL OFFER ROUTES */
+/* 🔐 PROTECT */
 router.use(auth);
 
 /* =====================================================
-   GET ALL OFFERS (WITH ADVERTISER NAME)
+   GET ALL OFFERS
 ===================================================== */
 router.get("/", async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT 
-        o.*,
-        a.name AS advertiser_name
+      SELECT o.*, a.name AS advertiser_name
       FROM offers o
       JOIN advertisers a ON a.id = o.advertiser_id
       ORDER BY o.created_at DESC
     `);
-
     res.json(rows);
   } catch (err) {
-    console.error("GET OFFERS ERROR:", err);
+    console.error(err);
     res.status(500).json({ message: "Failed to fetch offers" });
   }
 });
 
 /* =====================================================
-   CREATE OFFER
+   CREATE OFFER (ADVANCED)
 ===================================================== */
 router.post("/", async (req, res) => {
   try {
@@ -40,23 +37,11 @@ router.post("/", async (req, res) => {
       carrier,
       payout,
       revenue,
-      api_mode,
+      cap,
+      api_mode = "POST",
 
-      status_check_url,
-      status_check_params = [],
-
-      pin_send_url,
-      pin_send_params = [],
-
-      pin_verify_url,
-      pin_verify_params = [],
-
+      api_steps,          // 🔥 FULL JSON TEMPLATE ENGINE
       redirect_url,
-      steps = {
-        status_check: true,
-        pin_send: true,
-        pin_verify: true,
-      },
 
       is_active = true,
 
@@ -74,32 +59,17 @@ router.post("/", async (req, res) => {
         carrier,
         payout,
         revenue,
+        cap,
         api_mode,
-
-        status_check_url,
-        status_check_params,
-
-        pin_send_url,
-        pin_send_params,
-
-        pin_verify_url,
-        pin_verify_params,
-
+        api_steps,
         redirect_url,
-        steps,
         is_active,
-
         fraud_enabled,
         fraud_partner,
         fraud_service
       )
       VALUES (
-        $1,$2,$3,$4,$5,$6,$7,
-        $8,$9,
-        $10,$11,
-        $12,$13,
-        $14,$15,$16,
-        $17,$18,$19
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14
       )
       RETURNING *
       `,
@@ -110,21 +80,11 @@ router.post("/", async (req, res) => {
         carrier,
         payout,
         revenue,
+        cap,
         api_mode,
-
-        status_check_url,
-        status_check_params,
-
-        pin_send_url,
-        pin_send_params,
-
-        pin_verify_url,
-        pin_verify_params,
-
+        api_steps || {},
         redirect_url || null,
-        steps,
         is_active,
-
         fraud_enabled,
         fraud_partner,
         fraud_service,
@@ -139,7 +99,7 @@ router.post("/", async (req, res) => {
 });
 
 /* =====================================================
-   UPDATE OFFER
+   UPDATE OFFER (ADVANCED)
 ===================================================== */
 router.put("/:id", async (req, res) => {
   try {
@@ -150,35 +110,18 @@ router.put("/:id", async (req, res) => {
       carrier,
       payout,
       revenue,
-      api_mode,
+      cap,
+      api_mode = "POST",
 
-      status_check_url,
-      status_check_params = [],
-
-      pin_send_url,
-      pin_send_params = [],
-
-      pin_verify_url,
-      pin_verify_params = [],
-
+      api_steps,
       redirect_url,
-      steps,
+
       is_active,
 
       fraud_enabled = false,
       fraud_partner = null,
       fraud_service = null,
     } = req.body;
-
-    /* 🛡 SAFE STEPS */
-    const safeSteps =
-      steps && typeof steps === "object"
-        ? steps
-        : {
-            status_check: true,
-            pin_send: true,
-            pin_verify: true,
-          };
 
     const { rows } = await pool.query(
       `
@@ -189,27 +132,16 @@ router.put("/:id", async (req, res) => {
         carrier = $4,
         payout = $5,
         revenue = $6,
-        api_mode = $7,
-
-        status_check_url = $8,
-        status_check_params = $9,
-
-        pin_send_url = $10,
-        pin_send_params = $11,
-
-        pin_verify_url = $12,
-        pin_verify_params = $13,
-
-        redirect_url = $14,
-        steps = $15,
-        is_active = $16,
-
-        fraud_enabled = $17,
-        fraud_partner = $18,
-        fraud_service = $19,
+        cap = $7,
+        api_mode = $8,
+        api_steps = $9,
+        redirect_url = $10,
+        is_active = $11,
+        fraud_enabled = $12,
+        fraud_partner = $13,
+        fraud_service = $14,
         updated_at = NOW()
-
-      WHERE id = $20
+      WHERE id = $15
       RETURNING *
       `,
       [
@@ -219,25 +151,14 @@ router.put("/:id", async (req, res) => {
         carrier,
         payout,
         revenue,
+        cap,
         api_mode,
-
-        status_check_url,
-        status_check_params,
-
-        pin_send_url,
-        pin_send_params,
-
-        pin_verify_url,
-        pin_verify_params,
-
+        api_steps || {},
         redirect_url || null,
-        safeSteps,
         is_active,
-
         fraud_enabled,
         fraud_partner,
         fraud_service,
-
         req.params.id,
       ]
     );
@@ -254,7 +175,7 @@ router.put("/:id", async (req, res) => {
 });
 
 /* =====================================================
-   TOGGLE OFFER STATUS
+   TOGGLE STATUS
 ===================================================== */
 router.patch("/:id/status", async (req, res) => {
   try {
@@ -275,8 +196,8 @@ router.patch("/:id/status", async (req, res) => {
 
     res.json(rows[0]);
   } catch (err) {
-    console.error("TOGGLE OFFER ERROR:", err);
-    res.status(500).json({ message: "Failed to toggle offer status" });
+    console.error(err);
+    res.status(500).json({ message: "Toggle failed" });
   }
 });
 
@@ -285,17 +206,12 @@ router.patch("/:id/status", async (req, res) => {
 ===================================================== */
 router.delete("/:id", async (req, res) => {
   try {
-    await pool.query("DELETE FROM offers WHERE id = $1", [
-      req.params.id,
-    ]);
+    await pool.query("DELETE FROM offers WHERE id = $1", [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    console.error("DELETE OFFER ERROR:", err);
-    res.status(500).json({ message: "Failed to delete offer" });
+    console.error(err);
+    res.status(500).json({ message: "Delete failed" });
   }
 });
 
-/* =====================================================
-   ✅ IMPORTANT (ESM FIX)
-===================================================== */
 export default router;
