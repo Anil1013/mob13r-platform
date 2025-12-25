@@ -2,30 +2,8 @@ import { useEffect, useState } from "react";
 import { OFFER_API_SCHEMA } from "../../config/offerApiSchema";
 import LiveApiTestModal from "../LiveApiTestModal";
 
-/* ================= API BASE ================= */
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
-
-/* ================= FETCH HELPER ================= */
-const apiFetch = async (url, options = {}) => {
-  const token = localStorage.getItem("token");
-
-  const res = await fetch(`${API_BASE}${url}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(err || "API Error");
-  }
-
-  return res.json();
-};
 
 /* ================= DEFAULT ================= */
 const emptyOffer = {
@@ -35,9 +13,11 @@ const emptyOffer = {
   carrier: "",
   payout: "",
   revenue: "",
-  api_steps: {},
+  cap: "",
   redirect_url: "",
   is_active: true,
+  api_steps: {},
+  fallback_rules: [],
 };
 
 export default function OfferForm({ offer, onSaved }) {
@@ -47,15 +27,16 @@ export default function OfferForm({ offer, onSaved }) {
 
   /* ================= INIT ================= */
   useEffect(() => {
-    apiFetch("/api/advertisers")
-      .then(setAdvertisers)
-      .catch(console.error);
+    fetch(`${API_BASE}/advertisers`, auth())
+      .then((r) => r.json())
+      .then(setAdvertisers);
 
     if (offer) {
       setForm({
         ...emptyOffer,
         ...offer,
         api_steps: offer.api_steps || {},
+        fallback_rules: offer.fallback_rules || [],
       });
     } else {
       const steps = {};
@@ -82,11 +63,12 @@ export default function OfferForm({ offer, onSaved }) {
     });
   };
 
-  /* ================= PARAM BUILDER ================= */
-  const addKV = (step, type) => {
-    const obj = form.api_steps[step][type] || {};
-    setStep(step, type, { ...obj, "": "" });
-  };
+  /* ================= KV BUILDER ================= */
+  const addKV = (step, type) =>
+    setStep(step, type, {
+      ...(form.api_steps[step][type] || {}),
+      "": "",
+    });
 
   const updateKV = (step, type, k, v, oldKey) => {
     const obj = { ...(form.api_steps[step][type] || {}) };
@@ -101,25 +83,47 @@ export default function OfferForm({ offer, onSaved }) {
     setStep(step, type, obj);
   };
 
+  /* ================= FALLBACK ================= */
+  const addFallback = () =>
+    setForm({
+      ...form,
+      fallback_rules: [
+        ...form.fallback_rules,
+        { geo: "", carrier: "", fallback_offer_id: "" },
+      ],
+    });
+
+  const updateFallback = (i, k, v) => {
+    const rules = [...form.fallback_rules];
+    rules[i][k] = v;
+    setForm({ ...form, fallback_rules: rules });
+  };
+
+  const removeFallback = (i) => {
+    const rules = [...form.fallback_rules];
+    rules.splice(i, 1);
+    setForm({ ...form, fallback_rules: rules });
+  };
+
   /* ================= SAVE ================= */
   const save = async () => {
     const payload = {
       ...form,
-      payout: Number(form.payout || 0),
-      revenue: Number(form.revenue || 0),
+      payout: Number(form.payout),
+      revenue: Number(form.revenue),
+      cap: Number(form.cap || 0),
     };
 
-    if (offer?.id) {
-      await apiFetch(`/api/offers/${offer.id}`, {
-        method: "PUT",
+    await fetch(
+      offer?.id
+        ? `${API_BASE}/offers/${offer.id}`
+        : `${API_BASE}/offers`,
+      {
+        method: offer?.id ? "PUT" : "POST",
+        ...auth(),
         body: JSON.stringify(payload),
-      });
-    } else {
-      await apiFetch("/api/offers", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-    }
+      }
+    );
 
     onSaved?.();
   };
@@ -131,8 +135,8 @@ export default function OfferForm({ offer, onSaved }) {
         {offer ? "Edit Offer" : "Create Offer"}
       </h2>
 
-      {/* BASIC INFO */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* BASIC */}
+      <div className="grid grid-cols-2 gap-3">
         <select
           value={form.advertiser_id}
           onChange={(e) => set("advertiser_id", e.target.value)}
@@ -178,6 +182,13 @@ export default function OfferForm({ offer, onSaved }) {
         />
 
         <input
+          type="number"
+          placeholder="Daily Cap"
+          value={form.cap}
+          onChange={(e) => set("cap", e.target.value)}
+        />
+
+        <input
           className="col-span-2"
           placeholder="Redirect URL"
           value={form.redirect_url}
@@ -192,16 +203,13 @@ export default function OfferForm({ offer, onSaved }) {
           <div key={step} className="border rounded p-4 space-y-3">
             <div className="flex justify-between">
               <h3 className="font-semibold">{cfg.label}</h3>
-              <label className="flex gap-2">
-                <input
-                  type="checkbox"
-                  checked={data.enabled}
-                  onChange={(e) =>
-                    setStep(step, "enabled", e.target.checked)
-                  }
-                />
-                Enabled
-              </label>
+              <input
+                type="checkbox"
+                checked={data.enabled}
+                onChange={(e) =>
+                  setStep(step, "enabled", e.target.checked)
+                }
+              />
             </div>
 
             <div className="flex gap-2">
@@ -225,7 +233,7 @@ export default function OfferForm({ offer, onSaved }) {
               />
             </div>
 
-            <Section
+            <KVSection
               title="Headers"
               step={step}
               type="headers"
@@ -236,7 +244,7 @@ export default function OfferForm({ offer, onSaved }) {
               removeKV={removeKV}
             />
 
-            <Section
+            <KVSection
               title="Params / Body"
               step={step}
               type="params"
@@ -248,7 +256,7 @@ export default function OfferForm({ offer, onSaved }) {
             />
 
             <input
-              placeholder="Success Matcher"
+              placeholder='Success Matcher (e.g. "status":1)'
               value={data.success_matcher || ""}
               onChange={(e) =>
                 setStep(step, "success_matcher", e.target.value)
@@ -267,6 +275,53 @@ export default function OfferForm({ offer, onSaved }) {
         );
       })}
 
+      {/* FALLBACK */}
+      <div className="border rounded p-4 space-y-2">
+        <h3 className="font-semibold text-yellow-400">
+          Fallback Offers (After Cap)
+        </h3>
+
+        {form.fallback_rules.map((r, i) => (
+          <div key={i} className="grid grid-cols-4 gap-2">
+            <input
+              placeholder="Geo"
+              value={r.geo}
+              onChange={(e) =>
+                updateFallback(i, "geo", e.target.value)
+              }
+            />
+            <input
+              placeholder="Carrier"
+              value={r.carrier}
+              onChange={(e) =>
+                updateFallback(i, "carrier", e.target.value)
+              }
+            />
+            <input
+              placeholder="Fallback Offer ID"
+              value={r.fallback_offer_id}
+              onChange={(e) =>
+                updateFallback(
+                  i,
+                  "fallback_offer_id",
+                  e.target.value
+                )
+              }
+            />
+            <button
+              className="btn btn-danger"
+              onClick={() => removeFallback(i)}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+
+        <button className="btn btn-secondary" onClick={addFallback}>
+          + Add Fallback
+        </button>
+      </div>
+
       <button className="btn btn-primary" onClick={save}>
         Save Offer
       </button>
@@ -283,8 +338,8 @@ export default function OfferForm({ offer, onSaved }) {
   );
 }
 
-/* ================= SUB COMPONENT ================= */
-function Section({
+/* ================= SUB ================= */
+function KVSection({
   title,
   step,
   type,
@@ -299,28 +354,40 @@ function Section({
     <div>
       <h4 className="font-medium">{title}</h4>
       {Object.entries(obj).map(([k, v]) => (
-        <div key={k} className="flex gap-2 mb-1">
+        <div key={k} className="flex gap-2">
           <input
             value={k}
+            placeholder="key"
             onChange={(e) =>
               updateKV(step, type, e.target.value, v, k)
             }
           />
           <input
             value={v}
+            placeholder="value"
             onChange={(e) =>
               updateKV(step, type, k, e.target.value, k)
             }
           />
-          <button onClick={() => removeKV(step, type, k)}>✕</button>
+          <button onClick={() => removeKV(step, type, k)}>
+            ✕
+          </button>
         </div>
       ))}
       <button onClick={() => addKV(step, type)}>
         + Add {title}
       </button>
-      <div className="text-xs text-gray-500 mt-1">
+      <div className="text-xs opacity-60">
         Templates: {templates.map((t) => `<coll_${t}>`).join(", ")}
       </div>
     </div>
   );
 }
+
+/* ================= AUTH ================= */
+const auth = () => ({
+  headers: {
+    Authorization: `Bearer ${localStorage.getItem("token")}`,
+    "Content-Type": "application/json",
+  },
+});
