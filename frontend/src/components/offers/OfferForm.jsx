@@ -2,10 +2,32 @@ import { useEffect, useState } from "react";
 import { OFFER_API_SCHEMA } from "../../config/offerApiSchema";
 import LiveApiTestModal from "../LiveApiTestModal";
 
+/* ================= API BASE ================= */
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 
-/* ================= DEFAULT ================= */
+/* ================= FETCH HELPER ================= */
+const apiFetch = async (url, options = {}) => {
+  const token = localStorage.getItem("token");
+
+  const res = await fetch(`${API_BASE}${url}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(txt || "API Error");
+  }
+
+  return res.json();
+};
+
+/* ================= DEFAULT OFFER ================= */
 const emptyOffer = {
   advertiser_id: "",
   name: "",
@@ -13,30 +35,29 @@ const emptyOffer = {
   carrier: "",
   payout: "",
   revenue: "",
-  cap: "",
+  daily_cap: "",
   redirect_url: "",
-  is_active: true,
+  fallback_offer_id: "",
   api_steps: {},
-  fallback_rules: [],
+  is_active: true,
 };
 
 export default function OfferForm({ offer, onSaved }) {
   const [form, setForm] = useState(emptyOffer);
   const [advertisers, setAdvertisers] = useState([]);
+  const [offers, setOffers] = useState([]);
   const [testStep, setTestStep] = useState(null);
 
   /* ================= INIT ================= */
   useEffect(() => {
-    fetch(`${API_BASE}/advertisers`, auth())
-      .then((r) => r.json())
-      .then(setAdvertisers);
+    apiFetch("/api/advertisers").then(setAdvertisers).catch(console.error);
+    apiFetch("/api/offers").then(setOffers).catch(() => {});
 
     if (offer) {
       setForm({
         ...emptyOffer,
         ...offer,
         api_steps: offer.api_steps || {},
-        fallback_rules: offer.fallback_rules || [],
       });
     } else {
       const steps = {};
@@ -47,7 +68,7 @@ export default function OfferForm({ offer, onSaved }) {
     }
   }, [offer]);
 
-  /* ================= BASIC ================= */
+  /* ================= BASIC SETTERS ================= */
   const set = (k, v) => setForm({ ...form, [k]: v });
 
   const setStep = (step, key, val) => {
@@ -63,12 +84,11 @@ export default function OfferForm({ offer, onSaved }) {
     });
   };
 
-  /* ================= KV BUILDER ================= */
-  const addKV = (step, type) =>
-    setStep(step, type, {
-      ...(form.api_steps[step][type] || {}),
-      "": "",
-    });
+  /* ================= PARAM BUILDER ================= */
+  const addKV = (step, type) => {
+    const obj = form.api_steps[step][type] || {};
+    setStep(step, type, { ...obj, "": "" });
+  };
 
   const updateKV = (step, type, k, v, oldKey) => {
     const obj = { ...(form.api_steps[step][type] || {}) };
@@ -83,47 +103,26 @@ export default function OfferForm({ offer, onSaved }) {
     setStep(step, type, obj);
   };
 
-  /* ================= FALLBACK ================= */
-  const addFallback = () =>
-    setForm({
-      ...form,
-      fallback_rules: [
-        ...form.fallback_rules,
-        { geo: "", carrier: "", fallback_offer_id: "" },
-      ],
-    });
-
-  const updateFallback = (i, k, v) => {
-    const rules = [...form.fallback_rules];
-    rules[i][k] = v;
-    setForm({ ...form, fallback_rules: rules });
-  };
-
-  const removeFallback = (i) => {
-    const rules = [...form.fallback_rules];
-    rules.splice(i, 1);
-    setForm({ ...form, fallback_rules: rules });
-  };
-
   /* ================= SAVE ================= */
   const save = async () => {
     const payload = {
       ...form,
-      payout: Number(form.payout),
-      revenue: Number(form.revenue),
-      cap: Number(form.cap || 0),
+      payout: Number(form.payout || 0),
+      revenue: Number(form.revenue || 0),
+      daily_cap: Number(form.daily_cap || 0),
     };
 
-    await fetch(
-      offer?.id
-        ? `${API_BASE}/offers/${offer.id}`
-        : `${API_BASE}/offers`,
-      {
-        method: offer?.id ? "PUT" : "POST",
-        ...auth(),
+    if (offer?.id) {
+      await apiFetch(`/api/offers/${offer.id}`, {
+        method: "PUT",
         body: JSON.stringify(payload),
-      }
-    );
+      });
+    } else {
+      await apiFetch("/api/offers", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    }
 
     onSaved?.();
   };
@@ -135,8 +134,8 @@ export default function OfferForm({ offer, onSaved }) {
         {offer ? "Edit Offer" : "Create Offer"}
       </h2>
 
-      {/* BASIC */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* BASIC INFO */}
+      <div className="grid grid-cols-2 gap-4">
         <select
           value={form.advertiser_id}
           onChange={(e) => set("advertiser_id", e.target.value)}
@@ -184,9 +183,23 @@ export default function OfferForm({ offer, onSaved }) {
         <input
           type="number"
           placeholder="Daily Cap"
-          value={form.cap}
-          onChange={(e) => set("cap", e.target.value)}
+          value={form.daily_cap}
+          onChange={(e) => set("daily_cap", e.target.value)}
         />
+
+        <select
+          value={form.fallback_offer_id}
+          onChange={(e) => set("fallback_offer_id", e.target.value)}
+        >
+          <option value="">Fallback Offer (Optional)</option>
+          {offers
+            .filter((o) => o.id !== offer?.id)
+            .map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name} ({o.geo}/{o.carrier})
+              </option>
+            ))}
+        </select>
 
         <input
           className="col-span-2"
@@ -203,13 +216,16 @@ export default function OfferForm({ offer, onSaved }) {
           <div key={step} className="border rounded p-4 space-y-3">
             <div className="flex justify-between">
               <h3 className="font-semibold">{cfg.label}</h3>
-              <input
-                type="checkbox"
-                checked={data.enabled}
-                onChange={(e) =>
-                  setStep(step, "enabled", e.target.checked)
-                }
-              />
+              <label className="flex gap-2">
+                <input
+                  type="checkbox"
+                  checked={data.enabled}
+                  onChange={(e) =>
+                    setStep(step, "enabled", e.target.checked)
+                  }
+                />
+                Enabled
+              </label>
             </div>
 
             <div className="flex gap-2">
@@ -225,7 +241,7 @@ export default function OfferForm({ offer, onSaved }) {
 
               <input
                 className="flex-1"
-                placeholder="API URL"
+                placeholder="Full API URL"
                 value={data.url}
                 onChange={(e) =>
                   setStep(step, "url", e.target.value)
@@ -233,7 +249,7 @@ export default function OfferForm({ offer, onSaved }) {
               />
             </div>
 
-            <KVSection
+            <Section
               title="Headers"
               step={step}
               type="headers"
@@ -244,7 +260,7 @@ export default function OfferForm({ offer, onSaved }) {
               removeKV={removeKV}
             />
 
-            <KVSection
+            <Section
               title="Params / Body"
               step={step}
               type="params"
@@ -275,53 +291,6 @@ export default function OfferForm({ offer, onSaved }) {
         );
       })}
 
-      {/* FALLBACK */}
-      <div className="border rounded p-4 space-y-2">
-        <h3 className="font-semibold text-yellow-400">
-          Fallback Offers (After Cap)
-        </h3>
-
-        {form.fallback_rules.map((r, i) => (
-          <div key={i} className="grid grid-cols-4 gap-2">
-            <input
-              placeholder="Geo"
-              value={r.geo}
-              onChange={(e) =>
-                updateFallback(i, "geo", e.target.value)
-              }
-            />
-            <input
-              placeholder="Carrier"
-              value={r.carrier}
-              onChange={(e) =>
-                updateFallback(i, "carrier", e.target.value)
-              }
-            />
-            <input
-              placeholder="Fallback Offer ID"
-              value={r.fallback_offer_id}
-              onChange={(e) =>
-                updateFallback(
-                  i,
-                  "fallback_offer_id",
-                  e.target.value
-                )
-              }
-            />
-            <button
-              className="btn btn-danger"
-              onClick={() => removeFallback(i)}
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-
-        <button className="btn btn-secondary" onClick={addFallback}>
-          + Add Fallback
-        </button>
-      </div>
-
       <button className="btn btn-primary" onClick={save}>
         Save Offer
       </button>
@@ -338,8 +307,8 @@ export default function OfferForm({ offer, onSaved }) {
   );
 }
 
-/* ================= SUB ================= */
-function KVSection({
+/* ================= SUB COMPONENT ================= */
+function Section({
   title,
   step,
   type,
@@ -353,41 +322,34 @@ function KVSection({
   return (
     <div>
       <h4 className="font-medium">{title}</h4>
+
       {Object.entries(obj).map(([k, v]) => (
-        <div key={k} className="flex gap-2">
+        <div key={k} className="flex gap-2 mb-1">
           <input
+            className="w-1/3"
             value={k}
-            placeholder="key"
             onChange={(e) =>
               updateKV(step, type, e.target.value, v, k)
             }
           />
           <input
+            className="flex-1"
             value={v}
-            placeholder="value"
             onChange={(e) =>
               updateKV(step, type, k, e.target.value, k)
             }
           />
-          <button onClick={() => removeKV(step, type, k)}>
-            ✕
-          </button>
+          <button onClick={() => removeKV(step, type, k)}>✕</button>
         </div>
       ))}
+
       <button onClick={() => addKV(step, type)}>
         + Add {title}
       </button>
-      <div className="text-xs opacity-60">
+
+      <div className="text-xs text-gray-500 mt-1">
         Templates: {templates.map((t) => `<coll_${t}>`).join(", ")}
       </div>
     </div>
   );
 }
-
-/* ================= AUTH ================= */
-const auth = () => ({
-  headers: {
-    Authorization: `Bearer ${localStorage.getItem("token")}`,
-    "Content-Type": "application/json",
-  },
-});
