@@ -24,24 +24,20 @@ const jsonAuthHeaders = () => ({
    OFFERS CRUD
 ===================================================== */
 
-/* ================= GET ALL OFFERS =================
-   GET /api/offers
-===================================================== */
+/* ================= GET ALL OFFERS ================= */
 export const getOffers = async () => {
   const res = await fetch(`${API_URL}/api/offers`, {
     headers: authHeaders(),
   });
 
   if (!res.ok) {
-    throw new Error("Failed to fetch offers");
+    throw new Error(await res.text());
   }
 
   return res.json();
 };
 
-/* ================= CREATE OFFER =================
-   POST /api/offers
-===================================================== */
+/* ================= CREATE OFFER ================= */
 export const createOffer = async (offer) => {
   const res = await fetch(`${API_URL}/api/offers`, {
     method: "POST",
@@ -50,15 +46,13 @@ export const createOffer = async (offer) => {
   });
 
   if (!res.ok) {
-    throw new Error("Failed to create offer");
+    throw new Error(await res.text());
   }
 
   return res.json();
 };
 
-/* ================= UPDATE OFFER (FUTURE) =================
-   PUT /api/offers/:id
-===================================================== */
+/* ================= UPDATE OFFER ================= */
 export const updateOffer = async (id, offer) => {
   const res = await fetch(`${API_URL}/api/offers/${id}`, {
     method: "PUT",
@@ -67,15 +61,13 @@ export const updateOffer = async (id, offer) => {
   });
 
   if (!res.ok) {
-    throw new Error("Failed to update offer");
+    throw new Error(await res.text());
   }
 
   return res.json();
 };
 
-/* ================= TOGGLE OFFER STATUS =================
-   PATCH /api/offers/:id/status
-===================================================== */
+/* ================= TOGGLE OFFER STATUS ================= */
 export const toggleOfferStatus = async (id) => {
   const res = await fetch(`${API_URL}/api/offers/${id}/status`, {
     method: "PATCH",
@@ -83,15 +75,13 @@ export const toggleOfferStatus = async (id) => {
   });
 
   if (!res.ok) {
-    throw new Error("Failed to toggle offer status");
+    throw new Error(await res.text());
   }
 
   return res.json();
 };
 
-/* ================= DELETE OFFER =================
-   DELETE /api/offers/:id
-===================================================== */
+/* ================= DELETE OFFER ================= */
 export const deleteOffer = async (id) => {
   const res = await fetch(`${API_URL}/api/offers/${id}`, {
     method: "DELETE",
@@ -99,22 +89,28 @@ export const deleteOffer = async (id) => {
   });
 
   if (!res.ok) {
-    throw new Error("Failed to delete offer");
+    throw new Error(await res.text());
   }
 
   return res.json();
 };
 
 /* =====================================================
-   OFFER EXECUTION ENGINE (REAL FLOW)
+   OFFER EXECUTION ENGINE (GENERIC & FLEXIBLE)
 ===================================================== */
 
-/* ================= STEP 1: STATUS CHECK =================
-   POST /api/offers/:id/status-check
-   payload → { msisdn, transaction_id? }
-   backend auto adds: ip, ua
-===================================================== */
-export const checkStatus = async (offerId, payload) => {
+/**
+ * payload can contain ANY advertiser params:
+ * msisdn (required)
+ * user_ip OR ip
+ * ua
+ * pub_id
+ * sub_pub_id
+ * transaction_id (if any)
+ */
+
+/* ================= STATUS CHECK ================= */
+export const checkStatus = async (offerId, payload = {}) => {
   const res = await fetch(
     `${API_URL}/api/offers/${offerId}/status-check`,
     {
@@ -125,17 +121,14 @@ export const checkStatus = async (offerId, payload) => {
   );
 
   if (!res.ok) {
-    throw new Error("Status check failed");
+    throw new Error(await res.text());
   }
 
   return res.json();
 };
 
-/* ================= STEP 2: PIN SEND =================
-   POST /api/offers/:id/pin-send
-   payload → { msisdn, transaction_id }
-===================================================== */
-export const executePinSend = async (offerId, payload) => {
+/* ================= PIN SEND ================= */
+export const executePinSend = async (offerId, payload = {}) => {
   const res = await fetch(
     `${API_URL}/api/offers/${offerId}/pin-send`,
     {
@@ -146,17 +139,21 @@ export const executePinSend = async (offerId, payload) => {
   );
 
   if (!res.ok) {
-    throw new Error("PIN Send failed");
+    throw new Error(await res.text());
   }
 
   return res.json();
 };
 
-/* ================= STEP 3: PIN VERIFY =================
-   POST /api/offers/:id/pin-verify
-   payload → { msisdn, pin, transaction_id }
-===================================================== */
-export const executePinVerify = async (offerId, payload) => {
+/**
+ * payload must include:
+ * msisdn
+ * pin
+ * sessionKey (if operator requires)
+ */
+
+/* ================= PIN VERIFY ================= */
+export const executePinVerify = async (offerId, payload = {}) => {
   const res = await fetch(
     `${API_URL}/api/offers/${offerId}/pin-verify`,
     {
@@ -167,7 +164,7 @@ export const executePinVerify = async (offerId, payload) => {
   );
 
   if (!res.ok) {
-    throw new Error("PIN Verify failed");
+    throw new Error(await res.text());
   }
 
   return res.json();
