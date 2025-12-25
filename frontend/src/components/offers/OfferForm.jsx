@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "../../utils/axios";
 import { OFFER_API_SCHEMA } from "../../config/offerApiSchema";
+import LiveApiTestModal from "../LiveApiTestModal";
 
 const emptyOffer = {
   advertiser_id: "",
@@ -17,8 +18,7 @@ const emptyOffer = {
 export default function OfferForm({ offer, onSaved }) {
   const [form, setForm] = useState(emptyOffer);
   const [advertisers, setAdvertisers] = useState([]);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState(null);
+  const [testStep, setTestStep] = useState(null);
 
   /* ================= INIT ================= */
   useEffect(() => {
@@ -31,10 +31,9 @@ export default function OfferForm({ offer, onSaved }) {
         api_steps: offer.api_steps || {},
       });
     } else {
-      // initialize api_steps from schema
       const steps = {};
-      Object.entries(OFFER_API_SCHEMA).forEach(([key, cfg]) => {
-        steps[key] = { ...cfg.default };
+      Object.entries(OFFER_API_SCHEMA).forEach(([k, cfg]) => {
+        steps[k] = { ...cfg.default };
       });
       setForm((f) => ({ ...f, api_steps: steps }));
     }
@@ -90,26 +89,6 @@ export default function OfferForm({ offer, onSaved }) {
     }
 
     onSaved?.();
-  };
-
-  /* ================= TEST STEP ================= */
-  const testStep = async (step) => {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const res = await axios.post(
-        `/offers/${offer.id}/${step}`,
-        {
-          msisdn: "966500000000",
-          pin: "1234",
-          param1: "test",
-        }
-      );
-      setTestResult(res.data);
-    } catch (e) {
-      setTestResult(e.response?.data || { error: "Failed" });
-    }
-    setTesting(false);
   };
 
   /* ================= UI ================= */
@@ -177,44 +156,35 @@ export default function OfferForm({ offer, onSaved }) {
       {Object.entries(OFFER_API_SCHEMA).map(([step, cfg]) => {
         const data = form.api_steps[step] || {};
         return (
-          <div key={step} className="border rounded p-3 space-y-3">
+          <div key={step} className="border rounded p-4 space-y-3">
             <div className="flex justify-between items-center">
               <h3 className="font-semibold">{cfg.label}</h3>
-              <label>
+              <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={data.enabled}
                   onChange={(e) => setStep(step, "enabled", e.target.checked)}
-                />{" "}
+                />
                 Enabled
               </label>
             </div>
 
-            <select
-              value={data.method}
-              onChange={(e) => setStep(step, "method", e.target.value)}
-            >
-              <option>GET</option>
-              <option>POST</option>
-            </select>
+            <div className="flex gap-2">
+              <select
+                value={data.method}
+                onChange={(e) => setStep(step, "method", e.target.value)}
+              >
+                <option>GET</option>
+                <option>POST</option>
+              </select>
 
-            <input
-              placeholder="API URL"
-              value={data.url}
-              onChange={(e) => setStep(step, "url", e.target.value)}
-            />
-
-            {/* PARAMS */}
-            <Section
-              title="Params"
-              step={step}
-              type="params"
-              data={data}
-              templates={cfg.templates}
-              addKV={addKV}
-              updateKV={updateKV}
-              removeKV={removeKV}
-            />
+              <input
+                className="flex-1"
+                placeholder="API URL"
+                value={data.url}
+                onChange={(e) => setStep(step, "url", e.target.value)}
+              />
+            </div>
 
             {/* HEADERS */}
             <Section
@@ -228,37 +198,53 @@ export default function OfferForm({ offer, onSaved }) {
               removeKV={removeKV}
             />
 
+            {/* PARAMS */}
+            <Section
+              title="Params / Body"
+              step={step}
+              type="params"
+              data={data}
+              templates={cfg.templates}
+              addKV={addKV}
+              updateKV={updateKV}
+              removeKV={removeKV}
+            />
+
             <input
-              placeholder="Success Matcher (string)"
+              placeholder='Success Matcher (e.g. "status":1)'
               value={data.success_matcher || ""}
               onChange={(e) =>
                 setStep(step, "success_matcher", e.target.value)
               }
             />
 
-            {offer && (
+            {/* LIVE TEST */}
+            {offer?.id && data.enabled && (
               <button
-                className="btn btn-secondary"
-                disabled={testing}
-                onClick={() => testStep(step)}
+                className="btn btn-success"
+                onClick={() => setTestStep(step)}
               >
-                {testing ? "Testing..." : "Test API"}
+                🔴 Live API Test
               </button>
             )}
           </div>
         );
       })}
 
-      {/* TEST RESULT */}
-      {testResult && (
-        <pre className="bg-black text-green-400 p-3 text-xs overflow-auto">
-          {JSON.stringify(testResult, null, 2)}
-        </pre>
-      )}
-
       <button className="btn btn-primary" onClick={save}>
         Save Offer
       </button>
+
+      {/* LIVE TEST MODAL */}
+      {testStep && (
+        <LiveApiTestModal
+          open={!!testStep}
+          step={testStep}
+          offerId={offer.id}
+          authToken={localStorage.getItem("token")}
+          onClose={() => setTestStep(null)}
+        />
+      )}
     </div>
   );
 }
@@ -275,9 +261,11 @@ function Section({
   removeKV,
 }) {
   const obj = data[type] || {};
+
   return (
     <div>
-      <h4 className="font-medium">{title}</h4>
+      <h4 className="font-medium mb-1">{title}</h4>
+
       {Object.entries(obj).map(([k, v]) => (
         <div key={k} className="flex gap-2 mb-1">
           <input
@@ -297,7 +285,10 @@ function Section({
           <button onClick={() => removeKV(step, type, k)}>✕</button>
         </div>
       ))}
-      <button onClick={() => addKV(step, type)}>+ Add {title}</button>
+
+      <button onClick={() => addKV(step, type)}>
+        + Add {title}
+      </button>
 
       <div className="text-xs text-gray-500 mt-1">
         Templates: {templates.map((t) => `<coll_${t}>`).join(", ")}
