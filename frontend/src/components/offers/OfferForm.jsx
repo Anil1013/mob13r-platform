@@ -50,7 +50,7 @@ export default function OfferForm({ offer, onSaved }) {
 
   /* ================= INIT ================= */
   useEffect(() => {
-    apiFetch("/api/advertisers").then(setAdvertisers);
+    apiFetch("/api/advertisers").then(setAdvertisers).catch(console.error);
     apiFetch("/api/offers").then(setOffers).catch(() => {});
 
     if (offer) {
@@ -68,21 +68,29 @@ export default function OfferForm({ offer, onSaved }) {
     }
   }, [offer]);
 
-  /* ================= SETTERS ================= */
+  /* ================= BASIC SETTERS ================= */
   const set = (k, v) => setForm({ ...form, [k]: v });
 
   const setStep = (step, key, val) => {
-    setForm({
-      ...form,
+    setForm((f) => ({
+      ...f,
       api_steps: {
-        ...form.api_steps,
+        ...f.api_steps,
         [step]: {
-          ...form.api_steps[step],
+          ...f.api_steps[step],
           [key]: val,
         },
       },
-    });
+    }));
   };
+
+  /* ================= CLEAN EMPTY KV ================= */
+  const cleanKV = (obj = {}) =>
+    Object.fromEntries(
+      Object.entries(obj).filter(
+        ([k, v]) => k && v !== undefined && v !== ""
+      )
+    );
 
   /* ================= PARAM BUILDER ================= */
   const addKV = (step, type) => {
@@ -103,28 +111,16 @@ export default function OfferForm({ offer, onSaved }) {
     setStep(step, type, obj);
   };
 
-  /* ================= SAVE (FIXED) ================= */
+  /* ================= SAVE ================= */
   const save = async () => {
-    /* 🔒 HARD VALIDATION */
-    if (!form.advertiser_id) {
-      alert("Advertiser is required");
-      return;
-    }
-
-    if (!form.name.trim()) {
-      alert("Offer name is required");
-      return;
-    }
-
-    /* 🔧 CLEAN API STEPS */
     const cleanedSteps = {};
 
-    Object.entries(form.api_steps || {}).forEach(([k, step]) => {
-      if (step.enabled && !step.url) {
-        cleanedSteps[k] = { ...step, enabled: false };
-      } else {
-        cleanedSteps[k] = step;
-      }
+    Object.entries(form.api_steps).forEach(([step, cfg]) => {
+      cleanedSteps[step] = {
+        ...cfg,
+        headers: cleanKV(cfg.headers),
+        params: cleanKV(cfg.params),
+      };
     });
 
     const payload = {
@@ -135,24 +131,19 @@ export default function OfferForm({ offer, onSaved }) {
       api_steps: cleanedSteps,
     };
 
-    try {
-      if (offer?.id) {
-        await apiFetch(`/api/offers/${offer.id}`, {
-          method: "PUT",
-          body: JSON.stringify(payload),
-        });
-      } else {
-        await apiFetch("/api/offers", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
-      }
-
-      alert("Offer saved successfully");
-      onSaved?.();
-    } catch (err) {
-      alert(err.message || "Save failed");
+    if (offer?.id) {
+      await apiFetch(`/api/offers/${offer.id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+    } else {
+      await apiFetch("/api/offers", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
     }
+
+    onSaved?.();
   };
 
   /* ================= UI ================= */
@@ -257,9 +248,10 @@ export default function OfferForm({ offer, onSaved }) {
               </label>
             </div>
 
-            <div className="flex gap-2 items-center">
+            {/* ===== METHOD + FULL WIDTH URL ===== */}
+            <div className="flex items-center gap-2 w-full">
               <select
-                className="w-24"
+                className="w-24 shrink-0"
                 value={data.method}
                 onChange={(e) =>
                   setStep(step, "method", e.target.value)
@@ -270,14 +262,53 @@ export default function OfferForm({ offer, onSaved }) {
               </select>
 
               <input
-                className="flex-1 font-mono text-sm"
-                placeholder="Full API URL"
+                className="w-full font-mono text-sm px-2 py-1"
+                placeholder="https://full.api.url/endpoint"
                 value={data.url || ""}
                 onChange={(e) =>
                   setStep(step, "url", e.target.value)
                 }
               />
             </div>
+
+            <Section
+              title="Headers"
+              step={step}
+              type="headers"
+              data={data}
+              templates={cfg.templates}
+              addKV={addKV}
+              updateKV={updateKV}
+              removeKV={removeKV}
+            />
+
+            <Section
+              title="Params / Body"
+              step={step}
+              type="params"
+              data={data}
+              templates={cfg.templates}
+              addKV={addKV}
+              updateKV={updateKV}
+              removeKV={removeKV}
+            />
+
+            <input
+              placeholder='Success Matcher (e.g. "status":true)'
+              value={data.success_matcher || ""}
+              onChange={(e) =>
+                setStep(step, "success_matcher", e.target.value)
+              }
+            />
+
+            {offer?.id && data.enabled && (
+              <button
+                className="btn btn-success"
+                onClick={() => setTestStep(step)}
+              >
+                🔴 Live API Test
+              </button>
+            )}
           </div>
         );
       })}
@@ -294,6 +325,56 @@ export default function OfferForm({ offer, onSaved }) {
           onClose={() => setTestStep(null)}
         />
       )}
+    </div>
+  );
+}
+
+/* ================= SUB COMPONENT ================= */
+function Section({
+  title,
+  step,
+  type,
+  data,
+  templates,
+  addKV,
+  updateKV,
+  removeKV,
+}) {
+  const obj = data[type] || {};
+
+  return (
+    <div>
+      <h4 className="font-medium">{title}</h4>
+
+      {Object.entries(obj).map(([k, v]) => (
+        <div key={k} className="flex gap-2 mb-1">
+          <input
+            className="w-1/3"
+            placeholder="key"
+            value={k}
+            onChange={(e) =>
+              updateKV(step, type, e.target.value, v, k)
+            }
+          />
+          <input
+            className="flex-1"
+            placeholder="value"
+            value={v}
+            onChange={(e) =>
+              updateKV(step, type, k, e.target.value, k)
+            }
+          />
+          <button onClick={() => removeKV(step, type, k)}>✕</button>
+        </div>
+      ))}
+
+      <button onClick={() => addKV(step, type)}>
+        + Add {title}
+      </button>
+
+      <div className="text-xs text-gray-500 mt-1">
+        Templates: {templates.map((t) => `<coll_${t}>`).join(", ")}
+      </div>
     </div>
   );
 }
