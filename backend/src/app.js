@@ -5,6 +5,7 @@ import authRoutes from "./routes/auth.routes.js";
 import advertisersRoutes from "./routes/advertisers.routes.js";
 import offersRoutes from "./routes/offers.routes.js";
 import offerExecutionRoutes from "./routes/offer-execution.routes.js";
+import executionLogsRoutes from "./routes/execution-logs.routes.js";
 
 const app = express();
 
@@ -34,5 +35,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/advertisers", advertisersRoutes);
 app.use("/api/offers", offersRoutes);
 app.use("/api/offers", offerExecutionRoutes);
+app.use("/api/execution-logs", executionLogsRoutes);
 
 export default app;
