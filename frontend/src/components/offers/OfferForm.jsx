@@ -1,21 +1,31 @@
 import { useEffect, useState } from "react";
-import axiosLib from "axios";
 import { OFFER_API_SCHEMA } from "../../config/offerApiSchema";
 import LiveApiTestModal from "../LiveApiTestModal";
 
-/* ================= AXIOS INSTANCE ================= */
-const axios = axiosLib.create({
-  baseURL:
-    import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com",
-});
+/* ================= API BASE ================= */
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 
-axios.interceptors.request.use((config) => {
+/* ================= FETCH HELPER ================= */
+const apiFetch = async (url, options = {}) => {
   const token = localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${url}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err || "API Error");
   }
-  return config;
-});
+
+  return res.json();
+};
 
 /* ================= DEFAULT ================= */
 const emptyOffer = {
@@ -37,9 +47,9 @@ export default function OfferForm({ offer, onSaved }) {
 
   /* ================= INIT ================= */
   useEffect(() => {
-    axios.get("/api/advertisers").then((res) => {
-      setAdvertisers(res.data || []);
-    });
+    apiFetch("/api/advertisers")
+      .then(setAdvertisers)
+      .catch(console.error);
 
     if (offer) {
       setForm({
@@ -49,14 +59,14 @@ export default function OfferForm({ offer, onSaved }) {
       });
     } else {
       const steps = {};
-      Object.entries(OFFER_API_SCHEMA).forEach(([key, cfg]) => {
-        steps[key] = { ...cfg.default };
+      Object.entries(OFFER_API_SCHEMA).forEach(([k, cfg]) => {
+        steps[k] = { ...cfg.default };
       });
       setForm((f) => ({ ...f, api_steps: steps }));
     }
   }, [offer]);
 
-  /* ================= BASIC SETTERS ================= */
+  /* ================= BASIC ================= */
   const set = (k, v) => setForm({ ...form, [k]: v });
 
   const setStep = (step, key, val) => {
@@ -72,7 +82,7 @@ export default function OfferForm({ offer, onSaved }) {
     });
   };
 
-  /* ================= PARAM / HEADER BUILDER ================= */
+  /* ================= PARAM BUILDER ================= */
   const addKV = (step, type) => {
     const obj = form.api_steps[step][type] || {};
     setStep(step, type, { ...obj, "": "" });
@@ -100,9 +110,15 @@ export default function OfferForm({ offer, onSaved }) {
     };
 
     if (offer?.id) {
-      await axios.put(`/api/offers/${offer.id}`, payload);
+      await apiFetch(`/api/offers/${offer.id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
     } else {
-      await axios.post("/api/offers", payload);
+      await apiFetch("/api/offers", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
     }
 
     onSaved?.();
@@ -115,7 +131,7 @@ export default function OfferForm({ offer, onSaved }) {
         {offer ? "Edit Offer" : "Create Offer"}
       </h2>
 
-      {/* ================= BASIC INFO ================= */}
+      {/* BASIC INFO */}
       <div className="grid grid-cols-2 gap-4">
         <select
           value={form.advertiser_id}
@@ -169,15 +185,14 @@ export default function OfferForm({ offer, onSaved }) {
         />
       </div>
 
-      {/* ================= API STEPS ================= */}
+      {/* API STEPS */}
       {Object.entries(OFFER_API_SCHEMA).map(([step, cfg]) => {
         const data = form.api_steps[step] || {};
-
         return (
           <div key={step} className="border rounded p-4 space-y-3">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between">
               <h3 className="font-semibold">{cfg.label}</h3>
-              <label className="flex gap-2 items-center">
+              <label className="flex gap-2">
                 <input
                   type="checkbox"
                   checked={data.enabled}
@@ -210,7 +225,6 @@ export default function OfferForm({ offer, onSaved }) {
               />
             </div>
 
-            {/* HEADERS */}
             <Section
               title="Headers"
               step={step}
@@ -222,7 +236,6 @@ export default function OfferForm({ offer, onSaved }) {
               removeKV={removeKV}
             />
 
-            {/* PARAMS */}
             <Section
               title="Params / Body"
               step={step}
@@ -235,14 +248,13 @@ export default function OfferForm({ offer, onSaved }) {
             />
 
             <input
-              placeholder='Success Matcher (e.g. "status":1)'
+              placeholder="Success Matcher"
               value={data.success_matcher || ""}
               onChange={(e) =>
                 setStep(step, "success_matcher", e.target.value)
               }
             />
 
-            {/* LIVE TEST */}
             {offer?.id && data.enabled && (
               <button
                 className="btn btn-success"
@@ -259,13 +271,11 @@ export default function OfferForm({ offer, onSaved }) {
         Save Offer
       </button>
 
-      {/* ================= LIVE TEST MODAL ================= */}
       {testStep && (
         <LiveApiTestModal
-          open={!!testStep}
+          open
           step={testStep}
           offerId={offer.id}
-          authToken={localStorage.getItem("token")}
           onClose={() => setTestStep(null)}
         />
       )}
@@ -285,22 +295,18 @@ function Section({
   removeKV,
 }) {
   const obj = data[type] || {};
-
   return (
     <div>
-      <h4 className="font-medium mb-1">{title}</h4>
-
+      <h4 className="font-medium">{title}</h4>
       {Object.entries(obj).map(([k, v]) => (
         <div key={k} className="flex gap-2 mb-1">
           <input
-            placeholder="key"
             value={k}
             onChange={(e) =>
               updateKV(step, type, e.target.value, v, k)
             }
           />
           <input
-            placeholder="value"
             value={v}
             onChange={(e) =>
               updateKV(step, type, k, e.target.value, k)
@@ -309,11 +315,9 @@ function Section({
           <button onClick={() => removeKV(step, type, k)}>✕</button>
         </div>
       ))}
-
       <button onClick={() => addKV(step, type)}>
         + Add {title}
       </button>
-
       <div className="text-xs text-gray-500 mt-1">
         Templates: {templates.map((t) => `<coll_${t}>`).join(", ")}
       </div>
