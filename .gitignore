@@ -7,3 +7,5 @@ backend/.env
 aws/
 awscliv2.zip
 backend/FETCH_HEAD
+
+.elasticbeanstalk/
