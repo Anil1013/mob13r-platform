@@ -1,8 +1,23 @@
 import { useEffect, useState } from "react";
-import { getAdvertisers } from "../../services/advertisers";
+import axiosLib from "axios";
 import { OFFER_API_SCHEMA } from "../../config/offerApiSchema";
 import LiveApiTestModal from "../LiveApiTestModal";
 
+/* ================= AXIOS INSTANCE ================= */
+const axios = axiosLib.create({
+  baseURL:
+    import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com",
+});
+
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+/* ================= DEFAULT ================= */
 const emptyOffer = {
   advertiser_id: "",
   name: "",
@@ -22,7 +37,9 @@ export default function OfferForm({ offer, onSaved }) {
 
   /* ================= INIT ================= */
   useEffect(() => {
-    axios.get("/advertisers").then((res) => setAdvertisers(res.data));
+    axios.get("/api/advertisers").then((res) => {
+      setAdvertisers(res.data || []);
+    });
 
     if (offer) {
       setForm({
@@ -32,14 +49,14 @@ export default function OfferForm({ offer, onSaved }) {
       });
     } else {
       const steps = {};
-      Object.entries(OFFER_API_SCHEMA).forEach(([k, cfg]) => {
-        steps[k] = { ...cfg.default };
+      Object.entries(OFFER_API_SCHEMA).forEach(([key, cfg]) => {
+        steps[key] = { ...cfg.default };
       });
       setForm((f) => ({ ...f, api_steps: steps }));
     }
   }, [offer]);
 
-  /* ================= BASIC ================= */
+  /* ================= BASIC SETTERS ================= */
   const set = (k, v) => setForm({ ...form, [k]: v });
 
   const setStep = (step, key, val) => {
@@ -55,7 +72,7 @@ export default function OfferForm({ offer, onSaved }) {
     });
   };
 
-  /* ================= PARAM BUILDER ================= */
+  /* ================= PARAM / HEADER BUILDER ================= */
   const addKV = (step, type) => {
     const obj = form.api_steps[step][type] || {};
     setStep(step, type, { ...obj, "": "" });
@@ -78,14 +95,14 @@ export default function OfferForm({ offer, onSaved }) {
   const save = async () => {
     const payload = {
       ...form,
-      payout: Number(form.payout),
-      revenue: Number(form.revenue),
+      payout: Number(form.payout || 0),
+      revenue: Number(form.revenue || 0),
     };
 
     if (offer?.id) {
-      await axios.put(`/offers/${offer.id}`, payload);
+      await axios.put(`/api/offers/${offer.id}`, payload);
     } else {
-      await axios.post("/offers", payload);
+      await axios.post("/api/offers", payload);
     }
 
     onSaved?.();
@@ -98,7 +115,7 @@ export default function OfferForm({ offer, onSaved }) {
         {offer ? "Edit Offer" : "Create Offer"}
       </h2>
 
-      {/* BASIC INFO */}
+      {/* ================= BASIC INFO ================= */}
       <div className="grid grid-cols-2 gap-4">
         <select
           value={form.advertiser_id}
@@ -131,15 +148,15 @@ export default function OfferForm({ offer, onSaved }) {
         />
 
         <input
-          placeholder="Payout"
           type="number"
+          placeholder="Payout"
           value={form.payout}
           onChange={(e) => set("payout", e.target.value)}
         />
 
         <input
-          placeholder="Revenue"
           type="number"
+          placeholder="Revenue"
           value={form.revenue}
           onChange={(e) => set("revenue", e.target.value)}
         />
@@ -152,18 +169,21 @@ export default function OfferForm({ offer, onSaved }) {
         />
       </div>
 
-      {/* API STEPS */}
+      {/* ================= API STEPS ================= */}
       {Object.entries(OFFER_API_SCHEMA).map(([step, cfg]) => {
         const data = form.api_steps[step] || {};
+
         return (
           <div key={step} className="border rounded p-4 space-y-3">
             <div className="flex justify-between items-center">
               <h3 className="font-semibold">{cfg.label}</h3>
-              <label className="flex items-center gap-2">
+              <label className="flex gap-2 items-center">
                 <input
                   type="checkbox"
                   checked={data.enabled}
-                  onChange={(e) => setStep(step, "enabled", e.target.checked)}
+                  onChange={(e) =>
+                    setStep(step, "enabled", e.target.checked)
+                  }
                 />
                 Enabled
               </label>
@@ -172,7 +192,9 @@ export default function OfferForm({ offer, onSaved }) {
             <div className="flex gap-2">
               <select
                 value={data.method}
-                onChange={(e) => setStep(step, "method", e.target.value)}
+                onChange={(e) =>
+                  setStep(step, "method", e.target.value)
+                }
               >
                 <option>GET</option>
                 <option>POST</option>
@@ -182,7 +204,9 @@ export default function OfferForm({ offer, onSaved }) {
                 className="flex-1"
                 placeholder="API URL"
                 value={data.url}
-                onChange={(e) => setStep(step, "url", e.target.value)}
+                onChange={(e) =>
+                  setStep(step, "url", e.target.value)
+                }
               />
             </div>
 
@@ -235,7 +259,7 @@ export default function OfferForm({ offer, onSaved }) {
         Save Offer
       </button>
 
-      {/* LIVE TEST MODAL */}
+      {/* ================= LIVE TEST MODAL ================= */}
       {testStep && (
         <LiveApiTestModal
           open={!!testStep}
