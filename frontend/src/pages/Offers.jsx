@@ -6,18 +6,24 @@ import Header from "../components/layout/Header";
 import OfferForm from "../components/offers/OfferForm";
 import OfferConfig from "../components/offers/OfferConfig";
 
-import { getOffers, createOffer, updateOffer } from "../services/offers";
+import {
+  getOffers,
+  createOffer,
+  updateOffer,
+  deleteOffer,
+  toggleOfferStatus,
+} from "../services/offers";
 
 export default function Offers() {
+  const navigate = useNavigate();
+
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [showForm, setShowForm] = useState(false);
   const [editingOffer, setEditingOffer] = useState(null);
-  const [selectedOffer, setSelectedOffer] = useState(null);
-
-  const navigate = useNavigate();
+  const [viewOffer, setViewOffer] = useState(null);
 
   /* ================= LOAD OFFERS ================= */
   const loadOffers = async () => {
@@ -39,7 +45,7 @@ export default function Offers() {
   }, []);
 
   /* ================= CREATE ================= */
-  const handleCreateOffer = async (payload) => {
+  const handleCreate = async (payload) => {
     try {
       await createOffer(payload);
       setShowForm(false);
@@ -50,13 +56,39 @@ export default function Offers() {
   };
 
   /* ================= UPDATE ================= */
-  const handleUpdateOffer = async (payload) => {
+  const handleUpdate = async (payload) => {
     try {
       await updateOffer(editingOffer.id, payload);
       setEditingOffer(null);
+      setShowForm(false);
       loadOffers();
     } catch {
       alert("Failed to update offer");
+    }
+  };
+
+  /* ================= DELETE ================= */
+  const handleDelete = async (offer) => {
+    const ok = window.confirm(
+      `Are you sure you want to delete offer "${offer.name}"?`
+    );
+    if (!ok) return;
+
+    try {
+      await deleteOffer(offer.id);
+      loadOffers();
+    } catch {
+      alert("Failed to delete offer");
+    }
+  };
+
+  /* ================= TOGGLE STATUS ================= */
+  const handleToggleStatus = async (offer) => {
+    try {
+      await toggleOfferStatus(offer.id);
+      loadOffers();
+    } catch {
+      alert("Failed to update status");
     }
   };
 
@@ -105,7 +137,6 @@ export default function Offers() {
                   <th>Geo</th>
                   <th>Carrier</th>
                   <th>Payout</th>
-                  <th>Revenue</th>
                   <th>Status</th>
                   <th>Actions</th>
                   <th>Execute</th>
@@ -115,7 +146,7 @@ export default function Offers() {
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan="10" style={styles.empty}>
+                    <td colSpan="9" style={styles.empty}>
                       Loading offers...
                     </td>
                   </tr>
@@ -123,7 +154,7 @@ export default function Offers() {
 
                 {!loading && offers.length === 0 && (
                   <tr>
-                    <td colSpan="10" style={styles.empty}>
+                    <td colSpan="9" style={styles.empty}>
                       No offers created yet
                     </td>
                   </tr>
@@ -138,7 +169,6 @@ export default function Offers() {
                       <td>{o.geo || "—"}</td>
                       <td>{o.carrier || "—"}</td>
                       <td>${o.payout ?? "—"}</td>
-                      <td>${o.revenue ?? "—"}</td>
 
                       <td>
                         <span
@@ -154,10 +184,10 @@ export default function Offers() {
                       </td>
 
                       {/* ACTIONS */}
-                      <td>
+                      <td style={{ whiteSpace: "nowrap" }}>
                         <button
                           style={styles.link}
-                          onClick={() => setSelectedOffer(o)}
+                          onClick={() => setViewOffer(o)}
                         >
                           View
                         </button>
@@ -171,12 +201,29 @@ export default function Offers() {
                         >
                           Edit
                         </button>
+
+                        <button
+                          style={styles.toggle}
+                          onClick={() => handleToggleStatus(o)}
+                        >
+                          {o.is_active ? "Pause" : "Activate"}
+                        </button>
+
+                        <button
+                          style={styles.delete}
+                          onClick={() => handleDelete(o)}
+                        >
+                          Delete
+                        </button>
                       </td>
 
                       {/* EXECUTE */}
                       <td>
                         <button
-                          style={styles.execute}
+                          style={{
+                            ...styles.execute,
+                            opacity: o.is_active ? 1 : 0.5,
+                          }}
                           disabled={!o.is_active}
                           onClick={() =>
                             navigate(`/offers/${o.id}/execute`)
@@ -191,7 +238,7 @@ export default function Offers() {
             </table>
           </div>
 
-          {/* CREATE / EDIT MODAL */}
+          {/* CREATE / EDIT */}
           {showForm && (
             <OfferForm
               initialData={editingOffer}
@@ -199,15 +246,15 @@ export default function Offers() {
                 setShowForm(false);
                 setEditingOffer(null);
               }}
-              onSave={editingOffer ? handleUpdateOffer : handleCreateOffer}
+              onSave={editingOffer ? handleUpdate : handleCreate}
             />
           )}
 
-          {/* CONFIG VIEW */}
-          {selectedOffer && (
+          {/* VIEW CONFIG */}
+          {viewOffer && (
             <OfferConfig
-              offer={selectedOffer}
-              onClose={() => setSelectedOffer(null)}
+              offer={viewOffer}
+              onClose={() => setViewOffer(null)}
             />
           )}
         </div>
@@ -221,17 +268,77 @@ export default function Offers() {
 const styles = {
   main: { flex: 1, background: "#020617", minHeight: "100vh" },
   content: { padding: 24, color: "#fff", maxWidth: 1200, margin: "0 auto" },
-  headerRow: { display: "flex", justifyContent: "space-between", marginBottom: 20 },
+  headerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
   title: { fontSize: 24 },
-  createBtn: { background: "#2563eb", color: "#fff", padding: "10px 18px", borderRadius: 8 },
-  logsBtn: { background: "#334155", color: "#fff", padding: "10px 18px", borderRadius: 8 },
+  createBtn: {
+    background: "#2563eb",
+    color: "#fff",
+    padding: "10px 18px",
+    borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
+  },
+  logsBtn: {
+    background: "#334155",
+    color: "#fff",
+    padding: "10px 18px",
+    borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
+  },
   card: { border: "1px solid #1e293b", borderRadius: 12, overflow: "hidden" },
   table: { width: "100%", borderCollapse: "collapse", textAlign: "center" },
   mono: { fontFamily: "monospace", fontSize: 12, color: "#93c5fd" },
-  status: { padding: "4px 12px", borderRadius: 999, fontSize: 12, color: "#fff" },
-  link: { background: "none", border: "none", color: "#38bdf8", cursor: "pointer" },
-  edit: { background: "none", border: "none", color: "#facc15", cursor: "pointer", marginLeft: 8 },
-  execute: { background: "#16a34a", color: "#fff", border: "none", padding: "6px 12px", borderRadius: 6 },
+  status: {
+    padding: "4px 12px",
+    borderRadius: 999,
+    fontSize: 12,
+    color: "#fff",
+  },
+  link: {
+    background: "none",
+    border: "none",
+    color: "#38bdf8",
+    cursor: "pointer",
+    marginRight: 6,
+  },
+  edit: {
+    background: "none",
+    border: "none",
+    color: "#facc15",
+    cursor: "pointer",
+    marginRight: 6,
+  },
+  toggle: {
+    background: "none",
+    border: "none",
+    color: "#22c55e",
+    cursor: "pointer",
+    marginRight: 6,
+  },
+  delete: {
+    background: "none",
+    border: "none",
+    color: "#ef4444",
+    cursor: "pointer",
+  },
+  execute: {
+    background: "#16a34a",
+    color: "#fff",
+    border: "none",
+    padding: "6px 12px",
+    borderRadius: 6,
+    cursor: "pointer",
+  },
   empty: { padding: 24, color: "#94a3b8" },
-  error: { background: "#7f1d1d", padding: 10, borderRadius: 8, marginBottom: 16 },
+  error: {
+    background: "#7f1d1d",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
 };
