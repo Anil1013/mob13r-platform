@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import axios from "../../utils/axios";
+import axios from "../../services/api";
 import { OFFER_API_SCHEMA } from "../../config/offerApiSchema";
 import LiveApiTestModal from "../LiveApiTestModal";
 
