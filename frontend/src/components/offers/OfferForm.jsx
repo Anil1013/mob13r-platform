@@ -1,55 +1,60 @@
 import { useEffect, useState } from "react";
 import { getAdvertisers } from "../../services/advertisers";
 
-export default function OfferForm({ onClose, onSave }) {
+/* ================= DEFAULT OFFER ================= */
+const DEFAULT_OFFER = {
+  /* BASIC */
+  name: "",
+  advertiser_id: "",
+  geo: "",
+  carrier: "",
+  payout: "",
+  revenue: "",
+  is_active: true,
+
+  /* API */
+  api_mode: "POST",
+
+  /* STATUS CHECK */
+  status_check_url: "",
+  status_check_params: "msisdn,user_ip,ip,ua",
+
+  /* PIN SEND */
+  pin_send_url: "",
+  pin_send_params: "msisdn,user_ip,ip,ua,pub_id,sub_pub_id",
+
+  /* PIN VERIFY */
+  pin_verify_url: "",
+  pin_verify_params: "msisdn,pin,user_ip,ip,ua,sessionKey",
+
+  /* FLOW */
+  redirect_url: "",
+  step_status_check: true,
+  step_pin_send: true,
+  step_pin_verify: true,
+
+  /* FRAUD */
+  fraud_enabled: false,
+  fraud_partner: "",
+  fraud_service: "",
+};
+
+export default function OfferForm({ onClose, onSave, initialData }) {
   const [advertisers, setAdvertisers] = useState([]);
+  const [offer, setOffer] = useState({ ...DEFAULT_OFFER, ...initialData });
 
-  const [offer, setOffer] = useState({
-    /* ================= BASIC ================= */
-    name: "",
-    advertiser_id: "",
-    geo: "",
-    carrier: "",
-    payout: "",
-    revenue: "",
-    is_active: true,
-
-    /* ================= API ================= */
-    api_mode: "POST",
-
-    /* ================= STATUS CHECK ================= */
-    status_check_url: "",
-    status_check_params: "msisdn,user_ip,ua",
-
-    /* ================= PIN SEND ================= */
-    pin_send_url: "",
-    pin_send_params: "msisdn,user_ip,ua,pub_id,sub_pub_id",
-
-    /* ================= PIN VERIFY ================= */
-    pin_verify_url: "",
-    pin_verify_params: "msisdn,pin,user_ip,ua,sessionKey",
-
-    /* ================= FLOW CONTROL ================= */
-    redirect_url: "",
-    step_status_check: true,
-    step_pin_send: true,
-    step_pin_verify: true,
-
-    /* ================= FRAUD ================= */
-    fraud_enabled: false,
-    fraud_partner: "",
-    fraud_service: "",
-  });
-
+  /* ================= LOAD ADVERTISERS ================= */
   useEffect(() => {
-    getAdvertisers().then(setAdvertisers);
+    getAdvertisers().then((data) => setAdvertisers(data || []));
   }, []);
 
+  /* ================= HANDLE CHANGE ================= */
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setOffer({ ...offer, [name]: type === "checkbox" ? checked : value });
   };
 
+  /* ================= SUBMIT ================= */
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -71,8 +76,11 @@ export default function OfferForm({ onClose, onSave }) {
   return (
     <div style={styles.overlay}>
       <form style={styles.card} onSubmit={handleSubmit}>
-        <h2 style={styles.heading}>Create Offer</h2>
+        <h2 style={styles.heading}>
+          {initialData ? "Edit Offer" : "Create Offer"}
+        </h2>
 
+        {/* ================= BASIC ================= */}
         <Section title="Basic Information">
           <Input label="Offer Name" name="name" value={offer.name} onChange={handleChange} required />
 
@@ -108,6 +116,7 @@ export default function OfferForm({ onClose, onSave }) {
           </label>
         </Section>
 
+        {/* ================= API MODE ================= */}
         <Section title="API Mode">
           <select name="api_mode" value={offer.api_mode} onChange={handleChange} style={styles.select}>
             <option value="POST">POST</option>
@@ -115,21 +124,40 @@ export default function OfferForm({ onClose, onSave }) {
           </select>
         </Section>
 
+        {/* ================= STATUS CHECK ================= */}
         <Section title="Status Check API">
           <Input label="Status Check URL" name="status_check_url" value={offer.status_check_url} onChange={handleChange} />
-          <Input label="Allowed Params" name="status_check_params" value={offer.status_check_params} onChange={handleChange} />
+          <Input
+            label="Allowed Parameters (Advertiser dependent)"
+            name="status_check_params"
+            value={offer.status_check_params}
+            onChange={handleChange}
+          />
         </Section>
 
+        {/* ================= PIN SEND ================= */}
         <Section title="PIN Send API">
           <Input label="PIN Send URL" name="pin_send_url" value={offer.pin_send_url} onChange={handleChange} />
-          <Input label="Allowed Params" name="pin_send_params" value={offer.pin_send_params} onChange={handleChange} />
+          <Input
+            label="Allowed Parameters (Advertiser dependent)"
+            name="pin_send_params"
+            value={offer.pin_send_params}
+            onChange={handleChange}
+          />
         </Section>
 
+        {/* ================= PIN VERIFY ================= */}
         <Section title="PIN Verify API">
           <Input label="PIN Verify URL" name="pin_verify_url" value={offer.pin_verify_url} onChange={handleChange} />
-          <Input label="Allowed Params" name="pin_verify_params" value={offer.pin_verify_params} onChange={handleChange} />
+          <Input
+            label="Allowed Parameters (Advertiser dependent)"
+            name="pin_verify_params"
+            value={offer.pin_verify_params}
+            onChange={handleChange}
+          />
         </Section>
 
+        {/* ================= REDIRECT ================= */}
         <Section title="Redirect (Mandatory)">
           <Input
             label="Redirect URL after OTP success"
@@ -140,6 +168,7 @@ export default function OfferForm({ onClose, onSave }) {
           />
         </Section>
 
+        {/* ================= STEPS ================= */}
         <Section title="Execution Steps">
           <label style={styles.checkbox}>
             <input type="checkbox" name="step_status_check" checked={offer.step_status_check} onChange={handleChange} />
@@ -155,9 +184,12 @@ export default function OfferForm({ onClose, onSave }) {
           </label>
         </Section>
 
+        {/* ================= ACTIONS ================= */}
         <div style={styles.actions}>
           <button type="button" onClick={onClose} style={styles.cancel}>Cancel</button>
-          <button type="submit" style={styles.save}>Save Offer</button>
+          <button type="submit" style={styles.save}>
+            {initialData ? "Update Offer" : "Save Offer"}
+          </button>
         </div>
       </form>
     </div>
@@ -165,7 +197,8 @@ export default function OfferForm({ onClose, onSave }) {
 }
 
 /* ================= HELPERS ================= */
-const normalize = (v) => v ? v.split(",").map(x => x.trim()).filter(Boolean) : [];
+const normalize = (v) =>
+  v ? v.split(",").map((x) => x.trim()).filter(Boolean) : [];
 
 /* ================= UI ================= */
 const Section = ({ title, children }) => (
@@ -186,7 +219,7 @@ const Row = ({ children }) => <div style={styles.row}>{children}</div>;
 
 const styles = {
   overlay:{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",justifyContent:"center",alignItems:"center",zIndex:50},
-  card:{width:720,maxHeight:"90vh",overflowY:"auto",background:"#020617",padding:28,borderRadius:14,color:"#fff"},
+  card:{width:740,maxHeight:"90vh",overflowY:"auto",background:"#020617",padding:28,borderRadius:14,color:"#fff"},
   heading:{textAlign:"center",marginBottom:20},
   section:{marginBottom:20},
   sectionTitle:{color:"#38bdf8",fontSize:14,marginBottom:10},
