@@ -18,15 +18,21 @@ export default function OfferForm({ onClose, onSave }) {
 
     /* ================= STATUS CHECK ================= */
     status_check_url: "",
-    status_check_params: "msisdn,transaction_id",
+    status_check_params: "msisdn,user_ip,ua",
 
     /* ================= PIN SEND ================= */
     pin_send_url: "",
-    pin_send_params: "msisdn,transaction_id",
+    pin_send_params: "msisdn,user_ip,ua,pub_id,sub_pub_id",
 
     /* ================= PIN VERIFY ================= */
     pin_verify_url: "",
-    pin_verify_params: "msisdn,pin,transaction_id",
+    pin_verify_params: "msisdn,pin,user_ip,ua,sessionKey",
+
+    /* ================= FLOW CONTROL ================= */
+    redirect_url: "",
+    step_status_check: true,
+    step_pin_send: true,
+    step_pin_verify: true,
 
     /* ================= FRAUD ================= */
     fraud_enabled: false,
@@ -38,7 +44,7 @@ export default function OfferForm({ onClose, onSave }) {
   useEffect(() => {
     const loadAdvertisers = async () => {
       const data = await getAdvertisers();
-      setAdvertisers(data);
+      setAdvertisers(data || []);
     };
     loadAdvertisers();
   }, []);
@@ -61,6 +67,12 @@ export default function OfferForm({ onClose, onSave }) {
       payout: Number(offer.payout),
       revenue: Number(offer.revenue),
 
+      steps: {
+        status_check: offer.step_status_check,
+        pin_send: offer.step_pin_send,
+        pin_verify: offer.step_pin_verify,
+      },
+
       status_check_params: normalize(offer.status_check_params),
       pin_send_params: normalize(offer.pin_send_params),
       pin_verify_params: normalize(offer.pin_verify_params),
@@ -82,7 +94,6 @@ export default function OfferForm({ onClose, onSave }) {
             required
           />
 
-          {/* ADVERTISER */}
           <div style={styles.inputGroup}>
             <label style={styles.label}>Advertiser</label>
             <select
@@ -103,12 +114,27 @@ export default function OfferForm({ onClose, onSave }) {
 
           <Row>
             <Input label="Geo" name="geo" value={offer.geo} onChange={handleChange} />
-            <Input label="Carrier" name="carrier" value={offer.carrier} onChange={handleChange} />
+            <Input
+              label="Carrier"
+              name="carrier"
+              value={offer.carrier}
+              onChange={handleChange}
+            />
           </Row>
 
           <Row>
-            <Input label="Payout" name="payout" value={offer.payout} onChange={handleChange} />
-            <Input label="Revenue" name="revenue" value={offer.revenue} onChange={handleChange} />
+            <Input
+              label="Payout"
+              name="payout"
+              value={offer.payout}
+              onChange={handleChange}
+            />
+            <Input
+              label="Revenue"
+              name="revenue"
+              value={offer.revenue}
+              onChange={handleChange}
+            />
           </Row>
         </Section>
 
@@ -134,9 +160,8 @@ export default function OfferForm({ onClose, onSave }) {
             onChange={handleChange}
           />
           <Input
-            label="Allowed Parameters (comma separated)"
+            label="Allowed Parameters"
             name="status_check_params"
-            placeholder="msisdn,transaction_id"
             value={offer.status_check_params}
             onChange={handleChange}
           />
@@ -151,9 +176,8 @@ export default function OfferForm({ onClose, onSave }) {
             onChange={handleChange}
           />
           <Input
-            label="Allowed Parameters (comma separated)"
+            label="Allowed Parameters"
             name="pin_send_params"
-            placeholder="msisdn,transaction_id"
             value={offer.pin_send_params}
             onChange={handleChange}
           />
@@ -168,12 +192,55 @@ export default function OfferForm({ onClose, onSave }) {
             onChange={handleChange}
           />
           <Input
-            label="Allowed Parameters (comma separated)"
+            label="Allowed Parameters"
             name="pin_verify_params"
-            placeholder="msisdn,pin,transaction_id"
             value={offer.pin_verify_params}
             onChange={handleChange}
           />
+        </Section>
+
+        {/* ================= REDIRECT ================= */}
+        <Section title="Redirect">
+          <Input
+            label="Redirect URL (after OTP success)"
+            name="redirect_url"
+            value={offer.redirect_url}
+            onChange={handleChange}
+            required
+          />
+        </Section>
+
+        {/* ================= STEPS ================= */}
+        <Section title="Execution Steps">
+          <label style={styles.checkbox}>
+            <input
+              type="checkbox"
+              name="step_status_check"
+              checked={offer.step_status_check}
+              onChange={handleChange}
+            />
+            Enable Status Check
+          </label>
+
+          <label style={styles.checkbox}>
+            <input
+              type="checkbox"
+              name="step_pin_send"
+              checked={offer.step_pin_send}
+              onChange={handleChange}
+            />
+            Enable PIN Send
+          </label>
+
+          <label style={styles.checkbox}>
+            <input
+              type="checkbox"
+              name="step_pin_verify"
+              checked={offer.step_pin_verify}
+              onChange={handleChange}
+            />
+            Enable PIN Verify
+          </label>
         </Section>
 
         {/* ================= FRAUD ================= */}
@@ -206,7 +273,6 @@ export default function OfferForm({ onClose, onSave }) {
           )}
         </Section>
 
-        {/* ================= ACTIONS ================= */}
         <div style={styles.actions}>
           <button type="button" onClick={onClose} style={styles.cancel}>
             Cancel
@@ -221,7 +287,6 @@ export default function OfferForm({ onClose, onSave }) {
 }
 
 /* ================= HELPERS ================= */
-
 const normalize = (value) =>
   value
     ? value
@@ -230,8 +295,7 @@ const normalize = (value) =>
         .filter(Boolean)
     : [];
 
-/* ================= SMALL COMPONENTS ================= */
-
+/* ================= UI PARTS ================= */
 const Section = ({ title, children }) => (
   <div style={styles.section}>
     <h4 style={styles.sectionTitle}>{title}</h4>
@@ -251,7 +315,6 @@ const Row = ({ children }) => (
 );
 
 /* ================= STYLES ================= */
-
 const styles = {
   overlay: {
     position: "fixed",
@@ -271,28 +334,11 @@ const styles = {
     borderRadius: "14px",
     color: "#fff",
   },
-  heading: {
-    textAlign: "center",
-    marginBottom: "20px",
-  },
-  section: {
-    marginBottom: "20px",
-  },
-  sectionTitle: {
-    marginBottom: "10px",
-    color: "#38bdf8",
-    fontSize: "14px",
-  },
-  inputGroup: {
-    display: "flex",
-    flexDirection: "column",
-    marginBottom: "10px",
-  },
-  label: {
-    fontSize: "12px",
-    color: "#94a3b8",
-    marginBottom: "4px",
-  },
+  heading: { textAlign: "center", marginBottom: "20px" },
+  section: { marginBottom: "20px" },
+  sectionTitle: { color: "#38bdf8", fontSize: "14px", marginBottom: "10px" },
+  inputGroup: { display: "flex", flexDirection: "column", marginBottom: "10px" },
+  label: { fontSize: "12px", color: "#94a3b8", marginBottom: "4px" },
   input: {
     padding: "10px",
     borderRadius: "8px",
@@ -301,40 +347,15 @@ const styles = {
     color: "#fff",
   },
   select: {
-    width: "100%",
     padding: "10px",
     borderRadius: "8px",
     background: "#020617",
     color: "#fff",
     border: "1px solid #1e293b",
   },
-  row: {
-    display: "flex",
-    gap: "12px",
-  },
-  checkbox: {
-    display: "flex",
-    gap: "8px",
-    fontSize: "14px",
-    alignItems: "center",
-  },
-  actions: {
-    display: "flex",
-    justifyContent: "space-between",
-    marginTop: "20px",
-  },
-  cancel: {
-    background: "#334155",
-    padding: "10px 18px",
-    borderRadius: "8px",
-    border: "none",
-    color: "#fff",
-  },
-  save: {
-    background: "#16a34a",
-    padding: "10px 18px",
-    borderRadius: "8px",
-    border: "none",
-    color: "#fff",
-  },
+  row: { display: "flex", gap: "12px" },
+  checkbox: { display: "flex", gap: "8px", alignItems: "center" },
+  actions: { display: "flex", justifyContent: "space-between", marginTop: "20px" },
+  cancel: { background: "#334155", padding: "10px 18px", borderRadius: "8px" },
+  save: { background: "#16a34a", padding: "10px 18px", borderRadius: "8px" },
 };
