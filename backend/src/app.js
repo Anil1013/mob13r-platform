@@ -9,29 +9,22 @@ import executionLogsRoutes from "./routes/execution-logs.routes.js";
 
 const app = express();
 
-/* ================= CORS (FIXED & SAFE) ================= */
-app.use(
-  cors({
-    origin: [
-      "https://dashboard.mob13r.com",
-      "http://localhost:5173",
-    ],
-    credentials: true, // ✅ REQUIRED for Authorization header
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+/* ================= CORS (EXPRESS 5 SAFE & FINAL) ================= */
+const corsOptions = {
+  origin: [
+    "https://dashboard.mob13r.com",
+    "http://localhost:5173",
+  ],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true, // ✅ REQUIRED for JWT
+};
 
-/* ✅ EXPRESS 5 SAFE PREFLIGHT HANDLING */
-app.use((req, res, next) => {
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-  next();
-});
-
-/* ================= BODY ================= */
+app.use(cors(corsOptions));
 app.use(express.json());
+
+/* ✅ Explicit OPTIONS handler (MANDATORY in Express 5) */
+app.options("*", cors(corsOptions));
 
 /* ================= HEALTH ================= */
 app.get("/health", (req, res) => {
