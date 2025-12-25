@@ -7,10 +7,12 @@ const DEFAULT_OFFER = {
   advertiser_id: "",
   geo: "",
   carrier: "",
+
   payout: "",
   revenue: "",
-  is_active: true,
+  cap: "",
 
+  is_active: true,
   api_mode: "POST",
 
   status_check_url: "",
@@ -67,6 +69,10 @@ export default function OfferForm({ onClose, onSave, initialData }) {
       ...DEFAULT_OFFER,
       ...initialData,
 
+      payout: initialData.payout ?? "",
+      revenue: initialData.revenue ?? "",
+      cap: initialData.cap ?? "",
+
       status_check_params: toArray(initialData.status_check_params),
       pin_send_params: toArray(initialData.pin_send_params),
       pin_verify_params: toArray(initialData.pin_verify_params),
@@ -93,6 +99,10 @@ export default function OfferForm({ onClose, onSave, initialData }) {
     if (!offer.name) e.name = "Offer name required";
     if (!offer.advertiser_id) e.advertiser_id = "Advertiser required";
 
+    if (offer.payout < 0) e.payout = "Invalid payout";
+    if (offer.revenue < 0) e.revenue = "Invalid revenue";
+    if (offer.cap < 0) e.cap = "Invalid cap";
+
     if (offer.status_check_url && !isValidUrl(offer.status_check_url))
       e.status_check_url = "Invalid URL";
 
@@ -107,7 +117,7 @@ export default function OfferForm({ onClose, onSave, initialData }) {
       !offer.step_pin_send &&
       !offer.step_pin_verify
     ) {
-      e.steps = "At least one step must be enabled";
+      e.steps = "Enable at least one step";
     }
 
     setErrors(e);
@@ -121,8 +131,10 @@ export default function OfferForm({ onClose, onSave, initialData }) {
 
     onSave({
       ...offer,
+
       payout: Number(offer.payout || 0),
       revenue: Number(offer.revenue || 0),
+      cap: offer.cap === "" ? null : Number(offer.cap),
 
       steps: {
         status_check: offer.step_status_check,
@@ -170,6 +182,17 @@ export default function OfferForm({ onClose, onSave, initialData }) {
             options={advertisers}
             error={errors.advertiser_id}
           />
+
+          <Row>
+            <Input label="Geo" name="geo" value={offer.geo} onChange={handleChange} />
+            <Input label="Carrier" name="carrier" value={offer.carrier} onChange={handleChange} />
+          </Row>
+
+          <Row>
+            <Input label="Payout" name="payout" value={offer.payout} onChange={handleChange} error={errors.payout} />
+            <Input label="Revenue" name="revenue" value={offer.revenue} onChange={handleChange} error={errors.revenue} />
+            <Input label="Daily Cap" name="cap" value={offer.cap} onChange={handleChange} error={errors.cap} />
+          </Row>
         </Section>
 
         {/* ================= STATUS CHECK ================= */}
@@ -318,10 +341,12 @@ const Select = ({ label, options, error, ...p }) => (
   </div>
 );
 
+const Row = ({ children }) => <div style={styles.row}>{children}</div>;
+
 /* ================= STYLES ================= */
 const styles = {
   overlay:{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",justifyContent:"center",alignItems:"center",zIndex:50},
-  card:{width:780,maxHeight:"90vh",overflowY:"auto",background:"#020617",padding:28,borderRadius:14,color:"#fff"},
+  card:{width:820,maxHeight:"90vh",overflowY:"auto",background:"#020617",padding:28,borderRadius:14,color:"#fff"},
   heading:{textAlign:"center",marginBottom:20},
   section:{marginBottom:22},
   sectionTitle:{color:"#38bdf8",fontSize:14,marginBottom:10},
@@ -329,6 +354,7 @@ const styles = {
   label:{fontSize:12,color:"#94a3b8"},
   input:{padding:10,borderRadius:8,border:"1px solid #1e293b",background:"#020617",color:"#fff"},
   select:{padding:10,borderRadius:8,border:"1px solid #1e293b",background:"#020617",color:"#fff"},
+  row:{display:"flex",gap:12},
   chips:{display:"flex",flexWrap:"wrap",gap:6,border:"1px solid #1e293b",padding:6,borderRadius:8},
   chip:{background:"#1e293b",padding:"4px 8px",borderRadius:6,fontSize:12,cursor:"pointer"},
   chipInput:{flex:1,minWidth:120,background:"transparent",border:"none",color:"#fff",outline:"none"},
