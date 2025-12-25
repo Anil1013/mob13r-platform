@@ -1,20 +1,6 @@
 import { useEffect, useState } from "react";
 import { getAdvertisers } from "../../services/advertisers";
-
-/* ================= PARAM TEMPLATES ================= */
-const TEMPLATE_PARAMS = [
-  "<coll_msisdn>",
-  "<coll_token>",
-  "<coll_uuid_trxid>",
-  "<coll_pin>",
-  "<coll_ip>",
-  "<coll_userip>",
-  "<coll_ua>",
-  "<coll_base64_ua>",
-  "<anti_fraud_id>",
-  "<param1>",
-  "<param2>",
-];
+import { OFFER_API_SCHEMA } from "../../config/offerApiSchema";
 
 /* ================= DEFAULT OFFER ================= */
 const DEFAULT_OFFER = {
@@ -26,78 +12,98 @@ const DEFAULT_OFFER = {
   cap: "",
   revenue: "",
   is_active: true,
-
-  api_steps: {
-    status_check: createStep(),
-    pin_send: createStep(),
-    pin_verify: createStep(),
-    redirect: {
-      enabled: false,
-      url: "",
-    },
-    anti_fraud: createStep(),
-  },
+  redirect_url: "",
+  api_steps: {},
 };
 
-function createStep() {
-  return {
-    enabled: true,
-    method: "POST",
-    url: "",
-    headers: [{ key: "", value: "" }],
-    params: [{ key: "", value: "" }],
-    success_matcher: "",
-  };
-}
-
-/* ================= COMPONENT ================= */
 export default function OfferForm({ onClose, onSave, initialData }) {
   const [advertisers, setAdvertisers] = useState([]);
   const [offer, setOffer] = useState(DEFAULT_OFFER);
 
-  /* LOAD ADVERTISERS */
+  /* ================= LOAD ADVERTISERS ================= */
   useEffect(() => {
-    getAdvertisers().then(setAdvertisers);
+    getAdvertisers().then((res) => setAdvertisers(res || []));
   }, []);
 
-  /* LOAD EDIT */
+  /* ================= INIT CREATE / EDIT ================= */
   useEffect(() => {
-    if (!initialData) return;
+    if (!initialData) {
+      const steps = {};
+      Object.entries(OFFER_API_SCHEMA).forEach(([k, v]) => {
+        steps[k] = structuredClone(v.default);
+      });
+      setOffer({ ...DEFAULT_OFFER, api_steps: steps });
+      return;
+    }
+
+    const steps = {};
+    Object.entries(OFFER_API_SCHEMA).forEach(([k, v]) => {
+      steps[k] = {
+        ...v.default,
+        ...(initialData.api_steps?.[k] || {}),
+      };
+    });
 
     setOffer({
       ...DEFAULT_OFFER,
       ...initialData,
+      api_steps: steps,
     });
   }, [initialData]);
 
-  /* HANDLERS */
+  /* ================= BASIC CHANGE ================= */
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setOffer((p) => ({ ...p, [name]: type === "checkbox" ? checked : value }));
+  };
+
+  /* ================= STEP CHANGE ================= */
   const updateStep = (step, field, value) => {
     setOffer((p) => ({
       ...p,
       api_steps: {
         ...p.api_steps,
-        [step]: { ...p.api_steps[step], [field]: value },
+        [step]: {
+          ...p.api_steps[step],
+          [field]: value,
+        },
       },
     }));
   };
 
-  const updateKV = (step, type, index, field, value) => {
-    const list = [...offer.api_steps[step][type]];
-    list[index][field] = value;
-    updateStep(step, type, list);
+  /* ================= PARAM / HEADER ================= */
+  const updateKeyValue = (step, field, key, value) => {
+    setOffer((p) => ({
+      ...p,
+      api_steps: {
+        ...p.api_steps,
+        [step]: {
+          ...p.api_steps[step],
+          [field]: {
+            ...p.api_steps[step][field],
+            [key]: value,
+          },
+        },
+      },
+    }));
   };
 
-  const addKV = (step, type) =>
-    updateStep(step, type, [...offer.api_steps[step][type], { key: "", value: "" }]);
+  const removeKeyValue = (step, field, key) => {
+    setOffer((p) => {
+      const obj = { ...p.api_steps[step][field] };
+      delete obj[key];
+      return {
+        ...p,
+        api_steps: {
+          ...p.api_steps,
+          [step]: { ...p.api_steps[step], [field]: obj },
+        },
+      };
+    });
+  };
 
-  const removeKV = (step, type, i) =>
-    updateStep(
-      step,
-      type,
-      offer.api_steps[step][type].filter((_, x) => x !== i)
-    );
-
-  const submit = (e) => {
+  /* ================= SUBMIT ================= */
+  const handleSubmit = (e) => {
     e.preventDefault();
     onSave({
       ...offer,
@@ -108,111 +114,129 @@ export default function OfferForm({ onClose, onSave, initialData }) {
   };
 
   return (
-    <div style={S.overlay}>
-      <form style={S.card} onSubmit={submit}>
+    <div style={styles.overlay}>
+      <form style={styles.card} onSubmit={handleSubmit}>
         <h2>{initialData ? "Edit Offer" : "Create Offer"}</h2>
 
-        {/* BASIC */}
+        {/* ================= BASIC ================= */}
         <Section title="Basic">
-          <Input label="Name" value={offer.name} onChange={(e) => setOffer({ ...offer, name: e.target.value })} />
-          <Select
-            label="Advertiser"
-            value={offer.advertiser_id}
-            onChange={(e) => setOffer({ ...offer, advertiser_id: e.target.value })}
-            options={advertisers}
-          />
+          <Input label="Offer Name" name="name" value={offer.name} onChange={handleChange} />
+          <Select label="Advertiser" name="advertiser_id" value={offer.advertiser_id} onChange={handleChange} options={advertisers} />
           <Row>
-            <Input label="Payout" value={offer.payout} onChange={(e) => setOffer({ ...offer, payout: e.target.value })} />
-            <Input label="Daily Cap" value={offer.cap} onChange={(e) => setOffer({ ...offer, cap: e.target.value })} />
-            <Input label="Revenue" value={offer.revenue} onChange={(e) => setOffer({ ...offer, revenue: e.target.value })} />
+            <Input label="Geo" name="geo" value={offer.geo} onChange={handleChange} />
+            <Input label="Carrier" name="carrier" value={offer.carrier} onChange={handleChange} />
           </Row>
+          <Row>
+            <Input label="Payout" name="payout" value={offer.payout} onChange={handleChange} />
+            <Input label="Cap" name="cap" value={offer.cap} onChange={handleChange} />
+            <Input label="Revenue" name="revenue" value={offer.revenue} onChange={handleChange} />
+          </Row>
+          <Input label="Redirect URL" name="redirect_url" value={offer.redirect_url} onChange={handleChange} />
         </Section>
 
-        {/* STEPS */}
-        {["status_check", "pin_send", "pin_verify", "anti_fraud"].map((step) => (
-          <ApiStep
-            key={step}
-            title={step.replace("_", " ").toUpperCase()}
-            data={offer.api_steps[step]}
-            onToggle={(v) => updateStep(step, "enabled", v)}
-            onChange={(f, v) => updateStep(step, f, v)}
-            onKVChange={(t, i, f, v) => updateKV(step, t, i, f, v)}
-            onAddKV={(t) => addKV(step, t)}
-            onRemoveKV={(t, i) => removeKV(step, t, i)}
-          />
-        ))}
+        {/* ================= API STEPS ================= */}
+        {Object.entries(OFFER_API_SCHEMA).map(([key, schema]) => {
+          const step = offer.api_steps[key];
+          if (!step) return null;
 
-        {/* REDIRECT */}
-        <Section title="Redirect">
-          <Input
-            label="Redirect URL"
-            value={offer.api_steps.redirect.url}
-            onChange={(e) =>
-              setOffer((p) => ({
-                ...p,
-                api_steps: { ...p.api_steps, redirect: { enabled: true, url: e.target.value } },
-              }))
-            }
-          />
-        </Section>
+          return (
+            <Section key={key} title={schema.label}>
+              <p style={styles.desc}>{schema.description}</p>
 
-        <div style={S.actions}>
+              <Checkbox
+                label="Enabled"
+                checked={step.enabled}
+                onChange={(e) => updateStep(key, "enabled", e.target.checked)}
+              />
+
+              <Row>
+                <select
+                  value={step.method}
+                  onChange={(e) => updateStep(key, "method", e.target.value)}
+                  style={styles.select}
+                >
+                  <option>GET</option>
+                  <option>POST</option>
+                </select>
+
+                <input
+                  value={step.url}
+                  onChange={(e) => updateStep(key, "url", e.target.value)}
+                  placeholder="API URL"
+                  style={styles.input}
+                />
+              </Row>
+
+              <KeyValueEditor
+                title="Headers"
+                data={step.headers}
+                onAdd={(k, v) => updateKeyValue(key, "headers", k, v)}
+                onRemove={(k) => removeKeyValue(key, "headers", k)}
+                templates={schema.templates}
+              />
+
+              <KeyValueEditor
+                title="Params / Body"
+                data={step.params}
+                onAdd={(k, v) => updateKeyValue(key, "params", k, v)}
+                onRemove={(k) => removeKeyValue(key, "params", k)}
+                templates={schema.templates}
+              />
+
+              <Input
+                label="Success Matcher"
+                value={step.success_matcher}
+                onChange={(e) => updateStep(key, "success_matcher", e.target.value)}
+                placeholder="e.g. success=true"
+              />
+            </Section>
+          );
+        })}
+
+        {/* ================= ACTIONS ================= */}
+        <div style={styles.actions}>
           <button type="button" onClick={onClose}>Cancel</button>
-          <button type="submit">Save</button>
+          <button type="submit">{initialData ? "Update" : "Save"}</button>
         </div>
       </form>
     </div>
   );
 }
 
-/* ================= API STEP UI ================= */
-const ApiStep = ({ title, data, onToggle, onChange, onKVChange, onAddKV, onRemoveKV }) => (
-  <Section title={title}>
-    <Checkbox label="Enabled" checked={data.enabled} onChange={(e) => onToggle(e.target.checked)} />
-    <select value={data.method} onChange={(e) => onChange("method", e.target.value)}>
-      <option>POST</option>
-      <option>GET</option>
-    </select>
-    <Input label="URL" value={data.url} onChange={(e) => onChange("url", e.target.value)} />
+/* ================= KEY VALUE EDITOR ================= */
+const KeyValueEditor = ({ title, data = {}, onAdd, onRemove, templates }) => {
+  const [k, setK] = useState("");
+  const [v, setV] = useState("");
 
-    <KV title="Headers" list={data.headers} onChange={(i, f, v) => onKVChange("headers", i, f, v)} onAdd={() => onAddKV("headers")} onRemove={(i) => onRemoveKV("headers", i)} />
-    <KV title="Params / Body" list={data.params} onChange={(i, f, v) => onKVChange("params", i, f, v)} onAdd={() => onAddKV("params")} onRemove={(i) => onRemoveKV("params", i)} />
+  return (
+    <div>
+      <strong>{title}</strong>
+      {Object.entries(data).map(([key, val]) => (
+        <div key={key} style={styles.kv}>
+          <span>{key}: {val}</span>
+          <button type="button" onClick={() => onRemove(key)}>✕</button>
+        </div>
+      ))}
 
-    <Input label="Success Matcher" value={data.success_matcher} onChange={(e) => onChange("success_matcher", e.target.value)} />
+      <div style={styles.kv}>
+        <input placeholder="key" value={k} onChange={(e) => setK(e.target.value)} />
+        <input placeholder="value" value={v} onChange={(e) => setV(e.target.value)} />
+        <button type="button" onClick={() => { onAdd(k, v); setK(""); setV(""); }}>+</button>
+      </div>
 
-    <TemplateHints />
-  </Section>
-);
+      <div style={styles.templates}>
+        {templates.map((t) => (
+          <span key={t} onClick={() => setV(`<coll_${t}>`)}>{`<coll_${t}>`}</span>
+        ))}
+      </div>
+    </div>
+  );
+};
 
-/* ================= KV BUILDER ================= */
-const KV = ({ title, list, onChange, onAdd, onRemove }) => (
-  <>
-    <h5>{title}</h5>
-    {list.map((r, i) => (
-      <Row key={i}>
-        <input placeholder="key" value={r.key} onChange={(e) => onChange(i, "key", e.target.value)} />
-        <input placeholder="value / <template>" value={r.value} onChange={(e) => onChange(i, "value", e.target.value)} />
-        <button type="button" onClick={() => onRemove(i)}>✕</button>
-      </Row>
-    ))}
-    <button type="button" onClick={onAdd}>+ Add</button>
-  </>
-);
-
-/* ================= TEMPLATE HINTS ================= */
-const TemplateHints = () => (
-  <div style={{ fontSize: 11, opacity: 0.7 }}>
-    Templates:
-    {TEMPLATE_PARAMS.map((t) => (
-      <span key={t} style={{ marginLeft: 6 }}>{t}</span>
-    ))}
-  </div>
-);
-
-/* ================= UI ================= */
+/* ================= UI HELPERS ================= */
 const Section = ({ title, children }) => (
-  <div style={{ marginBottom: 24 }}>
-    <h4 style={{ color: "#38bdf8" }}>{title}</h4>
+  <div style={styles.section}>
+    <h4>{title}</h4>
     {children}
   </div>
 );
@@ -220,27 +244,35 @@ const Section = ({ title, children }) => (
 const Input = ({ label, ...p }) => (
   <div>
     <label>{label}</label>
-    <input {...p} />
+    <input {...p} style={styles.input} />
   </div>
 );
 
 const Select = ({ label, options, ...p }) => (
   <div>
     <label>{label}</label>
-    <select {...p}>
+    <select {...p} style={styles.select}>
       <option value="">Select</option>
-      {options.map((o) => (
-        <option key={o.id} value={o.id}>{o.name}</option>
-      ))}
+      {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
     </select>
   </div>
 );
 
-const Checkbox = (p) => <label><input type="checkbox" {...p} /> {p.label}</label>;
+const Checkbox = ({ label, ...p }) => (
+  <label><input type="checkbox" {...p} /> {label}</label>
+);
+
 const Row = ({ children }) => <div style={{ display: "flex", gap: 8 }}>{children}</div>;
 
-const S = {
-  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,.6)" },
-  card: { background: "#020617", padding: 24, width: 900, maxHeight: "90vh", overflow: "auto" },
+/* ================= STYLES ================= */
+const styles = {
+  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", display: "flex", justifyContent: "center", alignItems: "center" },
+  card: { width: 900, maxHeight: "90vh", overflowY: "auto", background: "#020617", padding: 24, borderRadius: 12, color: "#fff" },
+  section: { marginBottom: 24 },
+  input: { padding: 8, width: "100%", background: "#020617", color: "#fff", border: "1px solid #1e293b" },
+  select: { padding: 8, background: "#020617", color: "#fff" },
   actions: { display: "flex", justifyContent: "space-between" },
+  kv: { display: "flex", gap: 6, alignItems: "center" },
+  templates: { display: "flex", gap: 6, flexWrap: "wrap", fontSize: 11, cursor: "pointer" },
+  desc: { fontSize: 12, color: "#94a3b8" },
 };
