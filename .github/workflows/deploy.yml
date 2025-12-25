@@ -18,15 +18,19 @@ jobs:
         with:
           node-version: 22
 
+      # 🔹 Install deps ONLY for backend
       - name: Install backend deps
         run: |
           cd backend
           npm install --omit=dev
 
-      - name: Zip application
+      # 🔹 Zip backend AS ROOT APP (THIS IS THE KEY FIX)
+      - name: Zip backend application
         run: |
-          zip -r app.zip . -x "*.git*"
+          cd backend
+          zip -r ../app.zip . -x "*.git*"
 
+      # 🔹 Deploy correct zip
       - name: Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
         with:
