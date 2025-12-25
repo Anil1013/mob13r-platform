@@ -42,7 +42,7 @@ export default function OfferForm({ onClose, onSave, initialData }) {
     getAdvertisers().then((res) => setAdvertisers(res || []));
   }, []);
 
-  /* ================= LOAD EDIT ================= */
+  /* ================= LOAD EDIT DATA ================= */
   useEffect(() => {
     if (!initialData) {
       setOffer(DEFAULT_OFFER);
@@ -51,15 +51,39 @@ export default function OfferForm({ onClose, onSave, initialData }) {
 
     setOffer({
       ...DEFAULT_OFFER,
-      ...initialData,
 
+      /* BASIC */
+      name: initialData.name ?? "",
+      advertiser_id: initialData.advertiser_id ?? "",
+      geo: initialData.geo ?? "",
+      carrier: initialData.carrier ?? "",
+      payout: initialData.payout ?? "",
+      revenue: initialData.revenue ?? "",
+      is_active: initialData.is_active ?? true,
+
+      /* API */
+      api_mode: initialData.api_mode ?? "POST",
+
+      /* URLS (🔥 THIS WAS THE ISSUE) */
+      status_check_url: initialData.status_check_url ?? "",
+      pin_send_url: initialData.pin_send_url ?? "",
+      pin_verify_url: initialData.pin_verify_url ?? "",
+      redirect_url: initialData.redirect_url ?? "",
+
+      /* PARAMS → ALWAYS ARRAY */
       status_check_params: toArray(initialData.status_check_params),
       pin_send_params: toArray(initialData.pin_send_params),
       pin_verify_params: toArray(initialData.pin_verify_params),
 
+      /* STEPS */
       step_status_check: initialData.steps?.status_check ?? true,
       step_pin_send: initialData.steps?.pin_send ?? true,
       step_pin_verify: initialData.steps?.pin_verify ?? true,
+
+      /* FRAUD */
+      fraud_enabled: initialData.fraud_enabled ?? false,
+      fraud_partner: initialData.fraud_partner ?? "",
+      fraud_service: initialData.fraud_service ?? "",
     });
   }, [initialData]);
 
@@ -100,6 +124,7 @@ export default function OfferForm({ onClose, onSave, initialData }) {
         {/* ================= BASIC ================= */}
         <Section title="Basic Information">
           <Input label="Offer Name" name="name" value={offer.name} onChange={handleChange} />
+
           <Select
             label="Advertiser"
             name="advertiser_id"
@@ -107,14 +132,17 @@ export default function OfferForm({ onClose, onSave, initialData }) {
             onChange={handleChange}
             options={advertisers}
           />
+
           <Row>
             <Input label="Geo" name="geo" value={offer.geo} onChange={handleChange} />
             <Input label="Carrier" name="carrier" value={offer.carrier} onChange={handleChange} />
           </Row>
+
           <Row>
             <Input label="Payout" name="payout" value={offer.payout} onChange={handleChange} />
             <Input label="Revenue" name="revenue" value={offer.revenue} onChange={handleChange} />
           </Row>
+
           <Checkbox label="Offer Active" name="is_active" checked={offer.is_active} onChange={handleChange} />
         </Section>
 
@@ -176,6 +204,7 @@ export default function OfferForm({ onClose, onSave, initialData }) {
             checked={offer.fraud_enabled}
             onChange={handleChange}
           />
+
           {offer.fraud_enabled && (
             <>
               <Input label="Fraud Partner" name="fraud_partner" value={offer.fraud_partner} onChange={handleChange} />
@@ -200,9 +229,11 @@ export default function OfferForm({ onClose, onSave, initialData }) {
 const ParamBuilder = ({ label, values = [], onChange }) => {
   const [input, setInput] = useState("");
 
-  const add = (v) => {
+  const add = () => {
+    const v = input.trim();
     if (!v || values.includes(v)) return;
     onChange([...values, v]);
+    setInput("");
   };
 
   return (
@@ -220,8 +251,7 @@ const ParamBuilder = ({ label, values = [], onChange }) => {
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === ",") {
               e.preventDefault();
-              add(input.trim());
-              setInput("");
+              add();
             }
           }}
           placeholder="type & press enter"
@@ -234,7 +264,11 @@ const ParamBuilder = ({ label, values = [], onChange }) => {
 
 /* ================= HELPERS ================= */
 const toArray = (v) =>
-  Array.isArray(v) ? v : typeof v === "string" ? v.split(",").map((x) => x.trim()) : [];
+  Array.isArray(v)
+    ? v
+    : typeof v === "string"
+    ? v.split(",").map((x) => x.trim()).filter(Boolean)
+    : [];
 
 /* ================= UI ================= */
 const Section = ({ title, children }) => (
