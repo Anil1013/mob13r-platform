@@ -12,6 +12,7 @@ export default function OfferForm({ onClose, onSave }) {
     carrier: "",
     payout: "",
     revenue: "",
+    is_active: true,
 
     /* ================= API ================= */
     api_mode: "POST",
@@ -40,25 +41,15 @@ export default function OfferForm({ onClose, onSave }) {
     fraud_service: "",
   });
 
-  /* ================= LOAD ADVERTISERS ================= */
   useEffect(() => {
-    const loadAdvertisers = async () => {
-      const data = await getAdvertisers();
-      setAdvertisers(data || []);
-    };
-    loadAdvertisers();
+    getAdvertisers().then(setAdvertisers);
   }, []);
 
-  /* ================= HANDLE CHANGE ================= */
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setOffer({
-      ...offer,
-      [name]: type === "checkbox" ? checked : value,
-    });
+    setOffer({ ...offer, [name]: type === "checkbox" ? checked : value });
   };
 
-  /* ================= SUBMIT ================= */
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -66,13 +57,11 @@ export default function OfferForm({ onClose, onSave }) {
       ...offer,
       payout: Number(offer.payout),
       revenue: Number(offer.revenue),
-
       steps: {
         status_check: offer.step_status_check,
         pin_send: offer.step_pin_send,
         pin_verify: offer.step_pin_verify,
       },
-
       status_check_params: normalize(offer.status_check_params),
       pin_send_params: normalize(offer.pin_send_params),
       pin_verify_params: normalize(offer.pin_verify_params),
@@ -84,15 +73,8 @@ export default function OfferForm({ onClose, onSave }) {
       <form style={styles.card} onSubmit={handleSubmit}>
         <h2 style={styles.heading}>Create Offer</h2>
 
-        {/* ================= BASIC INFO ================= */}
         <Section title="Basic Information">
-          <Input
-            label="Offer Name"
-            name="name"
-            value={offer.name}
-            onChange={handleChange}
-            required
-          />
+          <Input label="Offer Name" name="name" value={offer.name} onChange={handleChange} required />
 
           <div style={styles.inputGroup}>
             <label style={styles.label}>Advertiser</label>
@@ -105,104 +87,52 @@ export default function OfferForm({ onClose, onSave }) {
             >
               <option value="">Select advertiser</option>
               {advertisers.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
+                <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
           </div>
 
           <Row>
             <Input label="Geo" name="geo" value={offer.geo} onChange={handleChange} />
-            <Input
-              label="Carrier"
-              name="carrier"
-              value={offer.carrier}
-              onChange={handleChange}
-            />
+            <Input label="Carrier" name="carrier" value={offer.carrier} onChange={handleChange} />
           </Row>
 
           <Row>
-            <Input
-              label="Payout"
-              name="payout"
-              value={offer.payout}
-              onChange={handleChange}
-            />
-            <Input
-              label="Revenue"
-              name="revenue"
-              value={offer.revenue}
-              onChange={handleChange}
-            />
+            <Input label="Payout" name="payout" value={offer.payout} onChange={handleChange} />
+            <Input label="Revenue" name="revenue" value={offer.revenue} onChange={handleChange} />
           </Row>
+
+          <label style={styles.checkbox}>
+            <input type="checkbox" name="is_active" checked={offer.is_active} onChange={handleChange} />
+            Offer Active
+          </label>
         </Section>
 
-        {/* ================= API MODE ================= */}
         <Section title="API Mode">
-          <select
-            name="api_mode"
-            value={offer.api_mode}
-            onChange={handleChange}
-            style={styles.select}
-          >
+          <select name="api_mode" value={offer.api_mode} onChange={handleChange} style={styles.select}>
             <option value="POST">POST</option>
             <option value="GET">GET</option>
           </select>
         </Section>
 
-        {/* ================= STATUS CHECK ================= */}
         <Section title="Status Check API">
-          <Input
-            label="Status Check URL"
-            name="status_check_url"
-            value={offer.status_check_url}
-            onChange={handleChange}
-          />
-          <Input
-            label="Allowed Parameters"
-            name="status_check_params"
-            value={offer.status_check_params}
-            onChange={handleChange}
-          />
+          <Input label="Status Check URL" name="status_check_url" value={offer.status_check_url} onChange={handleChange} />
+          <Input label="Allowed Params" name="status_check_params" value={offer.status_check_params} onChange={handleChange} />
         </Section>
 
-        {/* ================= PIN SEND ================= */}
         <Section title="PIN Send API">
-          <Input
-            label="PIN Send URL"
-            name="pin_send_url"
-            value={offer.pin_send_url}
-            onChange={handleChange}
-          />
-          <Input
-            label="Allowed Parameters"
-            name="pin_send_params"
-            value={offer.pin_send_params}
-            onChange={handleChange}
-          />
+          <Input label="PIN Send URL" name="pin_send_url" value={offer.pin_send_url} onChange={handleChange} />
+          <Input label="Allowed Params" name="pin_send_params" value={offer.pin_send_params} onChange={handleChange} />
         </Section>
 
-        {/* ================= PIN VERIFY ================= */}
         <Section title="PIN Verify API">
-          <Input
-            label="PIN Verify URL"
-            name="pin_verify_url"
-            value={offer.pin_verify_url}
-            onChange={handleChange}
-          />
-          <Input
-            label="Allowed Parameters"
-            name="pin_verify_params"
-            value={offer.pin_verify_params}
-            onChange={handleChange}
-          />
+          <Input label="PIN Verify URL" name="pin_verify_url" value={offer.pin_verify_url} onChange={handleChange} />
+          <Input label="Allowed Params" name="pin_verify_params" value={offer.pin_verify_params} onChange={handleChange} />
         </Section>
 
-        {/* ================= REDIRECT ================= */}
-        <Section title="Redirect">
+        <Section title="Redirect (Mandatory)">
           <Input
-            label="Redirect URL (after OTP success)"
+            label="Redirect URL after OTP success"
             name="redirect_url"
             value={offer.redirect_url}
             onChange={handleChange}
@@ -210,76 +140,24 @@ export default function OfferForm({ onClose, onSave }) {
           />
         </Section>
 
-        {/* ================= STEPS ================= */}
         <Section title="Execution Steps">
           <label style={styles.checkbox}>
-            <input
-              type="checkbox"
-              name="step_status_check"
-              checked={offer.step_status_check}
-              onChange={handleChange}
-            />
+            <input type="checkbox" name="step_status_check" checked={offer.step_status_check} onChange={handleChange} />
             Enable Status Check
           </label>
-
           <label style={styles.checkbox}>
-            <input
-              type="checkbox"
-              name="step_pin_send"
-              checked={offer.step_pin_send}
-              onChange={handleChange}
-            />
+            <input type="checkbox" name="step_pin_send" checked={offer.step_pin_send} onChange={handleChange} />
             Enable PIN Send
           </label>
-
           <label style={styles.checkbox}>
-            <input
-              type="checkbox"
-              name="step_pin_verify"
-              checked={offer.step_pin_verify}
-              onChange={handleChange}
-            />
+            <input type="checkbox" name="step_pin_verify" checked={offer.step_pin_verify} onChange={handleChange} />
             Enable PIN Verify
           </label>
         </Section>
 
-        {/* ================= FRAUD ================= */}
-        <Section title="Anti-Fraud (Optional)">
-          <label style={styles.checkbox}>
-            <input
-              type="checkbox"
-              name="fraud_enabled"
-              checked={offer.fraud_enabled}
-              onChange={handleChange}
-            />
-            Enable Fraud Protection
-          </label>
-
-          {offer.fraud_enabled && (
-            <>
-              <Input
-                label="Fraud Partner ID"
-                name="fraud_partner"
-                value={offer.fraud_partner}
-                onChange={handleChange}
-              />
-              <Input
-                label="Fraud Service ID"
-                name="fraud_service"
-                value={offer.fraud_service}
-                onChange={handleChange}
-              />
-            </>
-          )}
-        </Section>
-
         <div style={styles.actions}>
-          <button type="button" onClick={onClose} style={styles.cancel}>
-            Cancel
-          </button>
-          <button type="submit" style={styles.save}>
-            Save Offer
-          </button>
+          <button type="button" onClick={onClose} style={styles.cancel}>Cancel</button>
+          <button type="submit" style={styles.save}>Save Offer</button>
         </div>
       </form>
     </div>
@@ -287,15 +165,9 @@ export default function OfferForm({ onClose, onSave }) {
 }
 
 /* ================= HELPERS ================= */
-const normalize = (value) =>
-  value
-    ? value
-        .split(",")
-        .map((v) => v.trim())
-        .filter(Boolean)
-    : [];
+const normalize = (v) => v ? v.split(",").map(x => x.trim()).filter(Boolean) : [];
 
-/* ================= UI PARTS ================= */
+/* ================= UI ================= */
 const Section = ({ title, children }) => (
   <div style={styles.section}>
     <h4 style={styles.sectionTitle}>{title}</h4>
@@ -310,52 +182,21 @@ const Input = ({ label, ...props }) => (
   </div>
 );
 
-const Row = ({ children }) => (
-  <div style={styles.row}>{children}</div>
-);
+const Row = ({ children }) => <div style={styles.row}>{children}</div>;
 
-/* ================= STYLES ================= */
 const styles = {
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.6)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 50,
-  },
-  card: {
-    width: "720px",
-    maxHeight: "90vh",
-    overflowY: "auto",
-    background: "#020617",
-    padding: "28px",
-    borderRadius: "14px",
-    color: "#fff",
-  },
-  heading: { textAlign: "center", marginBottom: "20px" },
-  section: { marginBottom: "20px" },
-  sectionTitle: { color: "#38bdf8", fontSize: "14px", marginBottom: "10px" },
-  inputGroup: { display: "flex", flexDirection: "column", marginBottom: "10px" },
-  label: { fontSize: "12px", color: "#94a3b8", marginBottom: "4px" },
-  input: {
-    padding: "10px",
-    borderRadius: "8px",
-    border: "1px solid #1e293b",
-    background: "#020617",
-    color: "#fff",
-  },
-  select: {
-    padding: "10px",
-    borderRadius: "8px",
-    background: "#020617",
-    color: "#fff",
-    border: "1px solid #1e293b",
-  },
-  row: { display: "flex", gap: "12px" },
-  checkbox: { display: "flex", gap: "8px", alignItems: "center" },
-  actions: { display: "flex", justifyContent: "space-between", marginTop: "20px" },
-  cancel: { background: "#334155", padding: "10px 18px", borderRadius: "8px" },
-  save: { background: "#16a34a", padding: "10px 18px", borderRadius: "8px" },
+  overlay:{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",justifyContent:"center",alignItems:"center",zIndex:50},
+  card:{width:720,maxHeight:"90vh",overflowY:"auto",background:"#020617",padding:28,borderRadius:14,color:"#fff"},
+  heading:{textAlign:"center",marginBottom:20},
+  section:{marginBottom:20},
+  sectionTitle:{color:"#38bdf8",fontSize:14,marginBottom:10},
+  inputGroup:{display:"flex",flexDirection:"column",marginBottom:10},
+  label:{fontSize:12,color:"#94a3b8",marginBottom:4},
+  input:{padding:10,borderRadius:8,border:"1px solid #1e293b",background:"#020617",color:"#fff"},
+  select:{padding:10,borderRadius:8,background:"#020617",color:"#fff",border:"1px solid #1e293b"},
+  row:{display:"flex",gap:12},
+  checkbox:{display:"flex",gap:8,alignItems:"center"},
+  actions:{display:"flex",justifyContent:"space-between"},
+  cancel:{background:"#334155",padding:"10px 18px",borderRadius:8,color:"#fff"},
+  save:{background:"#16a34a",padding:"10px 18px",borderRadius:8,color:"#fff"}
 };
