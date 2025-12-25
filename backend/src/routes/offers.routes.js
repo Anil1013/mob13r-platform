@@ -134,12 +134,13 @@ router.post("/", async (req, res) => {
 });
 
 /* =====================================================
-   UPDATE OFFER (EDIT SUPPORT)
+   UPDATE OFFER
+   PUT /api/offers/:id
 ===================================================== */
 router.put("/:id", async (req, res) => {
   try {
-    const { id } = req.params;
     const {
+      advertiser_id,
       name,
       geo,
       carrier,
@@ -148,56 +149,56 @@ router.put("/:id", async (req, res) => {
       api_mode,
 
       status_check_url,
-      status_check_params = [],
+      status_check_params,
 
       pin_send_url,
-      pin_send_params = [],
+      pin_send_params,
 
       pin_verify_url,
-      pin_verify_params = [],
+      pin_verify_params,
 
       redirect_url,
       steps,
       is_active,
 
-      fraud_enabled = false,
+      fraud_enabled,
       fraud_partner,
       fraud_service,
     } = req.body;
 
     const { rows } = await pool.query(
       `
-      UPDATE offers
-      SET
-        name = $1,
-        geo = $2,
-        carrier = $3,
-        payout = $4,
-        revenue = $5,
-        api_mode = $6,
+      UPDATE offers SET
+        advertiser_id = $1,
+        name = $2,
+        geo = $3,
+        carrier = $4,
+        payout = $5,
+        revenue = $6,
+        api_mode = $7,
 
-        status_check_url = $7,
-        status_check_params = $8,
+        status_check_url = $8,
+        status_check_params = $9,
 
-        pin_send_url = $9,
-        pin_send_params = $10,
+        pin_send_url = $10,
+        pin_send_params = $11,
 
-        pin_verify_url = $11,
-        pin_verify_params = $12,
+        pin_verify_url = $12,
+        pin_verify_params = $13,
 
-        redirect_url = $13,
-        steps = $14,
-        is_active = $15,
+        redirect_url = $14,
+        steps = $15,
+        is_active = $16,
 
-        fraud_enabled = $16,
-        fraud_partner = $17,
-        fraud_service = $18,
+        fraud_enabled = $17,
+        fraud_partner = $18,
+        fraud_service = $19
 
-        updated_at = NOW()
-      WHERE id = $19
+      WHERE id = $20
       RETURNING *
       `,
       [
+        advertiser_id,
         name,
         geo,
         carrier,
@@ -206,22 +207,23 @@ router.put("/:id", async (req, res) => {
         api_mode,
 
         status_check_url,
-        status_check_params,
+        JSON.stringify(status_check_params || []),
 
         pin_send_url,
-        pin_send_params,
+        JSON.stringify(pin_send_params || []),
 
         pin_verify_url,
-        pin_verify_params,
+        JSON.stringify(pin_verify_params || []),
 
-        redirect_url,
-        steps,
+        redirect_url || null,
+        steps || {},
         is_active,
 
-        fraud_enabled,
-        fraud_partner,
-        fraud_service,
-        id,
+        fraud_enabled || false,
+        fraud_partner || null,
+        fraud_service || null,
+
+        req.params.id,
       ]
     );
 
@@ -235,6 +237,7 @@ router.put("/:id", async (req, res) => {
     res.status(500).json({ message: "Failed to update offer" });
   }
 });
+
 
 /* =====================================================
    TOGGLE OFFER STATUS (ACTIVE / INACTIVE)
