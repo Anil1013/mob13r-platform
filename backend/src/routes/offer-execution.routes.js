@@ -1,102 +1,121 @@
 import { Router } from "express";
-import crypto from "crypto";
 import pool from "../db.js";
 import auth from "../middleware/auth.js";
+import { buildContext, applyTemplate } from "../utils/templateEngine.js";
 
 const router = Router();
 router.use(auth);
 
 /* =====================================================
-   TEMPLATE MAP
+   SAFE FETCH (TIMEOUT PROTECTED)
 ===================================================== */
-const buildContext = (req) => {
-  const ip = req.headers["x-forwarded-for"]?.split(",")[0] || req.ip;
-  const ua = req.headers["user-agent"];
+const safeFetch = async (url, options = {}, timeout = 15000) => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
 
-  return {
-    msisdn: req.body.msisdn,
-    transaction_id: req.body.transaction_id || crypto.randomUUID(),
-    pin: req.body.pin,
-    ip,
-    user_ip: req.body.user_ip || req.body.ip || ip,
-    ua,
-    param1: req.body.param1,
-    param2: req.body.param2,
-    anti_fraud_id: req.body.anti_fraud_id,
-  };
-};
-
-const applyTemplates = (obj = {}, ctx) => {
-  const out = {};
-  for (const k in obj) {
-    let v = obj[k];
-    if (typeof v === "string") {
-      Object.entries(ctx).forEach(([key, value]) => {
-        v = v.replaceAll(`<coll_${key}>`, value ?? "");
-        v = v.replaceAll(`<${key}>`, value ?? "");
-      });
-    }
-    out[k] = v;
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return await res.json();
+  } finally {
+    clearTimeout(id);
   }
-  return out;
 };
 
+/* =====================================================
+   EXECUTE API STEP
+===================================================== */
 const executeStep = async (step, ctx) => {
-  const params = applyTemplates(step.params || {}, ctx);
-  const headers = applyTemplates(step.headers || {}, ctx);
+  const url = applyTemplate(step.url, ctx);
+  const params = applyTemplate(step.params || {}, ctx);
+  const headers = applyTemplate(step.headers || {}, ctx);
 
   if (step.method === "GET") {
     const qs = new URLSearchParams(params).toString();
-    const res = await fetch(`${step.url}?${qs}`, { headers });
-    return res.json();
+    return safeFetch(`${url}?${qs}`, { headers });
   }
 
-  const res = await fetch(step.url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...headers },
+  return safeFetch(url, {
+    method: step.method || "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
     body: JSON.stringify(params),
   });
-
-  return res.json();
 };
 
+/* =====================================================
+   LOAD OFFER
+===================================================== */
 const loadOffer = async (id) => {
-  const { rows } = await pool.query("SELECT * FROM offers WHERE id = $1", [id]);
+  const { rows } = await pool.query(
+    "SELECT * FROM offers WHERE id = $1",
+    [id]
+  );
   return rows[0];
 };
 
 /* =====================================================
-   EXECUTE STEP (GENERIC)
+   GENERIC EXECUTION
+   POST /api/offers/:id/:step
 ===================================================== */
 router.post("/:id/:step", async (req, res) => {
   try {
     const offer = await loadOffer(req.params.id);
-    if (!offer) return res.status(404).json({ message: "Offer not found" });
+    if (!offer)
+      return res.status(404).json({ message: "Offer not found" });
 
     const apiSteps = offer.api_steps || {};
-    const step = apiSteps[req.params.step];
+    const stepConfig = apiSteps[req.params.step];
 
-    if (!step || step.enabled === false) {
-      return res.status(400).json({ message: "Step disabled or not configured" });
+    if (!stepConfig || stepConfig.enabled === false) {
+      return res.status(400).json({
+        message: "Step disabled or not configured",
+      });
     }
 
+    /* BUILD RUNTIME CONTEXT */
     const ctx = buildContext(req);
-    const response = await executeStep(step, ctx);
 
-    const success =
-      step.success_matcher
-        ? JSON.stringify(response).includes(step.success_matcher)
-        : true;
+    /* AUTO ANTI-FRAUD */
+    if (
+      apiSteps.anti_fraud &&
+      apiSteps.anti_fraud.enabled &&
+      req.params.step !== "anti_fraud"
+    ) {
+      await executeStep(apiSteps.anti_fraud, ctx);
+    }
+
+    /* EXECUTE STEP */
+    const response = await executeStep(stepConfig, ctx);
+
+    /* SUCCESS MATCHING */
+    let success = true;
+    if (stepConfig.success_matcher) {
+      const matcher = stepConfig.success_matcher;
+
+      if (typeof matcher === "string") {
+        success = JSON.stringify(response).includes(matcher);
+      } else if (typeof matcher === "object") {
+        success = Object.entries(matcher).every(
+          ([k, v]) => response?.[k] === v
+        );
+      }
+    }
 
     res.json({
       transaction_id: ctx.transaction_id,
+      step: req.params.step,
       success,
       response,
       redirect_url: success ? offer.redirect_url : null,
     });
   } catch (err) {
     console.error("EXECUTION ERROR:", err);
-    res.status(500).json({ message: "Execution failed" });
+    res.status(500).json({
+      message: "Execution failed",
+      error: err.message,
+    });
   }
 });
 
