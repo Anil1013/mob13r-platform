@@ -9,7 +9,7 @@ import executionLogsRoutes from "./routes/execution-logs.routes.js";
 
 const app = express();
 
-/* ================= CORS (EXPRESS 5 SAFE & FINAL) ================= */
+/* ================= CORS (EXPRESS 5 SAFE) ================= */
 const corsOptions = {
   origin: [
     "https://dashboard.mob13r.com",
@@ -17,14 +17,14 @@ const corsOptions = {
   ],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true, // ✅ REQUIRED for JWT
+  credentials: true,
 };
 
+/* ✅ This alone is enough in Express 5 */
 app.use(cors(corsOptions));
-app.use(express.json());
 
-/* ✅ Explicit OPTIONS handler (MANDATORY in Express 5) */
-app.options("*", cors(corsOptions));
+/* ✅ Handle JSON */
+app.use(express.json());
 
 /* ================= HEALTH ================= */
 app.get("/health", (req, res) => {
