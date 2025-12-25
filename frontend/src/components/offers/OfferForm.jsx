@@ -41,17 +41,41 @@ const DEFAULT_OFFER = {
 
 export default function OfferForm({ onClose, onSave, initialData }) {
   const [advertisers, setAdvertisers] = useState([]);
-  const [offer, setOffer] = useState({ ...DEFAULT_OFFER, ...initialData });
+  const [offer, setOffer] = useState(DEFAULT_OFFER);
 
   /* ================= LOAD ADVERTISERS ================= */
   useEffect(() => {
     getAdvertisers().then((data) => setAdvertisers(data || []));
   }, []);
 
+  /* ================= LOAD EDIT DATA ================= */
+  useEffect(() => {
+    if (!initialData) {
+      setOffer(DEFAULT_OFFER);
+      return;
+    }
+
+    setOffer({
+      ...DEFAULT_OFFER,
+      ...initialData,
+
+      status_check_params: arrayToString(initialData.status_check_params),
+      pin_send_params: arrayToString(initialData.pin_send_params),
+      pin_verify_params: arrayToString(initialData.pin_verify_params),
+
+      step_status_check: initialData.steps?.status_check ?? true,
+      step_pin_send: initialData.steps?.pin_send ?? true,
+      step_pin_verify: initialData.steps?.pin_verify ?? true,
+    });
+  }, [initialData]);
+
   /* ================= HANDLE CHANGE ================= */
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setOffer({ ...offer, [name]: type === "checkbox" ? checked : value });
+    setOffer((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
   };
 
   /* ================= SUBMIT ================= */
@@ -60,16 +84,20 @@ export default function OfferForm({ onClose, onSave, initialData }) {
 
     onSave({
       ...offer,
-      payout: Number(offer.payout),
-      revenue: Number(offer.revenue),
+      payout: Number(offer.payout || 0),
+      revenue: Number(offer.revenue || 0),
+
       steps: {
         status_check: offer.step_status_check,
         pin_send: offer.step_pin_send,
         pin_verify: offer.step_pin_verify,
       },
+
       status_check_params: normalize(offer.status_check_params),
       pin_send_params: normalize(offer.pin_send_params),
       pin_verify_params: normalize(offer.pin_verify_params),
+
+      redirect_url: offer.redirect_url || null, // ✅ optional
     });
   };
 
@@ -127,43 +155,28 @@ export default function OfferForm({ onClose, onSave, initialData }) {
         {/* ================= STATUS CHECK ================= */}
         <Section title="Status Check API">
           <Input label="Status Check URL" name="status_check_url" value={offer.status_check_url} onChange={handleChange} />
-          <Input
-            label="Allowed Parameters (Advertiser dependent)"
-            name="status_check_params"
-            value={offer.status_check_params}
-            onChange={handleChange}
-          />
+          <Input label="Allowed Parameters" name="status_check_params" value={offer.status_check_params} onChange={handleChange} />
         </Section>
 
         {/* ================= PIN SEND ================= */}
         <Section title="PIN Send API">
           <Input label="PIN Send URL" name="pin_send_url" value={offer.pin_send_url} onChange={handleChange} />
-          <Input
-            label="Allowed Parameters (Advertiser dependent)"
-            name="pin_send_params"
-            value={offer.pin_send_params}
-            onChange={handleChange}
-          />
+          <Input label="Allowed Parameters" name="pin_send_params" value={offer.pin_send_params} onChange={handleChange} />
         </Section>
 
         {/* ================= PIN VERIFY ================= */}
         <Section title="PIN Verify API">
           <Input label="PIN Verify URL" name="pin_verify_url" value={offer.pin_verify_url} onChange={handleChange} />
-          <Input
-            label="Allowed Parameters (Advertiser dependent)"
-            name="pin_verify_params"
-            value={offer.pin_verify_params}
-            onChange={handleChange}
-          />
+          <Input label="Allowed Parameters" name="pin_verify_params" value={offer.pin_verify_params} onChange={handleChange} />
         </Section>
 
         {/* ================= REDIRECT ================= */}
-        <Section title="Redirect">
+        <Section title="Redirect (Optional)">
           <Input
+            label="Redirect URL"
             name="redirect_url"
             value={offer.redirect_url}
             onChange={handleChange}
-          
           />
         </Section>
 
@@ -197,7 +210,12 @@ export default function OfferForm({ onClose, onSave, initialData }) {
 
 /* ================= HELPERS ================= */
 const normalize = (v) =>
-  v ? v.split(",").map((x) => x.trim()).filter(Boolean) : [];
+  typeof v === "string"
+    ? v.split(",").map((x) => x.trim()).filter(Boolean)
+    : [];
+
+const arrayToString = (v) =>
+  Array.isArray(v) ? v.join(",") : v || "";
 
 /* ================= UI ================= */
 const Section = ({ title, children }) => (
