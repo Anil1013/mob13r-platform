@@ -33,16 +33,30 @@ const DEFAULT_OFFER = {
   fraud_service: "",
 };
 
+/* ================= PARAM TEMPLATES ================= */
+const PARAM_TEMPLATES = [
+  "msisdn",
+  "ip",
+  "user_ip",
+  "ua",
+  "pub_id",
+  "sub_pub_id",
+  "pin",
+  "sessionKey",
+];
+
 export default function OfferForm({ onClose, onSave, initialData }) {
   const [advertisers, setAdvertisers] = useState([]);
   const [offer, setOffer] = useState(DEFAULT_OFFER);
+  const [errors, setErrors] = useState({});
+  const [testing, setTesting] = useState(null);
 
   /* ================= LOAD ADVERTISERS ================= */
   useEffect(() => {
     getAdvertisers().then((res) => setAdvertisers(res || []));
   }, []);
 
-  /* ================= LOAD EDIT DATA ================= */
+  /* ================= LOAD EDIT ================= */
   useEffect(() => {
     if (!initialData) {
       setOffer(DEFAULT_OFFER);
@@ -51,39 +65,15 @@ export default function OfferForm({ onClose, onSave, initialData }) {
 
     setOffer({
       ...DEFAULT_OFFER,
+      ...initialData,
 
-      /* BASIC */
-      name: initialData.name ?? "",
-      advertiser_id: initialData.advertiser_id ?? "",
-      geo: initialData.geo ?? "",
-      carrier: initialData.carrier ?? "",
-      payout: initialData.payout ?? "",
-      revenue: initialData.revenue ?? "",
-      is_active: initialData.is_active ?? true,
-
-      /* API */
-      api_mode: initialData.api_mode ?? "POST",
-
-      /* URLS (🔥 THIS WAS THE ISSUE) */
-      status_check_url: initialData.status_check_url ?? "",
-      pin_send_url: initialData.pin_send_url ?? "",
-      pin_verify_url: initialData.pin_verify_url ?? "",
-      redirect_url: initialData.redirect_url ?? "",
-
-      /* PARAMS → ALWAYS ARRAY */
       status_check_params: toArray(initialData.status_check_params),
       pin_send_params: toArray(initialData.pin_send_params),
       pin_verify_params: toArray(initialData.pin_verify_params),
 
-      /* STEPS */
       step_status_check: initialData.steps?.status_check ?? true,
       step_pin_send: initialData.steps?.pin_send ?? true,
       step_pin_verify: initialData.steps?.pin_verify ?? true,
-
-      /* FRAUD */
-      fraud_enabled: initialData.fraud_enabled ?? false,
-      fraud_partner: initialData.fraud_partner ?? "",
-      fraud_service: initialData.fraud_service ?? "",
     });
   }, [initialData]);
 
@@ -96,8 +86,38 @@ export default function OfferForm({ onClose, onSave, initialData }) {
     }));
   };
 
+  /* ================= VALIDATION ================= */
+  const validate = () => {
+    const e = {};
+
+    if (!offer.name) e.name = "Offer name required";
+    if (!offer.advertiser_id) e.advertiser_id = "Advertiser required";
+
+    if (offer.status_check_url && !isValidUrl(offer.status_check_url))
+      e.status_check_url = "Invalid URL";
+
+    if (offer.pin_send_url && !isValidUrl(offer.pin_send_url))
+      e.pin_send_url = "Invalid URL";
+
+    if (offer.pin_verify_url && !isValidUrl(offer.pin_verify_url))
+      e.pin_verify_url = "Invalid URL";
+
+    if (
+      !offer.step_status_check &&
+      !offer.step_pin_send &&
+      !offer.step_pin_verify
+    ) {
+      e.steps = "At least one step must be enabled";
+    }
+
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  /* ================= SUBMIT ================= */
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!validate()) return;
 
     onSave({
       ...offer,
@@ -114,6 +134,23 @@ export default function OfferForm({ onClose, onSave, initialData }) {
     });
   };
 
+  /* ================= API TEST ================= */
+  const testApi = async (url, params) => {
+    if (!url) return alert("URL missing");
+    setTesting(url);
+
+    try {
+      const qs = params.map((p) => `${p}=test`).join("&");
+      const res = await fetch(`${url}?${qs}`);
+      const text = await res.text();
+      alert(`✅ SUCCESS\n\n${text.slice(0, 500)}`);
+    } catch (err) {
+      alert(`❌ ERROR\n\n${err.message}`);
+    } finally {
+      setTesting(null);
+    }
+  };
+
   return (
     <div style={styles.overlay}>
       <form style={styles.card} onSubmit={handleSubmit}>
@@ -123,7 +160,7 @@ export default function OfferForm({ onClose, onSave, initialData }) {
 
         {/* ================= BASIC ================= */}
         <Section title="Basic Information">
-          <Input label="Offer Name" name="name" value={offer.name} onChange={handleChange} />
+          <Input label="Offer Name" name="name" value={offer.name} onChange={handleChange} error={errors.name} />
 
           <Select
             label="Advertiser"
@@ -131,91 +168,51 @@ export default function OfferForm({ onClose, onSave, initialData }) {
             value={offer.advertiser_id}
             onChange={handleChange}
             options={advertisers}
+            error={errors.advertiser_id}
           />
-
-          <Row>
-            <Input label="Geo" name="geo" value={offer.geo} onChange={handleChange} />
-            <Input label="Carrier" name="carrier" value={offer.carrier} onChange={handleChange} />
-          </Row>
-
-          <Row>
-            <Input label="Payout" name="payout" value={offer.payout} onChange={handleChange} />
-            <Input label="Revenue" name="revenue" value={offer.revenue} onChange={handleChange} />
-          </Row>
-
-          <Checkbox label="Offer Active" name="is_active" checked={offer.is_active} onChange={handleChange} />
-        </Section>
-
-        {/* ================= API MODE ================= */}
-        <Section title="API Mode">
-          <select name="api_mode" value={offer.api_mode} onChange={handleChange} style={styles.select}>
-            <option value="POST">POST</option>
-            <option value="GET">GET</option>
-          </select>
         </Section>
 
         {/* ================= STATUS CHECK ================= */}
-        <Section title="Status Check API">
-          <Input label="URL" name="status_check_url" value={offer.status_check_url} onChange={handleChange} />
-          <ParamBuilder
-            label="Allowed Parameters"
-            values={offer.status_check_params}
-            onChange={(v) => setOffer((p) => ({ ...p, status_check_params: v }))}
-          />
-        </Section>
+        <ApiSection
+          title="Status Check API"
+          urlName="status_check_url"
+          url={offer.status_check_url}
+          params={offer.status_check_params}
+          onUrlChange={handleChange}
+          onParamsChange={(v) => setOffer((p) => ({ ...p, status_check_params: v }))}
+          onTest={() => testApi(offer.status_check_url, offer.status_check_params)}
+          testing={testing === offer.status_check_url}
+        />
 
         {/* ================= PIN SEND ================= */}
-        <Section title="PIN Send API">
-          <Input label="URL" name="pin_send_url" value={offer.pin_send_url} onChange={handleChange} />
-          <ParamBuilder
-            label="Allowed Parameters"
-            values={offer.pin_send_params}
-            onChange={(v) => setOffer((p) => ({ ...p, pin_send_params: v }))}
-          />
-        </Section>
+        <ApiSection
+          title="PIN Send API"
+          urlName="pin_send_url"
+          url={offer.pin_send_url}
+          params={offer.pin_send_params}
+          onUrlChange={handleChange}
+          onParamsChange={(v) => setOffer((p) => ({ ...p, pin_send_params: v }))}
+          onTest={() => testApi(offer.pin_send_url, offer.pin_send_params)}
+          testing={testing === offer.pin_send_url}
+        />
 
         {/* ================= PIN VERIFY ================= */}
-        <Section title="PIN Verify API">
-          <Input label="URL" name="pin_verify_url" value={offer.pin_verify_url} onChange={handleChange} />
-          <ParamBuilder
-            label="Allowed Parameters"
-            values={offer.pin_verify_params}
-            onChange={(v) => setOffer((p) => ({ ...p, pin_verify_params: v }))}
-          />
-        </Section>
-
-        {/* ================= REDIRECT ================= */}
-        <Section title="Redirect">
-          <Input label="Redirect URL" name="redirect_url" value={offer.redirect_url} onChange={handleChange} />
-        </Section>
-
-        {/* ================= STEPS ================= */}
-        <Section title="Execution Steps">
-          <Checkbox label="Enable Status Check" name="step_status_check" checked={offer.step_status_check} onChange={handleChange} />
-          <Checkbox label="Enable PIN Send" name="step_pin_send" checked={offer.step_pin_send} onChange={handleChange} />
-          <Checkbox label="Enable PIN Verify" name="step_pin_verify" checked={offer.step_pin_verify} onChange={handleChange} />
-        </Section>
-
-        {/* ================= FRAUD ================= */}
-        <Section title="Fraud Configuration">
-          <Checkbox
-            label="Enable Fraud Protection"
-            name="fraud_enabled"
-            checked={offer.fraud_enabled}
-            onChange={handleChange}
-          />
-
-          {offer.fraud_enabled && (
-            <>
-              <Input label="Fraud Partner" name="fraud_partner" value={offer.fraud_partner} onChange={handleChange} />
-              <Input label="Fraud Service" name="fraud_service" value={offer.fraud_service} onChange={handleChange} />
-            </>
-          )}
-        </Section>
+        <ApiSection
+          title="PIN Verify API"
+          urlName="pin_verify_url"
+          url={offer.pin_verify_url}
+          params={offer.pin_verify_params}
+          onUrlChange={handleChange}
+          onParamsChange={(v) => setOffer((p) => ({ ...p, pin_verify_params: v }))}
+          onTest={() => testApi(offer.pin_verify_url, offer.pin_verify_params)}
+          testing={testing === offer.pin_verify_url}
+        />
 
         {/* ================= ACTIONS ================= */}
         <div style={styles.actions}>
-          <button type="button" onClick={onClose} style={styles.cancel}>Cancel</button>
+          <button type="button" onClick={onClose} style={styles.cancel}>
+            Cancel
+          </button>
           <button type="submit" style={styles.save}>
             {initialData ? "Update Offer" : "Save Offer"}
           </button>
@@ -225,20 +222,36 @@ export default function OfferForm({ onClose, onSave, initialData }) {
   );
 }
 
+/* ================= API SECTION ================= */
+const ApiSection = ({ title, url, urlName, params, onUrlChange, onParamsChange, onTest, testing }) => (
+  <Section title={title}>
+    <Input label="URL" name={urlName} value={url} onChange={onUrlChange} />
+    <ParamBuilder values={params} onChange={onParamsChange} />
+    <button type="button" onClick={onTest} disabled={testing} style={styles.testBtn}>
+      {testing ? "Testing..." : "Test API"}
+    </button>
+  </Section>
+);
+
 /* ================= PARAM BUILDER ================= */
-const ParamBuilder = ({ label, values = [], onChange }) => {
+const ParamBuilder = ({ values = [], onChange }) => {
   const [input, setInput] = useState("");
 
-  const add = () => {
-    const v = input.trim();
+  const add = (v) => {
     if (!v || values.includes(v)) return;
     onChange([...values, v]);
-    setInput("");
   };
 
   return (
-    <div style={styles.inputGroup}>
-      <label style={styles.label}>{label}</label>
+    <>
+      <div style={styles.templateRow}>
+        {PARAM_TEMPLATES.map((t) => (
+          <span key={t} style={styles.template} onClick={() => add(t)}>
+            + {t}
+          </span>
+        ))}
+      </div>
+
       <div style={styles.chips}>
         {values.map((p) => (
           <span key={p} style={styles.chip} onClick={() => onChange(values.filter((x) => x !== p))}>
@@ -251,24 +264,30 @@ const ParamBuilder = ({ label, values = [], onChange }) => {
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === ",") {
               e.preventDefault();
-              add();
+              add(input.trim());
+              setInput("");
             }
           }}
           placeholder="type & press enter"
           style={styles.chipInput}
         />
       </div>
-    </div>
+    </>
   );
 };
 
 /* ================= HELPERS ================= */
 const toArray = (v) =>
-  Array.isArray(v)
-    ? v
-    : typeof v === "string"
-    ? v.split(",").map((x) => x.trim()).filter(Boolean)
-    : [];
+  Array.isArray(v) ? v : typeof v === "string" ? v.split(",").map((x) => x.trim()) : [];
+
+const isValidUrl = (v) => {
+  try {
+    new URL(v);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /* ================= UI ================= */
 const Section = ({ title, children }) => (
@@ -278,14 +297,15 @@ const Section = ({ title, children }) => (
   </div>
 );
 
-const Input = ({ label, ...p }) => (
+const Input = ({ label, error, ...p }) => (
   <div style={styles.inputGroup}>
     <label style={styles.label}>{label}</label>
     <input {...p} style={styles.input} />
+    {error && <div style={styles.error}>{error}</div>}
   </div>
 );
 
-const Select = ({ label, options, ...p }) => (
+const Select = ({ label, options, error, ...p }) => (
   <div style={styles.inputGroup}>
     <label style={styles.label}>{label}</label>
     <select {...p} style={styles.select}>
@@ -294,34 +314,29 @@ const Select = ({ label, options, ...p }) => (
         <option key={o.id} value={o.id}>{o.name}</option>
       ))}
     </select>
+    {error && <div style={styles.error}>{error}</div>}
   </div>
 );
-
-const Checkbox = ({ label, ...p }) => (
-  <label style={styles.checkbox}>
-    <input type="checkbox" {...p} /> {label}
-  </label>
-);
-
-const Row = ({ children }) => <div style={styles.row}>{children}</div>;
 
 /* ================= STYLES ================= */
 const styles = {
   overlay:{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",justifyContent:"center",alignItems:"center",zIndex:50},
-  card:{width:760,maxHeight:"90vh",overflowY:"auto",background:"#020617",padding:28,borderRadius:14,color:"#fff"},
+  card:{width:780,maxHeight:"90vh",overflowY:"auto",background:"#020617",padding:28,borderRadius:14,color:"#fff"},
   heading:{textAlign:"center",marginBottom:20},
-  section:{marginBottom:20},
+  section:{marginBottom:22},
   sectionTitle:{color:"#38bdf8",fontSize:14,marginBottom:10},
   inputGroup:{marginBottom:10},
-  label:{fontSize:12,color:"#94a3b8",marginBottom:4},
+  label:{fontSize:12,color:"#94a3b8"},
   input:{padding:10,borderRadius:8,border:"1px solid #1e293b",background:"#020617",color:"#fff"},
   select:{padding:10,borderRadius:8,border:"1px solid #1e293b",background:"#020617",color:"#fff"},
-  row:{display:"flex",gap:12},
-  checkbox:{display:"flex",gap:8,alignItems:"center"},
-  actions:{display:"flex",justifyContent:"space-between"},
-  cancel:{background:"#334155",padding:"10px 18px",borderRadius:8,color:"#fff"},
-  save:{background:"#16a34a",padding:"10px 18px",borderRadius:8,color:"#fff"},
   chips:{display:"flex",flexWrap:"wrap",gap:6,border:"1px solid #1e293b",padding:6,borderRadius:8},
   chip:{background:"#1e293b",padding:"4px 8px",borderRadius:6,fontSize:12,cursor:"pointer"},
   chipInput:{flex:1,minWidth:120,background:"transparent",border:"none",color:"#fff",outline:"none"},
+  templateRow:{display:"flex",flexWrap:"wrap",gap:6,marginBottom:6},
+  template:{fontSize:11,color:"#38bdf8",cursor:"pointer"},
+  testBtn:{marginTop:8,background:"#0ea5e9",border:"none",padding:"6px 12px",borderRadius:6,color:"#fff"},
+  actions:{display:"flex",justifyContent:"space-between"},
+  cancel:{background:"#334155",padding:"10px 18px",borderRadius:8,color:"#fff"},
+  save:{background:"#16a34a",padding:"10px 18px",borderRadius:8,color:"#fff"},
+  error:{color:"#f87171",fontSize:11,marginTop:4},
 };
