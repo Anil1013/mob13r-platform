@@ -134,7 +134,7 @@ export default function OfferForm({ offer, onSaved }) {
         {offer ? "Edit Offer" : "Create Offer"}
       </h2>
 
-      {/* BASIC INFO */}
+      {/* ================= BASIC INFO ================= */}
       <div className="grid grid-cols-2 gap-4">
         <select
           value={form.advertiser_id}
@@ -191,7 +191,7 @@ export default function OfferForm({ offer, onSaved }) {
           value={form.fallback_offer_id}
           onChange={(e) => set("fallback_offer_id", e.target.value)}
         >
-          <option value="">Fallback Offer (Optional)</option>
+          <option value="">Fallback Offer (Cap Reached)</option>
           {offers
             .filter((o) => o.id !== offer?.id)
             .map((o) => (
@@ -209,14 +209,15 @@ export default function OfferForm({ offer, onSaved }) {
         />
       </div>
 
-      {/* API STEPS */}
+      {/* ================= API STEPS ================= */}
       {Object.entries(OFFER_API_SCHEMA).map(([step, cfg]) => {
         const data = form.api_steps[step] || {};
+
         return (
           <div key={step} className="border rounded p-4 space-y-3">
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <h3 className="font-semibold">{cfg.label}</h3>
-              <label className="flex gap-2">
+              <label className="flex gap-2 items-center">
                 <input
                   type="checkbox"
                   checked={data.enabled}
@@ -228,8 +229,10 @@ export default function OfferForm({ offer, onSaved }) {
               </label>
             </div>
 
-            <div className="flex gap-2">
+            {/* ===== METHOD + FULL URL (FIXED) ===== */}
+            <div className="flex gap-2 items-center">
               <select
+                className="w-24 shrink-0"
                 value={data.method}
                 onChange={(e) =>
                   setStep(step, "method", e.target.value)
@@ -240,9 +243,9 @@ export default function OfferForm({ offer, onSaved }) {
               </select>
 
               <input
-                className="flex-1"
+                className="flex-1 min-w-0 font-mono text-sm"
                 placeholder="Full API URL"
-                value={data.url}
+                value={data.url || ""}
                 onChange={(e) =>
                   setStep(step, "url", e.target.value)
                 }
@@ -272,7 +275,7 @@ export default function OfferForm({ offer, onSaved }) {
             />
 
             <input
-              placeholder='Success Matcher (e.g. "status":1)'
+              placeholder='Success Matcher (e.g. "status":true)'
               value={data.success_matcher || ""}
               onChange={(e) =>
                 setStep(step, "success_matcher", e.target.value)
@@ -319,6 +322,7 @@ function Section({
   removeKV,
 }) {
   const obj = data[type] || {};
+
   return (
     <div>
       <h4 className="font-medium">{title}</h4>
@@ -327,6 +331,7 @@ function Section({
         <div key={k} className="flex gap-2 mb-1">
           <input
             className="w-1/3"
+            placeholder="key"
             value={k}
             onChange={(e) =>
               updateKV(step, type, e.target.value, v, k)
@@ -334,6 +339,7 @@ function Section({
           />
           <input
             className="flex-1"
+            placeholder="value"
             value={v}
             onChange={(e) =>
               updateKV(step, type, k, e.target.value, k)
