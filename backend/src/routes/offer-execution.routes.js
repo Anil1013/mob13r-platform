@@ -6,22 +6,57 @@ import auth from "../middleware/auth.js";
 const router = Router();
 router.use(auth);
 
-/* ================= HELPERS ================= */
-const buildPayload = (allowed = [], source = {}, extra = {}) => {
-  const payload = {};
-  allowed.forEach((k) => {
-    if (source[k] !== undefined) payload[k] = source[k];
-  });
-  return { ...payload, ...extra };
+/* =====================================================
+   TEMPLATE MAP
+===================================================== */
+const buildContext = (req) => {
+  const ip = req.headers["x-forwarded-for"]?.split(",")[0] || req.ip;
+  const ua = req.headers["user-agent"];
+
+  return {
+    msisdn: req.body.msisdn,
+    transaction_id: req.body.transaction_id || crypto.randomUUID(),
+    pin: req.body.pin,
+    ip,
+    user_ip: req.body.user_ip || req.body.ip || ip,
+    ua,
+    param1: req.body.param1,
+    param2: req.body.param2,
+    anti_fraud_id: req.body.anti_fraud_id,
+  };
 };
 
-const executeApi = async ({ method, url, payload }) => {
-  const options = {
-    method,
-    headers: { "Content-Type": "application/json" },
-  };
-  if (method === "POST") options.body = JSON.stringify(payload);
-  const res = await fetch(url, options);
+const applyTemplates = (obj = {}, ctx) => {
+  const out = {};
+  for (const k in obj) {
+    let v = obj[k];
+    if (typeof v === "string") {
+      Object.entries(ctx).forEach(([key, value]) => {
+        v = v.replaceAll(`<coll_${key}>`, value ?? "");
+        v = v.replaceAll(`<${key}>`, value ?? "");
+      });
+    }
+    out[k] = v;
+  }
+  return out;
+};
+
+const executeStep = async (step, ctx) => {
+  const params = applyTemplates(step.params || {}, ctx);
+  const headers = applyTemplates(step.headers || {}, ctx);
+
+  if (step.method === "GET") {
+    const qs = new URLSearchParams(params).toString();
+    const res = await fetch(`${step.url}?${qs}`, { headers });
+    return res.json();
+  }
+
+  const res = await fetch(step.url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify(params),
+  });
+
   return res.json();
 };
 
@@ -30,96 +65,39 @@ const loadOffer = async (id) => {
   return rows[0];
 };
 
-/* ================= STATUS CHECK ================= */
-router.post("/:id/status-check", async (req, res) => {
-  const offer = await loadOffer(req.params.id);
-  if (!offer) return res.status(404).json({ message: "Offer not found" });
-  if (offer.steps?.status_check === false)
-    return res.status(400).json({ message: "Status check disabled" });
+/* =====================================================
+   EXECUTE STEP (GENERIC)
+===================================================== */
+router.post("/:id/:step", async (req, res) => {
+  try {
+    const offer = await loadOffer(req.params.id);
+    if (!offer) return res.status(404).json({ message: "Offer not found" });
 
-  const ip = req.headers["x-forwarded-for"]?.split(",")[0] || req.ip;
-  const ua = req.headers["user-agent"];
-  const user_ip = req.body.user_ip || req.body.ip || ip;
-  const transaction_id = req.body.transaction_id || crypto.randomUUID();
+    const apiSteps = offer.api_steps || {};
+    const step = apiSteps[req.params.step];
 
-  const params = Array.isArray(offer.status_check_params)
-    ? offer.status_check_params
-    : JSON.parse(offer.status_check_params || "[]");
+    if (!step || step.enabled === false) {
+      return res.status(400).json({ message: "Step disabled or not configured" });
+    }
 
-  const payload = buildPayload(
-    params,
-    { ...req.body, transaction_id },
-    { user_ip, ip, ua }
-  );
+    const ctx = buildContext(req);
+    const response = await executeStep(step, ctx);
 
-  const response = await executeApi({
-    method: offer.api_mode,
-    url: offer.status_check_url,
-    payload,
-  });
+    const success =
+      step.success_matcher
+        ? JSON.stringify(response).includes(step.success_matcher)
+        : true;
 
-  res.json({ transaction_id, response });
-});
-
-/* ================= PIN SEND ================= */
-router.post("/:id/pin-send", async (req, res) => {
-  const offer = await loadOffer(req.params.id);
-  if (!offer) return res.status(404).json({ message: "Offer not found" });
-  if (offer.steps?.pin_send === false)
-    return res.status(400).json({ message: "PIN send disabled" });
-
-  const ip = req.headers["x-forwarded-for"]?.split(",")[0] || req.ip;
-  const ua = req.headers["user-agent"];
-  const user_ip = req.body.user_ip || req.body.ip || ip;
-
-  const params = Array.isArray(offer.pin_send_params)
-    ? offer.pin_send_params
-    : JSON.parse(offer.pin_send_params || "[]");
-
-  const payload = buildPayload(params, req.body, { user_ip, ip, ua });
-
-  const response = await executeApi({
-    method: offer.api_mode,
-    url: offer.pin_send_url,
-    payload,
-  });
-
-  res.json({ transaction_id: req.body.transaction_id, response });
-});
-
-/* ================= PIN VERIFY ================= */
-router.post("/:id/pin-verify", async (req, res) => {
-  const offer = await loadOffer(req.params.id);
-  if (!offer) return res.status(404).json({ message: "Offer not found" });
-  if (offer.steps?.pin_verify === false)
-    return res.status(400).json({ message: "PIN verify disabled" });
-
-  const ip = req.headers["x-forwarded-for"]?.split(",")[0] || req.ip;
-  const ua = req.headers["user-agent"];
-  const user_ip = req.body.user_ip || req.body.ip || ip;
-
-  const params = Array.isArray(offer.pin_verify_params)
-    ? offer.pin_verify_params
-    : JSON.parse(offer.pin_verify_params || "[]");
-
-  const payload = buildPayload(params, req.body, { user_ip, ip, ua });
-
-  const response = await executeApi({
-    method: offer.api_mode,
-    url: offer.pin_verify_url,
-    payload,
-  });
-
-  const success =
-    response?.status === "OK" ||
-    response?.status === "SUCCESS" ||
-    response?.success === true;
-
-  res.json({
-    transaction_id: req.body.transaction_id,
-    response,
-    redirect_url: success ? offer.redirect_url : null,
-  });
+    res.json({
+      transaction_id: ctx.transaction_id,
+      success,
+      response,
+      redirect_url: success ? offer.redirect_url : null,
+    });
+  } catch (err) {
+    console.error("EXECUTION ERROR:", err);
+    res.status(500).json({ message: "Execution failed" });
+  }
 });
 
 export default router;
