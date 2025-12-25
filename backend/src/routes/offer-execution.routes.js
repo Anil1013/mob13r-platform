@@ -1,13 +1,14 @@
 import { Router } from "express";
 import pool from "../db.js";
 import auth from "../middleware/auth.js";
+import crypto from "crypto";
 import { buildContext, applyTemplate } from "../utils/templateEngine.js";
 
 const router = Router();
 router.use(auth);
 
 /* =====================================================
-   SAFE FETCH (TIMEOUT PROTECTED)
+   SAFE FETCH (TIMEOUT)
 ===================================================== */
 const safeFetch = async (url, options = {}, timeout = 15000) => {
   const controller = new AbortController();
@@ -19,6 +20,35 @@ const safeFetch = async (url, options = {}, timeout = 15000) => {
   } finally {
     clearTimeout(id);
   }
+};
+
+/* =====================================================
+   JSON PATH RESOLVER (MINI)
+===================================================== */
+const getByPath = (obj, path) => {
+  if (!path || typeof path !== "string") return undefined;
+  return path
+    .replace(/^\$\./, "")
+    .split(".")
+    .reduce((o, k) => (o ? o[k] : undefined), obj);
+};
+
+/* =====================================================
+   APPLY RESPONSE MAPPER
+===================================================== */
+const applyResponseMapper = (mapper = {}, response = {}, ctx = {}) => {
+  const extracted = {};
+
+  Object.entries(mapper).forEach(([key, jsonPath]) => {
+    const value = getByPath(response, jsonPath);
+    if (value !== undefined) {
+      ctx[key] = value;               // ctx.sessionKey
+      ctx[`coll_${key}`] = value;     // legacy template support
+      extracted[key] = value;
+    }
+  });
+
+  return extracted;
 };
 
 /* =====================================================
@@ -57,13 +87,13 @@ const loadOffer = async (id) => {
 
 /* =====================================================
    GENERIC EXECUTION
-   POST /api/offers/:id/:step
 ===================================================== */
 router.post("/:id/:step", async (req, res) => {
   try {
     const offer = await loadOffer(req.params.id);
-    if (!offer)
+    if (!offer) {
       return res.status(404).json({ message: "Offer not found" });
+    }
 
     const apiSteps = offer.api_steps || {};
     const stepConfig = apiSteps[req.params.step];
@@ -74,10 +104,14 @@ router.post("/:id/:step", async (req, res) => {
       });
     }
 
-    /* BUILD RUNTIME CONTEXT */
+    /* ================= BUILD CONTEXT ================= */
     const ctx = buildContext(req);
 
-    /* AUTO ANTI-FRAUD */
+    if (!ctx.transaction_id) {
+      ctx.transaction_id = crypto.randomUUID();
+    }
+
+    /* ================= AUTO ANTI FRAUD ================= */
     if (
       apiSteps.anti_fraud &&
       apiSteps.anti_fraud.enabled &&
@@ -86,28 +120,55 @@ router.post("/:id/:step", async (req, res) => {
       await executeStep(apiSteps.anti_fraud, ctx);
     }
 
-    /* EXECUTE STEP */
+    /* ================= EXECUTE STEP ================= */
     const response = await executeStep(stepConfig, ctx);
 
-    /* SUCCESS MATCHING */
-    let success = true;
-    if (stepConfig.success_matcher) {
-      const matcher = stepConfig.success_matcher;
+    /* ================= RESPONSE → CONTEXT ================= */
+    let extracted = {};
 
-      if (typeof matcher === "string") {
-        success = JSON.stringify(response).includes(matcher);
-      } else if (typeof matcher === "object") {
-        success = Object.entries(matcher).every(
+    // 1️⃣ JSON-PATH BASED MAPPER (PREFERRED)
+    if (stepConfig.response_mapper) {
+      extracted = applyResponseMapper(
+        stepConfig.response_mapper,
+        response,
+        ctx
+      );
+    }
+
+    // 2️⃣ FALLBACK: AUTO FLATTEN STRING / NUMBER FIELDS
+    Object.entries(response || {}).forEach(([k, v]) => {
+      if (
+        (typeof v === "string" || typeof v === "number") &&
+        ctx[k] === undefined
+      ) {
+        ctx[k] = v;
+        ctx[`coll_${k}`] = v;
+        extracted[k] = v;
+      }
+    });
+
+    /* ================= SUCCESS MATCH ================= */
+    let success = true;
+
+    if (stepConfig.success_matcher) {
+      if (typeof stepConfig.success_matcher === "string") {
+        success = JSON.stringify(response).includes(
+          stepConfig.success_matcher
+        );
+      } else if (typeof stepConfig.success_matcher === "object") {
+        success = Object.entries(stepConfig.success_matcher).every(
           ([k, v]) => response?.[k] === v
         );
       }
     }
 
+    /* ================= FINAL RESPONSE ================= */
     res.json({
       transaction_id: ctx.transaction_id,
       step: req.params.step,
       success,
       response,
+      extracted,          // 👈 VISUAL TESTER KEY
       redirect_url: success ? offer.redirect_url : null,
     });
   } catch (err) {
