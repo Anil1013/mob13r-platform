@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -11,7 +11,7 @@ import ProtectedRoute from "./auth/ProtectedRoute";
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         {/* PUBLIC */}
         <Route path="/login" element={<Login />} />
@@ -53,7 +53,7 @@ export default function App() {
           }
         />
 
-        {/* ✅ EXECUTION LOGS */}
+        {/* EXECUTION LOGS */}
         <Route
           path="/execution-logs"
           element={
@@ -66,6 +66,6 @@ export default function App() {
         {/* FALLBACK */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
