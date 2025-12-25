@@ -158,13 +158,12 @@ export default function OfferForm({ onClose, onSave, initialData }) {
         </Section>
 
         {/* ================= REDIRECT ================= */}
-        <Section title="Redirect (Mandatory)">
+        <Section title="Redirect">
           <Input
-            label="Redirect URL after OTP success"
             name="redirect_url"
             value={offer.redirect_url}
             onChange={handleChange}
-            required
+          
           />
         </Section>
 
