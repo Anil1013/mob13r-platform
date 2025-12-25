@@ -84,6 +84,7 @@ export default function OfferForm({ onClose, onSave, initialData }) {
 
     onSave({
       ...offer,
+
       payout: Number(offer.payout || 0),
       revenue: Number(offer.revenue || 0),
 
@@ -110,7 +111,13 @@ export default function OfferForm({ onClose, onSave, initialData }) {
 
         {/* ================= BASIC ================= */}
         <Section title="Basic Information">
-          <Input label="Offer Name" name="name" value={offer.name} onChange={handleChange} required />
+          <Input
+            label="Offer Name"
+            name="name"
+            value={offer.name}
+            onChange={handleChange}
+            required
+          />
 
           <div style={styles.inputGroup}>
             <label style={styles.label}>Advertiser</label>
@@ -123,7 +130,9 @@ export default function OfferForm({ onClose, onSave, initialData }) {
             >
               <option value="">Select advertiser</option>
               {advertisers.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
               ))}
             </select>
           </div>
@@ -139,14 +148,24 @@ export default function OfferForm({ onClose, onSave, initialData }) {
           </Row>
 
           <label style={styles.checkbox}>
-            <input type="checkbox" name="is_active" checked={offer.is_active} onChange={handleChange} />
+            <input
+              type="checkbox"
+              name="is_active"
+              checked={offer.is_active}
+              onChange={handleChange}
+            />
             Offer Active
           </label>
         </Section>
 
         {/* ================= API MODE ================= */}
         <Section title="API Mode">
-          <select name="api_mode" value={offer.api_mode} onChange={handleChange} style={styles.select}>
+          <select
+            name="api_mode"
+            value={offer.api_mode}
+            onChange={handleChange}
+            style={styles.select}
+          >
             <option value="POST">POST</option>
             <option value="GET">GET</option>
           </select>
@@ -154,20 +173,50 @@ export default function OfferForm({ onClose, onSave, initialData }) {
 
         {/* ================= STATUS CHECK ================= */}
         <Section title="Status Check API">
-          <Input label="Status Check URL" name="status_check_url" value={offer.status_check_url} onChange={handleChange} />
-          <Input label="Allowed Parameters" name="status_check_params" value={offer.status_check_params} onChange={handleChange} />
+          <Input
+            label="Status Check URL"
+            name="status_check_url"
+            value={offer.status_check_url}
+            onChange={handleChange}
+          />
+          <Input
+            label="Allowed Parameters"
+            name="status_check_params"
+            value={offer.status_check_params}
+            onChange={handleChange}
+          />
         </Section>
 
         {/* ================= PIN SEND ================= */}
         <Section title="PIN Send API">
-          <Input label="PIN Send URL" name="pin_send_url" value={offer.pin_send_url} onChange={handleChange} />
-          <Input label="Allowed Parameters" name="pin_send_params" value={offer.pin_send_params} onChange={handleChange} />
+          <Input
+            label="PIN Send URL"
+            name="pin_send_url"
+            value={offer.pin_send_url}
+            onChange={handleChange}
+          />
+          <Input
+            label="Allowed Parameters"
+            name="pin_send_params"
+            value={offer.pin_send_params}
+            onChange={handleChange}
+          />
         </Section>
 
         {/* ================= PIN VERIFY ================= */}
         <Section title="PIN Verify API">
-          <Input label="PIN Verify URL" name="pin_verify_url" value={offer.pin_verify_url} onChange={handleChange} />
-          <Input label="Allowed Parameters" name="pin_verify_params" value={offer.pin_verify_params} onChange={handleChange} />
+          <Input
+            label="PIN Verify URL"
+            name="pin_verify_url"
+            value={offer.pin_verify_url}
+            onChange={handleChange}
+          />
+          <Input
+            label="Allowed Parameters"
+            name="pin_verify_params"
+            value={offer.pin_verify_params}
+            onChange={handleChange}
+          />
         </Section>
 
         {/* ================= REDIRECT ================= */}
@@ -183,22 +232,39 @@ export default function OfferForm({ onClose, onSave, initialData }) {
         {/* ================= STEPS ================= */}
         <Section title="Execution Steps">
           <label style={styles.checkbox}>
-            <input type="checkbox" name="step_status_check" checked={offer.step_status_check} onChange={handleChange} />
+            <input
+              type="checkbox"
+              name="step_status_check"
+              checked={offer.step_status_check}
+              onChange={handleChange}
+            />
             Enable Status Check
           </label>
           <label style={styles.checkbox}>
-            <input type="checkbox" name="step_pin_send" checked={offer.step_pin_send} onChange={handleChange} />
+            <input
+              type="checkbox"
+              name="step_pin_send"
+              checked={offer.step_pin_send}
+              onChange={handleChange}
+            />
             Enable PIN Send
           </label>
           <label style={styles.checkbox}>
-            <input type="checkbox" name="step_pin_verify" checked={offer.step_pin_verify} onChange={handleChange} />
+            <input
+              type="checkbox"
+              name="step_pin_verify"
+              checked={offer.step_pin_verify}
+              onChange={handleChange}
+            />
             Enable PIN Verify
           </label>
         </Section>
 
         {/* ================= ACTIONS ================= */}
         <div style={styles.actions}>
-          <button type="button" onClick={onClose} style={styles.cancel}>Cancel</button>
+          <button type="button" onClick={onClose} style={styles.cancel}>
+            Cancel
+          </button>
           <button type="submit" style={styles.save}>
             {initialData ? "Update Offer" : "Save Offer"}
           </button>
@@ -235,18 +301,56 @@ const Input = ({ label, ...props }) => (
 const Row = ({ children }) => <div style={styles.row}>{children}</div>;
 
 const styles = {
-  overlay:{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",justifyContent:"center",alignItems:"center",zIndex:50},
-  card:{width:740,maxHeight:"90vh",overflowY:"auto",background:"#020617",padding:28,borderRadius:14,color:"#fff"},
-  heading:{textAlign:"center",marginBottom:20},
-  section:{marginBottom:20},
-  sectionTitle:{color:"#38bdf8",fontSize:14,marginBottom:10},
-  inputGroup:{display:"flex",flexDirection:"column",marginBottom:10},
-  label:{fontSize:12,color:"#94a3b8",marginBottom:4},
-  input:{padding:10,borderRadius:8,border:"1px solid #1e293b",background:"#020617",color:"#fff"},
-  select:{padding:10,borderRadius:8,background:"#020617",color:"#fff",border:"1px solid #1e293b"},
-  row:{display:"flex",gap:12},
-  checkbox:{display:"flex",gap:8,alignItems:"center"},
-  actions:{display:"flex",justifyContent:"space-between"},
-  cancel:{background:"#334155",padding:"10px 18px",borderRadius:8,color:"#fff"},
-  save:{background:"#16a34a",padding:"10px 18px",borderRadius:8,color:"#fff"}
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,.6)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 50,
+  },
+  card: {
+    width: 740,
+    maxHeight: "90vh",
+    overflowY: "auto",
+    background: "#020617",
+    padding: 28,
+    borderRadius: 14,
+    color: "#fff",
+  },
+  heading: { textAlign: "center", marginBottom: 20 },
+  section: { marginBottom: 20 },
+  sectionTitle: { color: "#38bdf8", fontSize: 14, marginBottom: 10 },
+  inputGroup: { display: "flex", flexDirection: "column", marginBottom: 10 },
+  label: { fontSize: 12, color: "#94a3b8", marginBottom: 4 },
+  input: {
+    padding: 10,
+    borderRadius: 8,
+    border: "1px solid #1e293b",
+    background: "#020617",
+    color: "#fff",
+  },
+  select: {
+    padding: 10,
+    borderRadius: 8,
+    background: "#020617",
+    color: "#fff",
+    border: "1px solid #1e293b",
+  },
+  row: { display: "flex", gap: 12 },
+  checkbox: { display: "flex", gap: 8, alignItems: "center" },
+  actions: { display: "flex", justifyContent: "space-between" },
+  cancel: {
+    background: "#334155",
+    padding: "10px 18px",
+    borderRadius: 8,
+    color: "#fff",
+  },
+  save: {
+    background: "#16a34a",
+    padding: "10px 18px",
+    borderRadius: 8,
+    color: "#fff",
+  },
 };
