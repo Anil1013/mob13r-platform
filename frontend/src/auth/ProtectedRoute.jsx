@@ -1,9 +1,9 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useEffect } from "react";
 
-const IDLE_LIMIT = 15 * 60 * 1000; // 15 minutes
+const IDLE_LIMIT = 24 * 60 * 60 * 1000; // 24 hours
 
-export default function ProtectedRoute() {
+export default function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
   const expiry = localStorage.getItem("token_expiry");
 
@@ -18,32 +18,25 @@ export default function ProtectedRoute() {
       localStorage.setItem("last_activity", Date.now());
     };
 
-    const checkIdle = () => {
-      const last = Number(localStorage.getItem("last_activity"));
-      if (last && Date.now() - last >= IDLE_LIMIT) {
-        clearSession();
-        window.location.replace("/#/login");
-      }
-    };
+    updateActivity(); // ✅ ensure value exists
 
-    updateActivity();
-    ["mousemove", "keydown", "scroll", "click"].forEach(e =>
+    ["mousemove", "keydown", "scroll", "click"].forEach((e) =>
       window.addEventListener(e, updateActivity)
     );
 
-    const interval = setInterval(checkIdle, 30 * 1000);
-
     return () => {
-      ["mousemove", "keydown", "scroll", "click"].forEach(e =>
+      ["mousemove", "keydown", "scroll", "click"].forEach((e) =>
         window.removeEventListener(e, updateActivity)
       );
-      clearInterval(interval);
     };
   }, []);
 
-  return <Outlet />;
+  // ✅ RENDER CHILD PAGE
+  return children;
 }
 
 function clearSession() {
-  localStorage.clear();
+  localStorage.removeItem("token");
+  localStorage.removeItem("token_expiry");
+  localStorage.removeItem("last_activity");
 }
