@@ -6,13 +6,15 @@ import Header from "../components/layout/Header";
 import OfferForm from "../components/offers/OfferForm";
 import OfferConfig from "../components/offers/OfferConfig";
 
-import { getOffers, createOffer } from "../services/offers";
+import { getOffers, createOffer, updateOffer } from "../services/offers";
 
 export default function Offers() {
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
   const [showForm, setShowForm] = useState(false);
+  const [editingOffer, setEditingOffer] = useState(null);
   const [selectedOffer, setSelectedOffer] = useState(null);
 
   const navigate = useNavigate();
@@ -36,14 +38,25 @@ export default function Offers() {
     loadOffers();
   }, []);
 
-  /* ================= CREATE OFFER ================= */
-  const handleCreateOffer = async (newOffer) => {
+  /* ================= CREATE ================= */
+  const handleCreateOffer = async (payload) => {
     try {
-      await createOffer(newOffer);
+      await createOffer(payload);
       setShowForm(false);
-      loadOffers(); // ✅ reload from DB
-    } catch (err) {
+      loadOffers();
+    } catch {
       alert("Failed to create offer");
+    }
+  };
+
+  /* ================= UPDATE ================= */
+  const handleUpdateOffer = async (payload) => {
+    try {
+      await updateOffer(editingOffer.id, payload);
+      setEditingOffer(null);
+      loadOffers();
+    } catch {
+      alert("Failed to update offer");
     }
   };
 
@@ -60,7 +73,6 @@ export default function Offers() {
             <h2 style={styles.title}>Offers</h2>
 
             <div style={{ display: "flex", gap: 12 }}>
-              {/* VIEW LOGS */}
               <button
                 style={styles.logsBtn}
                 onClick={() => navigate("/execution-logs")}
@@ -68,17 +80,18 @@ export default function Offers() {
                 View Logs
               </button>
 
-              {/* CREATE */}
               <button
                 style={styles.createBtn}
-                onClick={() => setShowForm(true)}
+                onClick={() => {
+                  setEditingOffer(null);
+                  setShowForm(true);
+                }}
               >
                 + Create Offer
               </button>
             </div>
           </div>
 
-          {/* ERROR */}
           {error && <div style={styles.error}>{error}</div>}
 
           {/* TABLE */}
@@ -94,7 +107,7 @@ export default function Offers() {
                   <th>Payout</th>
                   <th>Revenue</th>
                   <th>Status</th>
-                  <th>Config</th>
+                  <th>Actions</th>
                   <th>Execute</th>
                 </tr>
               </thead>
@@ -131,23 +144,32 @@ export default function Offers() {
                         <span
                           style={{
                             ...styles.status,
-                            background:
-                              o.status === "Active"
-                                ? "#16a34a"
-                                : "#ca8a04",
+                            background: o.is_active
+                              ? "#16a34a"
+                              : "#991b1b",
                           }}
                         >
-                          {o.status}
+                          {o.is_active ? "Active" : "Inactive"}
                         </span>
                       </td>
 
-                      {/* CONFIG */}
+                      {/* ACTIONS */}
                       <td>
                         <button
                           style={styles.link}
                           onClick={() => setSelectedOffer(o)}
                         >
-                          Configure
+                          View
+                        </button>
+
+                        <button
+                          style={styles.edit}
+                          onClick={() => {
+                            setEditingOffer(o);
+                            setShowForm(true);
+                          }}
+                        >
+                          Edit
                         </button>
                       </td>
 
@@ -155,6 +177,7 @@ export default function Offers() {
                       <td>
                         <button
                           style={styles.execute}
+                          disabled={!o.is_active}
                           onClick={() =>
                             navigate(`/offers/${o.id}/execute`)
                           }
@@ -168,14 +191,19 @@ export default function Offers() {
             </table>
           </div>
 
-          {/* MODALS */}
+          {/* CREATE / EDIT MODAL */}
           {showForm && (
             <OfferForm
-              onClose={() => setShowForm(false)}
-              onSave={handleCreateOffer}
+              initialData={editingOffer}
+              onClose={() => {
+                setShowForm(false);
+                setEditingOffer(null);
+              }}
+              onSave={editingOffer ? handleUpdateOffer : handleCreateOffer}
             />
           )}
 
+          {/* CONFIG VIEW */}
           {selectedOffer && (
             <OfferConfig
               offer={selectedOffer}
@@ -191,94 +219,19 @@ export default function Offers() {
 /* ================= STYLES ================= */
 
 const styles = {
-  main: {
-    flex: 1,
-    background: "#020617",
-    minHeight: "100vh",
-  },
-  content: {
-    padding: 24,
-    color: "#fff",
-    maxWidth: "1200px",
-    margin: "0 auto",
-  },
-  headerRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 24,
-  },
-  createBtn: {
-    background: "#2563eb",
-    color: "#fff",
-    padding: "10px 18px",
-    borderRadius: 8,
-    border: "none",
-    cursor: "pointer",
-    fontWeight: 600,
-  },
-  logsBtn: {
-    background: "#334155",
-    color: "#fff",
-    padding: "10px 18px",
-    borderRadius: 8,
-    border: "none",
-    cursor: "pointer",
-    fontWeight: 600,
-  },
-  card: {
-    border: "1px solid #1e293b",
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    textAlign: "center",
-  },
-  mono: {
-    fontFamily: "monospace",
-    fontSize: 12,
-    color: "#93c5fd",
-  },
-  status: {
-    padding: "4px 12px",
-    borderRadius: 999,
-    fontSize: 12,
-    color: "#fff",
-    fontWeight: 600,
-    display: "inline-block",
-  },
-  link: {
-    background: "none",
-    border: "none",
-    color: "#38bdf8",
-    cursor: "pointer",
-    fontWeight: 600,
-  },
-  execute: {
-    background: "#16a34a",
-    color: "#fff",
-    border: "none",
-    padding: "6px 12px",
-    borderRadius: 6,
-    fontSize: 12,
-    cursor: "pointer",
-    fontWeight: 600,
-  },
-  empty: {
-    padding: 24,
-    color: "#94a3b8",
-    textAlign: "center",
-  },
-  error: {
-    background: "#7f1d1d",
-    padding: "10px",
-    borderRadius: 8,
-    marginBottom: 16,
-    color: "#fecaca",
-  },
+  main: { flex: 1, background: "#020617", minHeight: "100vh" },
+  content: { padding: 24, color: "#fff", maxWidth: 1200, margin: "0 auto" },
+  headerRow: { display: "flex", justifyContent: "space-between", marginBottom: 20 },
+  title: { fontSize: 24 },
+  createBtn: { background: "#2563eb", color: "#fff", padding: "10px 18px", borderRadius: 8 },
+  logsBtn: { background: "#334155", color: "#fff", padding: "10px 18px", borderRadius: 8 },
+  card: { border: "1px solid #1e293b", borderRadius: 12, overflow: "hidden" },
+  table: { width: "100%", borderCollapse: "collapse", textAlign: "center" },
+  mono: { fontFamily: "monospace", fontSize: 12, color: "#93c5fd" },
+  status: { padding: "4px 12px", borderRadius: 999, fontSize: 12, color: "#fff" },
+  link: { background: "none", border: "none", color: "#38bdf8", cursor: "pointer" },
+  edit: { background: "none", border: "none", color: "#facc15", cursor: "pointer", marginLeft: 8 },
+  execute: { background: "#16a34a", color: "#fff", border: "none", padding: "6px 12px", borderRadius: 6 },
+  empty: { padding: 24, color: "#94a3b8" },
+  error: { background: "#7f1d1d", padding: 10, borderRadius: 8, marginBottom: 16 },
 };
