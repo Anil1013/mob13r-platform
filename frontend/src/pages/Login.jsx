@@ -37,7 +37,7 @@ export default function Login() {
 localStorage.setItem("token", data.token);
 
 // ⏱ Save expiry (20 minutes)
-const expiryTime = Date.now() + 20 * 60 * 1000;
+const expiryTime = Date.now() + 24*60 * 60 * 1000;
 localStorage.setItem("token_expiry", expiryTime);
 
 navigate("/dashboard");
@@ -87,4 +87,5 @@ navigate("/dashboard");
     </div>
   );
 }
+
 
