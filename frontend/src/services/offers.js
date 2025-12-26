@@ -1,5 +1,14 @@
+/**
+ * NOTE:
+ * Frontend NEVER calls telco/operator APIs directly.
+ * All execution flows go via BACKEND only.
+ */
+
 const API_URL = import.meta.env.VITE_API_URL;
 
+/* =====================================================
+   🔐 AUTH HELPERS
+===================================================== */
 const getToken = () => localStorage.getItem("token");
 
 const authHeaders = () => ({
@@ -11,12 +20,26 @@ const jsonAuthHeaders = () => ({
   Authorization: `Bearer ${getToken()}`,
 });
 
+/* =====================================================
+   OFFERS CRUD
+===================================================== */
+
 /* ================= GET ALL OFFERS ================= */
 export const getOffers = async () => {
   const res = await fetch(`${API_URL}/api/offers`, {
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error(await res.text());
+
+  if (res.status === 401) {
+    localStorage.clear();
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
+
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+
   return res.json();
 };
 
@@ -25,69 +48,191 @@ export const getOfferById = async (id) => {
   const res = await fetch(`${API_URL}/api/offers/${id}`, {
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error(await res.text());
+
+  if (res.status === 401) {
+    localStorage.clear();
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
+
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+
   return res.json();
 };
 
-/* ================= CREATE ================= */
-export const createOffer = async (payload) => {
+/* ================= CREATE OFFER ================= */
+export const createOffer = async (offer) => {
   const res = await fetch(`${API_URL}/api/offers`, {
     method: "POST",
     headers: jsonAuthHeaders(),
-    body: JSON.stringify(payload),
+    body: JSON.stringify(offer),
   });
-  if (!res.ok) throw new Error(await res.text());
+
+  if (res.status === 401) {
+    localStorage.clear();
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
+
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+
   return res.json();
 };
 
-/* ================= UPDATE ================= */
-export const updateOffer = async (id, payload) => {
+/* ================= UPDATE OFFER ================= */
+export const updateOffer = async (id, offer) => {
   const res = await fetch(`${API_URL}/api/offers/${id}`, {
     method: "PUT",
     headers: jsonAuthHeaders(),
-    body: JSON.stringify(payload),
+    body: JSON.stringify(offer),
   });
-  if (!res.ok) throw new Error(await res.text());
+
+  if (res.status === 401) {
+    localStorage.clear();
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
+
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+
   return res.json();
 };
 
-/* ================= DELETE ================= */
-export const deleteOffer = async (id) => {
-  const res = await fetch(`${API_URL}/api/offers/${id}`, {
-    method: "DELETE",
-    headers: authHeaders(),
-  });
-  if (!res.ok) throw new Error(await res.text());
-};
-
-/* ================= STATUS TOGGLE ================= */
+/* ================= TOGGLE OFFER STATUS ================= */
 export const toggleOfferStatus = async (id) => {
   const res = await fetch(`${API_URL}/api/offers/${id}/status`, {
     method: "PATCH",
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error(await res.text());
+
+  if (res.status === 401) {
+    localStorage.clear();
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
+
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+
   return res.json();
 };
 
-/* ================= EXECUTION ================= */
-export const checkStatus = (id, p) =>
-  fetch(`${API_URL}/api/offers/${id}/status-check`, {
-    method: "POST",
-    headers: jsonAuthHeaders(),
-    body: JSON.stringify(p),
-  }).then((r) => r.json());
+/* ================= DELETE OFFER ================= */
+export const deleteOffer = async (id) => {
+  const res = await fetch(`${API_URL}/api/offers/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
 
-export const executePinSend = (id, p) =>
-  fetch(`${API_URL}/api/offers/${id}/pin-send`, {
-    method: "POST",
-    headers: jsonAuthHeaders(),
-    body: JSON.stringify(p),
-  }).then((r) => r.json());
+  if (res.status === 401) {
+    localStorage.clear();
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
 
-export const executePinVerify = (id, p) =>
-  fetch(`${API_URL}/api/offers/${id}/pin-verify`, {
-    method: "POST",
-    headers: jsonAuthHeaders(),
-    body: JSON.stringify(p),
-  }).then((r) => r.json());
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+
+  return true;
+};
+
+/* =====================================================
+   OFFER EXECUTION ENGINE (GENERIC & FLEXIBLE)
+===================================================== */
+
+/**
+ * payload can contain ANY advertiser params:
+ * msisdn (required)
+ * user_ip OR ip
+ * ua
+ * pub_id
+ * sub_pub_id
+ * transaction_id (if any)
+ */
+
+/* ================= STATUS CHECK ================= */
+export const checkStatus = async (offerId, payload = {}) => {
+  const res = await fetch(
+    `${API_URL}/api/offers/${offerId}/status-check`,
+    {
+      method: "POST",
+      headers: jsonAuthHeaders(),
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (res.status === 401) {
+    localStorage.clear();
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
+
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+
+  return res.json();
+};
+
+/* ================= PIN SEND ================= */
+export const executePinSend = async (offerId, payload = {}) => {
+  const res = await fetch(
+    `${API_URL}/api/offers/${offerId}/pin-send`,
+    {
+      method: "POST",
+      headers: jsonAuthHeaders(),
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (res.status === 401) {
+    localStorage.clear();
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
+
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+
+  return res.json();
+};
+
+/**
+ * payload must include:
+ * msisdn
+ * pin
+ * transaction_id / sessionKey (if operator requires)
+ */
+
+/* ================= PIN VERIFY ================= */
+export const executePinVerify = async (offerId, payload = {}) => {
+  const res = await fetch(
+    `${API_URL}/api/offers/${offerId}/pin-verify`,
+    {
+      method: "POST",
+      headers: jsonAuthHeaders(),
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (res.status === 401) {
+    localStorage.clear();
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
+
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+
+  return res.json();
+};
