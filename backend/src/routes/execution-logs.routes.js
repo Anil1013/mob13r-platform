@@ -1,8 +1,8 @@
-const express = require("express");
-const router = express.Router();
+import express from "express";
+import auth from "../middleware/auth.js";
+import db from "../db.js";
 
-const auth = require("../middleware/auth");
-const db = require("../db");
+const router = express.Router();
 
 /**
  * EXECUTION LOGS ROUTES
@@ -149,4 +149,5 @@ router.get("/export", auth, async (req, res) => {
   }
 });
 
-module.exports = router;
+/* ✅ IMPORTANT: DEFAULT EXPORT */
+export default router;
