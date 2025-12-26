@@ -1,3 +1,17 @@
+/**
+ * OFFER_API_SCHEMA
+ *
+ * This schema drives:
+ * - OfferForm (UI generation)
+ * - OfferConfig (view-only flow)
+ * - OfferExecute (step enable/disable)
+ * - Backend execution order
+ *
+ * NOTE:
+ * - Keys MUST match backend step handlers
+ * - Templates MUST match <coll_xxx> usage
+ */
+
 export const OFFER_API_SCHEMA = {
   status_check: {
     label: "Status Check",
@@ -16,6 +30,7 @@ export const OFFER_API_SCHEMA = {
       "ip",
       "user_ip",
       "ua",
+      "cid",
       "param1",
       "param2",
     ],
@@ -40,6 +55,7 @@ export const OFFER_API_SCHEMA = {
       "uuid_trxid",
       "user_ip",
       "ua",
+      "cid",
       "param1",
       "param2",
     ],
@@ -64,6 +80,7 @@ export const OFFER_API_SCHEMA = {
       "pin",
       "user_ip",
       "ua",
+      "cid",
       "param1",
       "param2",
     ],
