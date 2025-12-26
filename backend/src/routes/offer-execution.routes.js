@@ -2,7 +2,7 @@ import express from "express";
 const router = express.Router();
 
 import auth from "../middleware/auth.js";
-import db from "../db/index.js";
+import db from "../db.js";
 
 /**
  * EXECUTION LOGS ROUTES
