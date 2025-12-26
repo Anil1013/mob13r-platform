@@ -7,12 +7,18 @@ const db = require("../db");
 /**
  * EXECUTION LOGS ROUTES
  *
- * Handles:
- * - Fetch execution logs (filterable)
- * - Export execution logs as CSV
+ * DB TABLE:
+ * - offer_execution_logs
  *
- * Used by:
- * - frontend/src/pages/OfferExecutionLogs.jsx
+ * Columns:
+ * - id
+ * - offer_id
+ * - step
+ * - status
+ * - request_payload (jsonb)
+ * - response_payload (jsonb)
+ * - error
+ * - created_at
  */
 
 /* =====================================================
@@ -20,7 +26,7 @@ const db = require("../db");
 ===================================================== */
 router.get("/", auth, async (req, res) => {
   try {
-    const { offer_id, transaction_id } = req.query;
+    const { offer_id } = req.query;
 
     const conditions = [];
     const values = [];
@@ -28,11 +34,6 @@ router.get("/", auth, async (req, res) => {
     if (offer_id) {
       values.push(offer_id);
       conditions.push(`offer_id = $${values.length}`);
-    }
-
-    if (transaction_id) {
-      values.push(transaction_id);
-      conditions.push(`transaction_id = $${values.length}`);
     }
 
     const where =
@@ -47,12 +48,11 @@ router.get("/", auth, async (req, res) => {
         offer_id,
         step,
         status,
-        transaction_id,
         request_payload,
         response_payload,
         error,
         created_at
-      FROM execution_logs
+      FROM offer_execution_logs
       ${where}
       ORDER BY id DESC
       LIMIT 500
@@ -72,7 +72,7 @@ router.get("/", auth, async (req, res) => {
 ===================================================== */
 router.get("/export", auth, async (req, res) => {
   try {
-    const { offer_id, transaction_id } = req.query;
+    const { offer_id } = req.query;
 
     const conditions = [];
     const values = [];
@@ -80,11 +80,6 @@ router.get("/export", auth, async (req, res) => {
     if (offer_id) {
       values.push(offer_id);
       conditions.push(`offer_id = $${values.length}`);
-    }
-
-    if (transaction_id) {
-      values.push(transaction_id);
-      conditions.push(`transaction_id = $${values.length}`);
     }
 
     const where =
@@ -99,12 +94,11 @@ router.get("/export", auth, async (req, res) => {
         offer_id,
         step,
         status,
-        transaction_id,
         request_payload,
         response_payload,
         error,
         created_at
-      FROM execution_logs
+      FROM offer_execution_logs
       ${where}
       ORDER BY id DESC
       LIMIT 5000
@@ -118,7 +112,6 @@ router.get("/export", auth, async (req, res) => {
       "offer_id",
       "step",
       "status",
-      "transaction_id",
       "created_at",
       "request_payload",
       "response_payload",
@@ -132,7 +125,6 @@ router.get("/export", auth, async (req, res) => {
         const val = r[h];
         if (val === null || val === undefined) return '""';
 
-        // escape quotes
         const safe =
           typeof val === "object"
             ? JSON.stringify(val)
@@ -144,7 +136,6 @@ router.get("/export", auth, async (req, res) => {
       csv += line.join(",") + "\n";
     });
 
-    /* ================= RESPONSE ================= */
     res.setHeader("Content-Type", "text/csv");
     res.setHeader(
       "Content-Disposition",
