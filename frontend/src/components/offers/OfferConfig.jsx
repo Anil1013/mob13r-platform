@@ -1,6 +1,8 @@
 export default function OfferConfig({ offer, onClose }) {
   if (!offer) return null;
 
+  const steps = offer.api_steps || {};
+
   return (
     <div style={styles.overlay}>
       <div style={styles.card}>
@@ -15,51 +17,23 @@ export default function OfferConfig({ offer, onClose }) {
           {!offer.is_active && " • INACTIVE"}
         </p>
 
-        {/* ================= STEP 1 ================= */}
-        {offer.steps?.status_check && (
-          <Step
-            index={1}
-            title="Status Check"
-            method={offer.api_mode}
-            url={offer.status_check_url}
-            params={offer.status_check_params}
-          />
-        )}
+        {/* ================= API STEPS ================= */}
+        {Object.entries(steps).map(([key, step], idx) => {
+          if (!step.enabled) return null;
 
-        {/* ================= STEP 2 ================= */}
-        {offer.steps?.pin_send && (
-          <Step
-            index={2}
-            title="PIN Send"
-            method={offer.api_mode}
-            url={offer.pin_send_url}
-            params={offer.pin_send_params}
-          />
-        )}
-
-        {/* ================= STEP 3 ================= */}
-        {offer.steps?.pin_verify && (
-          <Step
-            index={3}
-            title="PIN Verify"
-            method={offer.api_mode}
-            url={offer.pin_verify_url}
-            params={offer.pin_verify_params}
-          />
-        )}
-
-        {/* ================= FRAUD ================= */}
-        {offer.fraud_enabled && (
-          <div style={styles.step}>
-            <h4 style={styles.stepTitle}>Anti-Fraud</h4>
-            <div style={styles.kv}>
-              Partner: {offer.fraud_partner || "—"}
-            </div>
-            <div style={styles.kv}>
-              Service: {offer.fraud_service || "—"}
-            </div>
-          </div>
-        )}
+          return (
+            <Step
+              key={key}
+              index={idx + 1}
+              title={humanize(key)}
+              method={step.method}
+              url={step.url}
+              headers={step.headers}
+              params={step.params}
+              matcher={step.success_matcher}
+            />
+          );
+        })}
 
         {/* ================= REDIRECT ================= */}
         <div style={styles.step}>
@@ -68,7 +42,7 @@ export default function OfferConfig({ offer, onClose }) {
             URL: {offer.redirect_url || "—"}
           </div>
           <div style={styles.note}>
-            User will be redirected after successful OTP verification
+            User will be redirected after successful verification
           </div>
         </div>
 
@@ -85,9 +59,7 @@ export default function OfferConfig({ offer, onClose }) {
    STEP BLOCK
 ===================================================== */
 
-const Step = ({ index, title, method, url, params = [] }) => {
-  const list = Array.isArray(params) ? params : [];
-
+function Step({ index, title, method, url, headers = {}, params = {}, matcher }) {
   return (
     <div style={styles.step}>
       <h4 style={styles.stepTitle}>
@@ -97,21 +69,54 @@ const Step = ({ index, title, method, url, params = [] }) => {
       <div style={styles.kv}>Method: {method || "—"}</div>
       <div style={styles.kv}>URL: {url || "—"}</div>
 
-      <div style={styles.params}>
-        Params:
-        {list.length ? (
-          list.map((p) => (
-            <span key={p} style={styles.param}>
-              {p}
-            </span>
-          ))
-        ) : (
-          <span style={{ marginLeft: 6 }}>—</span>
-        )}
-      </div>
+      {/* HEADERS */}
+      <KVBlock title="Headers" data={headers} />
+
+      {/* PARAMS */}
+      <KVBlock title="Params / Body" data={params} />
+
+      {/* SUCCESS MATCHER */}
+      {matcher && (
+        <div style={styles.matcher}>
+          Success Matcher: <code>{matcher}</code>
+        </div>
+      )}
     </div>
   );
-};
+}
+
+/* =====================================================
+   KEY VALUE BLOCK
+===================================================== */
+
+function KVBlock({ title, data }) {
+  const entries = Object.entries(data || {});
+  return (
+    <div style={styles.block}>
+      <div style={styles.blockTitle}>{title}</div>
+      {entries.length === 0 ? (
+        <div style={styles.empty}>—</div>
+      ) : (
+        entries.map(([k, v]) => (
+          <div key={k} style={styles.kv}>
+            <span style={styles.key}>{k}</span>:{" "}
+            <span style={styles.val}>{String(v)}</span>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+/* =====================================================
+   HELPERS
+===================================================== */
+
+function humanize(str) {
+  return str
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 /* =====================================================
    STYLES
@@ -128,7 +133,7 @@ const styles = {
     zIndex: 60,
   },
   card: {
-    width: "700px",
+    width: "800px",
     maxHeight: "90vh",
     overflowY: "auto",
     background: "#020617",
@@ -160,18 +165,32 @@ const styles = {
   kv: {
     fontSize: "13px",
     marginBottom: "4px",
+    wordBreak: "break-all",
   },
-  params: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "6px",
-    fontSize: "12px",
+  block: {
     marginTop: "6px",
+    fontSize: "12px",
   },
-  param: {
-    background: "#1e293b",
-    padding: "4px 8px",
-    borderRadius: "6px",
+  blockTitle: {
+    color: "#94a3b8",
+    marginBottom: "2px",
+  },
+  key: {
+    color: "#38bdf8",
+    fontFamily: "monospace",
+  },
+  val: {
+    color: "#e5e7eb",
+    fontFamily: "monospace",
+  },
+  empty: {
+    color: "#64748b",
+    fontStyle: "italic",
+  },
+  matcher: {
+    marginTop: "6px",
+    fontSize: "12px",
+    color: "#a5b4fc",
   },
   note: {
     marginTop: "6px",
