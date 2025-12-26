@@ -1,59 +1,161 @@
-import { Router } from "express";
-import pool from "../db.js";
-import auth from "../middleware/auth.js";
+const express = require("express");
+const router = express.Router();
 
-const router = Router();
-router.use(auth);
+const auth = require("../middleware/auth");
+const db = require("../db");
 
-/* ================= GET LOGS ================= */
-router.get("/", async (req, res) => {
-  const { offer_id, transaction_id } = req.query;
+/**
+ * EXECUTION LOGS ROUTES
+ *
+ * Handles:
+ * - Fetch execution logs (filterable)
+ * - Export execution logs as CSV
+ *
+ * Used by:
+ * - frontend/src/pages/OfferExecutionLogs.jsx
+ */
 
-  let where = [];
-  let values = [];
+/* =====================================================
+   GET EXECUTION LOGS (JSON)
+===================================================== */
+router.get("/", auth, async (req, res) => {
+  try {
+    const { offer_id, transaction_id } = req.query;
 
-  if (offer_id) {
-    values.push(offer_id);
-    where.push(`offer_id = $${values.length}`);
+    const conditions = [];
+    const values = [];
+
+    if (offer_id) {
+      values.push(offer_id);
+      conditions.push(`offer_id = $${values.length}`);
+    }
+
+    if (transaction_id) {
+      values.push(transaction_id);
+      conditions.push(`transaction_id = $${values.length}`);
+    }
+
+    const where =
+      conditions.length > 0
+        ? `WHERE ${conditions.join(" AND ")}`
+        : "";
+
+    const { rows } = await db.query(
+      `
+      SELECT
+        id,
+        offer_id,
+        step,
+        status,
+        transaction_id,
+        request_payload,
+        response_payload,
+        error,
+        created_at
+      FROM execution_logs
+      ${where}
+      ORDER BY id DESC
+      LIMIT 500
+      `,
+      values
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error("GET /execution-logs error:", err);
+    res.status(500).send("Failed to fetch execution logs");
   }
-
-  if (transaction_id) {
-    values.push(transaction_id);
-    where.push(`transaction_id = $${values.length}`);
-  }
-
-  const sql = `
-    SELECT *
-    FROM offer_executions
-    ${where.length ? "WHERE " + where.join(" AND ") : ""}
-    ORDER BY created_at DESC
-  `;
-
-  const { rows } = await pool.query(sql, values);
-  res.json(rows);
 });
 
-/* ================= EXPORT CSV ================= */
-router.get("/export", async (req, res) => {
-  const { rows } = await pool.query(
-    "SELECT * FROM offer_executions ORDER BY created_at DESC"
-  );
+/* =====================================================
+   EXPORT EXECUTION LOGS (CSV)
+===================================================== */
+router.get("/export", auth, async (req, res) => {
+  try {
+    const { offer_id, transaction_id } = req.query;
 
-  const csv = [
-    "id,offer_id,step,status,transaction_id,created_at",
-    ...rows.map(
-      (r) =>
-        `${r.id},${r.offer_id},${r.step},${r.status},${r.transaction_id},${r.created_at}`
-    ),
-  ].join("\n");
+    const conditions = [];
+    const values = [];
 
-  res.setHeader("Content-Type", "text/csv");
-  res.setHeader(
-    "Content-Disposition",
-    "attachment; filename=offer_execution_logs.csv"
-  );
+    if (offer_id) {
+      values.push(offer_id);
+      conditions.push(`offer_id = $${values.length}`);
+    }
 
-  res.send(csv);
+    if (transaction_id) {
+      values.push(transaction_id);
+      conditions.push(`transaction_id = $${values.length}`);
+    }
+
+    const where =
+      conditions.length > 0
+        ? `WHERE ${conditions.join(" AND ")}`
+        : "";
+
+    const { rows } = await db.query(
+      `
+      SELECT
+        id,
+        offer_id,
+        step,
+        status,
+        transaction_id,
+        request_payload,
+        response_payload,
+        error,
+        created_at
+      FROM execution_logs
+      ${where}
+      ORDER BY id DESC
+      LIMIT 5000
+      `,
+      values
+    );
+
+    /* ================= BUILD CSV ================= */
+    const headers = [
+      "id",
+      "offer_id",
+      "step",
+      "status",
+      "transaction_id",
+      "created_at",
+      "request_payload",
+      "response_payload",
+      "error",
+    ];
+
+    let csv = headers.join(",") + "\n";
+
+    rows.forEach((r) => {
+      const line = headers.map((h) => {
+        const val = r[h];
+        if (val === null || val === undefined) return '""';
+
+        // escape quotes
+        const safe =
+          typeof val === "object"
+            ? JSON.stringify(val)
+            : String(val);
+
+        return `"${safe.replace(/"/g, '""')}"`;
+      });
+
+      csv += line.join(",") + "\n";
+    });
+
+    /* ================= RESPONSE ================= */
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=offer_execution_logs.csv"
+    );
+
+    res.send(csv);
+  } catch (err) {
+    console.error("GET /execution-logs/export error:", err);
+    res.status(500).send("Failed to export execution logs");
+  }
 });
 
-export default router;
+module.exports = router;
