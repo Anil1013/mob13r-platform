@@ -38,4 +38,4 @@ app.use("/api/offers", offersRoutes);
 app.use("/api/offers", offerExecutionRoutes);
 app.use("/api/execution-logs", executionLogsRoutes);
 
-export default app;
+export default router;
