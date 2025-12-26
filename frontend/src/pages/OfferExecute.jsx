@@ -5,6 +5,7 @@ import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 
 import {
+  getOfferById,
   checkStatus,
   executePinSend,
   executePinVerify,
@@ -14,6 +15,8 @@ export default function OfferExecute() {
   const { id: offerId } = useParams();
   const navigate = useNavigate();
 
+  const [offer, setOffer] = useState(null);
+
   const [msisdn, setMsisdn] = useState("");
   const [pin, setPin] = useState("");
   const [transactionId, setTransactionId] = useState(null);
@@ -22,26 +25,63 @@ export default function OfferExecute() {
   const [logs, setLogs] = useState([]);
 
   const [steps, setSteps] = useState({
-    status_check: true,
-    pin_send: true,
-    pin_verify: true,
+    status_check: false,
+    pin_send: false,
+    pin_verify: false,
+    anti_fraud: false,
   });
+
+  /* ================= LOAD OFFER (DYNAMIC STEPS) ================= */
+  useEffect(() => {
+    const loadOffer = async () => {
+      try {
+        const data = await getOfferById(offerId);
+        setOffer(data);
+
+        const apiSteps = data.api_steps || {};
+        setSteps({
+          status_check: !!apiSteps.status_check?.enabled,
+          pin_send: !!apiSteps.pin_send?.enabled,
+          pin_verify: !!apiSteps.pin_verify?.enabled,
+          anti_fraud: !!apiSteps.anti_fraud?.enabled,
+        });
+      } catch (err) {
+        alert("Failed to load offer execution config");
+      }
+    };
+
+    loadOffer();
+  }, [offerId]);
 
   /* ================= LOG HELPER ================= */
   const addLog = (title, data) => {
-    setLogs((prev) => [
-      { title, data, time: new Date().toLocaleTimeString() },
-      ...prev,
-    ]);
+    setLogs((prev) => {
+      const next = [
+        { title, data, time: new Date().toLocaleTimeString() },
+        ...prev,
+      ];
+      return next.slice(0, 20); // cap logs
+    });
   };
 
-  /* ================= STEP 1 ================= */
+  /* ================= VALIDATION ================= */
+  const isValidMsisdn = (v) => /^\d{10,15}$/.test(v);
+
+  /* ================= STEP 1: STATUS CHECK ================= */
   const handleStatusCheck = async () => {
+    if (!isValidMsisdn(msisdn)) {
+      alert("Invalid MSISDN");
+      return;
+    }
+
     try {
       setLoading(true);
       const res = await checkStatus(offerId, { msisdn });
-      setTransactionId(res.transaction_id);
-      addLog("Status Check", res.response);
+
+      setTransactionId(
+        res.transaction_id || res.sessionKey || null
+      );
+      addLog("Status Check", res);
     } catch (err) {
       addLog("Status Check Failed", err.message || err);
     } finally {
@@ -49,7 +89,7 @@ export default function OfferExecute() {
     }
   };
 
-  /* ================= STEP 2 ================= */
+  /* ================= STEP 2: PIN SEND ================= */
   const handlePinSend = async () => {
     try {
       setLoading(true);
@@ -57,7 +97,8 @@ export default function OfferExecute() {
         msisdn,
         transaction_id: transactionId,
       });
-      addLog("PIN Send", res.response);
+
+      addLog("PIN Send", res);
     } catch (err) {
       addLog("PIN Send Failed", err.message || err);
     } finally {
@@ -65,7 +106,7 @@ export default function OfferExecute() {
     }
   };
 
-  /* ================= STEP 3 ================= */
+  /* ================= STEP 3: PIN VERIFY ================= */
   const handlePinVerify = async () => {
     try {
       setLoading(true);
@@ -75,7 +116,7 @@ export default function OfferExecute() {
         transaction_id: transactionId,
       });
 
-      addLog("PIN Verify", res.response);
+      addLog("PIN Verify", res);
 
       if (res.redirect_url) {
         window.location.href = res.redirect_url;
@@ -102,8 +143,11 @@ export default function OfferExecute() {
             </button>
           </div>
 
+          {/* ================= FORM ================= */}
           <div style={styles.card}>
-            <h4 style={styles.cardTitle}>Subscriber Details</h4>
+            <h4 style={styles.cardTitle}>
+              Subscriber Details
+            </h4>
 
             <input
               style={styles.input}
@@ -112,12 +156,14 @@ export default function OfferExecute() {
               onChange={(e) => setMsisdn(e.target.value)}
             />
 
-            <input
-              style={styles.input}
-              placeholder="PIN (only for verify)"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-            />
+            {steps.pin_verify && (
+              <input
+                style={styles.input}
+                placeholder="PIN (only for verify)"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+              />
+            )}
 
             <div style={styles.buttons}>
               {steps.status_check && (
@@ -158,11 +204,14 @@ export default function OfferExecute() {
             )}
           </div>
 
+          {/* ================= LOGS ================= */}
           <div style={styles.logs}>
             <h4>Live Execution Logs</h4>
 
             {logs.length === 0 && (
-              <div style={styles.empty}>No execution yet</div>
+              <div style={styles.empty}>
+                No execution yet
+              </div>
             )}
 
             {logs.map((l, i) => (
@@ -187,19 +236,83 @@ export default function OfferExecute() {
 const styles = {
   main: { flex: 1, background: "#020617", minHeight: "100vh" },
   content: { padding: 24, color: "#fff", maxWidth: 900, margin: "0 auto" },
-  headerRow: { display: "flex", justifyContent: "space-between", marginBottom: 20 },
-  back: { background: "#334155", color: "#fff", padding: "8px 14px", borderRadius: 6 },
-  card: { border: "1px solid #1e293b", borderRadius: 12, padding: 20 },
-  cardTitle: { marginBottom: 12, color: "#38bdf8" },
-  input: { width: "100%", padding: 10, marginBottom: 10, borderRadius: 8, background: "#020617", color: "#fff", border: "1px solid #1e293b" },
-  buttons: { display: "flex", gap: 10, flexWrap: "wrap" },
-  primary: { background: "#2563eb", color: "#fff", padding: "10px 14px", borderRadius: 6 },
-  success: { background: "#16a34a", color: "#fff", padding: "10px 14px", borderRadius: 6 },
-  tx: { marginTop: 12, color: "#94a3b8" },
+  headerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  back: {
+    background: "#334155",
+    color: "#fff",
+    padding: "8px 14px",
+    borderRadius: 6,
+    border: "none",
+    cursor: "pointer",
+  },
+  card: {
+    border: "1px solid #1e293b",
+    borderRadius: 12,
+    padding: 20,
+  },
+  cardTitle: {
+    marginBottom: 12,
+    color: "#38bdf8",
+  },
+  input: {
+    width: "100%",
+    padding: 10,
+    marginBottom: 10,
+    borderRadius: 8,
+    background: "#020617",
+    color: "#fff",
+    border: "1px solid #1e293b",
+  },
+  buttons: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  primary: {
+    background: "#2563eb",
+    color: "#fff",
+    padding: "10px 14px",
+    borderRadius: 6,
+    border: "none",
+    cursor: "pointer",
+  },
+  success: {
+    background: "#16a34a",
+    color: "#fff",
+    padding: "10px 14px",
+    borderRadius: 6,
+    border: "none",
+    cursor: "pointer",
+  },
+  tx: {
+    marginTop: 12,
+    color: "#94a3b8",
+  },
   logs: { marginTop: 20 },
-  logCard: { border: "1px solid #1e293b", borderRadius: 10, padding: 12, marginBottom: 12 },
-  logHeader: { display: "flex", justifyContent: "space-between", color: "#38bdf8" },
+  logCard: {
+    border: "1px solid #1e293b",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  logHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    color: "#38bdf8",
+  },
   time: { color: "#94a3b8" },
-  pre: { background: "#020617", padding: 10, borderRadius: 8, fontSize: 12 },
+  pre: {
+    background: "#020617",
+    padding: 10,
+    borderRadius: 8,
+    fontSize: 12,
+    marginTop: 6,
+    maxHeight: 260,
+    overflow: "auto",
+  },
   empty: { color: "#94a3b8" },
 };
