@@ -8,6 +8,7 @@ import OfferConfig from "../components/offers/OfferConfig";
 
 import {
   getOffers,
+  getOfferById,
   createOffer,
   updateOffer,
   deleteOffer,
@@ -49,8 +50,9 @@ export default function Offers() {
     try {
       await createOffer(payload);
       setShowForm(false);
+      setEditingOffer(null);
       loadOffers();
-    } catch {
+    } catch (err) {
       alert("Failed to create offer");
     }
   };
@@ -59,10 +61,10 @@ export default function Offers() {
   const handleUpdate = async (payload) => {
     try {
       await updateOffer(editingOffer.id, payload);
-      setEditingOffer(null);
       setShowForm(false);
+      setEditingOffer(null);
       loadOffers();
-    } catch {
+    } catch (err) {
       alert("Failed to update offer");
     }
   };
@@ -89,6 +91,18 @@ export default function Offers() {
       loadOffers();
     } catch {
       alert("Failed to update status");
+    }
+  };
+
+  /* ================= EDIT (IMPORTANT FIX) ================= */
+  const handleEdit = async (offer) => {
+    try {
+      // 🔥 IMPORTANT: fetch FULL offer (api_steps included)
+      const fullOffer = await getOfferById(offer.id);
+      setEditingOffer(fullOffer);
+      setShowForm(true);
+    } catch (err) {
+      alert("Failed to load offer for edit");
     }
   };
 
@@ -194,10 +208,7 @@ export default function Offers() {
 
                         <button
                           style={styles.edit}
-                          onClick={() => {
-                            setEditingOffer(o);
-                            setShowForm(true);
-                          }}
+                          onClick={() => handleEdit(o)}
                         >
                           Edit
                         </button>
@@ -238,7 +249,7 @@ export default function Offers() {
             </table>
           </div>
 
-          {/* CREATE / EDIT */}
+          {/* CREATE / EDIT FORM */}
           {showForm && (
             <OfferForm
               initialData={editingOffer}
