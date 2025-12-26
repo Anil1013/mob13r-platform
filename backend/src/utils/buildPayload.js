@@ -1,3 +1,4 @@
+import templateEngine from "./templateEngine.js";
 /**
  * BUILD PAYLOAD
  *
@@ -38,7 +39,7 @@ function cleanObject(obj) {
  * @param {object} context - runtime context (msisdn, pin, param1, etc)
  * @returns {object} processed payload
  */
-module.exports = function buildPayload(source = {}, context = {}) {
+export default function buildPayload(source = {}, context = {}) {
   if (!source || typeof source !== "object") {
     return {};
   }

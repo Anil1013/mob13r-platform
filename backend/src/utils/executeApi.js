@@ -64,7 +64,7 @@ function evaluateSuccess(response, matcher) {
  *    status: number
  *  }
  */
-module.exports = async function executeApi({
+export default async function executeApi({
   method = "GET",
   url,
   headers = {},

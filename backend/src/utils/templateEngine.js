@@ -58,7 +58,7 @@ function replaceObject(obj, context) {
  * @param {object} context
  * @returns processed input
  */
-module.exports = function templateEngine(input, context = {}) {
+export default function templateEngine(input, context = {}) {
   if (typeof input === "string") {
     return replaceString(input, context);
   }
