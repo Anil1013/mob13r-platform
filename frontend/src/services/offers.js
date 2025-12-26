@@ -1,14 +1,5 @@
-/**
- * NOTE:
- * Frontend NEVER calls telco/operator APIs directly.
- * All execution flows go via BACKEND only.
- */
-
 const API_URL = import.meta.env.VITE_API_URL;
 
-/* =====================================================
-   🔐 AUTH HELPERS
-===================================================== */
 const getToken = () => localStorage.getItem("token");
 
 const authHeaders = () => ({
@@ -20,152 +11,83 @@ const jsonAuthHeaders = () => ({
   Authorization: `Bearer ${getToken()}`,
 });
 
-/* =====================================================
-   OFFERS CRUD
-===================================================== */
-
 /* ================= GET ALL OFFERS ================= */
 export const getOffers = async () => {
   const res = await fetch(`${API_URL}/api/offers`, {
     headers: authHeaders(),
   });
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
+  if (!res.ok) throw new Error(await res.text());
   return res.json();
 };
 
-/* ================= CREATE OFFER ================= */
-export const createOffer = async (offer) => {
+/* ================= GET OFFER BY ID (IMPORTANT) ================= */
+export const getOfferById = async (id) => {
+  const res = await fetch(`${API_URL}/api/offers/${id}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+};
+
+/* ================= CREATE ================= */
+export const createOffer = async (payload) => {
   const res = await fetch(`${API_URL}/api/offers`, {
     method: "POST",
     headers: jsonAuthHeaders(),
-    body: JSON.stringify(offer),
+    body: JSON.stringify(payload),
   });
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
+  if (!res.ok) throw new Error(await res.text());
   return res.json();
 };
 
-/* ================= UPDATE OFFER ================= */
-export const updateOffer = async (id, offer) => {
+/* ================= UPDATE ================= */
+export const updateOffer = async (id, payload) => {
   const res = await fetch(`${API_URL}/api/offers/${id}`, {
     method: "PUT",
     headers: jsonAuthHeaders(),
-    body: JSON.stringify(offer),
+    body: JSON.stringify(payload),
   });
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
+  if (!res.ok) throw new Error(await res.text());
   return res.json();
 };
 
-/* ================= TOGGLE OFFER STATUS ================= */
-export const toggleOfferStatus = async (id) => {
-  const res = await fetch(`${API_URL}/api/offers/${id}/status`, {
-    method: "PATCH",
-    headers: authHeaders(),
-  });
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
-  return res.json();
-};
-
-/* ================= DELETE OFFER ================= */
+/* ================= DELETE ================= */
 export const deleteOffer = async (id) => {
   const res = await fetch(`${API_URL}/api/offers/${id}`, {
     method: "DELETE",
     headers: authHeaders(),
   });
+  if (!res.ok) throw new Error(await res.text());
+};
 
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
+/* ================= STATUS TOGGLE ================= */
+export const toggleOfferStatus = async (id) => {
+  const res = await fetch(`${API_URL}/api/offers/${id}/status`, {
+    method: "PATCH",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await res.text());
   return res.json();
 };
 
-/* =====================================================
-   OFFER EXECUTION ENGINE (GENERIC & FLEXIBLE)
-===================================================== */
+/* ================= EXECUTION ================= */
+export const checkStatus = (id, p) =>
+  fetch(`${API_URL}/api/offers/${id}/status-check`, {
+    method: "POST",
+    headers: jsonAuthHeaders(),
+    body: JSON.stringify(p),
+  }).then((r) => r.json());
 
-/**
- * payload can contain ANY advertiser params:
- * msisdn (required)
- * user_ip OR ip
- * ua
- * pub_id
- * sub_pub_id
- * transaction_id (if any)
- */
+export const executePinSend = (id, p) =>
+  fetch(`${API_URL}/api/offers/${id}/pin-send`, {
+    method: "POST",
+    headers: jsonAuthHeaders(),
+    body: JSON.stringify(p),
+  }).then((r) => r.json());
 
-/* ================= STATUS CHECK ================= */
-export const checkStatus = async (offerId, payload = {}) => {
-  const res = await fetch(
-    `${API_URL}/api/offers/${offerId}/status-check`,
-    {
-      method: "POST",
-      headers: jsonAuthHeaders(),
-      body: JSON.stringify(payload),
-    }
-  );
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
-  return res.json();
-};
-
-/* ================= PIN SEND ================= */
-export const executePinSend = async (offerId, payload = {}) => {
-  const res = await fetch(
-    `${API_URL}/api/offers/${offerId}/pin-send`,
-    {
-      method: "POST",
-      headers: jsonAuthHeaders(),
-      body: JSON.stringify(payload),
-    }
-  );
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
-  return res.json();
-};
-
-/**
- * payload must include:
- * msisdn
- * pin
- * sessionKey (if operator requires)
- */
-
-/* ================= PIN VERIFY ================= */
-export const executePinVerify = async (offerId, payload = {}) => {
-  const res = await fetch(
-    `${API_URL}/api/offers/${offerId}/pin-verify`,
-    {
-      method: "POST",
-      headers: jsonAuthHeaders(),
-      body: JSON.stringify(payload),
-    }
-  );
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
-  return res.json();
-};
+export const executePinVerify = (id, p) =>
+  fetch(`${API_URL}/api/offers/${id}/pin-verify`, {
+    method: "POST",
+    headers: jsonAuthHeaders(),
+    body: JSON.stringify(p),
+  }).then((r) => r.json());
