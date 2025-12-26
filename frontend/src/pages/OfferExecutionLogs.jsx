@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 
@@ -21,6 +22,7 @@ export default function OfferExecutionLogs() {
   const loadLogs = async () => {
     try {
       setLoading(true);
+      setError("");
       const data = await getExecutionLogs(filters);
       setLogs(data || []);
     } catch (err) {
@@ -33,6 +35,7 @@ export default function OfferExecutionLogs() {
 
   useEffect(() => {
     loadLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ================= FILTER CHANGE ================= */
@@ -60,6 +63,7 @@ export default function OfferExecutionLogs() {
         <Header />
 
         <div style={styles.content}>
+          {/* HEADER */}
           <div style={styles.headerRow}>
             <div>
               <h2 style={styles.title}>Offer Execution Logs</h2>
@@ -68,7 +72,6 @@ export default function OfferExecutionLogs() {
               </p>
             </div>
 
-            {/* DOWNLOAD */}
             <button style={styles.download} onClick={handleDownload}>
               ⬇ Download CSV
             </button>
@@ -96,6 +99,9 @@ export default function OfferExecutionLogs() {
               Apply
             </button>
           </div>
+
+          {/* ERROR */}
+          {error && <div style={styles.error}>{error}</div>}
 
           {/* TABLE */}
           <div style={styles.card}>
@@ -150,7 +156,9 @@ export default function OfferExecutionLogs() {
                       </td>
                       <td style={styles.mono}>{l.transaction_id}</td>
                       <td>
-                        {new Date(l.created_at).toLocaleString()}
+                        {l.created_at
+                          ? new Date(l.created_at).toLocaleString()
+                          : "—"}
                       </td>
                       <td>
                         <details>
@@ -173,8 +181,6 @@ ERROR:
               </tbody>
             </table>
           </div>
-
-          {error && <div style={styles.error}>{error}</div>}
         </div>
       </div>
     </div>
@@ -281,7 +287,7 @@ const styles = {
     textAlign: "center",
   },
   error: {
-    marginTop: 16,
+    marginBottom: 16,
     background: "#7f1d1d",
     padding: 10,
     borderRadius: 8,
