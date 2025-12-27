@@ -13,7 +13,7 @@ export default function Dashboard() {
 
         <div style={styles.body}>
           <h2>Welcome to Mob13r Dashboard</h2>
-          <p>Offers, publishers, analytics coming next…</p>
+          <p>Publishers, analytics coming next…</p>
         </div>
       </div>
     </div>

@@ -8,7 +8,6 @@ export default function Sidebar() {
       <nav style={styles.nav}>
         <NavLink to="/dashboard" style={styles.link}>Dashboard</NavLink>
         <NavLink to="/advertisers" style={styles.link}>Advertisers</NavLink>
-        <NavLink to="/offers" style={styles.link}>Offers</NavLink>
         <NavLink to="/publishers" style={styles.link}>Publishers</NavLink>
         <NavLink to="/analytics" style={styles.link}>Analytics</NavLink>
         <NavLink to="/settings" style={styles.link}>Settings</NavLink>

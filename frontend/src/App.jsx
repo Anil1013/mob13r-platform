@@ -3,7 +3,6 @@ import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Advertisers from "./pages/Advertisers";
-import Offers from "./pages/Offers";
 import OfferExecute from "./pages/OfferExecute";
 import OfferExecutionLogs from "./pages/OfferExecutionLogs";
 
@@ -39,7 +38,6 @@ export default function App() {
           path="/offers"
           element={
             <ProtectedRoute>
-              <Offers />
             </ProtectedRoute>
           }
         />
