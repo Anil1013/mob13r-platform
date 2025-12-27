@@ -11,8 +11,6 @@ import templateEngine from "./templateEngine.js";
  * - offer-execution.routes.js
  */
 
-const templateEngine = require("./templateEngine");
-
 /**
  * Clean object:
  * - Remove undefined / null keys
