@@ -7,9 +7,9 @@ const emptyOffer = {
   name: "",
   geo: "",
   carrier: "",
-  payout: "",
-  revenue: "",
-  daily_cap: "",
+  payout: 0,
+  revenue: 0,
+  daily_cap: 0,
   redirect_url: "",
   fallback_offer_id: "",
   is_active: true,
@@ -19,17 +19,15 @@ const emptyOffer = {
 export default function OfferForm({ initialData, onSave, onClose }) {
   const [form, setForm] = useState(emptyOffer);
 
-  /* ================= INIT (CREATE / EDIT) ================= */
+  /* ================= INIT ================= */
   useEffect(() => {
     if (initialData) {
-      // EDIT MODE → prefill from DB (api_steps included)
       setForm({
         ...emptyOffer,
         ...initialData,
         api_steps: normalizeSteps(initialData.api_steps),
       });
     } else {
-      // CREATE MODE → init from schema defaults
       const steps = {};
       Object.entries(OFFER_API_SCHEMA).forEach(([k, cfg]) => {
         steps[k] = { ...cfg.default };
@@ -72,16 +70,16 @@ export default function OfferForm({ initialData, onSave, onClose }) {
     setStep(step, type, obj);
   };
 
-  /* ================= USED PARAMS DETECTOR ================= */
+  /* ================= USED PARAMS ================= */
   const usedParams = useMemo(() => {
     const found = new Set();
     const regex = /<coll_[a-zA-Z0-9_]+>/g;
 
     Object.values(form.api_steps || {}).forEach((s) => {
-      const scan = (val) => {
-        if (!val) return;
-        const text = typeof val === "string" ? val : JSON.stringify(val);
-        (text.match(regex) || []).forEach((m) => found.add(m));
+      const scan = (v) => {
+        if (!v) return;
+        const txt = typeof v === "string" ? v : JSON.stringify(v);
+        (txt.match(regex) || []).forEach((m) => found.add(m));
       };
       scan(s.url);
       scan(s.headers);
@@ -92,11 +90,18 @@ export default function OfferForm({ initialData, onSave, onClose }) {
     return Array.from(found);
   }, [form.api_steps]);
 
-  /* ================= SAVE (PARENT HANDLES API) ================= */
+  /* ================= SAVE ================= */
   const handleSave = () => {
-    if (!form.name) {
-      alert("Offer Name is required");
-      return;
+    if (!form.name) return alert("Offer name required");
+
+    for (const [step, cfg] of Object.entries(OFFER_API_SCHEMA)) {
+      const s = form.api_steps[step];
+      if (s?.enabled && !s.url) {
+        return alert(`${cfg.label}: URL required`);
+      }
+      if (s?.enabled && !s.url.startsWith("http")) {
+        return alert(`${cfg.label}: Invalid URL`);
+      }
     }
 
     const payload = {
@@ -117,7 +122,7 @@ export default function OfferForm({ initialData, onSave, onClose }) {
         {initialData ? "Edit Offer" : "Create Offer"}
       </h2>
 
-      {/* ================= USED PARAMS ================= */}
+      {/* USED PARAMS */}
       {usedParams.length > 0 && (
         <div className="bg-slate-900 p-3 rounded">
           <div className="text-sm font-semibold mb-1">📊 Used Params</div>
@@ -128,61 +133,86 @@ export default function OfferForm({ initialData, onSave, onClose }) {
               </span>
             ))}
           </div>
-          <div className="text-xs text-gray-400 mt-1">
-            Use <code>{`<coll_param>`}</code> syntax (e.g. <code>{`<coll_msisdn>`}</code>)
-          </div>
         </div>
       )}
 
-      {/* ================= BASIC INFO ================= */}
+      {/* BASIC INFO */}
       <div className="grid grid-cols-2 gap-4">
         <input
           placeholder="Offer Name"
           value={form.name}
           onChange={(e) => set("name", e.target.value)}
         />
+
+        <input
+          placeholder="Advertiser ID"
+          value={form.advertiser_id}
+          onChange={(e) => set("advertiser_id", e.target.value)}
+        />
+
         <input
           placeholder="Geo"
           value={form.geo}
           onChange={(e) => set("geo", e.target.value)}
         />
+
         <input
           placeholder="Carrier"
           value={form.carrier}
           onChange={(e) => set("carrier", e.target.value)}
         />
+
         <input
           type="number"
           placeholder="Payout"
           value={form.payout}
           onChange={(e) => set("payout", e.target.value)}
         />
+
         <input
           type="number"
           placeholder="Revenue"
           value={form.revenue}
           onChange={(e) => set("revenue", e.target.value)}
         />
+
         <input
           type="number"
           placeholder="Daily Cap"
           value={form.daily_cap}
           onChange={(e) => set("daily_cap", e.target.value)}
         />
+
         <input
           className="col-span-2"
           placeholder="Redirect URL"
           value={form.redirect_url}
           onChange={(e) => set("redirect_url", e.target.value)}
         />
+
+        <input
+          className="col-span-2"
+          placeholder="Fallback Offer ID (optional)"
+          value={form.fallback_offer_id}
+          onChange={(e) => set("fallback_offer_id", e.target.value)}
+        />
+
+        <label className="flex items-center gap-2 col-span-2">
+          <input
+            type="checkbox"
+            checked={form.is_active}
+            onChange={(e) => set("is_active", e.target.checked)}
+          />
+          Offer Active
+        </label>
       </div>
 
-      {/* ================= API STEPS ================= */}
+      {/* API STEPS */}
       {Object.entries(OFFER_API_SCHEMA).map(([step, cfg]) => {
         const data = form.api_steps[step] || {};
         return (
           <div key={step} className="border rounded p-4 space-y-3">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between">
               <h3 className="font-semibold">{cfg.label}</h3>
               <input
                 type="checkbox"
@@ -191,19 +221,20 @@ export default function OfferForm({ initialData, onSave, onClose }) {
               />
             </div>
 
-            <div className="flex gap-2 w-full">
+            <div className="flex gap-2">
               <select
-                className="w-28"
                 value={data.method || "GET"}
                 onChange={(e) => setStep(step, "method", e.target.value)}
               >
                 <option>GET</option>
                 <option>POST</option>
+                <option>PUT</option>
+                <option>PATCH</option>
               </select>
 
               <input
                 className="w-full font-mono text-sm"
-                placeholder="https://full.api.url/endpoint"
+                placeholder="https://api.endpoint/path"
                 value={data.url || ""}
                 onChange={(e) => setStep(step, "url", e.target.value)}
               />
@@ -234,13 +265,15 @@ export default function OfferForm({ initialData, onSave, onClose }) {
             <input
               placeholder='Success Matcher (e.g. "status":true)'
               value={data.success_matcher || ""}
-              onChange={(e) => setStep(step, "success_matcher", e.target.value)}
+              onChange={(e) =>
+                setStep(step, "success_matcher", e.target.value)
+              }
             />
           </div>
         );
       })}
 
-      {/* ================= ACTIONS ================= */}
+      {/* ACTIONS */}
       <div className="flex gap-3">
         <button className="btn btn-primary" onClick={handleSave}>
           Save Offer
@@ -254,7 +287,16 @@ export default function OfferForm({ initialData, onSave, onClose }) {
 }
 
 /* ================= SUB COMPONENT ================= */
-function Section({ title, step, type, data, templates, addKV, updateKV, removeKV }) {
+function Section({
+  title,
+  step,
+  type,
+  data,
+  templates,
+  addKV,
+  updateKV,
+  removeKV,
+}) {
   const obj = data?.[type] || {};
   return (
     <div>
@@ -264,12 +306,16 @@ function Section({ title, step, type, data, templates, addKV, updateKV, removeKV
           <input
             placeholder="key"
             value={k}
-            onChange={(e) => updateKV(step, type, e.target.value, v, k)}
+            onChange={(e) =>
+              updateKV(step, type, e.target.value, v, k)
+            }
           />
           <input
             placeholder="value"
             value={v}
-            onChange={(e) => updateKV(step, type, k, e.target.value, k)}
+            onChange={(e) =>
+              updateKV(step, type, k, e.target.value, k)
+            }
           />
           <button onClick={() => removeKV(step, type, k)}>✕</button>
         </div>
