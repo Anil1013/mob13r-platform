@@ -1,5 +1,5 @@
 {
-  "name": "mob13r-backend",
+  "name": "Mb13r-backend",
   "version": "1.0.0",
   "type": "module",
   "main": "src/server.js",
