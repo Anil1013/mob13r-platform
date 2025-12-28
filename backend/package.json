@@ -15,7 +15,4 @@
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.11.5"
   },
-  "engines": {
-    "node": "18.x"
-  }
 }
