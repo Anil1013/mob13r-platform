@@ -34,7 +34,7 @@ jobs:
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          region: ${{ secrets.AWS_REGION }}
+          region: ap-south-1
           application_name: mob13r-platform
           environment_name: mb13r-backend-env
           version_label: github-${{ github.sha }}
