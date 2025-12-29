@@ -195,4 +195,41 @@ router.delete("/parameters/:id", async (req, res) => {
   }
 });
 
+/* =========================
+   CHANGE SERVICE TYPE (PRIMARY / FALLBACK)
+========================= */
+router.patch("/:offerId/service-type", async (req, res) => {
+  try {
+    const offerId = Number(req.params.offerId);
+    const { service_type } = req.body;
+
+    if (isNaN(offerId)) {
+      return res.status(400).json({ message: "Invalid offerId" });
+    }
+
+    if (!["NORMAL", "FALLBACK"].includes(service_type)) {
+      return res.status(400).json({ message: "Invalid service_type" });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE offers
+      SET service_type = $1
+      WHERE id = $2
+      RETURNING *
+      `,
+      [service_type, offerId]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ message: "Offer not found" });
+    }
+
+    return res.json(result.rows[0]);
+  } catch (err) {
+    console.error("CHANGE SERVICE TYPE ERROR:", err.message);
+    return res.status(500).json({ message: "Failed to change service type" });
+  }
+});
+
 export default router;
