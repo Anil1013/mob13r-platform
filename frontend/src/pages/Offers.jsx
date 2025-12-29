@@ -128,11 +128,9 @@ export default function Offers() {
     if (o.service_type === "FALLBACK") {
       return <span style={styles.badgeFallback}>🟡 Fallback Active</span>;
     }
-
     if (o.daily_cap && o.today_hits >= o.daily_cap) {
       return <span style={styles.badgeCap}>🔴 Cap Reached</span>;
     }
-
     return <span style={styles.badgeActive}>🟢 Active</span>;
   };
 
@@ -149,114 +147,130 @@ export default function Offers() {
       <div style={styles.page}>
         <h1>Offers</h1>
 
-        {/* SELECT ADVERTISER */}
-        <select
-          value={offerForm.advertiser_id}
-          onChange={(e) => {
-            const id = e.target.value;
-            setOfferForm({ ...offerForm, advertiser_id: id });
-            setSelectedOffer(null);
-            fetchOffers(id);
-          }}
-        >
-          <option value="">Select Advertiser</option>
-          {advertisers.map((a) => (
-            <option key={a.id} value={a.id}>{a.name}</option>
-          ))}
-        </select>
-
-        {/* CREATE OFFER */}
-        <form onSubmit={createOffer} style={styles.card}>
-          <h3>Create Offer</h3>
-
-          <input placeholder="Service Name" required
-            value={offerForm.service_name}
-            onChange={(e) => setOfferForm({ ...offerForm, service_name: e.target.value })}
-          />
-
-          <input placeholder="CPA"
-            value={offerForm.cpa}
-            onChange={(e) => setOfferForm({ ...offerForm, cpa: e.target.value })}
-          />
-
-          <input placeholder="Daily Cap"
-            value={offerForm.daily_cap}
-            onChange={(e) => setOfferForm({ ...offerForm, daily_cap: e.target.value })}
-          />
-
-          <input placeholder="Geo"
-            value={offerForm.geo}
-            onChange={(e) => setOfferForm({ ...offerForm, geo: e.target.value })}
-          />
-
-          <input placeholder="Carrier"
-            value={offerForm.carrier}
-            onChange={(e) => setOfferForm({ ...offerForm, carrier: e.target.value })}
-          />
-
+        {/* 🔹 TOP BAR */}
+        <div style={styles.topBar}>
           <select
-            value={offerForm.service_type}
-            onChange={(e) =>
-              setOfferForm({ ...offerForm, service_type: e.target.value })
-            }
+            value={offerForm.advertiser_id}
+            onChange={(e) => {
+              const id = e.target.value;
+              setOfferForm({ ...offerForm, advertiser_id: id });
+              setSelectedOffer(null);
+              fetchOffers(id);
+            }}
           >
-            <option value="NORMAL">NORMAL (Primary)</option>
-            <option value="FALLBACK">FALLBACK</option>
+            <option value="">Select Advertiser</option>
+            {advertisers.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
           </select>
 
-          <button>Create Offer</button>
-        </form>
+          <form onSubmit={createOffer} style={styles.createRow}>
+            <input
+              placeholder="Service Name"
+              required
+              value={offerForm.service_name}
+              onChange={(e) =>
+                setOfferForm({ ...offerForm, service_name: e.target.value })
+              }
+            />
+            <input
+              placeholder="CPA"
+              value={offerForm.cpa}
+              onChange={(e) =>
+                setOfferForm({ ...offerForm, cpa: e.target.value })
+              }
+            />
+            <input
+              placeholder="Daily Cap"
+              value={offerForm.daily_cap}
+              onChange={(e) =>
+                setOfferForm({ ...offerForm, daily_cap: e.target.value })
+              }
+            />
+            <input
+              placeholder="Geo"
+              value={offerForm.geo}
+              onChange={(e) =>
+                setOfferForm({ ...offerForm, geo: e.target.value })
+              }
+            />
+            <input
+              placeholder="Carrier"
+              value={offerForm.carrier}
+              onChange={(e) =>
+                setOfferForm({ ...offerForm, carrier: e.target.value })
+              }
+            />
+            <select
+              value={offerForm.service_type}
+              onChange={(e) =>
+                setOfferForm({ ...offerForm, service_type: e.target.value })
+              }
+            >
+              <option value="NORMAL">NORMAL</option>
+              <option value="FALLBACK">FALLBACK</option>
+            </select>
 
-        {/* OFFER TABLE */}
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th>Service</th>
-              <th>Geo</th>
-              <th>Carrier</th>
-              <th>Daily Cap</th>
-              <th>Used</th>
-              <th>Remaining</th>
-              <th>Route</th>
-              <th>Status</th>
-              <th>Control</th>
-              <th>Params</th>
-            </tr>
-          </thead>
-          <tbody>
-            {offers.map((o) => (
-              <tr key={o.id}>
-                <td>{o.service_name}</td>
-                <td>{o.geo}</td>
-                <td>{o.carrier}</td>
-                <td>{o.daily_cap || "∞"}</td>
-                <td>{o.today_hits}</td>
-                <td>{remaining(o)}</td>
-                <td>{o.service_type}</td>
-                <td>{getStatusBadge(o)}</td>
-                <td>
-                  {o.service_type === "NORMAL" ? (
-                    <button onClick={() => changeServiceType(o.id, "FALLBACK")}>
-                      Make Fallback
-                    </button>
-                  ) : (
-                    <button onClick={() => changeServiceType(o.id, "NORMAL")}>
-                      Make Primary
-                    </button>
-                  )}
-                </td>
-                <td>
-                  <button onClick={() => {
-                    setSelectedOffer(o);
-                    fetchParameters(o.id);
-                  }}>
-                    Manage
-                  </button>
-                </td>
+            <button>Create</button>
+          </form>
+        </div>
+
+        {/* 🔹 OFFER TABLE */}
+        <div style={styles.tableWrap}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th>Service</th>
+                <th>Geo</th>
+                <th>Carrier</th>
+                <th>Daily Cap</th>
+                <th>Used</th>
+                <th>Remaining</th>
+                <th>Route</th>
+                <th>Status</th>
+                <th>Control</th>
+                <th>Params</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {offers.map((o) => (
+                <tr key={o.id}>
+                  <td>{o.service_name}</td>
+                  <td>{o.geo}</td>
+                  <td>{o.carrier}</td>
+                  <td>{o.daily_cap || "∞"}</td>
+                  <td>{o.today_hits}</td>
+                  <td>{remaining(o)}</td>
+                  <td>{o.service_type}</td>
+                  <td>{getStatusBadge(o)}</td>
+                  <td>
+                    {o.service_type === "NORMAL" ? (
+                      <button onClick={() => changeServiceType(o.id, "FALLBACK")}>
+                        Make Fallback
+                      </button>
+                    ) : (
+                      <button onClick={() => changeServiceType(o.id, "NORMAL")}>
+                        Make Primary
+                      </button>
+                    )}
+                  </td>
+                  <td>
+                    <button
+                      onClick={() => {
+                        setSelectedOffer(o);
+                        fetchParameters(o.id);
+                      }}
+                    >
+                      Manage
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         {/* PARAMETERS */}
         {selectedOffer && (
@@ -309,7 +323,7 @@ const styles = {
   },
   topBar: {
     display: "flex",
-    gap: 16,
+    gap: 12,
     alignItems: "center",
     marginBottom: 20,
     flexWrap: "wrap",
@@ -319,8 +333,14 @@ const styles = {
     gap: 8,
     flexWrap: "wrap",
   },
+  card: {
+    background: "#fff",
+    padding: 20,
+    marginTop: 20,
+    borderRadius: 6,
+  },
+  inline: { display: "flex", gap: 10 },
   tableWrap: {
-    marginTop: 10,
     background: "#fff",
     padding: 10,
     borderRadius: 6,
@@ -330,5 +350,6 @@ const styles = {
     borderCollapse: "collapse",
   },
   badgeActive: { color: "green", fontWeight: 600 },
+  badgeCap: { color: "red", fontWeight: 600 },
   badgeFallback: { color: "#ca8a04", fontWeight: 600 },
 };
