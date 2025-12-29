@@ -92,7 +92,10 @@ router.post("/", async (req, res) => {
 ========================= */
 router.get("/:offerId/parameters", async (req, res) => {
   try {
-    const { offerId } = req.params;
+    const offerId = Number(req.params.offerId);
+    if (isNaN(offerId)) {
+      return res.status(400).json({ message: "Invalid offerId" });
+    }
 
     const result = await pool.query(
       `
@@ -116,12 +119,32 @@ router.get("/:offerId/parameters", async (req, res) => {
 ========================= */
 router.post("/:offerId/parameters", async (req, res) => {
   try {
-    const { offerId } = req.params;
+    const offerId = Number(req.params.offerId);
     const { param_key, param_value } = req.body;
+
+    if (isNaN(offerId)) {
+      return res.status(400).json({ message: "Invalid offerId" });
+    }
 
     if (!param_key || !param_value) {
       return res.status(400).json({
         message: "param_key and param_value required",
+      });
+    }
+
+    /* prevent duplicate param */
+    const exists = await pool.query(
+      `
+      SELECT id
+      FROM offer_parameters
+      WHERE offer_id = $1 AND param_key = $2
+      `,
+      [offerId, param_key]
+    );
+
+    if (exists.rows.length) {
+      return res.status(400).json({
+        message: "param_key already exists for this offer",
       });
     }
 
@@ -147,7 +170,10 @@ router.post("/:offerId/parameters", async (req, res) => {
 ========================= */
 router.delete("/parameters/:id", async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Invalid parameter id" });
+    }
 
     await pool.query(
       `
