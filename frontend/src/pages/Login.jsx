@@ -26,7 +26,14 @@ export default function Login() {
         return;
       }
 
+      // ✅ REQUIRED FOR ProtectedRoute
       localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem(
+        "token_expiry",
+        Date.now() + 24 * 60 * 60 * 1000 // 24 hours
+      );
+
       window.location.href = "/dashboard";
     } catch (err) {
       setError("Server error");
@@ -50,7 +57,6 @@ export default function Login() {
           style={{ width: "100%", padding: 10, marginBottom: 10 }}
         />
 
-        {/* 🔐 Password with Show / Hide */}
         <div style={{ position: "relative", marginBottom: 10 }}>
           <input
             type={showPassword ? "text" : "password"}
@@ -67,7 +73,6 @@ export default function Login() {
               right: 12,
               top: 10,
               cursor: "pointer",
-              fontSize: 18,
             }}
           >
             {showPassword ? "🙈" : "👁️"}
