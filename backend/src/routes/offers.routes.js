@@ -53,7 +53,18 @@ router.post("/", async (req, res) => {
     const result = await pool.query(
       `
       INSERT INTO offers
-      (advertiser_id, service_name, cpa, daily_cap, geo, carrier, service_type, today_hits, last_reset_date, status)
+      (
+        advertiser_id,
+        service_name,
+        cpa,
+        daily_cap,
+        geo,
+        carrier,
+        service_type,
+        today_hits,
+        last_reset_date,
+        status
+      )
       VALUES
       ($1,$2,$3,$4,$5,$6,$7,0,CURRENT_DATE,'active')
       RETURNING *
@@ -73,6 +84,83 @@ router.post("/", async (req, res) => {
   } catch (err) {
     console.error("CREATE OFFER ERROR:", err.message);
     return res.status(500).json({ message: "Failed to create offer" });
+  }
+});
+
+/* =========================
+   GET OFFER PARAMETERS
+========================= */
+router.get("/:offerId/parameters", async (req, res) => {
+  try {
+    const { offerId } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT id, param_key, param_value
+      FROM offer_parameters
+      WHERE offer_id = $1
+      ORDER BY id ASC
+      `,
+      [offerId]
+    );
+
+    return res.json(result.rows);
+  } catch (err) {
+    console.error("GET PARAMETERS ERROR:", err.message);
+    return res.status(500).json({ message: "Failed to fetch parameters" });
+  }
+});
+
+/* =========================
+   ADD OFFER PARAMETER
+========================= */
+router.post("/:offerId/parameters", async (req, res) => {
+  try {
+    const { offerId } = req.params;
+    const { param_key, param_value } = req.body;
+
+    if (!param_key || !param_value) {
+      return res.status(400).json({
+        message: "param_key and param_value required",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO offer_parameters
+      (offer_id, param_key, param_value)
+      VALUES ($1, $2, $3)
+      RETURNING *
+      `,
+      [offerId, param_key, param_value]
+    );
+
+    return res.json(result.rows[0]);
+  } catch (err) {
+    console.error("ADD PARAMETER ERROR:", err.message);
+    return res.status(500).json({ message: "Failed to add parameter" });
+  }
+});
+
+/* =========================
+   DELETE OFFER PARAMETER
+========================= */
+router.delete("/parameters/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await pool.query(
+      `
+      DELETE FROM offer_parameters
+      WHERE id = $1
+      `,
+      [id]
+    );
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("DELETE PARAM ERROR:", err.message);
+    return res.status(500).json({ message: "Failed to delete parameter" });
   }
 });
 
