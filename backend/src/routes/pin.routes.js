@@ -316,4 +316,86 @@ router.post("/pin/verify", async (req, res) => {
   }
 });
 
+/* =====================================================
+   🔁 CHECK STATUS
+===================================================== */
+router.get("/pin/status", async (req, res) => {
+  try {
+    const { session_token, msisdn } = req.query;
+
+    if (!session_token && !msisdn) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "session_token or msisdn required"
+      });
+    }
+
+    let sessionRes;
+
+    /* 🔍 By session_token */
+    if (session_token) {
+      sessionRes = await pool.query(
+        `
+        SELECT *
+        FROM pin_sessions
+        WHERE session_token = $1
+        `,
+        [session_token]
+      );
+    }
+
+    /* 🔍 By msisdn (latest session) */
+    else if (msisdn) {
+      sessionRes = await pool.query(
+        `
+        SELECT *
+        FROM pin_sessions
+        WHERE msisdn = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+        `,
+        [msisdn]
+      );
+    }
+
+    if (!sessionRes.rows.length) {
+      return res.json({
+        status: "INVALID_SESSION"
+      });
+    }
+
+    const s = sessionRes.rows[0];
+
+    /* BLOCKED */
+    if (s.otp_attempts >= MAX_OTP_ATTEMPTS) {
+      return res.json({
+        status: "BLOCKED",
+        otp_attempts: s.otp_attempts
+      });
+    }
+
+    /* VERIFIED */
+    if (s.status === "VERIFIED") {
+      return res.json({
+        status: "VERIFIED",
+        verified_at: s.verified_at
+      });
+    }
+
+    /* OTP SENT / INVALID */
+    return res.json({
+      status: s.status || "OTP_SENT",
+      otp_attempts: s.otp_attempts,
+      offer_id: s.offer_id
+    });
+
+  } catch (err) {
+    console.error("CHECK STATUS ERROR:", err.message);
+    return res.status(500).json({
+      status: "FAILED",
+      message: "Check status failed"
+    });
+  }
+});
+
 export default router;
