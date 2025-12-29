@@ -23,14 +23,14 @@ async function resetDailyHits() {
 async function isMsisdnLimitReached(msisdn) {
   const result = await pool.query(
     `
-    SELECT COUNT(*) 
+    SELECT COUNT(*)
     FROM pin_sessions
     WHERE msisdn = $1
       AND created_at::date = CURRENT_DATE
     `,
     [msisdn]
   );
-  return Number(result.rows[0].count) >= 3;
+  return Number(result.rows[0].count) >= MAX_MSISDN_DAILY;
 }
 
 /* ================= FIND FALLBACK ================= */
@@ -187,16 +187,16 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       adv_response: advData,
     });
   } catch (err) {
-    console.error("PIN SEND ERROR:", err.message);
+    console.error("PIN SEND ERROR:", err.response?.data || err.message);
     return res.status(500).json({
       message: "PIN send failed",
-      error: err.message,
+      error: err.response?.data || err.message,
     });
   }
 });
 
 /* =====================================================
-   🔐 PIN VERIFY
+   🔐 PIN VERIFY (✔ OTP VALIDATION FIXED)
 ===================================================== */
 router.post("/pin/verify", async (req, res) => {
   try {
@@ -204,30 +204,39 @@ router.post("/pin/verify", async (req, res) => {
 
     if (!session_token || !otp) {
       return res.status(400).json({
+        status: "FAILED",
         message: "session_token and otp required",
       });
     }
 
+    /* Load session */
     const sessionRes = await pool.query(
       `
       SELECT *
       FROM pin_sessions
       WHERE session_token = $1
-        AND status = 'OTP_SENT'
       `,
       [session_token]
     );
 
     if (!sessionRes.rows.length) {
-      return res.status(400).json({ message: "Invalid session" });
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Invalid session",
+      });
     }
 
     const session = sessionRes.rows[0];
 
+    /* Retry limit */
     if (session.otp_attempts >= MAX_OTP_ATTEMPTS) {
-      return res.status(429).json({ message: "OTP attempts exceeded" });
+      return res.status(429).json({
+        status: "BLOCKED",
+        message: "OTP attempts exceeded",
+      });
     }
 
+    /* Load offer params */
     const paramRes = await pool.query(
       `
       SELECT param_key, param_value
@@ -244,47 +253,65 @@ router.post("/pin/verify", async (req, res) => {
 
     const pinVerifyUrl = staticParams.verify_pin_url;
     if (!pinVerifyUrl) {
-      return res.status(500).json({ message: "verify_pin_url missing" });
+      return res.status(500).json({
+        status: "FAILED",
+        message: "verify_pin_url missing",
+      });
     }
 
     const advMethod = getAdvMethod(staticParams);
 
-    const verifyParams = {
+    const verifyPayload = {
       ...session.params,
       otp,
       sessionKey: session.adv_session_key,
     };
 
-    try {
-      if (advMethod === "GET") {
-        await axios.get(pinVerifyUrl, { params: verifyParams });
-      } else {
-        await axios.post(pinVerifyUrl, verifyParams);
-      }
-    } catch (err) {
-      await pool.query(
-        `UPDATE pin_sessions SET otp_attempts = otp_attempts + 1 WHERE id = $1`,
-        [session.id]
-      );
-      throw err;
+    /* CALL ADV VERIFY */
+    let advResp;
+    if (advMethod === "GET") {
+      advResp = await axios.get(pinVerifyUrl, { params: verifyPayload });
+    } else {
+      advResp = await axios.post(pinVerifyUrl, verifyPayload);
     }
 
+    const advData = advResp.data;
+
+    /* ❌ OTP WRONG */
+    if (!advData || advData.status !== true) {
+      await pool.query(
+        `
+        UPDATE pin_sessions
+        SET otp_attempts = otp_attempts + 1
+        WHERE session_token = $1
+        `,
+        [session_token]
+      );
+
+      return res.status(400).json({
+        status: "OTP_INVALID",
+        adv_response: advData,
+      });
+    }
+
+    /* ✅ OTP CORRECT */
     await pool.query(
       `
       UPDATE pin_sessions
       SET status = 'VERIFIED',
           verified_at = NOW()
-      WHERE id = $1
+      WHERE session_token = $1
       `,
-      [session.id]
+      [session_token]
     );
 
     return res.json({ status: "SUCCESS" });
   } catch (err) {
-    console.error("PIN VERIFY ERROR:", err.message);
+    console.error("PIN VERIFY ERROR:", err.response?.data || err.message);
     return res.status(500).json({
+      status: "FAILED",
       message: "PIN verify failed",
-      error: err.message,
+      error: err.response?.data || err.message,
     });
   }
 });
