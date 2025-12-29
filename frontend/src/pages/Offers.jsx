@@ -42,14 +42,21 @@ export default function Offers() {
     setAdvertisers(await res.json());
   };
 
+  // advertiserId empty => ALL offers
   const fetchOffers = async (advertiserId = "") => {
-    const url = advertiserId
-      ? `${API_BASE}/api/offers?advertiser_id=${advertiserId}`
-      : `${API_BASE}/api/offers`;
+    try {
+      const url = advertiserId
+        ? `${API_BASE}/api/offers?advertiser_id=${advertiserId}`
+        : `${API_BASE}/api/offers`;
 
-    const res = await fetch(url, { headers: authHeaders });
-    const data = await res.json();
-    setOffers(Array.isArray(data) ? data : []);
+      const res = await fetch(url, { headers: authHeaders });
+      const data = await res.json();
+
+      setOffers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Fetch offers failed:", err);
+      setOffers([]);
+    }
   };
 
   const fetchParameters = async (offerId) => {
@@ -62,7 +69,7 @@ export default function Offers() {
 
   useEffect(() => {
     fetchAdvertisers();
-    fetchOffers(); // load all offers
+    fetchOffers(); // load all offers initially
   }, []);
 
   /* ---------------- CREATE OFFER ---------------- */
@@ -89,26 +96,58 @@ export default function Offers() {
     });
   };
 
-  /* ---------------- MANUAL PROMOTE / DEMOTE ---------------- */
+  /* ---------------- PARAMETERS ---------------- */
+  const addParameter = async (e) => {
+    e.preventDefault();
+
+    await fetch(
+      `${API_BASE}/api/offers/${selectedOffer.id}/parameters`,
+      {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify(paramForm),
+      }
+    );
+
+    setParamForm({ param_key: "", param_value: "" });
+    fetchParameters(selectedOffer.id);
+  };
+
+  const deleteParameter = async (id) => {
+    await fetch(
+      `${API_BASE}/api/offers/parameters/${id}`,
+      { method: "DELETE", headers: authHeaders }
+    );
+    fetchParameters(selectedOffer.id);
+  };
+
+  /* ---------------- PROMOTE / DEMOTE ---------------- */
   const changeServiceType = async (offerId, service_type) => {
     await fetch(`${API_BASE}/api/offers/${offerId}/service-type`, {
       method: "PATCH",
       headers: authHeaders,
       body: JSON.stringify({ service_type }),
     });
+
     fetchOffers(offerForm.advertiser_id);
   };
 
   /* ---------------- HELPERS ---------------- */
-  const remaining = (o) =>
-    o.daily_cap ? Math.max(o.daily_cap - o.today_hits, 0) : "∞";
-
   const getStatusBadge = (o) => {
-    if (o.service_type === "FALLBACK")
+    if (o.service_type === "FALLBACK") {
       return <span style={styles.badgeFallback}>🟡 Fallback</span>;
-    if (o.daily_cap && o.today_hits >= o.daily_cap)
+    }
+
+    if (o.daily_cap && o.today_hits >= o.daily_cap) {
       return <span style={styles.badgeCap}>🔴 Cap Reached</span>;
+    }
+
     return <span style={styles.badgeActive}>🟢 Active</span>;
+  };
+
+  const remaining = (o) => {
+    if (!o.daily_cap) return "∞";
+    return Math.max(o.daily_cap - o.today_hits, 0);
   };
 
   /* ---------------- UI ---------------- */
@@ -119,9 +158,8 @@ export default function Offers() {
       <div style={styles.page}>
         <h1>Offers</h1>
 
-        {/* 🔝 TOP BAR */}
+        {/* TOP BAR */}
         <div style={styles.topBar}>
-          {/* Advertiser */}
           <select
             value={offerForm.advertiser_id}
             onChange={(e) => {
@@ -133,84 +171,124 @@ export default function Offers() {
           >
             <option value="">All Advertisers</option>
             {advertisers.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
             ))}
           </select>
+        </div>
 
-          {/* Create Offer */}
-          <form onSubmit={createOffer} style={styles.createRow}>
-            <input placeholder="Service" required
+        {/* CREATE OFFER */}
+        <form onSubmit={createOffer} style={styles.card}>
+          <h3>Create Offer</h3>
+
+          <div style={styles.createRow}>
+            <input
+              placeholder="Service Name"
+              required
               value={offerForm.service_name}
-              onChange={(e)=>setOfferForm({...offerForm,service_name:e.target.value})}
+              onChange={(e) =>
+                setOfferForm({ ...offerForm, service_name: e.target.value })
+              }
             />
-            <input placeholder="CPA"
+            <input
+              placeholder="CPA"
               value={offerForm.cpa}
-              onChange={(e)=>setOfferForm({...offerForm,cpa:e.target.value})}
+              onChange={(e) =>
+                setOfferForm({ ...offerForm, cpa: e.target.value })
+              }
             />
-            <input placeholder="Daily Cap"
+            <input
+              placeholder="Daily Cap"
               value={offerForm.daily_cap}
-              onChange={(e)=>setOfferForm({...offerForm,daily_cap:e.target.value})}
+              onChange={(e) =>
+                setOfferForm({ ...offerForm, daily_cap: e.target.value })
+              }
             />
-            <input placeholder="Geo"
+            <input
+              placeholder="Geo"
               value={offerForm.geo}
-              onChange={(e)=>setOfferForm({...offerForm,geo:e.target.value})}
+              onChange={(e) =>
+                setOfferForm({ ...offerForm, geo: e.target.value })
+              }
             />
-            <input placeholder="Carrier"
+            <input
+              placeholder="Carrier"
               value={offerForm.carrier}
-              onChange={(e)=>setOfferForm({...offerForm,carrier:e.target.value})}
+              onChange={(e) =>
+                setOfferForm({ ...offerForm, carrier: e.target.value })
+              }
             />
             <select
               value={offerForm.service_type}
-              onChange={(e)=>setOfferForm({...offerForm,service_type:e.target.value})}
+              onChange={(e) =>
+                setOfferForm({ ...offerForm, service_type: e.target.value })
+              }
             >
               <option value="NORMAL">Primary</option>
               <option value="FALLBACK">Fallback</option>
             </select>
             <button>Create</button>
-          </form>
-        </div>
+          </div>
+        </form>
 
-        {/* 📊 OFFER TABLE */}
+        {/* OFFER TABLE */}
         <div style={styles.tableWrap}>
           <table style={styles.table}>
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Advertiser</th>
-                <th>Service</th>
-                <th>Geo</th>
-                <th>Carrier</th>
-                <th>Cap</th>
-                <th>Used</th>
-                <th>Remain</th>
-                <th>Route</th>
-                <th>Status</th>
-                <th>Control</th>
+                {[
+                  "ID",
+                  "Advertiser",
+                  "Service",
+                  "Geo",
+                  "Carrier",
+                  "Cap",
+                  "Used",
+                  "Remain",
+                  "Route",
+                  "Status",
+                  "Control",
+                  "Params",
+                ].map((h) => (
+                  <th key={h} style={styles.th}>
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {offers.map((o) => (
                 <tr key={o.id}>
-                  <td>{o.id}</td>
-                  <td>{o.advertiser_name || "-"}</td>
-                  <td>{o.service_name}</td>
-                  <td>{o.geo}</td>
-                  <td>{o.carrier}</td>
-                  <td>{o.daily_cap || "∞"}</td>
-                  <td>{o.today_hits}</td>
-                  <td>{remaining(o)}</td>
-                  <td>{o.service_type}</td>
-                  <td>{getStatusBadge(o)}</td>
-                  <td>
+                  <td style={styles.td}>{o.id}</td>
+                  <td style={styles.td}>{o.advertiser_name || "-"}</td>
+                  <td style={styles.td}>{o.service_name}</td>
+                  <td style={styles.td}>{o.geo}</td>
+                  <td style={styles.td}>{o.carrier}</td>
+                  <td style={styles.td}>{o.daily_cap || "∞"}</td>
+                  <td style={styles.td}>{o.today_hits}</td>
+                  <td style={styles.td}>{remaining(o)}</td>
+                  <td style={styles.td}>{o.service_type}</td>
+                  <td style={styles.td}>{getStatusBadge(o)}</td>
+                  <td style={styles.td}>
+                    {o.service_type === "NORMAL" ? (
+                      <button onClick={() => changeServiceType(o.id, "FALLBACK")}>
+                        Make Fallback
+                      </button>
+                    ) : (
+                      <button onClick={() => changeServiceType(o.id, "NORMAL")}>
+                        Make Primary
+                      </button>
+                    )}
+                  </td>
+                  <td style={styles.td}>
                     <button
-                      onClick={() =>
-                        changeServiceType(
-                          o.id,
-                          o.service_type === "NORMAL" ? "FALLBACK" : "NORMAL"
-                        )
-                      }
+                      onClick={() => {
+                        setSelectedOffer(o);
+                        fetchParameters(o.id);
+                      }}
                     >
-                      Toggle
+                      Manage
                     </button>
                   </td>
                 </tr>
@@ -219,6 +297,44 @@ export default function Offers() {
           </table>
         </div>
 
+        {/* PARAMETERS */}
+        {selectedOffer && (
+          <div style={styles.card}>
+            <h3>Parameters – {selectedOffer.service_name}</h3>
+
+            <form onSubmit={addParameter} style={styles.inline}>
+              <input
+                placeholder="param_key"
+                value={paramForm.param_key}
+                onChange={(e) =>
+                  setParamForm({ ...paramForm, param_key: e.target.value })
+                }
+              />
+              <input
+                placeholder="param_value"
+                value={paramForm.param_value}
+                onChange={(e) =>
+                  setParamForm({ ...paramForm, param_value: e.target.value })
+                }
+              />
+              <button>Add</button>
+            </form>
+
+            <table style={styles.table}>
+              <tbody>
+                {parameters.map((p) => (
+                  <tr key={p.id}>
+                    <td style={styles.td}>{p.param_key}</td>
+                    <td style={styles.td}>{p.param_value}</td>
+                    <td style={styles.td}>
+                      <button onClick={() => deleteParameter(p.id)}>❌</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </>
   );
@@ -227,30 +343,47 @@ export default function Offers() {
 /* ---------------- STYLES ---------------- */
 const styles = {
   page: {
-    padding: "60px 40px",
+    padding: "60px 30px",
     fontFamily: "Inter, system-ui, Arial",
   },
   topBar: {
-    display: "flex",
-    gap: 12,
-    alignItems: "center",
-    marginBottom: 20,
-    flexWrap: "wrap",
+    marginBottom: 15,
   },
   createRow: {
     display: "flex",
     gap: 8,
     flexWrap: "wrap",
   },
+  card: {
+    background: "#fff",
+    padding: 20,
+    marginTop: 15,
+    borderRadius: 6,
+  },
+  inline: {
+    display: "flex",
+    gap: 10,
+    marginBottom: 10,
+  },
   tableWrap: {
+    marginTop: 15,
     display: "flex",
     justifyContent: "center",
-    marginTop: 10,
   },
   table: {
     width: "95%",
     borderCollapse: "collapse",
-    background: "#fff",
+    textAlign: "center",
+  },
+  th: {
+    border: "1px solid #ddd",
+    padding: 8,
+    background: "#f3f4f6",
+    fontWeight: 600,
+  },
+  td: {
+    border: "1px solid #ddd",
+    padding: 8,
   },
   badgeActive: { color: "green", fontWeight: 600 },
   badgeCap: { color: "red", fontWeight: 600 },
