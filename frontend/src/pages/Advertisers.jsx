@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import Navbar from "../components/Navbar";
 
 const API_BASE = "https://backend.mob13r.com";
 
@@ -14,6 +15,7 @@ export default function Advertisers() {
 
   const token = localStorage.getItem("token");
 
+  /* ---------------- FETCH ---------------- */
   const fetchAdvertisers = async () => {
     const res = await fetch(`${API_BASE}/api/advertisers`, {
       headers: {
@@ -28,7 +30,7 @@ export default function Advertisers() {
     fetchAdvertisers();
   }, []);
 
-  // CREATE or UPDATE
+  /* ---------------- CREATE / UPDATE ---------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -55,7 +57,7 @@ export default function Advertisers() {
     fetchAdvertisers();
   };
 
-  // EDIT MODE
+  /* ---------------- EDIT ---------------- */
   const editAdvertiser = (adv) => {
     setForm({
       id: adv.id,
@@ -65,7 +67,7 @@ export default function Advertisers() {
     setEditing(true);
   };
 
-  // TOGGLE STATUS
+  /* ---------------- STATUS TOGGLE ---------------- */
   const toggleStatus = async (id) => {
     await fetch(`${API_BASE}/api/advertisers/${id}/toggle`, {
       method: "PATCH",
@@ -76,59 +78,24 @@ export default function Advertisers() {
     fetchAdvertisers();
   };
 
-  const logout = () => {
-    localStorage.clear();
-    navigate("/login", { replace: true });
-  };
-
-  // SEARCH FILTER (client side)
+  /* ---------------- SEARCH ---------------- */
   const filteredList = list.filter(
     (a) =>
       a.name.toLowerCase().includes(search.toLowerCase()) ||
       a.email.toLowerCase().includes(search.toLowerCase())
   );
 
+  /* ---------------- UI ---------------- */
   return (
     <>
-      {/* 🔹 Navbar */}
-      <div style={styles.navbar}>
-        <div style={styles.left}>
-          <div style={styles.logo} onClick={() => navigate("/dashboard")}>
-            Mob13r
-          </div>
+      {/* ✅ GLOBAL NAVBAR */}
+      <Navbar />
 
-          <NavLink
-            to="/dashboard"
-            style={({ isActive }) =>
-              isActive ? styles.activeLink : styles.link
-            }
-          >
-            Dashboard
-          </NavLink>
-
-          <NavLink
-            to="/advertisers"
-            style={({ isActive }) =>
-              isActive ? styles.activeLink : styles.link
-            }
-          >
-            Advertisers
-          </NavLink>
-        </div>
-
-        <div style={styles.right}>
-          <span style={styles.user}>{user?.email}</span>
-          <button style={styles.logoutBtn} onClick={logout}>
-            Logout
-          </button>
-        </div>
-      </div>
-
-      {/* 🔹 Page Content (FULL WIDTH) */}
+      {/* PAGE CONTENT */}
       <div style={styles.page}>
         <h2 style={styles.heading}>Advertisers</h2>
 
-        {/* 🔹 SEARCH + CREATE (same row) */}
+        {/* SEARCH + CREATE */}
         <form onSubmit={handleSubmit} style={styles.form}>
           <input
             type="text"
@@ -174,7 +141,7 @@ export default function Advertisers() {
           )}
         </form>
 
-        {/* 🔹 LIST TABLE */}
+        {/* LIST TABLE */}
         <table
           border="1"
           cellPadding="12"
@@ -220,62 +187,12 @@ export default function Advertisers() {
   );
 }
 
-/* ================= STYLES ================= */
+/* ---------------- STYLES ---------------- */
 const styles = {
-  navbar: {
-    height: 60,
-    backgroundColor: "#111827",
-    color: "#ffffff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "0 24px",
-    fontFamily: "Inter, system-ui, Arial",
-  },
-  left: {
-    display: "flex",
-    alignItems: "center",
-    gap: 24,
-  },
-  logo: {
-    fontSize: 18,          // SAME SIZE
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  link: {
-    color: "#cbd5f5",
-    textDecoration: "none",
-    fontSize: 18,          // SAME SIZE
-    fontWeight: 500,
-  },
-  activeLink: {
-    color: "#ffffff",
-    textDecoration: "none",
-    fontSize: 18,          // SAME SIZE
-    fontWeight: 600,
-    borderBottom: "2px solid #ffffff",
-    paddingBottom: 2,
-  },
-  right: {
-    display: "flex",
-    alignItems: "center",
-    gap: 16,
-  },
-  user: {
-    fontSize: 14,
-    opacity: 0.9,
-  },
-  logoutBtn: {
-    backgroundColor: "#ef4444",
-    color: "#fff",
-    border: "none",
-    padding: "8px 14px",
-    borderRadius: 6,
-    cursor: "pointer",
-  },
   page: {
-    padding: 40,
+    padding: "80px 40px 40px", // ✅ fixed navbar offset
     width: "100%",
+    fontFamily: "Inter, system-ui, Arial",
   },
   heading: {
     marginBottom: 16,
