@@ -4,25 +4,30 @@ import pool from "../db.js";
 const router = express.Router();
 
 /* =========================
-   GET OFFERS (by advertiser)
+   GET OFFERS (ALL / by advertiser)
 ========================= */
 router.get("/", async (req, res) => {
   try {
     const { advertiser_id } = req.query;
 
-    if (!advertiser_id) {
-      return res.status(400).json({ message: "advertiser_id required" });
+    let query = `
+      SELECT
+        o.*,
+        a.name AS advertiser_name
+      FROM offers o
+      JOIN advertisers a ON a.id = o.advertiser_id
+    `;
+
+    const params = [];
+
+    if (advertiser_id) {
+      query += ` WHERE o.advertiser_id = $1`;
+      params.push(advertiser_id);
     }
 
-    const result = await pool.query(
-      `
-      SELECT *
-      FROM offers
-      WHERE advertiser_id = $1
-      ORDER BY id DESC
-      `,
-      [advertiser_id]
-    );
+    query += ` ORDER BY o.id DESC`;
+
+    const result = await pool.query(query, params);
 
     return res.json(result.rows);
   } catch (err) {
