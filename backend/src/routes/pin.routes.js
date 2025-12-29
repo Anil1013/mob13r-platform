@@ -5,6 +5,10 @@ import { v4 as uuidv4 } from "uuid";
 
 const router = express.Router();
 
+/* ================= CONFIG ================= */
+const MAX_MSISDN_DAILY = 3;
+const MAX_OTP_ATTEMPTS = 5;
+
 /* 🔎 DAILY CAP CHECK (ONLY) */
 async function isDailyCapReached(offerId, dailyCap) {
   if (!dailyCap) return false;
@@ -17,6 +21,18 @@ async function isDailyCapReached(offerId, dailyCap) {
   );
 
   return Number(result.rows[0].count) >= dailyCap;
+}
+
+/* 🔐 MSISDN DAILY LIMIT */
+async function isMsisdnLimitReached(msisdn) {
+  const result = await pool.query(
+    `SELECT COUNT(*) FROM pin_sessions
+     WHERE msisdn=$1
+     AND created_at::date = CURRENT_DATE`,
+    [msisdn]
+  );
+
+  return Number(result.rows[0].count) >= MAX_MSISDN_DAILY;
 }
 
 /* 🔁 FIND FALLBACK (SAME GEO + CARRIER) */
@@ -39,21 +55,25 @@ async function findFallbackOffer(primaryOffer) {
   return fallback.rows[0] || null;
 }
 
-/**
- * 🔐 PIN SEND (GET + POST)
- */
+/* =====================================================
+   🔐 PIN SEND (GET + POST)
+===================================================== */
 router.all("/pin/send/:offer_id", async (req, res) => {
   try {
     const { offer_id } = req.params;
-
-    const incomingParams = {
-      ...req.query,
-      ...req.body,
-    };
-
+    const incomingParams = { ...req.query, ...req.body };
     const msisdn = incomingParams.msisdn;
+
     if (!msisdn) {
       return res.status(400).json({ message: "msisdn is required" });
+    }
+
+    /* 🔐 Anti-Fraud: MSISDN limit */
+    const limitHit = await isMsisdnLimitReached(msisdn);
+    if (limitHit) {
+      return res.status(429).json({
+        message: "Daily limit reached for this number",
+      });
     }
 
     /* 1️⃣ LOAD PRIMARY OFFER */
@@ -78,9 +98,9 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     if (capHit) {
       const fallback = await findFallbackOffer(selectedOffer);
       if (!fallback) {
-        return res
-          .status(429)
-          .json({ message: "Daily cap reached, no fallback available" });
+        return res.status(429).json({
+          message: "Daily cap reached, no fallback available",
+        });
       }
       selectedOffer = fallback;
       routed = "FALLBACK";
@@ -117,12 +137,6 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     const pinSendUrl =
       staticParams.pin_send_url || staticParams.operator_send_url;
 
-    if (!pinSendUrl) {
-      return res
-        .status(500)
-        .json({ message: "PIN send URL not configured" });
-    }
-
     const method = staticParams.request_method || "POST";
 
     try {
@@ -147,10 +161,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
           [fallback.id, sessionToken]
         );
 
-        await axios.post(
-          staticParams.pin_send_url,
-          finalParams
-        );
+        await axios.post(pinSendUrl, finalParams);
       } else {
         throw err;
       }
@@ -167,9 +178,9 @@ router.all("/pin/send/:offer_id", async (req, res) => {
   }
 });
 
-/**
- * 🔐 PIN VERIFY
- */
+/* =====================================================
+   🔐 PIN VERIFY
+===================================================== */
 router.post("/pin/verify", async (req, res) => {
   try {
     const { session_token, otp } = req.body;
@@ -192,6 +203,13 @@ router.post("/pin/verify", async (req, res) => {
     }
 
     const session = sessionResult.rows[0];
+
+    /* 🔐 OTP RETRY LIMIT */
+    if (session.otp_attempts >= MAX_OTP_ATTEMPTS) {
+      return res.status(429).json({
+        message: "OTP attempts exceeded",
+      });
+    }
 
     /* 2️⃣ LOAD OFFER */
     const offerResult = await pool.query(
@@ -221,12 +239,24 @@ router.post("/pin/verify", async (req, res) => {
 
     const method = staticParams.request_method || "POST";
 
-    if (method === "GET") {
-      await axios.get(pinVerifyUrl, { params: verifyParams });
-    } else {
-      await axios.post(pinVerifyUrl, verifyParams);
+    try {
+      if (method === "GET") {
+        await axios.get(pinVerifyUrl, { params: verifyParams });
+      } else {
+        await axios.post(pinVerifyUrl, verifyParams);
+      }
+    } catch (err) {
+      /* ❌ WRONG OTP → increment counter */
+      await pool.query(
+        `UPDATE pin_sessions
+         SET otp_attempts = otp_attempts + 1
+         WHERE id=$1`,
+        [session.id]
+      );
+      throw err;
     }
 
+    /* ✅ SUCCESS */
     await pool.query(
       `UPDATE pin_sessions
        SET status='VERIFIED', verified_at=NOW()
