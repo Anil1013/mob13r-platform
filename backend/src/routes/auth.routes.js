@@ -16,30 +16,54 @@ const USER = {
 };
 
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  if (email !== USER.email) {
-    return res.status(401).json({ message: "Invalid credentials" });
-  }
-
-  const isMatch = await bcrypt.compare(password, USER.password);
-  if (!isMatch) {
-    return res.status(401).json({ message: "Invalid credentials" });
-  }
-
-  const token = jwt.sign(
-    { id: USER.id, email: USER.email, role: USER.role },
-    process.env.JWT_SECRET,
-    { expiresIn: "24h" }
-  );
-
-  res.json({
-    token,
-    user: {
-      email: USER.email,
-      role: USER.role
+    // ✅ Basic validation
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required"
+      });
     }
-  });
+
+    if (email !== USER.email) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials"
+      });
+    }
+
+    const isMatch = await bcrypt.compare(password, USER.password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials"
+      });
+    }
+
+    const token = jwt.sign(
+      { id: USER.id, email: USER.email, role: USER.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "24h" }
+    );
+
+    return res.json({
+      success: true,
+      token,
+      expiresIn: 60 * 60 * 24,
+      user: {
+        email: USER.email,
+        role: USER.role
+      }
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
+  }
 });
 
 export default router;
