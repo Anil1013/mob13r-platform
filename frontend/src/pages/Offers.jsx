@@ -44,13 +44,27 @@ export default function Offers() {
 
   // 🔥 advertiserId empty → ALL offers
   const fetchOffers = async (advertiserId) => {
+  try {
     const url = advertiserId
       ? `${API_BASE}/api/offers?advertiser_id=${advertiserId}`
       : `${API_BASE}/api/offers`;
 
     const res = await fetch(url, { headers: authHeaders });
-    setOffers(await res.json());
-  };
+    const data = await res.json();
+
+    // 🔐 SAFETY CHECK
+    if (Array.isArray(data)) {
+      setOffers(data);
+    } else {
+      console.warn("Offers API returned non-array:", data);
+      setOffers([]);
+    }
+  } catch (err) {
+    console.error("Failed to fetch offers:", err);
+    setOffers([]);
+  }
+};
+
 
   const fetchParameters = async (offerId) => {
     const res = await fetch(
