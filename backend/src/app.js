@@ -3,6 +3,7 @@ import cors from "cors";
 
 import authRoutes from "./routes/auth.routes.js";
 import advertisersRoutes from "./routes/advertisers.routes.js";
+import pinRoutes from "./routes/pin.routes.js";
 
 const app = express();
 
@@ -15,5 +16,6 @@ app.get("/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/advertisers", advertisersRoutes);
+app.use("/api", pinRoutes);
 
 export default app;
