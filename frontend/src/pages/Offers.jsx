@@ -112,13 +112,29 @@ export default function Offers() {
     fetchParameters(selectedOffer.id);
   };
 
+  /* ---------------- HELPERS ---------------- */
+  const getStatusBadge = (offer) => {
+    if (offer.service_type === "FALLBACK") {
+      return <span style={styles.badgeFallback}>🟡 Fallback Active</span>;
+    }
+
+    if (offer.daily_cap && offer.today_hits >= offer.daily_cap) {
+      return <span style={styles.badgeCap}>🔴 Cap Reached</span>;
+    }
+
+    return <span style={styles.badgeActive}>🟢 Active</span>;
+  };
+
+  const remaining = (o) => {
+    if (!o.daily_cap) return "∞";
+    return Math.max(o.daily_cap - o.today_hits, 0);
+  };
+
   /* ---------------- UI ---------------- */
   return (
     <>
-      {/* ✅ GLOBAL NAVBAR */}
       <Navbar />
 
-      {/* ✅ PAGE CONTENT (navbar offset fixed) */}
       <div style={styles.page}>
         <h1>Offers</h1>
 
@@ -162,7 +178,7 @@ export default function Offers() {
           />
 
           <input
-            placeholder="Daily Cap"
+            placeholder="Daily Cap (blank = unlimited)"
             value={offerForm.daily_cap}
             onChange={(e) =>
               setOfferForm({ ...offerForm, daily_cap: e.target.value })
@@ -170,7 +186,7 @@ export default function Offers() {
           />
 
           <input
-            placeholder="Geo (IN, PK, UAE)"
+            placeholder="Geo"
             value={offerForm.geo}
             onChange={(e) =>
               setOfferForm({ ...offerForm, geo: e.target.value })
@@ -178,7 +194,7 @@ export default function Offers() {
           />
 
           <input
-            placeholder="Carrier (JIO, ZONG)"
+            placeholder="Carrier"
             value={offerForm.carrier}
             onChange={(e) =>
               setOfferForm({ ...offerForm, carrier: e.target.value })
@@ -191,14 +207,14 @@ export default function Offers() {
               setOfferForm({ ...offerForm, service_type: e.target.value })
             }
           >
-            <option value="NORMAL">NORMAL</option>
+            <option value="NORMAL">NORMAL (Primary)</option>
             <option value="FALLBACK">FALLBACK</option>
           </select>
 
           <button>Create Offer</button>
         </form>
 
-        {/* OFFER LIST */}
+        {/* OFFER TABLE */}
         <table style={styles.table}>
           <thead>
             <tr>
@@ -206,7 +222,10 @@ export default function Offers() {
               <th>Geo</th>
               <th>Carrier</th>
               <th>Daily Cap</th>
-              <th>Type</th>
+              <th>Used Today</th>
+              <th>Remaining</th>
+              <th>Route</th>
+              <th>Status</th>
               <th>Params</th>
             </tr>
           </thead>
@@ -217,7 +236,10 @@ export default function Offers() {
                 <td>{o.geo}</td>
                 <td>{o.carrier}</td>
                 <td>{o.daily_cap || "∞"}</td>
-                <td>{o.service_type}</td>
+                <td>{o.today_hits}</td>
+                <td>{remaining(o)}</td>
+                <td>{o.service_type === "FALLBACK" ? "Fallback" : "Primary"}</td>
+                <td>{getStatusBadge(o)}</td>
                 <td>
                   <button
                     onClick={() => {
@@ -286,7 +308,7 @@ export default function Offers() {
 /* ---------------- STYLES ---------------- */
 const styles = {
   page: {
-    padding: "80px 40px 40px", // ✅ FIXED NAVBAR OFFSET
+    padding: "80px 40px 40px",
     fontFamily: "Inter, system-ui, Arial",
   },
   card: {
@@ -303,5 +325,17 @@ const styles = {
     width: "100%",
     marginTop: 20,
     borderCollapse: "collapse",
+  },
+  badgeActive: {
+    color: "green",
+    fontWeight: 600,
+  },
+  badgeCap: {
+    color: "red",
+    fontWeight: 600,
+  },
+  badgeFallback: {
+    color: "#ca8a04",
+    fontWeight: 600,
   },
 };
