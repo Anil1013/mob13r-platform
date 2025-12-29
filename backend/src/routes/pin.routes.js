@@ -9,21 +9,17 @@ const router = express.Router();
 const MAX_MSISDN_DAILY = 3;
 const MAX_OTP_ATTEMPTS = 5;
 
-/* 🔎 DAILY CAP CHECK (ONLY) */
-async function isDailyCapReached(offerId, dailyCap) {
-  if (!dailyCap) return false;
-
-  const result = await pool.query(
-    `SELECT COUNT(*) FROM pin_sessions
-     WHERE offer_id=$1
-     AND created_at::date = CURRENT_DATE`,
-    [offerId]
-  );
-
-  return Number(result.rows[0].count) >= dailyCap;
+/* ================= DAILY RESET ================= */
+async function resetDailyHits() {
+  await pool.query(`
+    UPDATE offers
+    SET today_hits = 0,
+        last_reset_date = CURRENT_DATE
+    WHERE last_reset_date < CURRENT_DATE
+  `);
 }
 
-/* 🔐 MSISDN DAILY LIMIT */
+/* ================= MSISDN DAILY LIMIT ================= */
 async function isMsisdnLimitReached(msisdn) {
   const result = await pool.query(
     `SELECT COUNT(*) FROM pin_sessions
@@ -31,28 +27,26 @@ async function isMsisdnLimitReached(msisdn) {
      AND created_at::date = CURRENT_DATE`,
     [msisdn]
   );
-
   return Number(result.rows[0].count) >= MAX_MSISDN_DAILY;
 }
 
-/* 🔁 FIND FALLBACK (SAME GEO + CARRIER) */
-async function findFallbackOffer(primaryOffer) {
-  const fallback = await pool.query(
-    `SELECT * FROM offers
-     WHERE advertiser_id=$1
-     AND geo=$2
-     AND carrier=$3
-     AND is_fallback=true
-     AND status='active'
-     LIMIT 1`,
-    [
-      primaryOffer.advertiser_id,
-      primaryOffer.geo,
-      primaryOffer.carrier,
-    ]
+/* ================= FIND FALLBACK ================= */
+async function findFallbackOffer(primary) {
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM offers
+    WHERE advertiser_id = $1
+      AND geo = $2
+      AND carrier = $3
+      AND service_type = 'FALLBACK'
+      AND today_hits < daily_cap
+    LIMIT 1
+    `,
+    [primary.advertiser_id, primary.geo, primary.carrier]
   );
 
-  return fallback.rows[0] || null;
+  return result.rows[0] || null;
 }
 
 /* =====================================================
@@ -60,6 +54,8 @@ async function findFallbackOffer(primaryOffer) {
 ===================================================== */
 router.all("/pin/send/:offer_id", async (req, res) => {
   try {
+    await resetDailyHits();
+
     const { offer_id } = req.params;
     const incomingParams = { ...req.query, ...req.body };
     const msisdn = incomingParams.msisdn;
@@ -68,52 +64,53 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       return res.status(400).json({ message: "msisdn is required" });
     }
 
-    /* 🔐 Anti-Fraud: MSISDN limit */
-    const limitHit = await isMsisdnLimitReached(msisdn);
-    if (limitHit) {
+    /* 🔐 MSISDN LIMIT */
+    if (await isMsisdnLimitReached(msisdn)) {
       return res.status(429).json({
-        message: "Daily limit reached for this number",
+        message: "MSISDN daily limit reached",
       });
     }
 
     /* 1️⃣ LOAD PRIMARY OFFER */
-    const offerResult = await pool.query(
-      "SELECT * FROM offers WHERE id=$1 AND status='active'",
+    const offerRes = await pool.query(
+      `
+      SELECT *
+      FROM offers
+      WHERE id=$1
+        AND service_type='NORMAL'
+      `,
       [offer_id]
     );
 
-    if (!offerResult.rows.length) {
-      return res.status(404).json({ message: "Offer not found" });
+    if (!offerRes.rows.length) {
+      return res.status(404).json({ message: "Primary offer not found" });
     }
 
-    let selectedOffer = offerResult.rows[0];
-    let routed = "PRIMARY";
+    let offer = offerRes.rows[0];
+    let route = "PRIMARY";
 
-    /* 2️⃣ CHECK DAILY CAP */
-    const capHit = await isDailyCapReached(
-      selectedOffer.id,
-      selectedOffer.daily_cap
-    );
-
-    if (capHit) {
-      const fallback = await findFallbackOffer(selectedOffer);
+    /* 2️⃣ CAP CHECK */
+    if (offer.today_hits >= offer.daily_cap) {
+      const fallback = await findFallbackOffer(offer);
       if (!fallback) {
         return res.status(429).json({
-          message: "Daily cap reached, no fallback available",
+          message: "Primary cap reached, no fallback available",
         });
       }
-      selectedOffer = fallback;
-      routed = "FALLBACK";
+      offer = fallback;
+      route = "FALLBACK";
     }
 
-    /* 3️⃣ LOAD STATIC PARAMS */
-    const paramResult = await pool.query(
-      "SELECT param_key, param_value FROM offer_parameters WHERE offer_id=$1",
-      [selectedOffer.id]
+    /* 3️⃣ LOAD OFFER PARAMS */
+    const paramRes = await pool.query(
+      `SELECT param_key, param_value
+       FROM offer_parameters
+       WHERE offer_id=$1`,
+      [offer.id]
     );
 
     let staticParams = {};
-    paramResult.rows.forEach((p) => {
+    paramRes.rows.forEach((p) => {
       staticParams[p.param_key] = p.param_value;
     });
 
@@ -127,50 +124,43 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     const sessionToken = uuidv4();
 
     await pool.query(
-      `INSERT INTO pin_sessions
-       (offer_id, msisdn, session_token, params, status)
-       VALUES ($1,$2,$3,$4,'OTP_SENT')`,
-      [selectedOffer.id, msisdn, sessionToken, finalParams]
+      `
+      INSERT INTO pin_sessions
+      (offer_id, msisdn, session_token, params, status)
+      VALUES ($1,$2,$3,$4,'OTP_SENT')
+      `,
+      [offer.id, msisdn, sessionToken, finalParams]
     );
 
-    /* 5️⃣ OPERATOR PIN SEND */
+    /* 5️⃣ INCREMENT OFFER HIT */
+    await pool.query(
+      `UPDATE offers SET today_hits = today_hits + 1 WHERE id=$1`,
+      [offer.id]
+    );
+
+    /* 6️⃣ OPERATOR PIN SEND */
     const pinSendUrl =
       staticParams.pin_send_url || staticParams.operator_send_url;
 
+    if (!pinSendUrl) {
+      return res.status(500).json({
+        message: "PIN send URL missing",
+      });
+    }
+
     const method = staticParams.request_method || "POST";
 
-    try {
-      if (method === "GET") {
-        await axios.get(pinSendUrl, { params: finalParams });
-      } else {
-        await axios.post(pinSendUrl, finalParams);
-      }
-    } catch (err) {
-      /* 🔁 PRIMARY FAIL → FALLBACK TRY */
-      if (routed === "PRIMARY") {
-        const fallback = await findFallbackOffer(selectedOffer);
-        if (!fallback) throw err;
-
-        selectedOffer = fallback;
-        routed = "FALLBACK";
-
-        await pool.query(
-          `UPDATE pin_sessions
-           SET offer_id=$1
-           WHERE session_token=$2`,
-          [fallback.id, sessionToken]
-        );
-
-        await axios.post(pinSendUrl, finalParams);
-      } else {
-        throw err;
-      }
+    if (method === "GET") {
+      await axios.get(pinSendUrl, { params: finalParams });
+    } else {
+      await axios.post(pinSendUrl, finalParams);
     }
 
     return res.json({
       status: "OTP_SENT",
       session_token: sessionToken,
-      routed_offer: routed,
+      route,
+      offer_id: offer.id,
     });
   } catch (err) {
     console.error("PIN SEND ERROR:", err.message);
@@ -187,45 +177,45 @@ router.post("/pin/verify", async (req, res) => {
 
     if (!session_token || !otp) {
       return res.status(400).json({
-        message: "session_token and otp are required",
+        message: "session_token and otp required",
       });
     }
 
     /* 1️⃣ LOAD SESSION */
-    const sessionResult = await pool.query(
-      `SELECT * FROM pin_sessions
-       WHERE session_token=$1 AND status='OTP_SENT'`,
+    const sessionRes = await pool.query(
+      `
+      SELECT *
+      FROM pin_sessions
+      WHERE session_token=$1
+        AND status='OTP_SENT'
+      `,
       [session_token]
     );
 
-    if (!sessionResult.rows.length) {
+    if (!sessionRes.rows.length) {
       return res.status(400).json({ message: "Invalid session" });
     }
 
-    const session = sessionResult.rows[0];
+    const session = sessionRes.rows[0];
 
-    /* 🔐 OTP RETRY LIMIT */
     if (session.otp_attempts >= MAX_OTP_ATTEMPTS) {
       return res.status(429).json({
         message: "OTP attempts exceeded",
       });
     }
 
-    /* 2️⃣ LOAD OFFER */
-    const offerResult = await pool.query(
-      "SELECT * FROM offers WHERE id=$1",
+    /* 2️⃣ LOAD OFFER PARAMS */
+    const paramRes = await pool.query(
+      `
+      SELECT param_key, param_value
+      FROM offer_parameters
+      WHERE offer_id=$1
+      `,
       [session.offer_id]
-    );
-    const offer = offerResult.rows[0];
-
-    /* 3️⃣ LOAD STATIC PARAMS */
-    const paramResult = await pool.query(
-      "SELECT param_key, param_value FROM offer_parameters WHERE offer_id=$1",
-      [offer.id]
     );
 
     let staticParams = {};
-    paramResult.rows.forEach((p) => {
+    paramRes.rows.forEach((p) => {
       staticParams[p.param_key] = p.param_value;
     });
 
@@ -246,7 +236,6 @@ router.post("/pin/verify", async (req, res) => {
         await axios.post(pinVerifyUrl, verifyParams);
       }
     } catch (err) {
-      /* ❌ WRONG OTP → increment counter */
       await pool.query(
         `UPDATE pin_sessions
          SET otp_attempts = otp_attempts + 1
@@ -256,11 +245,14 @@ router.post("/pin/verify", async (req, res) => {
       throw err;
     }
 
-    /* ✅ SUCCESS */
+    /* ✅ VERIFIED */
     await pool.query(
-      `UPDATE pin_sessions
-       SET status='VERIFIED', verified_at=NOW()
-       WHERE id=$1`,
+      `
+      UPDATE pin_sessions
+      SET status='VERIFIED',
+          verified_at=NOW()
+      WHERE id=$1
+      `,
       [session.id]
     );
 
