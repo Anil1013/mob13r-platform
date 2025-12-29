@@ -112,13 +112,24 @@ export default function Offers() {
     fetchParameters(selectedOffer.id);
   };
 
+  /* ---------------- MANUAL PROMOTE / DEMOTE ---------------- */
+  const changeServiceType = async (offerId, service_type) => {
+    await fetch(`${API_BASE}/api/offers/${offerId}/service-type`, {
+      method: "PATCH",
+      headers: authHeaders,
+      body: JSON.stringify({ service_type }),
+    });
+
+    fetchOffers(offerForm.advertiser_id);
+  };
+
   /* ---------------- HELPERS ---------------- */
-  const getStatusBadge = (offer) => {
-    if (offer.service_type === "FALLBACK") {
+  const getStatusBadge = (o) => {
+    if (o.service_type === "FALLBACK") {
       return <span style={styles.badgeFallback}>🟡 Fallback Active</span>;
     }
 
-    if (offer.daily_cap && offer.today_hits >= offer.daily_cap) {
+    if (o.daily_cap && o.today_hits >= o.daily_cap) {
       return <span style={styles.badgeCap}>🔴 Cap Reached</span>;
     }
 
@@ -150,9 +161,7 @@ export default function Offers() {
         >
           <option value="">Select Advertiser</option>
           {advertisers.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
+            <option key={a.id} value={a.id}>{a.name}</option>
           ))}
         </select>
 
@@ -160,45 +169,29 @@ export default function Offers() {
         <form onSubmit={createOffer} style={styles.card}>
           <h3>Create Offer</h3>
 
-          <input
-            placeholder="Service Name"
-            required
+          <input placeholder="Service Name" required
             value={offerForm.service_name}
-            onChange={(e) =>
-              setOfferForm({ ...offerForm, service_name: e.target.value })
-            }
+            onChange={(e) => setOfferForm({ ...offerForm, service_name: e.target.value })}
           />
 
-          <input
-            placeholder="CPA"
+          <input placeholder="CPA"
             value={offerForm.cpa}
-            onChange={(e) =>
-              setOfferForm({ ...offerForm, cpa: e.target.value })
-            }
+            onChange={(e) => setOfferForm({ ...offerForm, cpa: e.target.value })}
           />
 
-          <input
-            placeholder="Daily Cap (blank = unlimited)"
+          <input placeholder="Daily Cap"
             value={offerForm.daily_cap}
-            onChange={(e) =>
-              setOfferForm({ ...offerForm, daily_cap: e.target.value })
-            }
+            onChange={(e) => setOfferForm({ ...offerForm, daily_cap: e.target.value })}
           />
 
-          <input
-            placeholder="Geo"
+          <input placeholder="Geo"
             value={offerForm.geo}
-            onChange={(e) =>
-              setOfferForm({ ...offerForm, geo: e.target.value })
-            }
+            onChange={(e) => setOfferForm({ ...offerForm, geo: e.target.value })}
           />
 
-          <input
-            placeholder="Carrier"
+          <input placeholder="Carrier"
             value={offerForm.carrier}
-            onChange={(e) =>
-              setOfferForm({ ...offerForm, carrier: e.target.value })
-            }
+            onChange={(e) => setOfferForm({ ...offerForm, carrier: e.target.value })}
           />
 
           <select
@@ -222,10 +215,11 @@ export default function Offers() {
               <th>Geo</th>
               <th>Carrier</th>
               <th>Daily Cap</th>
-              <th>Used Today</th>
+              <th>Used</th>
               <th>Remaining</th>
               <th>Route</th>
               <th>Status</th>
+              <th>Control</th>
               <th>Params</th>
             </tr>
           </thead>
@@ -238,15 +232,24 @@ export default function Offers() {
                 <td>{o.daily_cap || "∞"}</td>
                 <td>{o.today_hits}</td>
                 <td>{remaining(o)}</td>
-                <td>{o.service_type === "FALLBACK" ? "Fallback" : "Primary"}</td>
+                <td>{o.service_type}</td>
                 <td>{getStatusBadge(o)}</td>
                 <td>
-                  <button
-                    onClick={() => {
-                      setSelectedOffer(o);
-                      fetchParameters(o.id);
-                    }}
-                  >
+                  {o.service_type === "NORMAL" ? (
+                    <button onClick={() => changeServiceType(o.id, "FALLBACK")}>
+                      Make Fallback
+                    </button>
+                  ) : (
+                    <button onClick={() => changeServiceType(o.id, "NORMAL")}>
+                      Make Primary
+                    </button>
+                  )}
+                </td>
+                <td>
+                  <button onClick={() => {
+                    setSelectedOffer(o);
+                    fetchParameters(o.id);
+                  }}>
                     Manage
                   </button>
                 </td>
@@ -279,13 +282,6 @@ export default function Offers() {
             </form>
 
             <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th>Key</th>
-                  <th>Value</th>
-                  <th></th>
-                </tr>
-              </thead>
               <tbody>
                 {parameters.map((p) => (
                   <tr key={p.id}>
@@ -317,25 +313,9 @@ const styles = {
     marginTop: 20,
     borderRadius: 6,
   },
-  inline: {
-    display: "flex",
-    gap: 10,
-  },
-  table: {
-    width: "100%",
-    marginTop: 20,
-    borderCollapse: "collapse",
-  },
-  badgeActive: {
-    color: "green",
-    fontWeight: 600,
-  },
-  badgeCap: {
-    color: "red",
-    fontWeight: 600,
-  },
-  badgeFallback: {
-    color: "#ca8a04",
-    fontWeight: 600,
-  },
+  inline: { display: "flex", gap: 10 },
+  table: { width: "100%", marginTop: 20, borderCollapse: "collapse" },
+  badgeActive: { color: "green", fontWeight: 600 },
+  badgeCap: { color: "red", fontWeight: 600 },
+  badgeFallback: { color: "#ca8a04", fontWeight: 600 },
 };
