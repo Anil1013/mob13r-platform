@@ -42,12 +42,13 @@ export default function Offers() {
     setAdvertisers(await res.json());
   };
 
+  // 🔥 advertiserId empty → ALL offers
   const fetchOffers = async (advertiserId) => {
-    if (!advertiserId) return;
-    const res = await fetch(
-      `${API_BASE}/api/offers?advertiser_id=${advertiserId}`,
-      { headers: authHeaders }
-    );
+    const url = advertiserId
+      ? `${API_BASE}/api/offers?advertiser_id=${advertiserId}`
+      : `${API_BASE}/api/offers`;
+
+    const res = await fetch(url, { headers: authHeaders });
     setOffers(await res.json());
   };
 
@@ -61,6 +62,7 @@ export default function Offers() {
 
   useEffect(() => {
     fetchAdvertisers();
+    fetchOffers(); // 🔥 page load → all offers
   }, []);
 
   /* ---------------- CREATE OFFER ---------------- */
@@ -74,7 +76,7 @@ export default function Offers() {
     });
 
     const data = await res.json();
-    setOffers([...offers, data]);
+    setOffers((prev) => [...prev, data]);
 
     setOfferForm({
       ...offerForm,
@@ -126,7 +128,7 @@ export default function Offers() {
   /* ---------------- HELPERS ---------------- */
   const getStatusBadge = (o) => {
     if (o.service_type === "FALLBACK") {
-      return <span style={styles.badgeFallback}>🟡 Fallback Active</span>;
+      return <span style={styles.badgeFallback}>🟡 Fallback</span>;
     }
 
     if (o.daily_cap && o.today_hits >= o.daily_cap) {
@@ -159,9 +161,11 @@ export default function Offers() {
             fetchOffers(id);
           }}
         >
-          <option value="">Select Advertiser</option>
+          <option value="">All Advertisers</option>
           {advertisers.map((a) => (
-            <option key={a.id} value={a.id}>{a.name}</option>
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
           ))}
         </select>
 
@@ -169,29 +173,45 @@ export default function Offers() {
         <form onSubmit={createOffer} style={styles.card}>
           <h3>Create Offer</h3>
 
-          <input placeholder="Service Name" required
+          <input
+            placeholder="Service Name"
+            required
             value={offerForm.service_name}
-            onChange={(e) => setOfferForm({ ...offerForm, service_name: e.target.value })}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, service_name: e.target.value })
+            }
           />
 
-          <input placeholder="CPA"
+          <input
+            placeholder="CPA"
             value={offerForm.cpa}
-            onChange={(e) => setOfferForm({ ...offerForm, cpa: e.target.value })}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, cpa: e.target.value })
+            }
           />
 
-          <input placeholder="Daily Cap"
+          <input
+            placeholder="Daily Cap"
             value={offerForm.daily_cap}
-            onChange={(e) => setOfferForm({ ...offerForm, daily_cap: e.target.value })}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, daily_cap: e.target.value })
+            }
           />
 
-          <input placeholder="Geo"
+          <input
+            placeholder="Geo"
             value={offerForm.geo}
-            onChange={(e) => setOfferForm({ ...offerForm, geo: e.target.value })}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, geo: e.target.value })
+            }
           />
 
-          <input placeholder="Carrier"
+          <input
+            placeholder="Carrier"
             value={offerForm.carrier}
-            onChange={(e) => setOfferForm({ ...offerForm, carrier: e.target.value })}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, carrier: e.target.value })
+            }
           />
 
           <select
@@ -211,6 +231,8 @@ export default function Offers() {
         <table style={styles.table}>
           <thead>
             <tr>
+              <th>Offer ID</th>
+              <th>Advertiser</th>
               <th>Service</th>
               <th>Geo</th>
               <th>Carrier</th>
@@ -226,6 +248,8 @@ export default function Offers() {
           <tbody>
             {offers.map((o) => (
               <tr key={o.id}>
+                <td>{o.id}</td>
+                <td>{o.advertiser_name || "-"}</td>
                 <td>{o.service_name}</td>
                 <td>{o.geo}</td>
                 <td>{o.carrier}</td>
@@ -246,10 +270,12 @@ export default function Offers() {
                   )}
                 </td>
                 <td>
-                  <button onClick={() => {
-                    setSelectedOffer(o);
-                    fetchParameters(o.id);
-                  }}>
+                  <button
+                    onClick={() => {
+                      setSelectedOffer(o);
+                      fetchParameters(o.id);
+                    }}
+                  >
                     Manage
                   </button>
                 </td>
@@ -314,7 +340,11 @@ const styles = {
     borderRadius: 6,
   },
   inline: { display: "flex", gap: 10 },
-  table: { width: "100%", marginTop: 20, borderCollapse: "collapse" },
+  table: {
+    width: "90%",
+    margin: "20px auto",
+    borderCollapse: "collapse",
+  },
   badgeActive: { color: "green", fontWeight: 600 },
   badgeCap: { color: "red", fontWeight: 600 },
   badgeFallback: { color: "#ca8a04", fontWeight: 600 },
