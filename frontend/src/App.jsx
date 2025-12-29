@@ -1,29 +1,25 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import Advertisers from "./pages/Advertisers";
 import ProtectedRoute from "./auth/ProtectedRoute";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Default */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-
-        {/* Login */}
+        {/* Public routes */}
         <Route path="/login" element={<Login />} />
 
-        {/* Protected Dashboard */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
+        {/* Protected routes (ALL INSIDE ONE WRAPPER) */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/advertisers" element={<Advertisers />} />
+        </Route>
 
-        {/* Fallback */}
+        {/* Default & fallback */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
