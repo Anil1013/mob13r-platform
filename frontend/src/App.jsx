@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Advertisers from "./pages/Advertisers";
+import Offers from "./pages/Offers";
 import ProtectedRoute from "./auth/ProtectedRoute";
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/advertisers" element={<Advertisers />} />
+          <Route path="/advertisers" element={<Offers />} />
         </Route>
 
         {/* Default & fallback */}
