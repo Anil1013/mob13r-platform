@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import Navbar from "../components/Navbar";
 
 const API_BASE = "https://backend.mob13r.com";
 
 export default function Offers() {
-  const navigate = useNavigate();
   const token = localStorage.getItem("token");
-  const user = JSON.parse(localStorage.getItem("user"));
 
   /* ---------------- STATE ---------------- */
   const [advertisers, setAdvertisers] = useState([]);
@@ -30,12 +28,13 @@ export default function Offers() {
     param_value: "",
   });
 
-  /* ---------------- FETCH ---------------- */
+  /* ---------------- HEADERS ---------------- */
   const authHeaders = {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   };
 
+  /* ---------------- FETCH ---------------- */
   const fetchAdvertisers = async () => {
     const res = await fetch(`${API_BASE}/api/advertisers`, {
       headers: authHeaders,
@@ -113,29 +112,13 @@ export default function Offers() {
     fetchParameters(selectedOffer.id);
   };
 
-  const logout = () => {
-    localStorage.clear();
-    navigate("/login", { replace: true });
-  };
-
   /* ---------------- UI ---------------- */
   return (
     <>
-      {/* NAVBAR */}
-      <div style={styles.navbar}>
-        <div style={styles.left}>
-          <div style={styles.brand}>Mob13r</div>
-          <NavLink to="/dashboard" style={styles.link}>Dashboard</NavLink>
-          <NavLink to="/advertisers" style={styles.link}>Advertisers</NavLink>
-          <NavLink to="/offers" style={styles.activeLink}>Offers</NavLink>
-        </div>
-        <div style={styles.right}>
-          <span>{user?.email}</span>
-          <button style={styles.logoutBtn} onClick={logout}>Logout</button>
-        </div>
-      </div>
+      {/* ✅ COMMON NAVBAR */}
+      <Navbar />
 
-      {/* PAGE */}
+      {/* PAGE CONTENT */}
       <div style={styles.page}>
         <h1>Offers</h1>
 
@@ -151,7 +134,9 @@ export default function Offers() {
         >
           <option value="">Select Advertiser</option>
           {advertisers.map((a) => (
-            <option key={a.id} value={a.id}>{a.name}</option>
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
           ))}
         </select>
 
@@ -159,35 +144,41 @@ export default function Offers() {
         <form onSubmit={createOffer} style={styles.card}>
           <h3>Create Offer</h3>
 
-          <input placeholder="Service Name" required
+          <input
+            placeholder="Service Name"
+            required
             value={offerForm.service_name}
             onChange={(e) =>
               setOfferForm({ ...offerForm, service_name: e.target.value })
             }
           />
 
-          <input placeholder="CPA"
+          <input
+            placeholder="CPA"
             value={offerForm.cpa}
             onChange={(e) =>
               setOfferForm({ ...offerForm, cpa: e.target.value })
             }
           />
 
-          <input placeholder="Daily Cap"
+          <input
+            placeholder="Daily Cap"
             value={offerForm.daily_cap}
             onChange={(e) =>
               setOfferForm({ ...offerForm, daily_cap: e.target.value })
             }
           />
 
-          <input placeholder="Geo (IN, PK, UAE)"
+          <input
+            placeholder="Geo (IN, PK, UAE)"
             value={offerForm.geo}
             onChange={(e) =>
               setOfferForm({ ...offerForm, geo: e.target.value })
             }
           />
 
-          <input placeholder="Carrier (JIO, ZONG)"
+          <input
+            placeholder="Carrier (JIO, ZONG)"
             value={offerForm.carrier}
             onChange={(e) =>
               setOfferForm({ ...offerForm, carrier: e.target.value })
@@ -228,10 +219,12 @@ export default function Offers() {
                 <td>{o.daily_cap || "∞"}</td>
                 <td>{o.service_type}</td>
                 <td>
-                  <button onClick={() => {
-                    setSelectedOffer(o);
-                    fetchParameters(o.id);
-                  }}>
+                  <button
+                    onClick={() => {
+                      setSelectedOffer(o);
+                      fetchParameters(o.id);
+                    }}
+                  >
                     Manage
                   </button>
                 </td>
@@ -292,35 +285,19 @@ export default function Offers() {
 
 /* ---------------- STYLES ---------------- */
 const styles = {
-  navbar: {
-    height: 60,
-    background: "#0f172a",
-    color: "#fff",
-    display: "flex",
-    justifyContent: "space-between",
-    padding: "0 24px",
-    alignItems: "center",
+  page: {
+    padding: 40,
   },
-  left: { display: "flex", gap: 20, alignItems: "center" },
-  brand: { fontSize: 20, fontWeight: 700 },
-  link: { color: "#cbd5f5", textDecoration: "none" },
-  activeLink: { color: "#fff", fontWeight: 600 },
-  right: { display: "flex", gap: 12 },
-  logoutBtn: {
-    background: "#ef4444",
-    color: "#fff",
-    border: 0,
-    padding: "6px 12px",
-    cursor: "pointer",
-  },
-  page: { padding: 40 },
   card: {
     background: "#fff",
     padding: 20,
     marginTop: 20,
     borderRadius: 6,
   },
-  inline: { display: "flex", gap: 10 },
+  inline: {
+    display: "flex",
+    gap: 10,
+  },
   table: {
     width: "100%",
     marginTop: 20,
