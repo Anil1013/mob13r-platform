@@ -5,51 +5,33 @@ export default function Navbar() {
   const user = JSON.parse(localStorage.getItem("user"));
 
   const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("token_expiry");
+    localStorage.clear();
     navigate("/login", { replace: true });
   };
 
   return (
     <>
-      {/* 🔹 FIXED NAVBAR */}
       <div style={styles.navbar}>
-        {/* Left */}
+        {/* LEFT */}
         <div style={styles.left}>
           <div style={styles.brand} onClick={() => navigate("/dashboard")}>
             Mob13r
           </div>
 
-          <NavLink
-            to="/dashboard"
-            style={({ isActive }) =>
-              isActive ? styles.activeLink : styles.link
-            }
-          >
+          <NavLink to="/dashboard" style={navStyle}>
             Dashboard
           </NavLink>
 
-          <NavLink
-            to="/advertisers"
-            style={({ isActive }) =>
-              isActive ? styles.activeLink : styles.link
-            }
-          >
+          <NavLink to="/advertisers" style={navStyle}>
             Advertisers
           </NavLink>
 
-          <NavLink
-            to="/offers"
-            style={({ isActive }) =>
-              isActive ? styles.activeLink : styles.link
-            }
-          >
+          <NavLink to="/offers" style={navStyle}>
             Offers
           </NavLink>
         </div>
 
-        {/* Right */}
+        {/* RIGHT */}
         <div style={styles.right}>
           <span style={styles.user}>{user?.email}</span>
           <button style={styles.logoutBtn} onClick={logout}>
@@ -58,11 +40,14 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* 🔹 Spacer so content doesn’t hide behind fixed navbar */}
+      {/* spacer for fixed navbar */}
       <div style={{ height: 60 }} />
     </>
   );
 }
+
+const navStyle = ({ isActive }) =>
+  isActive ? styles.activeLink : styles.link;
 
 const styles = {
   navbar: {
@@ -72,7 +57,6 @@ const styles = {
     right: 0,
     height: 60,
     backgroundColor: "#0f172a",
-    color: "#ffffff",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
@@ -86,24 +70,23 @@ const styles = {
     gap: 28,
   },
   brand: {
-    fontSize: 16,
-    fontWeight: 600,
+    fontSize: 18,
+    fontWeight: 700,
     cursor: "pointer",
-    letterSpacing: "0.3px",
+    color: "#fff",
   },
   link: {
     color: "#cbd5f5",
     textDecoration: "none",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 500,
   },
   activeLink: {
     color: "#ffffff",
-    textDecoration: "none",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 600,
     borderBottom: "2px solid #ffffff",
-    paddingBottom: 2,
+    paddingBottom: 6,
   },
   right: {
     display: "flex",
