@@ -6,15 +6,13 @@ const API_BASE = "https://backend.mob13r.com";
 export default function Advertisers() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user"));
-  const token = localStorage.getItem("token");
 
   const [list, setList] = useState([]);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const pageSize = 5;
-
   const [form, setForm] = useState({ id: null, name: "", email: "" });
   const [editing, setEditing] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const token = localStorage.getItem("token");
 
   const fetchAdvertisers = async () => {
     const res = await fetch(`${API_BASE}/api/advertisers`, {
@@ -30,20 +28,7 @@ export default function Advertisers() {
     fetchAdvertisers();
   }, []);
 
-  /* ---------------- FILTER + PAGINATION ---------------- */
-  const filtered = list.filter(
-    (a) =>
-      a.name.toLowerCase().includes(search.toLowerCase()) ||
-      a.email.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const totalPages = Math.ceil(filtered.length / pageSize);
-  const paginated = filtered.slice(
-    (page - 1) * pageSize,
-    page * pageSize
-  );
-
-  /* ---------------- CREATE / UPDATE ---------------- */
+  // CREATE or UPDATE
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -70,15 +55,23 @@ export default function Advertisers() {
     fetchAdvertisers();
   };
 
-  const editAdvertiser = (a) => {
-    setForm({ id: a.id, name: a.name, email: a.email });
+  // EDIT MODE
+  const editAdvertiser = (adv) => {
+    setForm({
+      id: adv.id,
+      name: adv.name,
+      email: adv.email,
+    });
     setEditing(true);
   };
 
+  // TOGGLE STATUS
   const toggleStatus = async (id) => {
     await fetch(`${API_BASE}/api/advertisers/${id}/toggle`, {
       method: "PATCH",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     });
     fetchAdvertisers();
   };
@@ -88,133 +81,140 @@ export default function Advertisers() {
     navigate("/login", { replace: true });
   };
 
+  // SEARCH FILTER (client side)
+  const filteredList = list.filter(
+    (a) =>
+      a.name.toLowerCase().includes(search.toLowerCase()) ||
+      a.email.toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
     <>
-      {/* 🔹 NAVBAR */}
+      {/* 🔹 Navbar */}
       <div style={styles.navbar}>
         <div style={styles.left}>
           <div style={styles.logo} onClick={() => navigate("/dashboard")}>
             Mob13r
           </div>
 
-          <NavLink to="/dashboard" style={styles.link}>
+          <NavLink
+            to="/dashboard"
+            style={({ isActive }) =>
+              isActive ? styles.activeLink : styles.link
+            }
+          >
             Dashboard
           </NavLink>
 
-          <NavLink to="/advertisers" style={styles.activeLink}>
+          <NavLink
+            to="/advertisers"
+            style={({ isActive }) =>
+              isActive ? styles.activeLink : styles.link
+            }
+          >
             Advertisers
           </NavLink>
         </div>
 
         <div style={styles.right}>
-          <span>{user?.email}</span>
+          <span style={styles.user}>{user?.email}</span>
           <button style={styles.logoutBtn} onClick={logout}>
             Logout
           </button>
         </div>
       </div>
 
-      {/* 🔹 PAGE CENTER */}
+      {/* 🔹 Page Content (FULL WIDTH) */}
       <div style={styles.page}>
-        <div style={styles.container}>
-          <h1 style={styles.heading}>Advertisers</h1>
+        <h2 style={styles.heading}>Advertisers</h2>
 
-          {/* 🔍 SEARCH */}
+        {/* 🔹 SEARCH + CREATE (same row) */}
+        <form onSubmit={handleSubmit} style={styles.form}>
           <input
             type="text"
-            placeholder="Search by name or email..."
+            placeholder="Search by name or email"
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            style={styles.search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ padding: 8, width: 220 }}
           />
 
-          {/* ➕ FORM */}
-          <form onSubmit={handleSubmit} style={styles.form}>
-            <input
-              placeholder="Name"
-              value={form.name}
-              required
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-            <input
-              placeholder="Email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-            <button>{editing ? "Update" : "Create"}</button>
-            {editing && (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditing(false);
-                  setForm({ id: null, name: "", email: "" });
-                }}
-              >
-                Cancel
-              </button>
-            )}
-          </form>
+          <input
+            type="text"
+            placeholder="Name"
+            value={form.name}
+            required
+            onChange={(e) =>
+              setForm({ ...form, name: e.target.value })
+            }
+          />
 
-          {/* 📋 TABLE CARD */}
-          <div style={styles.tableCard}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginated.map((a) => (
-                  <tr key={a.id}>
-                    <td style={{ fontWeight: 600 }}>{a.name}</td>
-                    <td>{a.email}</td>
-                    <td
-                      style={{
-                        color: a.status === "active" ? "green" : "red",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {a.status}
-                    </td>
-                    <td>
-                      <button onClick={() => editAdvertiser(a)}>Edit</button>{" "}
-                      <button onClick={() => toggleStatus(a.id)}>
-                        {a.status === "active"
-                          ? "Deactivate"
-                          : "Activate"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <input
+            type="email"
+            placeholder="Email"
+            value={form.email}
+            onChange={(e) =>
+              setForm({ ...form, email: e.target.value })
+            }
+          />
 
-            {/* 🔢 PAGINATION */}
-            <div style={styles.pagination}>
-              <button
-                disabled={page === 1}
-                onClick={() => setPage(page - 1)}
-              >
-                Prev
-              </button>
-              <span>
-                Page {page} of {totalPages || 1}
-              </span>
-              <button
-                disabled={page === totalPages}
-                onClick={() => setPage(page + 1)}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        </div>
+          <button type="submit">
+            {editing ? "Update" : "Create"}
+          </button>
+
+          {editing && (
+            <button
+              type="button"
+              onClick={() => {
+                setForm({ id: null, name: "", email: "" });
+                setEditing(false);
+              }}
+            >
+              Cancel
+            </button>
+          )}
+        </form>
+
+        {/* 🔹 LIST TABLE */}
+        <table
+          border="1"
+          cellPadding="12"
+          style={{ marginTop: 20, width: "100%" }}
+        >
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredList.map((a) => (
+              <tr key={a.id}>
+                <td style={{ fontWeight: 600 }}>{a.name}</td>
+                <td>{a.email}</td>
+                <td
+                  style={{
+                    color: a.status === "active" ? "green" : "red",
+                    fontWeight: 600,
+                  }}
+                >
+                  {a.status}
+                </td>
+                <td>
+                  <button onClick={() => editAdvertiser(a)}>
+                    Edit
+                  </button>{" "}
+                  <button onClick={() => toggleStatus(a.id)}>
+                    {a.status === "active"
+                      ? "Deactivate"
+                      : "Activate"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </>
   );
@@ -223,71 +223,68 @@ export default function Advertisers() {
 /* ================= STYLES ================= */
 const styles = {
   navbar: {
-    height: 64,
-    background: "#0f172a",
-    color: "#fff",
+    height: 60,
+    backgroundColor: "#111827",
+    color: "#ffffff",
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
-    padding: "0 32px",
+    justifyContent: "space-between",
+    padding: "0 24px",
+    fontFamily: "Inter, system-ui, Arial",
   },
-  left: { display: "flex", gap: 24, alignItems: "center" },
-  logo: { fontSize: 22, fontWeight: "bold", cursor: "pointer" },
-  link: { color: "#cbd5f5", textDecoration: "none" },
-  activeLink: {
-    color: "#fff",
-    textDecoration: "underline",
+  left: {
+    display: "flex",
+    alignItems: "center",
+    gap: 24,
+  },
+  logo: {
+    fontSize: 18,          // SAME SIZE
     fontWeight: 600,
+    cursor: "pointer",
   },
-  right: { display: "flex", gap: 16, alignItems: "center" },
+  link: {
+    color: "#cbd5f5",
+    textDecoration: "none",
+    fontSize: 18,          // SAME SIZE
+    fontWeight: 500,
+  },
+  activeLink: {
+    color: "#ffffff",
+    textDecoration: "none",
+    fontSize: 18,          // SAME SIZE
+    fontWeight: 600,
+    borderBottom: "2px solid #ffffff",
+    paddingBottom: 2,
+  },
+  right: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+  },
+  user: {
+    fontSize: 14,
+    opacity: 0.9,
+  },
   logoutBtn: {
-    background: "#ef4444",
+    backgroundColor: "#ef4444",
     color: "#fff",
     border: "none",
     padding: "8px 14px",
     borderRadius: 6,
     cursor: "pointer",
   },
-
   page: {
-    display: "flex",
-    justifyContent: "center",
-    background: "#f8fafc",
-    minHeight: "calc(100vh - 64px)",
-    paddingTop: 40,
-  },
-  container: {
+    padding: 40,
     width: "100%",
-    maxWidth: 1000,
-    padding: "0 20px",
   },
-  heading: { fontSize: 28, marginBottom: 16 },
-  search: {
-    padding: 10,
-    width: 320,
+  heading: {
     marginBottom: 16,
   },
   form: {
     display: "flex",
-    gap: 10,
-    marginBottom: 24,
-    flexWrap: "wrap",
-  },
-  tableCard: {
-    background: "#fff",
-    padding: 20,
-    borderRadius: 10,
-    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    textAlign: "center",
-  },
-  pagination: {
-    marginTop: 16,
-    display: "flex",
-    justifyContent: "center",
     gap: 12,
+    alignItems: "center",
+    marginBottom: 20,
+    flexWrap: "wrap",
   },
 };
