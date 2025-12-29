@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
 const API_BASE = "https://backend.mob13r.com";
@@ -9,20 +9,18 @@ export default function Advertisers() {
   const token = localStorage.getItem("token");
 
   const [list, setList] = useState([]);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 5;
+
   const [form, setForm] = useState({ id: null, name: "", email: "" });
   const [editing, setEditing] = useState(false);
 
-  // 🔍 search
-  const [search, setSearch] = useState("");
-
-  // 📄 pagination
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
-
-  /* ---------------- FETCH ---------------- */
   const fetchAdvertisers = async () => {
     const res = await fetch(`${API_BASE}/api/advertisers`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     });
     const data = await res.json();
     setList(data || []);
@@ -31,6 +29,19 @@ export default function Advertisers() {
   useEffect(() => {
     fetchAdvertisers();
   }, []);
+
+  /* ---------------- FILTER + PAGINATION ---------------- */
+  const filtered = list.filter(
+    (a) =>
+      a.name.toLowerCase().includes(search.toLowerCase()) ||
+      a.email.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  const paginated = filtered.slice(
+    (page - 1) * pageSize,
+    page * pageSize
+  );
 
   /* ---------------- CREATE / UPDATE ---------------- */
   const handleSubmit = async (e) => {
@@ -59,17 +70,11 @@ export default function Advertisers() {
     fetchAdvertisers();
   };
 
-  /* ---------------- EDIT ---------------- */
-  const editAdvertiser = (adv) => {
-    setForm({
-      id: adv.id,
-      name: adv.name,
-      email: adv.email,
-    });
+  const editAdvertiser = (a) => {
+    setForm({ id: a.id, name: a.name, email: a.email });
     setEditing(true);
   };
 
-  /* ---------------- TOGGLE STATUS ---------------- */
   const toggleStatus = async (id) => {
     await fetch(`${API_BASE}/api/advertisers/${id}/toggle`, {
       method: "PATCH",
@@ -78,27 +83,10 @@ export default function Advertisers() {
     fetchAdvertisers();
   };
 
-  /* ---------------- LOGOUT ---------------- */
   const logout = () => {
     localStorage.clear();
     navigate("/login", { replace: true });
   };
-
-  /* ---------------- SEARCH FILTER ---------------- */
-  const filteredList = useMemo(() => {
-    return list.filter(
-      (a) =>
-        a.name.toLowerCase().includes(search.toLowerCase()) ||
-        (a.email || "").toLowerCase().includes(search.toLowerCase())
-    );
-  }, [list, search]);
-
-  /* ---------------- PAGINATION ---------------- */
-  const totalPages = Math.ceil(filteredList.length / pageSize);
-  const paginatedData = filteredList.slice(
-    (page - 1) * pageSize,
-    page * pageSize
-  );
 
   return (
     <>
@@ -109,36 +97,26 @@ export default function Advertisers() {
             Mob13r
           </div>
 
-          <NavLink
-            to="/dashboard"
-            style={({ isActive }) =>
-              isActive ? styles.activeLink : styles.link
-            }
-          >
+          <NavLink to="/dashboard" style={styles.link}>
             Dashboard
           </NavLink>
 
-          <NavLink
-            to="/advertisers"
-            style={({ isActive }) =>
-              isActive ? styles.activeLink : styles.link
-            }
-          >
+          <NavLink to="/advertisers" style={styles.activeLink}>
             Advertisers
           </NavLink>
         </div>
 
         <div style={styles.right}>
-          <span style={styles.user}>{user?.email}</span>
+          <span>{user?.email}</span>
           <button style={styles.logoutBtn} onClick={logout}>
             Logout
           </button>
         </div>
       </div>
 
-      {/* 🔹 PAGE */}
+      {/* 🔹 PAGE CENTER */}
       <div style={styles.page}>
-        <div style={styles.content}>
+        <div style={styles.container}>
           <h1 style={styles.heading}>Advertisers</h1>
 
           {/* 🔍 SEARCH */}
@@ -153,37 +131,26 @@ export default function Advertisers() {
             style={styles.search}
           />
 
-          {/* ➕ CREATE / EDIT */}
+          {/* ➕ FORM */}
           <form onSubmit={handleSubmit} style={styles.form}>
             <input
-              type="text"
               placeholder="Name"
               value={form.name}
               required
-              onChange={(e) =>
-                setForm({ ...form, name: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
-
             <input
-              type="email"
               placeholder="Email"
               value={form.email}
-              onChange={(e) =>
-                setForm({ ...form, email: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
-
-            <button type="submit">
-              {editing ? "Update" : "Create"}
-            </button>
-
+            <button>{editing ? "Update" : "Create"}</button>
             {editing && (
               <button
                 type="button"
                 onClick={() => {
-                  setForm({ id: null, name: "", email: "" });
                   setEditing(false);
+                  setForm({ id: null, name: "", email: "" });
                 }}
               >
                 Cancel
@@ -191,8 +158,8 @@ export default function Advertisers() {
             )}
           </form>
 
-          {/* 📄 TABLE */}
-          <div style={styles.tableWrap}>
+          {/* 📋 TABLE CARD */}
+          <div style={styles.tableCard}>
             <table style={styles.table}>
               <thead>
                 <tr>
@@ -203,9 +170,9 @@ export default function Advertisers() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedData.map((a) => (
+                {paginated.map((a) => (
                   <tr key={a.id}>
-                    <td style={styles.nameCell}>{a.name}</td>
+                    <td style={{ fontWeight: 600 }}>{a.name}</td>
                     <td>{a.email}</td>
                     <td
                       style={{
@@ -216,9 +183,7 @@ export default function Advertisers() {
                       {a.status}
                     </td>
                     <td>
-                      <button onClick={() => editAdvertiser(a)}>
-                        Edit
-                      </button>{" "}
+                      <button onClick={() => editAdvertiser(a)}>Edit</button>{" "}
                       <button onClick={() => toggleStatus(a.id)}>
                         {a.status === "active"
                           ? "Deactivate"
@@ -230,37 +195,23 @@ export default function Advertisers() {
               </tbody>
             </table>
 
-            {/* 📄 PAGINATION */}
+            {/* 🔢 PAGINATION */}
             <div style={styles.pagination}>
               <button
                 disabled={page === 1}
-                onClick={() => setPage((p) => p - 1)}
+                onClick={() => setPage(page - 1)}
               >
                 Prev
               </button>
-
               <span>
                 Page {page} of {totalPages || 1}
               </span>
-
               <button
                 disabled={page === totalPages}
-                onClick={() => setPage((p) => p + 1)}
+                onClick={() => setPage(page + 1)}
               >
                 Next
               </button>
-
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPage(1);
-                }}
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-              </select>
             </div>
           </div>
         </div>
@@ -269,99 +220,74 @@ export default function Advertisers() {
   );
 }
 
-/* 🎨 STYLES */
+/* ================= STYLES ================= */
 const styles = {
   navbar: {
     height: 64,
-    backgroundColor: "#0f172a",
-    color: "#ffffff",
+    background: "#0f172a",
+    color: "#fff",
     display: "flex",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
     padding: "0 32px",
   },
-  left: {
-    display: "flex",
-    alignItems: "center",
-    gap: 28,
-  },
-  logo: {
-    fontSize: 22,
-    fontWeight: "700",
-    cursor: "pointer",
-  },
-  link: {
-    color: "#cbd5f5",
-    textDecoration: "none",
-    fontSize: 16,
-  },
+  left: { display: "flex", gap: 24, alignItems: "center" },
+  logo: { fontSize: 22, fontWeight: "bold", cursor: "pointer" },
+  link: { color: "#cbd5f5", textDecoration: "none" },
   activeLink: {
-    color: "#ffffff",
+    color: "#fff",
     textDecoration: "underline",
-    fontSize: 16,
     fontWeight: 600,
   },
-  right: {
-    display: "flex",
-    alignItems: "center",
-    gap: 18,
-  },
-  user: {
-    fontSize: 14,
-    opacity: 0.9,
-  },
+  right: { display: "flex", gap: 16, alignItems: "center" },
   logoutBtn: {
-    backgroundColor: "#ef4444",
+    background: "#ef4444",
     color: "#fff",
     border: "none",
-    padding: "8px 16px",
+    padding: "8px 14px",
     borderRadius: 6,
     cursor: "pointer",
   },
+
   page: {
-    minHeight: "calc(100vh - 64px)",
-    backgroundColor: "#f8fafc",
     display: "flex",
     justifyContent: "center",
-    padding: "32px 0",
+    background: "#f8fafc",
+    minHeight: "calc(100vh - 64px)",
+    paddingTop: 40,
   },
-  content: {
+  container: {
     width: "100%",
-    maxWidth: "1100px",
-    padding: "0 24px",
+    maxWidth: 1000,
+    padding: "0 20px",
   },
-  heading: {
-    fontSize: 28,
-    marginBottom: 16,
-  },
+  heading: { fontSize: 28, marginBottom: 16 },
   search: {
     padding: 10,
-    width: "320px",
-    marginBottom: 20,
+    width: 320,
+    marginBottom: 16,
   },
   form: {
     display: "flex",
-    gap: 12,
+    gap: 10,
     marginBottom: 24,
+    flexWrap: "wrap",
   },
-  tableWrap: {
-    backgroundColor: "#ffffff",
+  tableCard: {
+    background: "#fff",
     padding: 20,
-    borderRadius: 8,
-    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+    borderRadius: 10,
+    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
   },
   table: {
     width: "100%",
     borderCollapse: "collapse",
-  },
-  nameCell: {
-    fontSize: 16,
-    fontWeight: 600,
+    textAlign: "center",
   },
   pagination: {
-    display: "flex",
-    gap: 12,
-    alignItems: "center",
     marginTop: 16,
+    display: "flex",
+    justifyContent: "center",
+    gap: 12,
   },
 };
