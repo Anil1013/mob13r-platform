@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -15,12 +15,35 @@ export default function Dashboard() {
     <>
       {/* 🔹 Navbar */}
       <div style={styles.navbar}>
-        <div style={styles.logo}>Mob13r</div>
+        <div style={styles.left}>
+          <div
+            style={styles.logo}
+            onClick={() => navigate("/dashboard")}
+          >
+            Mob13r
+          </div>
+
+          <NavLink
+            to="/dashboard"
+            style={({ isActive }) =>
+              isActive ? styles.activeLink : styles.link
+            }
+          >
+            Dashboard
+          </NavLink>
+
+          <NavLink
+            to="/advertisers"
+            style={({ isActive }) =>
+              isActive ? styles.activeLink : styles.link
+            }
+          >
+            Advertisers
+          </NavLink>
+        </div>
 
         <div style={styles.right}>
-          <span style={styles.user}>
-            {user?.email}
-          </span>
+          <span style={styles.user}>{user?.email}</span>
           <button style={styles.logoutBtn} onClick={logout}>
             Logout
           </button>
@@ -46,9 +69,25 @@ const styles = {
     justifyContent: "space-between",
     padding: "0 24px",
   },
+  left: {
+    display: "flex",
+    alignItems: "center",
+    gap: 20,
+  },
   logo: {
     fontSize: 20,
     fontWeight: "bold",
+    cursor: "pointer",
+  },
+  link: {
+    color: "#9ca3af",
+    textDecoration: "none",
+    fontSize: 14,
+  },
+  activeLink: {
+    color: "#ffffff",
+    textDecoration: "underline",
+    fontSize: 14,
   },
   right: {
     display: "flex",
