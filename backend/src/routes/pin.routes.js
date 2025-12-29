@@ -30,10 +30,10 @@ async function isMsisdnLimitReached(msisdn) {
     `,
     [msisdn]
   );
-  return Number(result.rows[0].count) >= MAX_MSISDN_DAILY;
+  return Number(result.rows[0].count) >= 3;
 }
 
-/* ================= FIND FALLBACK (ROUTING ONLY) ================= */
+/* ================= FIND FALLBACK ================= */
 async function findFallbackOffer(primary) {
   const result = await pool.query(
     `
@@ -54,54 +54,17 @@ async function findFallbackOffer(primary) {
   return result.rows[0] || null;
 }
 
-/* =====================================================
-   🔁 MANUAL SERVICE TYPE CHANGE (NORMAL ↔ FALLBACK)
-===================================================== */
-router.patch("/offers/:id/service-type", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { service_type } = req.body;
-
-    if (!["NORMAL", "FALLBACK"].includes(service_type)) {
-      return res.status(400).json({
-        message: "service_type must be NORMAL or FALLBACK",
-      });
-    }
-
-    /* Check offer exists */
-    const offerRes = await pool.query(
-      `SELECT id FROM offers WHERE id = $1`,
-      [id]
-    );
-
-    if (!offerRes.rows.length) {
-      return res.status(404).json({ message: "Offer not found" });
-    }
-
-    /* Update manually */
-    await pool.query(
-      `
-      UPDATE offers
-      SET service_type = $1
-      WHERE id = $2
-      `,
-      [service_type, id]
-    );
-
-    return res.json({
-      status: "SUCCESS",
-      message: `Offer manually set to ${service_type}`,
-    });
-  } catch (err) {
-    console.error("SERVICE TYPE PATCH ERROR:", err.message);
-    return res.status(500).json({
-      message: "Failed to update service type",
-    });
+/* ================= HELPER ================= */
+function getAdvMethod(staticParams) {
+  const m = (staticParams.method || "GET").toUpperCase();
+  if (!["GET", "POST"].includes(m)) {
+    throw new Error("Invalid method in panel (use GET or POST)");
   }
-});
+  return m;
+}
 
 /* =====================================================
-   🔐 PIN SEND (GET + POST)
+   🔐 PIN SEND
 ===================================================== */
 router.all("/pin/send/:offer_id", async (req, res) => {
   try {
@@ -116,12 +79,10 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     }
 
     if (await isMsisdnLimitReached(msisdn)) {
-      return res.status(429).json({
-        message: "MSISDN daily limit reached",
-      });
+      return res.status(429).json({ message: "MSISDN daily limit reached" });
     }
 
-    /* Load PRIMARY */
+    /* Load primary offer */
     const offerRes = await pool.query(
       `
       SELECT *
@@ -152,7 +113,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       route = "FALLBACK";
     }
 
-    /* LOAD PARAMS */
+    /* LOAD OFFER PARAMS */
     const paramRes = await pool.query(
       `
       SELECT param_key, param_value
@@ -162,17 +123,17 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       [offer.id]
     );
 
-    let staticParams = {};
+    const staticParams = {};
     paramRes.rows.forEach((p) => {
       staticParams[p.param_key] = p.param_value;
     });
 
-    const pinSendUrl =
-      staticParams.pin_send_url || staticParams.operator_send_url;
-
+    const pinSendUrl = staticParams.pin_send_url;
     if (!pinSendUrl) {
-      return res.status(500).json({ message: "PIN send URL missing" });
+      return res.status(500).json({ message: "pin_send_url missing" });
     }
+
+    const advMethod = getAdvMethod(staticParams);
 
     const finalParams = {
       ...staticParams,
@@ -191,12 +152,26 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       [offer.id, msisdn, sessionToken, finalParams]
     );
 
-    const method = staticParams.request_method || "POST";
-
-    if (method === "GET") {
-      await axios.get(pinSendUrl, { params: finalParams });
+    /* CALL ADV */
+    let advResp;
+    if (advMethod === "GET") {
+      advResp = await axios.get(pinSendUrl, { params: finalParams });
     } else {
-      await axios.post(pinSendUrl, finalParams);
+      advResp = await axios.post(pinSendUrl, finalParams);
+    }
+
+    const advData = advResp.data;
+    const advSessionKey = advData?.sessionKey;
+
+    if (advSessionKey) {
+      await pool.query(
+        `
+        UPDATE pin_sessions
+        SET adv_session_key = $1
+        WHERE session_token = $2
+        `,
+        [advSessionKey, sessionToken]
+      );
     }
 
     await pool.query(
@@ -206,13 +181,17 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     return res.json({
       status: "OTP_SENT",
-      session_token: sessionToken,
       route,
       offer_id: offer.id,
+      session_token: sessionToken,
+      adv_response: advData,
     });
   } catch (err) {
     console.error("PIN SEND ERROR:", err.message);
-    return res.status(500).json({ message: "PIN send failed" });
+    return res.status(500).json({
+      message: "PIN send failed",
+      error: err.message,
+    });
   }
 });
 
@@ -246,9 +225,7 @@ router.post("/pin/verify", async (req, res) => {
     const session = sessionRes.rows[0];
 
     if (session.otp_attempts >= MAX_OTP_ATTEMPTS) {
-      return res.status(429).json({
-        message: "OTP attempts exceeded",
-      });
+      return res.status(429).json({ message: "OTP attempts exceeded" });
     }
 
     const paramRes = await pool.query(
@@ -260,23 +237,26 @@ router.post("/pin/verify", async (req, res) => {
       [session.offer_id]
     );
 
-    let staticParams = {};
+    const staticParams = {};
     paramRes.rows.forEach((p) => {
       staticParams[p.param_key] = p.param_value;
     });
 
+    const pinVerifyUrl = staticParams.verify_pin_url;
+    if (!pinVerifyUrl) {
+      return res.status(500).json({ message: "verify_pin_url missing" });
+    }
+
+    const advMethod = getAdvMethod(staticParams);
+
     const verifyParams = {
       ...session.params,
       otp,
+      sessionKey: session.adv_session_key,
     };
 
-    const pinVerifyUrl =
-      staticParams.pin_verify_url || staticParams.operator_verify_url;
-
-    const method = staticParams.request_method || "POST";
-
     try {
-      if (method === "GET") {
+      if (advMethod === "GET") {
         await axios.get(pinVerifyUrl, { params: verifyParams });
       } else {
         await axios.post(pinVerifyUrl, verifyParams);
@@ -302,7 +282,10 @@ router.post("/pin/verify", async (req, res) => {
     return res.json({ status: "SUCCESS" });
   } catch (err) {
     console.error("PIN VERIFY ERROR:", err.message);
-    return res.status(500).json({ message: "PIN verify failed" });
+    return res.status(500).json({
+      message: "PIN verify failed",
+      error: err.message,
+    });
   }
 });
 
