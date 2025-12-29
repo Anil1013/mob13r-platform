@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+
+const API_BASE = "https://backend.mob13r.com";
 
 export default function Login() {
-  const navigate = useNavigate();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -14,14 +13,11 @@ export default function Login() {
     setError("");
 
     try {
-      const res = await fetch(
-        "https://backend.mob13r.com/api/auth/login",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        }
-      );
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
       const data = await res.json();
 
@@ -31,110 +27,57 @@ export default function Login() {
       }
 
       localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-
-      navigate("/", { replace: true });
+      window.location.href = "/dashboard";
     } catch (err) {
       setError("Server error");
     }
   };
 
   return (
-    <div style={styles.container}>
-      <form onSubmit={handleLogin} style={styles.card}>
-        <img src="/logo.png" alt="Mob13r" style={styles.logo} />
+    <div style={{ maxWidth: 400, margin: "80px auto", textAlign: "center" }}>
+      <img src="/logo.png" alt="Mob13r" width="120" />
+      <h2>Admin Login</h2>
 
-        <h2>Admin Login</h2>
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
-        {error && <p style={styles.error}>{error}</p>}
-
+      <form onSubmit={handleLogin}>
         <input
           type="email"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          style={styles.input}
+          style={{ width: "100%", padding: 10, marginBottom: 10 }}
         />
 
         {/* 🔐 Password with Show / Hide */}
-        <div style={styles.passwordBox}>
+        <div style={{ position: "relative", marginBottom: 10 }}>
           <input
             type={showPassword ? "text" : "password"}
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            style={{ ...styles.input, marginBottom: 0 }}
+            style={{ width: "100%", padding: 10 }}
           />
           <span
-            style={styles.eye}
             onClick={() => setShowPassword(!showPassword)}
+            style={{
+              position: "absolute",
+              right: 12,
+              top: 10,
+              cursor: "pointer",
+              fontSize: 18,
+            }}
           >
             {showPassword ? "🙈" : "👁️"}
           </span>
         </div>
 
-        <button type="submit" style={styles.button}>
+        <button style={{ width: "100%", padding: 10 }}>
           Login
         </button>
       </form>
     </div>
   );
 }
-
-const styles = {
-  container: {
-    minHeight: "100vh",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    background: "#f9fafb",
-  },
-  card: {
-    width: 360,
-    padding: 30,
-    background: "#fff",
-    borderRadius: 10,
-    boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
-    textAlign: "center",
-  },
-  logo: {
-    width: 80,
-    marginBottom: 10,
-  },
-  input: {
-    width: "100%",
-    padding: 12,
-    marginBottom: 16,
-    borderRadius: 6,
-    border: "1px solid #d1d5db",
-    fontSize: 14,
-  },
-  passwordBox: {
-    position: "relative",
-    marginBottom: 16,
-  },
-  eye: {
-    position: "absolute",
-    right: 12,
-    top: 12,
-    cursor: "pointer",
-    fontSize: 18,
-  },
-  button: {
-    width: "100%",
-    padding: 12,
-    background: "#111827",
-    color: "#fff",
-    border: "none",
-    borderRadius: 6,
-    cursor: "pointer",
-    fontSize: 15,
-  },
-  error: {
-    color: "#ef4444",
-    fontSize: 14,
-    marginBottom: 10,
-  },
-};
