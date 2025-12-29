@@ -76,7 +76,7 @@ export default function Offers() {
 
   useEffect(() => {
     fetchAdvertisers();
-    fetchOffers(); // 🔥 page load → all offers
+    fetchOffers(""); // 🔥 page load → all offers
   }, []);
 
   /* ---------------- CREATE OFFER ---------------- */
