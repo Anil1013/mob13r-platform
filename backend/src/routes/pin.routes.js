@@ -30,11 +30,10 @@ async function isMsisdnLimitReached(msisdn) {
     `,
     [msisdn]
   );
-
   return Number(result.rows[0].count) >= MAX_MSISDN_DAILY;
 }
 
-/* ================= FIND FALLBACK ================= */
+/* ================= FIND FALLBACK (ROUTING ONLY) ================= */
 async function findFallbackOffer(primary) {
   const result = await pool.query(
     `
@@ -44,7 +43,9 @@ async function findFallbackOffer(primary) {
       AND geo = $2
       AND carrier = $3
       AND service_type = 'FALLBACK'
+      AND status = 'active'
       AND (daily_cap IS NULL OR today_hits < daily_cap)
+    ORDER BY id ASC
     LIMIT 1
     `,
     [primary.advertiser_id, primary.geo, primary.carrier]
@@ -75,13 +76,14 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       });
     }
 
-    /* 1️⃣ LOAD PRIMARY OFFER */
+    /* 1️⃣ LOAD PRIMARY (NORMAL) OFFER */
     const offerRes = await pool.query(
       `
       SELECT *
       FROM offers
       WHERE id = $1
         AND service_type = 'NORMAL'
+        AND status = 'active'
       `,
       [offer_id]
     );
@@ -93,11 +95,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     let offer = offerRes.rows[0];
     let route = "PRIMARY";
 
-    /* 2️⃣ CAP CHECK (skip if unlimited) */
-    if (
-      offer.daily_cap &&
-      offer.today_hits >= offer.daily_cap
-    ) {
+    /* 2️⃣ CAP CHECK */
+    if (offer.daily_cap && offer.today_hits >= offer.daily_cap) {
       const fallback = await findFallbackOffer(offer);
 
       if (!fallback) {
@@ -110,7 +109,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       route = "FALLBACK";
     }
 
-    /* 3️⃣ LOAD OFFER PARAMS */
+    /* 3️⃣ LOAD OFFER PARAMETERS */
     const paramRes = await pool.query(
       `
       SELECT param_key, param_value
@@ -161,7 +160,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       await axios.post(pinSendUrl, finalParams);
     }
 
-    /* 6️⃣ INCREMENT HIT (only after success) */
+    /* 6️⃣ INCREMENT HIT ONLY AFTER SUCCESS */
     await pool.query(
       `
       UPDATE offers
