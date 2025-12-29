@@ -42,14 +42,29 @@ export default function Offers() {
     setAdvertisers(await res.json());
   };
 
+  // 🔥 advertiserId empty → ALL offers
   const fetchOffers = async (advertiserId) => {
-    if (!advertiserId) return;
-    const res = await fetch(
-      `${API_BASE}/api/offers?advertiser_id=${advertiserId}`,
-      { headers: authHeaders }
-    );
-    setOffers(await res.json());
-  };
+  try {
+    const url = advertiserId
+      ? `${API_BASE}/api/offers?advertiser_id=${advertiserId}`
+      : `${API_BASE}/api/offers`;
+
+    const res = await fetch(url, { headers: authHeaders });
+    const data = await res.json();
+
+    // 🔐 SAFETY CHECK
+    if (Array.isArray(data)) {
+      setOffers(data);
+    } else {
+      console.warn("Offers API returned non-array:", data);
+      setOffers([]);
+    }
+  } catch (err) {
+    console.error("Failed to fetch offers:", err);
+    setOffers([]);
+  }
+};
+
 
   const fetchParameters = async (offerId) => {
     const res = await fetch(
@@ -61,6 +76,7 @@ export default function Offers() {
 
   useEffect(() => {
     fetchAdvertisers();
+    fetchOffers(); // 🔥 page load → all offers
   }, []);
 
   /* ---------------- CREATE OFFER ---------------- */
@@ -74,7 +90,7 @@ export default function Offers() {
     });
 
     const data = await res.json();
-    setOffers([...offers, data]);
+    setOffers((prev) => [...prev, data]);
 
     setOfferForm({
       ...offerForm,
@@ -126,11 +142,13 @@ export default function Offers() {
   /* ---------------- HELPERS ---------------- */
   const getStatusBadge = (o) => {
     if (o.service_type === "FALLBACK") {
-      return <span style={styles.badgeFallback}>🟡 Fallback Active</span>;
+      return <span style={styles.badgeFallback}>🟡 Fallback</span>;
     }
+
     if (o.daily_cap && o.today_hits >= o.daily_cap) {
       return <span style={styles.badgeCap}>🔴 Cap Reached</span>;
     }
+
     return <span style={styles.badgeActive}>🟢 Active</span>;
   };
 
@@ -147,130 +165,138 @@ export default function Offers() {
       <div style={styles.page}>
         <h1>Offers</h1>
 
-        {/* 🔹 TOP BAR */}
-        <div style={styles.topBar}>
+        {/* SELECT ADVERTISER */}
+        <select
+          value={offerForm.advertiser_id}
+          onChange={(e) => {
+            const id = e.target.value;
+            setOfferForm({ ...offerForm, advertiser_id: id });
+            setSelectedOffer(null);
+            fetchOffers(id);
+          }}
+        >
+          <option value="">All Advertisers</option>
+          {advertisers.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+
+        {/* CREATE OFFER */}
+        <form onSubmit={createOffer} style={styles.card}>
+          <h3>Create Offer</h3>
+
+          <input
+            placeholder="Service Name"
+            required
+            value={offerForm.service_name}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, service_name: e.target.value })
+            }
+          />
+
+          <input
+            placeholder="CPA"
+            value={offerForm.cpa}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, cpa: e.target.value })
+            }
+          />
+
+          <input
+            placeholder="Daily Cap"
+            value={offerForm.daily_cap}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, daily_cap: e.target.value })
+            }
+          />
+
+          <input
+            placeholder="Geo"
+            value={offerForm.geo}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, geo: e.target.value })
+            }
+          />
+
+          <input
+            placeholder="Carrier"
+            value={offerForm.carrier}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, carrier: e.target.value })
+            }
+          />
+
           <select
-            value={offerForm.advertiser_id}
-            onChange={(e) => {
-              const id = e.target.value;
-              setOfferForm({ ...offerForm, advertiser_id: id });
-              setSelectedOffer(null);
-              fetchOffers(id);
-            }}
+            value={offerForm.service_type}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, service_type: e.target.value })
+            }
           >
-            <option value="">Select Advertiser</option>
-            {advertisers.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
+            <option value="NORMAL">NORMAL (Primary)</option>
+            <option value="FALLBACK">FALLBACK</option>
           </select>
 
-          <form onSubmit={createOffer} style={styles.createRow}>
-            <input
-              placeholder="Service Name"
-              required
-              value={offerForm.service_name}
-              onChange={(e) =>
-                setOfferForm({ ...offerForm, service_name: e.target.value })
-              }
-            />
-            <input
-              placeholder="CPA"
-              value={offerForm.cpa}
-              onChange={(e) =>
-                setOfferForm({ ...offerForm, cpa: e.target.value })
-              }
-            />
-            <input
-              placeholder="Daily Cap"
-              value={offerForm.daily_cap}
-              onChange={(e) =>
-                setOfferForm({ ...offerForm, daily_cap: e.target.value })
-              }
-            />
-            <input
-              placeholder="Geo"
-              value={offerForm.geo}
-              onChange={(e) =>
-                setOfferForm({ ...offerForm, geo: e.target.value })
-              }
-            />
-            <input
-              placeholder="Carrier"
-              value={offerForm.carrier}
-              onChange={(e) =>
-                setOfferForm({ ...offerForm, carrier: e.target.value })
-              }
-            />
-            <select
-              value={offerForm.service_type}
-              onChange={(e) =>
-                setOfferForm({ ...offerForm, service_type: e.target.value })
-              }
-            >
-              <option value="NORMAL">NORMAL</option>
-              <option value="FALLBACK">FALLBACK</option>
-            </select>
+          <button>Create Offer</button>
+        </form>
 
-            <button>Create</button>
-          </form>
-        </div>
-
-        {/* 🔹 OFFER TABLE */}
-        <div style={styles.tableWrap}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th>Service</th>
-                <th>Geo</th>
-                <th>Carrier</th>
-                <th>Daily Cap</th>
-                <th>Used</th>
-                <th>Remaining</th>
-                <th>Route</th>
-                <th>Status</th>
-                <th>Control</th>
-                <th>Params</th>
-              </tr>
-            </thead>
-            <tbody>
-              {offers.map((o) => (
-                <tr key={o.id}>
-                  <td>{o.service_name}</td>
-                  <td>{o.geo}</td>
-                  <td>{o.carrier}</td>
-                  <td>{o.daily_cap || "∞"}</td>
-                  <td>{o.today_hits}</td>
-                  <td>{remaining(o)}</td>
-                  <td>{o.service_type}</td>
-                  <td>{getStatusBadge(o)}</td>
-                  <td>
-                    {o.service_type === "NORMAL" ? (
-                      <button onClick={() => changeServiceType(o.id, "FALLBACK")}>
-                        Make Fallback
-                      </button>
-                    ) : (
-                      <button onClick={() => changeServiceType(o.id, "NORMAL")}>
-                        Make Primary
-                      </button>
-                    )}
-                  </td>
-                  <td>
-                    <button
-                      onClick={() => {
-                        setSelectedOffer(o);
-                        fetchParameters(o.id);
-                      }}
-                    >
-                      Manage
+        {/* OFFER TABLE */}
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th>Offer ID</th>
+              <th>Advertiser</th>
+              <th>Service</th>
+              <th>Geo</th>
+              <th>Carrier</th>
+              <th>Daily Cap</th>
+              <th>Used</th>
+              <th>Remaining</th>
+              <th>Route</th>
+              <th>Status</th>
+              <th>Control</th>
+              <th>Params</th>
+            </tr>
+          </thead>
+          <tbody>
+            {offers.map((o) => (
+              <tr key={o.id}>
+                <td>{o.id}</td>
+                <td>{o.advertiser_name || "-"}</td>
+                <td>{o.service_name}</td>
+                <td>{o.geo}</td>
+                <td>{o.carrier}</td>
+                <td>{o.daily_cap || "∞"}</td>
+                <td>{o.today_hits}</td>
+                <td>{remaining(o)}</td>
+                <td>{o.service_type}</td>
+                <td>{getStatusBadge(o)}</td>
+                <td>
+                  {o.service_type === "NORMAL" ? (
+                    <button onClick={() => changeServiceType(o.id, "FALLBACK")}>
+                      Make Fallback
                     </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  ) : (
+                    <button onClick={() => changeServiceType(o.id, "NORMAL")}>
+                      Make Primary
+                    </button>
+                  )}
+                </td>
+                <td>
+                  <button
+                    onClick={() => {
+                      setSelectedOffer(o);
+                      fetchParameters(o.id);
+                    }}
+                  >
+                    Manage
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
         {/* PARAMETERS */}
         {selectedOffer && (
