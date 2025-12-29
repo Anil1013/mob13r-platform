@@ -18,9 +18,11 @@ export default function Offers() {
     advertiser_id: "",
     service_name: "",
     cpa: "",
-    capping: "",
+    daily_cap: "",
+    geo: "",
+    carrier: "",
     otp_length: 4,
-    service_type: "NORMAL",
+    service_type: "NORMAL", // NORMAL | FALLBACK
   });
 
   const [paramForm, setParamForm] = useState({
@@ -28,7 +30,7 @@ export default function Offers() {
     param_value: "",
   });
 
-  /* ---------------- FETCH DATA ---------------- */
+  /* ---------------- FETCH ---------------- */
   const authHeaders = {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
@@ -41,10 +43,10 @@ export default function Offers() {
     setAdvertisers(await res.json());
   };
 
-  const fetchOffers = async () => {
-    if (!offerForm.advertiser_id) return;
+  const fetchOffers = async (advertiserId) => {
+    if (!advertiserId) return;
     const res = await fetch(
-      `${API_BASE}/api/offers?advertiser_id=${offerForm.advertiser_id}`,
+      `${API_BASE}/api/offers?advertiser_id=${advertiserId}`,
       { headers: authHeaders }
     );
     setOffers(await res.json());
@@ -62,7 +64,7 @@ export default function Offers() {
     fetchAdvertisers();
   }, []);
 
-  /* ---------------- OFFER CREATE ---------------- */
+  /* ---------------- CREATE OFFER ---------------- */
   const createOffer = async (e) => {
     e.preventDefault();
 
@@ -74,12 +76,14 @@ export default function Offers() {
 
     const data = await res.json();
     setOffers([...offers, data]);
+
     setOfferForm({
-      advertiser_id: offerForm.advertiser_id,
+      ...offerForm,
       service_name: "",
       cpa: "",
-      capping: "",
-      otp_length: 4,
+      daily_cap: "",
+      geo: "",
+      carrier: "",
       service_type: "NORMAL",
     });
   };
@@ -131,7 +135,7 @@ export default function Offers() {
         </div>
       </div>
 
-      {/* CONTENT */}
+      {/* PAGE */}
       <div style={styles.page}>
         <h1>Offers</h1>
 
@@ -139,9 +143,10 @@ export default function Offers() {
         <select
           value={offerForm.advertiser_id}
           onChange={(e) => {
-            setOfferForm({ ...offerForm, advertiser_id: e.target.value });
+            const id = e.target.value;
+            setOfferForm({ ...offerForm, advertiser_id: id });
             setSelectedOffer(null);
-            fetchOffers();
+            fetchOffers(id);
           }}
         >
           <option value="">Select Advertiser</option>
@@ -156,22 +161,44 @@ export default function Offers() {
 
           <input placeholder="Service Name" required
             value={offerForm.service_name}
-            onChange={(e) => setOfferForm({ ...offerForm, service_name: e.target.value })}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, service_name: e.target.value })
+            }
           />
 
           <input placeholder="CPA"
             value={offerForm.cpa}
-            onChange={(e) => setOfferForm({ ...offerForm, cpa: e.target.value })}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, cpa: e.target.value })
+            }
           />
 
-          <input placeholder="Capping"
-            value={offerForm.capping}
-            onChange={(e) => setOfferForm({ ...offerForm, capping: e.target.value })}
+          <input placeholder="Daily Cap"
+            value={offerForm.daily_cap}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, daily_cap: e.target.value })
+            }
+          />
+
+          <input placeholder="Geo (IN, PK, UAE)"
+            value={offerForm.geo}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, geo: e.target.value })
+            }
+          />
+
+          <input placeholder="Carrier (JIO, ZONG)"
+            value={offerForm.carrier}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, carrier: e.target.value })
+            }
           />
 
           <select
             value={offerForm.service_type}
-            onChange={(e) => setOfferForm({ ...offerForm, service_type: e.target.value })}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, service_type: e.target.value })
+            }
           >
             <option value="NORMAL">NORMAL</option>
             <option value="FALLBACK">FALLBACK</option>
@@ -185,8 +212,10 @@ export default function Offers() {
           <thead>
             <tr>
               <th>Service</th>
-              <th>CPA</th>
-              <th>Status</th>
+              <th>Geo</th>
+              <th>Carrier</th>
+              <th>Daily Cap</th>
+              <th>Type</th>
               <th>Params</th>
             </tr>
           </thead>
@@ -194,8 +223,10 @@ export default function Offers() {
             {offers.map((o) => (
               <tr key={o.id}>
                 <td>{o.service_name}</td>
-                <td>{o.cpa}</td>
-                <td>{o.status}</td>
+                <td>{o.geo}</td>
+                <td>{o.carrier}</td>
+                <td>{o.daily_cap || "∞"}</td>
+                <td>{o.service_type}</td>
                 <td>
                   <button onClick={() => {
                     setSelectedOffer(o);
@@ -275,9 +306,24 @@ const styles = {
   link: { color: "#cbd5f5", textDecoration: "none" },
   activeLink: { color: "#fff", fontWeight: 600 },
   right: { display: "flex", gap: 12 },
-  logoutBtn: { background: "#ef4444", color: "#fff", border: 0, padding: "6px 12px" },
+  logoutBtn: {
+    background: "#ef4444",
+    color: "#fff",
+    border: 0,
+    padding: "6px 12px",
+    cursor: "pointer",
+  },
   page: { padding: 40 },
-  card: { background: "#fff", padding: 20, marginTop: 20 },
+  card: {
+    background: "#fff",
+    padding: 20,
+    marginTop: 20,
+    borderRadius: 6,
+  },
   inline: { display: "flex", gap: 10 },
-  table: { width: "100%", marginTop: 20, borderCollapse: "collapse" },
+  table: {
+    width: "100%",
+    marginTop: 20,
+    borderCollapse: "collapse",
+  },
 };
