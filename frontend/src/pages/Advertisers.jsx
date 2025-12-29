@@ -12,10 +12,10 @@ export default function Advertisers() {
   const [form, setForm] = useState({ id: null, name: "", email: "" });
   const [editing, setEditing] = useState(false);
 
-  /* 🔍 SEARCH */
+  // 🔍 search
   const [search, setSearch] = useState("");
 
-  /* 📄 PAGINATION */
+  // 📄 pagination
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
 
@@ -138,120 +138,130 @@ export default function Advertisers() {
 
       {/* 🔹 PAGE */}
       <div style={styles.page}>
-        <h1 style={styles.heading}>Advertisers</h1>
+        <div style={styles.content}>
+          <h1 style={styles.heading}>Advertisers</h1>
 
-        {/* 🔍 SEARCH */}
-        <input
-          type="text"
-          placeholder="Search by name or email..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          style={styles.search}
-        />
-
-        {/* ➕ CREATE / EDIT */}
-        <form onSubmit={handleSubmit} style={styles.form}>
+          {/* 🔍 SEARCH */}
           <input
             type="text"
-            placeholder="Name"
-            value={form.name}
-            required
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Search by name or email..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            style={styles.search}
           />
 
-          <input
-            type="email"
-            placeholder="Email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-          />
+          {/* ➕ CREATE / EDIT */}
+          <form onSubmit={handleSubmit} style={styles.form}>
+            <input
+              type="text"
+              placeholder="Name"
+              value={form.name}
+              required
+              onChange={(e) =>
+                setForm({ ...form, name: e.target.value })
+              }
+            />
 
-          <button type="submit">
-            {editing ? "Update" : "Create"}
-          </button>
+            <input
+              type="email"
+              placeholder="Email"
+              value={form.email}
+              onChange={(e) =>
+                setForm({ ...form, email: e.target.value })
+              }
+            />
 
-          {editing && (
-            <button
-              type="button"
-              onClick={() => {
-                setForm({ id: null, name: "", email: "" });
-                setEditing(false);
-              }}
-            >
-              Cancel
+            <button type="submit">
+              {editing ? "Update" : "Create"}
             </button>
-          )}
-        </form>
 
-        {/* 📄 TABLE */}
-        <div style={styles.tableWrap}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedData.map((a) => (
-                <tr key={a.id}>
-                  <td style={styles.nameCell}>{a.name}</td>
-                  <td>{a.email}</td>
-                  <td
-                    style={{
-                      color: a.status === "active" ? "green" : "red",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {a.status}
-                  </td>
-                  <td>
-                    <button onClick={() => editAdvertiser(a)}>Edit</button>{" "}
-                    <button onClick={() => toggleStatus(a.id)}>
-                      {a.status === "active" ? "Deactivate" : "Activate"}
-                    </button>
-                  </td>
+            {editing && (
+              <button
+                type="button"
+                onClick={() => {
+                  setForm({ id: null, name: "", email: "" });
+                  setEditing(false);
+                }}
+              >
+                Cancel
+              </button>
+            )}
+          </form>
+
+          {/* 📄 TABLE */}
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {paginatedData.map((a) => (
+                  <tr key={a.id}>
+                    <td style={styles.nameCell}>{a.name}</td>
+                    <td>{a.email}</td>
+                    <td
+                      style={{
+                        color: a.status === "active" ? "green" : "red",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {a.status}
+                    </td>
+                    <td>
+                      <button onClick={() => editAdvertiser(a)}>
+                        Edit
+                      </button>{" "}
+                      <button onClick={() => toggleStatus(a.id)}>
+                        {a.status === "active"
+                          ? "Deactivate"
+                          : "Activate"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-          {/* 📄 PAGINATION CONTROLS */}
-          <div style={styles.pagination}>
-            <button
-              disabled={page === 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              Prev
-            </button>
+            {/* 📄 PAGINATION */}
+            <div style={styles.pagination}>
+              <button
+                disabled={page === 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                Prev
+              </button>
 
-            <span>
-              Page {page} of {totalPages || 1}
-            </span>
+              <span>
+                Page {page} of {totalPages || 1}
+              </span>
 
-            <button
-              disabled={page === totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </button>
+              <button
+                disabled={page === totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </button>
 
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
-            >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-            </select>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -310,8 +320,15 @@ const styles = {
   },
   page: {
     minHeight: "calc(100vh - 64px)",
-    padding: "32px 48px",
     backgroundColor: "#f8fafc",
+    display: "flex",
+    justifyContent: "center",
+    padding: "32px 0",
+  },
+  content: {
+    width: "100%",
+    maxWidth: "1100px",
+    padding: "0 24px",
   },
   heading: {
     fontSize: 28,
