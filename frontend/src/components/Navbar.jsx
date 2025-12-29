@@ -9,6 +9,9 @@ export default function Navbar() {
     navigate("/login", { replace: true });
   };
 
+  const navStyle = ({ isActive }) =>
+    isActive ? styles.activeLink : styles.link;
+
   return (
     <>
       <div style={styles.navbar}>
@@ -46,9 +49,6 @@ export default function Navbar() {
   );
 }
 
-const navStyle = ({ isActive }) =>
-  isActive ? styles.activeLink : styles.link;
-
 const styles = {
   navbar: {
     position: "fixed",
@@ -58,11 +58,12 @@ const styles = {
     height: 60,
     backgroundColor: "#0f172a",
     display: "flex",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
     padding: "0 28px",
     zIndex: 1000,
-    boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+    fontFamily: "Inter, system-ui, Arial",
   },
   left: {
     display: "flex",
@@ -78,12 +79,12 @@ const styles = {
   link: {
     color: "#cbd5f5",
     textDecoration: "none",
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: 500,
   },
   activeLink: {
     color: "#ffffff",
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: 600,
     borderBottom: "2px solid #ffffff",
     paddingBottom: 6,
@@ -96,6 +97,7 @@ const styles = {
   user: {
     fontSize: 14,
     opacity: 0.9,
+    color: "#e5e7eb",
   },
   logoutBtn: {
     backgroundColor: "#ef4444",
