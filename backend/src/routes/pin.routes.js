@@ -5,17 +5,47 @@ import { v4 as uuidv4 } from "uuid";
 
 const router = express.Router();
 
+/* 🔎 DAILY CAP CHECK (ONLY) */
+async function isDailyCapReached(offerId, dailyCap) {
+  if (!dailyCap) return false;
+
+  const result = await pool.query(
+    `SELECT COUNT(*) FROM pin_sessions
+     WHERE offer_id=$1
+     AND created_at::date = CURRENT_DATE`,
+    [offerId]
+  );
+
+  return Number(result.rows[0].count) >= dailyCap;
+}
+
+/* 🔁 FIND FALLBACK (SAME GEO + CARRIER) */
+async function findFallbackOffer(primaryOffer) {
+  const fallback = await pool.query(
+    `SELECT * FROM offers
+     WHERE advertiser_id=$1
+     AND geo=$2
+     AND carrier=$3
+     AND is_fallback=true
+     AND status='active'
+     LIMIT 1`,
+    [
+      primaryOffer.advertiser_id,
+      primaryOffer.geo,
+      primaryOffer.carrier,
+    ]
+  );
+
+  return fallback.rows[0] || null;
+}
+
 /**
  * 🔐 PIN SEND (GET + POST)
- * URL:
- *  GET  /api/pin/send/:offer_id
- *  POST /api/pin/send/:offer_id
  */
 router.all("/pin/send/:offer_id", async (req, res) => {
   try {
     const { offer_id } = req.params;
 
-    // Merge GET + POST params
     const incomingParams = {
       ...req.query,
       ...req.body,
@@ -26,22 +56,40 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       return res.status(400).json({ message: "msisdn is required" });
     }
 
-    /* 1️⃣ Load Offer */
+    /* 1️⃣ LOAD PRIMARY OFFER */
     const offerResult = await pool.query(
-      "SELECT * FROM offers WHERE id = $1 AND status = 'active'",
+      "SELECT * FROM offers WHERE id=$1 AND status='active'",
       [offer_id]
     );
 
     if (!offerResult.rows.length) {
-      return res.status(404).json({ message: "Offer not found or inactive" });
+      return res.status(404).json({ message: "Offer not found" });
     }
 
-    const offer = offerResult.rows[0];
+    let selectedOffer = offerResult.rows[0];
+    let routed = "PRIMARY";
 
-    /* 2️⃣ Load Static Parameters */
+    /* 2️⃣ CHECK DAILY CAP */
+    const capHit = await isDailyCapReached(
+      selectedOffer.id,
+      selectedOffer.daily_cap
+    );
+
+    if (capHit) {
+      const fallback = await findFallbackOffer(selectedOffer);
+      if (!fallback) {
+        return res
+          .status(429)
+          .json({ message: "Daily cap reached, no fallback available" });
+      }
+      selectedOffer = fallback;
+      routed = "FALLBACK";
+    }
+
+    /* 3️⃣ LOAD STATIC PARAMS */
     const paramResult = await pool.query(
-      "SELECT param_key, param_value FROM offer_parameters WHERE offer_id = $1",
-      [offer_id]
+      "SELECT param_key, param_value FROM offer_parameters WHERE offer_id=$1",
+      [selectedOffer.id]
     );
 
     let staticParams = {};
@@ -49,46 +97,69 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       staticParams[p.param_key] = p.param_value;
     });
 
-    /* 3️⃣ Merge Params (Incoming > Static) */
+    /* 4️⃣ FINAL PARAMS */
     const finalParams = {
       ...staticParams,
       ...incomingParams,
       msisdn,
     };
 
-    /* 4️⃣ Create PIN Session */
     const sessionToken = uuidv4();
 
     await pool.query(
       `INSERT INTO pin_sessions
        (offer_id, msisdn, session_token, params, status)
-       VALUES ($1, $2, $3, $4, 'OTP_SENT')`,
-      [offer_id, msisdn, sessionToken, finalParams]
+       VALUES ($1,$2,$3,$4,'OTP_SENT')`,
+      [selectedOffer.id, msisdn, sessionToken, finalParams]
     );
 
-    /* 5️⃣ Call OPERATOR PIN SEND */
-    // NOTE: operator URLs should be stored in offer_parameters or offers table
+    /* 5️⃣ OPERATOR PIN SEND */
     const pinSendUrl =
       staticParams.pin_send_url || staticParams.operator_send_url;
 
     if (!pinSendUrl) {
       return res
         .status(500)
-        .json({ message: "PIN send URL not configured for offer" });
+        .json({ message: "PIN send URL not configured" });
     }
 
     const method = staticParams.request_method || "POST";
 
-    if (method === "GET") {
-      await axios.get(pinSendUrl, { params: finalParams });
-    } else {
-      await axios.post(pinSendUrl, finalParams);
+    try {
+      if (method === "GET") {
+        await axios.get(pinSendUrl, { params: finalParams });
+      } else {
+        await axios.post(pinSendUrl, finalParams);
+      }
+    } catch (err) {
+      /* 🔁 PRIMARY FAIL → FALLBACK TRY */
+      if (routed === "PRIMARY") {
+        const fallback = await findFallbackOffer(selectedOffer);
+        if (!fallback) throw err;
+
+        selectedOffer = fallback;
+        routed = "FALLBACK";
+
+        await pool.query(
+          `UPDATE pin_sessions
+           SET offer_id=$1
+           WHERE session_token=$2`,
+          [fallback.id, sessionToken]
+        );
+
+        await axios.post(
+          staticParams.pin_send_url,
+          finalParams
+        );
+      } else {
+        throw err;
+      }
     }
 
-    /* 6️⃣ Response */
     return res.json({
       status: "OTP_SENT",
       session_token: sessionToken,
+      routed_offer: routed,
     });
   } catch (err) {
     console.error("PIN SEND ERROR:", err.message);
@@ -98,8 +169,6 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
 /**
  * 🔐 PIN VERIFY
- * URL:
- *  POST /api/pin/verify
  */
 router.post("/pin/verify", async (req, res) => {
   try {
@@ -111,37 +180,30 @@ router.post("/pin/verify", async (req, res) => {
       });
     }
 
-    /* 1️⃣ Load Session */
+    /* 1️⃣ LOAD SESSION */
     const sessionResult = await pool.query(
       `SELECT * FROM pin_sessions
-       WHERE session_token = $1 AND status = 'OTP_SENT'`,
+       WHERE session_token=$1 AND status='OTP_SENT'`,
       [session_token]
     );
 
     if (!sessionResult.rows.length) {
-      return res.status(400).json({ message: "Invalid or expired session" });
+      return res.status(400).json({ message: "Invalid session" });
     }
 
     const session = sessionResult.rows[0];
 
-    /* 2️⃣ Load Offer */
+    /* 2️⃣ LOAD OFFER */
     const offerResult = await pool.query(
-      "SELECT * FROM offers WHERE id = $1",
+      "SELECT * FROM offers WHERE id=$1",
       [session.offer_id]
     );
-
     const offer = offerResult.rows[0];
 
-    /* 3️⃣ Prepare VERIFY Params */
-    const verifyParams = {
-      ...session.params,
-      otp,
-    };
-
-    /* 4️⃣ Load Static Params again (for verify URL) */
+    /* 3️⃣ LOAD STATIC PARAMS */
     const paramResult = await pool.query(
-      "SELECT param_key, param_value FROM offer_parameters WHERE offer_id = $1",
-      [session.offer_id]
+      "SELECT param_key, param_value FROM offer_parameters WHERE offer_id=$1",
+      [offer.id]
     );
 
     let staticParams = {};
@@ -149,35 +211,30 @@ router.post("/pin/verify", async (req, res) => {
       staticParams[p.param_key] = p.param_value;
     });
 
+    const verifyParams = {
+      ...session.params,
+      otp,
+    };
+
     const pinVerifyUrl =
       staticParams.pin_verify_url || staticParams.operator_verify_url;
 
-    if (!pinVerifyUrl) {
-      return res
-        .status(500)
-        .json({ message: "PIN verify URL not configured for offer" });
-    }
-
     const method = staticParams.request_method || "POST";
 
-    /* 5️⃣ Call OPERATOR PIN VERIFY */
     if (method === "GET") {
       await axios.get(pinVerifyUrl, { params: verifyParams });
     } else {
       await axios.post(pinVerifyUrl, verifyParams);
     }
 
-    /* 6️⃣ Update Session */
     await pool.query(
       `UPDATE pin_sessions
-       SET status = 'VERIFIED', verified_at = NOW()
-       WHERE id = $1`,
+       SET status='VERIFIED', verified_at=NOW()
+       WHERE id=$1`,
       [session.id]
     );
 
-    return res.json({
-      status: "SUCCESS",
-    });
+    return res.json({ status: "SUCCESS" });
   } catch (err) {
     console.error("PIN VERIFY ERROR:", err.message);
     return res.status(500).json({ message: "PIN verify failed" });
