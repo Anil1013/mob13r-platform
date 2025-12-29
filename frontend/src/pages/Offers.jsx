@@ -20,7 +20,7 @@ export default function Offers() {
     geo: "",
     carrier: "",
     otp_length: 4,
-    service_type: "NORMAL", // NORMAL | FALLBACK
+    service_type: "NORMAL",
   });
 
   const [paramForm, setParamForm] = useState({
@@ -115,10 +115,10 @@ export default function Offers() {
   /* ---------------- UI ---------------- */
   return (
     <>
-      {/* ✅ COMMON NAVBAR */}
+      {/* ✅ GLOBAL NAVBAR */}
       <Navbar />
 
-      {/* PAGE CONTENT */}
+      {/* ✅ PAGE CONTENT (navbar offset fixed) */}
       <div style={styles.page}>
         <h1>Offers</h1>
 
@@ -286,7 +286,8 @@ export default function Offers() {
 /* ---------------- STYLES ---------------- */
 const styles = {
   page: {
-    padding: 40,
+    padding: "80px 40px 40px", // ✅ FIXED NAVBAR OFFSET
+    fontFamily: "Inter, system-ui, Arial",
   },
   card: {
     background: "#fff",
