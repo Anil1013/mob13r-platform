@@ -55,6 +55,52 @@ async function findFallbackOffer(primary) {
 }
 
 /* =====================================================
+   🔁 MANUAL SERVICE TYPE CHANGE (NORMAL ↔ FALLBACK)
+===================================================== */
+router.patch("/offers/:id/service-type", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { service_type } = req.body;
+
+    if (!["NORMAL", "FALLBACK"].includes(service_type)) {
+      return res.status(400).json({
+        message: "service_type must be NORMAL or FALLBACK",
+      });
+    }
+
+    /* Check offer exists */
+    const offerRes = await pool.query(
+      `SELECT id FROM offers WHERE id = $1`,
+      [id]
+    );
+
+    if (!offerRes.rows.length) {
+      return res.status(404).json({ message: "Offer not found" });
+    }
+
+    /* Update manually */
+    await pool.query(
+      `
+      UPDATE offers
+      SET service_type = $1
+      WHERE id = $2
+      `,
+      [service_type, id]
+    );
+
+    return res.json({
+      status: "SUCCESS",
+      message: `Offer manually set to ${service_type}`,
+    });
+  } catch (err) {
+    console.error("SERVICE TYPE PATCH ERROR:", err.message);
+    return res.status(500).json({
+      message: "Failed to update service type",
+    });
+  }
+});
+
+/* =====================================================
    🔐 PIN SEND (GET + POST)
 ===================================================== */
 router.all("/pin/send/:offer_id", async (req, res) => {
@@ -69,14 +115,13 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       return res.status(400).json({ message: "msisdn is required" });
     }
 
-    /* 🔐 MSISDN LIMIT */
     if (await isMsisdnLimitReached(msisdn)) {
       return res.status(429).json({
         message: "MSISDN daily limit reached",
       });
     }
 
-    /* 1️⃣ LOAD PRIMARY (NORMAL) OFFER */
+    /* Load PRIMARY */
     const offerRes = await pool.query(
       `
       SELECT *
@@ -95,21 +140,19 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     let offer = offerRes.rows[0];
     let route = "PRIMARY";
 
-    /* 2️⃣ CAP CHECK */
+    /* CAP CHECK */
     if (offer.daily_cap && offer.today_hits >= offer.daily_cap) {
       const fallback = await findFallbackOffer(offer);
-
       if (!fallback) {
         return res.status(429).json({
           message: "Primary cap reached, no fallback available",
         });
       }
-
       offer = fallback;
       route = "FALLBACK";
     }
 
-    /* 3️⃣ LOAD OFFER PARAMETERS */
+    /* LOAD PARAMS */
     const paramRes = await pool.query(
       `
       SELECT param_key, param_value
@@ -128,12 +171,9 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       staticParams.pin_send_url || staticParams.operator_send_url;
 
     if (!pinSendUrl) {
-      return res.status(500).json({
-        message: "PIN send URL missing",
-      });
+      return res.status(500).json({ message: "PIN send URL missing" });
     }
 
-    /* 4️⃣ FINAL PARAMS */
     const finalParams = {
       ...staticParams,
       ...incomingParams,
@@ -151,7 +191,6 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       [offer.id, msisdn, sessionToken, finalParams]
     );
 
-    /* 5️⃣ OPERATOR PIN SEND */
     const method = staticParams.request_method || "POST";
 
     if (method === "GET") {
@@ -160,13 +199,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       await axios.post(pinSendUrl, finalParams);
     }
 
-    /* 6️⃣ INCREMENT HIT ONLY AFTER SUCCESS */
     await pool.query(
-      `
-      UPDATE offers
-      SET today_hits = today_hits + 1
-      WHERE id = $1
-      `,
+      `UPDATE offers SET today_hits = today_hits + 1 WHERE id = $1`,
       [offer.id]
     );
 
@@ -195,7 +229,6 @@ router.post("/pin/verify", async (req, res) => {
       });
     }
 
-    /* 1️⃣ LOAD SESSION */
     const sessionRes = await pool.query(
       `
       SELECT *
@@ -218,7 +251,6 @@ router.post("/pin/verify", async (req, res) => {
       });
     }
 
-    /* 2️⃣ LOAD OFFER PARAMS */
     const paramRes = await pool.query(
       `
       SELECT param_key, param_value
@@ -251,17 +283,12 @@ router.post("/pin/verify", async (req, res) => {
       }
     } catch (err) {
       await pool.query(
-        `
-        UPDATE pin_sessions
-        SET otp_attempts = otp_attempts + 1
-        WHERE id = $1
-        `,
+        `UPDATE pin_sessions SET otp_attempts = otp_attempts + 1 WHERE id = $1`,
         [session.id]
       );
       throw err;
     }
 
-    /* ✅ VERIFIED */
     await pool.query(
       `
       UPDATE pin_sessions
