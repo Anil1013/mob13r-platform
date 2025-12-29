@@ -17,7 +17,7 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/advertisers" element={<Advertisers />} />
-          <Route path="/advertisers" element={<Offers />} />
+          <Route path="/offers" element={<Offers />} />
         </Route>
 
         {/* Default & fallback */}
