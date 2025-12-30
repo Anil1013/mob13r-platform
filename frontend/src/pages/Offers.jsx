@@ -42,21 +42,14 @@ export default function Offers() {
     setAdvertisers(await res.json());
   };
 
-  // advertiserId empty => ALL offers
   const fetchOffers = async (advertiserId = "") => {
-    try {
-      const url = advertiserId
-        ? `${API_BASE}/api/offers?advertiser_id=${advertiserId}`
-        : `${API_BASE}/api/offers`;
+    const url = advertiserId
+      ? `${API_BASE}/api/offers?advertiser_id=${advertiserId}`
+      : `${API_BASE}/api/offers`;
 
-      const res = await fetch(url, { headers: authHeaders });
-      const data = await res.json();
-
-      setOffers(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Fetch offers failed:", err);
-      setOffers([]);
-    }
+    const res = await fetch(url, { headers: authHeaders });
+    const data = await res.json();
+    setOffers(Array.isArray(data) ? data : []);
   };
 
   const fetchParameters = async (offerId) => {
@@ -69,7 +62,7 @@ export default function Offers() {
 
   useEffect(() => {
     fetchAdvertisers();
-    fetchOffers(); // load all offers initially
+    fetchOffers();
   }, []);
 
   /* ---------------- CREATE OFFER ---------------- */
@@ -134,51 +127,41 @@ export default function Offers() {
 
   /* ---------------- HELPERS ---------------- */
   const getStatusBadge = (o) => {
-    if (o.service_type === "FALLBACK") {
+    if (o.service_type === "FALLBACK")
       return <span style={styles.badgeFallback}>🟡 Fallback</span>;
-    }
-
-    if (o.daily_cap && o.today_hits >= o.daily_cap) {
+    if (o.daily_cap && o.today_hits >= o.daily_cap)
       return <span style={styles.badgeCap}>🔴 Cap Reached</span>;
-    }
-
     return <span style={styles.badgeActive}>🟢 Active</span>;
   };
 
-  const remaining = (o) => {
-    if (!o.daily_cap) return "∞";
-    return Math.max(o.daily_cap - o.today_hits, 0);
-  };
+  const remaining = (o) =>
+    !o.daily_cap ? "∞" : Math.max(o.daily_cap - o.today_hits, 0);
 
   /* ---------------- UI ---------------- */
-return (
-  <>
-    <Navbar />
+  return (
+    <>
+      <Navbar />
 
-    <div style={styles.page}>
-      <h1>Offers</h1>
+      <div style={styles.page}>
+        <h1>Offers</h1>
 
-      {/* TOP BAR */}
-      <div style={styles.topBar}>
-        <select
-          value={offerForm.advertiser_id}
-          onChange={(e) => {
-            const id = e.target.value;
-            setOfferForm({ ...offerForm, advertiser_id: id });
-            setSelectedOffer(null);
-            fetchOffers(id);
-          }}
-        >
-          <option value="">All Advertisers</option>
-          {advertisers.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
+        {/* TOP BAR (FILTER + CREATE INLINE) */}
+        <form onSubmit={createOffer} style={styles.topBar}>
+          <select
+            value={offerForm.advertiser_id}
+            onChange={(e) => {
+              const id = e.target.value;
+              setOfferForm({ ...offerForm, advertiser_id: id });
+              setSelectedOffer(null);
+              fetchOffers(id);
+            }}
+          >
+            <option value="">All Advertisers</option>
+            {advertisers.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
 
-        {/* CREATE OFFER INLINE */}
-        <form onSubmit={createOffer} style={styles.createRow}>
           <input
             placeholder="Service"
             required
@@ -231,167 +214,107 @@ return (
 
           <button type="submit">Create</button>
         </form>
-      </div>
 
-      {/* OFFER TABLE */}
-      <div style={styles.tableWrap}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              {[
-                "ID",
-                "Advertiser",
-                "Service",
-                "Geo",
-                "Carrier",
-                "Cap",
-                "Used",
-                "Remain",
-                "Route",
-                "Status",
-                "Control",
-                "Params",
-              ].map((h) => (
-                <th key={h} style={styles.th}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {offers.map((o) => (
-              <tr key={o.id}>
-                <td style={styles.td}>{o.id}</td>
-                <td style={styles.td}>{o.advertiser_name || "-"}</td>
-                <td style={styles.td}>{o.service_name}</td>
-                <td style={styles.td}>{o.geo}</td>
-                <td style={styles.td}>{o.carrier}</td>
-                <td style={styles.td}>{o.daily_cap || "∞"}</td>
-                <td style={styles.td}>{o.today_hits}</td>
-                <td style={styles.td}>{remaining(o)}</td>
-                <td style={styles.td}>{o.service_type}</td>
-                <td style={styles.td}>{getStatusBadge(o)}</td>
-                <td style={styles.td}>
-                  {o.service_type === "NORMAL" ? (
-                    <button onClick={() => changeServiceType(o.id, "FALLBACK")}>
-                      Make Fallback
-                    </button>
-                  ) : (
-                    <button onClick={() => changeServiceType(o.id, "NORMAL")}>
-                      Make Primary
-                    </button>
-                  )}
-                </td>
-                <td style={styles.td}>
-                  <button
-                    onClick={() => {
+        {/* OFFER TABLE */}
+        <div style={styles.tableWrap}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                {["ID","Advertiser","Service","Geo","Carrier","Cap","Used","Remain","Route","Status","Control","Params"]
+                  .map(h => <th key={h} style={styles.th}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {offers.map(o => (
+                <tr key={o.id}>
+                  <td style={styles.td}>{o.id}</td>
+                  <td style={styles.td}>{o.advertiser_name || "-"}</td>
+                  <td style={styles.td}>{o.service_name}</td>
+                  <td style={styles.td}>{o.geo}</td>
+                  <td style={styles.td}>{o.carrier}</td>
+                  <td style={styles.td}>{o.daily_cap || "∞"}</td>
+                  <td style={styles.td}>{o.today_hits}</td>
+                  <td style={styles.td}>{remaining(o)}</td>
+                  <td style={styles.td}>{o.service_type}</td>
+                  <td style={styles.td}>{getStatusBadge(o)}</td>
+                  <td style={styles.td}>
+                    {o.service_type === "NORMAL" ? (
+                      <button onClick={() => changeServiceType(o.id, "FALLBACK")}>
+                        Make Fallback
+                      </button>
+                    ) : (
+                      <button onClick={() => changeServiceType(o.id, "NORMAL")}>
+                        Make Primary
+                      </button>
+                    )}
+                  </td>
+                  <td style={styles.td}>
+                    <button onClick={() => {
                       setSelectedOffer(o);
                       fetchParameters(o.id);
-                    }}
-                  >
-                    Manage
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* PARAMETERS */}
-      {selectedOffer && (
-        <div style={styles.card}>
-          <h3>Parameters – {selectedOffer.service_name}</h3>
-
-          <form onSubmit={addParameter} style={styles.inline}>
-            <input
-              placeholder="param_key"
-              value={paramForm.param_key}
-              onChange={(e) =>
-                setParamForm({ ...paramForm, param_key: e.target.value })
-              }
-            />
-            <input
-              placeholder="param_value"
-              value={paramForm.param_value}
-              onChange={(e) =>
-                setParamForm({ ...paramForm, param_value: e.target.value })
-              }
-            />
-            <button>Add</button>
-          </form>
-
-          <table style={styles.table}>
-            <tbody>
-              {parameters.map((p) => (
-                <tr key={p.id}>
-                  <td style={styles.td}>{p.param_key}</td>
-                  <td style={styles.td}>{p.param_value}</td>
-                  <td style={styles.td}>
-                    <button onClick={() => deleteParameter(p.id)}>❌</button>
+                    }}>
+                      Manage
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      )}
-    </div>
-  </>
-);
 
+        {/* PARAMETERS */}
+        {selectedOffer && (
+          <div style={styles.card}>
+            <h3>Parameters – {selectedOffer.service_name}</h3>
+
+            <form onSubmit={addParameter} style={styles.inline}>
+              <input
+                placeholder="param_key"
+                value={paramForm.param_key}
+                onChange={(e) =>
+                  setParamForm({ ...paramForm, param_key: e.target.value })
+                }
+              />
+              <input
+                placeholder="param_value"
+                value={paramForm.param_value}
+                onChange={(e) =>
+                  setParamForm({ ...paramForm, param_value: e.target.value })
+                }
+              />
+              <button>Add</button>
+            </form>
+
+            <table style={styles.table}>
+              <tbody>
+                {parameters.map((p) => (
+                  <tr key={p.id}>
+                    <td style={styles.td}>{p.param_key}</td>
+                    <td style={styles.td}>{p.param_value}</td>
+                    <td style={styles.td}>
+                      <button onClick={() => deleteParameter(p.id)}>❌</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
 
 /* ---------------- STYLES ---------------- */
 const styles = {
-  page: {
-    padding: "60px 30px",
-    fontFamily: "Inter, system-ui, Arial",
-  },
-  topBar: {
-  display: "flex",
-  alignItems: "center",
-  gap: 12,
-  marginBottom: 15,
-  flexWrap: "wrap",
-},
-
-createRow: {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  flexWrap: "wrap",
-},
-
-  },
-  card: {
-    background: "#fff",
-    padding: 20,
-    marginTop: 15,
-    borderRadius: 6,
-  },
-  inline: {
-    display: "flex",
-    gap: 10,
-    marginBottom: 10,
-  },
-  tableWrap: {
-    marginTop: 15,
-    display: "flex",
-    justifyContent: "center",
-  },
-  table: {
-    width: "95%",
-    borderCollapse: "collapse",
-    textAlign: "center",
-  },
-  th: {
-    border: "1px solid #ddd",
-    padding: 8,
-    background: "#f3f4f6",
-    fontWeight: 600,
-  },
-  td: {
-    border: "1px solid #ddd",
-    padding: 8,
-  },
+  page: { padding: "60px 30px", fontFamily: "Inter, system-ui, Arial" },
+  topBar: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 15 },
+  tableWrap: { display: "flex", justifyContent: "center", marginTop: 15 },
+  table: { width: "95%", borderCollapse: "collapse", textAlign: "center" },
+  th: { border: "1px solid #ddd", padding: 8, background: "#f3f4f6" },
+  td: { border: "1px solid #ddd", padding: 8 },
+  card: { background: "#fff", padding: 20, marginTop: 15, borderRadius: 6 },
+  inline: { display: "flex", gap: 10, marginBottom: 10 },
   badgeActive: { color: "green", fontWeight: 600 },
   badgeCap: { color: "red", fontWeight: 600 },
   badgeFallback: { color: "#ca8a04", fontWeight: 600 },
