@@ -75,7 +75,7 @@ export default function Offers() {
     });
 
     const data = await res.json();
-    setOffers((prev) => [data, ...prev]);
+    setOffers((prev) => [...prev, data]);
 
     setOfferForm({
       ...offerForm,
@@ -86,17 +86,6 @@ export default function Offers() {
       carrier: "",
       service_type: "NORMAL",
     });
-  };
-
-  /* ---------------- UPDATE CPA / CAP ---------------- */
-  const updateOfferField = async (offerId, payload) => {
-    await fetch(`${API_BASE}/api/offers/${offerId}`, {
-      method: "PATCH",
-      headers: authHeaders,
-      body: JSON.stringify(payload),
-    });
-
-    fetchOffers(offerForm.advertiser_id);
   };
 
   /* ---------------- PARAMETERS ---------------- */
@@ -147,6 +136,9 @@ export default function Offers() {
   const remaining = (o) =>
     !o.daily_cap ? "∞" : Math.max(o.daily_cap - o.today_hits, 0);
 
+  const autoRevenue = (o) =>
+    o.cpa ? `$${(Number(o.cpa) * Number(o.today_hits || 0)).toFixed(2)}` : "$0.00";
+
   /* ---------------- UI ---------------- */
   return (
     <>
@@ -172,49 +164,39 @@ export default function Offers() {
             ))}
           </select>
 
-          <input
-            placeholder="Service"
-            required
+          <input placeholder="Service" required
             value={offerForm.service_name}
             onChange={(e) =>
               setOfferForm({ ...offerForm, service_name: e.target.value })
             }
           />
 
-          <input
-            placeholder="CPA"
+          <input placeholder="CPA ($)" style={{ width: 80 }}
             value={offerForm.cpa}
             onChange={(e) =>
               setOfferForm({ ...offerForm, cpa: e.target.value })
             }
-            style={{ width: 70 }}
           />
 
-          <input
-            placeholder="Cap"
+          <input placeholder="Cap" style={{ width: 80 }}
             value={offerForm.daily_cap}
             onChange={(e) =>
               setOfferForm({ ...offerForm, daily_cap: e.target.value })
             }
-            style={{ width: 80 }}
           />
 
-          <input
-            placeholder="Geo"
+          <input placeholder="Geo" style={{ width: 70 }}
             value={offerForm.geo}
             onChange={(e) =>
               setOfferForm({ ...offerForm, geo: e.target.value })
             }
-            style={{ width: 70 }}
           />
 
-          <input
-            placeholder="Carrier"
+          <input placeholder="Carrier" style={{ width: 90 }}
             value={offerForm.carrier}
             onChange={(e) =>
               setOfferForm({ ...offerForm, carrier: e.target.value })
             }
-            style={{ width: 90 }}
           />
 
           <select
@@ -235,8 +217,13 @@ export default function Offers() {
           <table style={styles.table}>
             <thead>
               <tr>
-                {["ID","Advertiser","Service","CPA","Geo","Carrier","Cap","Used","Remain","Route","Status","Control","Params"]
-                  .map(h => <th key={h} style={styles.th}>{h}</th>)}
+                {[
+                  "ID","Advertiser","Service","CPA ($)",
+                  "Geo","Carrier","Cap","Used","Remain",
+                  "Revenue ($)","Route","Status","Control","Params"
+                ].map(h => (
+                  <th key={h} style={styles.th}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -245,42 +232,15 @@ export default function Offers() {
                   <td style={styles.td}>{o.id}</td>
                   <td style={styles.td}>{o.advertiser_name || "-"}</td>
                   <td style={styles.td}>{o.service_name}</td>
-
-                  {/* CPA EDIT */}
-                  <td style={styles.td}>
-                    <input
-                      type="number"
-                      step="0.01"
-                      defaultValue={o.cpa}
-                      disabled={o.service_type === "FALLBACK"}
-                      style={styles.inlineInput}
-                      onBlur={(e) =>
-                        updateOfferField(o.id, { cpa: e.target.value })
-                      }
-                    />
-                  </td>
-
+                  <td style={styles.td}>{o.cpa ? `$${o.cpa}` : "-"}</td>
                   <td style={styles.td}>{o.geo}</td>
                   <td style={styles.td}>{o.carrier}</td>
-
-                  {/* CAP EDIT */}
-                  <td style={styles.td}>
-                    <input
-                      type="number"
-                      defaultValue={o.daily_cap}
-                      disabled={o.service_type === "FALLBACK"}
-                      style={styles.inlineInput}
-                      onBlur={(e) =>
-                        updateOfferField(o.id, { daily_cap: e.target.value })
-                      }
-                    />
-                  </td>
-
+                  <td style={styles.td}>{o.daily_cap || "∞"}</td>
                   <td style={styles.td}>{o.today_hits}</td>
                   <td style={styles.td}>{remaining(o)}</td>
+                  <td style={styles.td}>{autoRevenue(o)}</td>
                   <td style={styles.td}>{o.service_type}</td>
                   <td style={styles.td}>{getStatusBadge(o)}</td>
-
                   <td style={styles.td}>
                     {o.service_type === "NORMAL" ? (
                       <button onClick={() => changeServiceType(o.id, "FALLBACK")}>
@@ -292,7 +252,6 @@ export default function Offers() {
                       </button>
                     )}
                   </td>
-
                   <td style={styles.td}>
                     <button onClick={() => {
                       setSelectedOffer(o);
@@ -329,6 +288,20 @@ export default function Offers() {
               />
               <button>Add</button>
             </form>
+
+            <table style={styles.table}>
+              <tbody>
+                {parameters.map((p) => (
+                  <tr key={p.id}>
+                    <td style={styles.td}>{p.param_key}</td>
+                    <td style={styles.td}>{p.param_value}</td>
+                    <td style={styles.td}>
+                      <button onClick={() => deleteParameter(p.id)}>❌</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -346,13 +319,6 @@ const styles = {
   td: { border: "1px solid #ddd", padding: 8 },
   card: { background: "#fff", padding: 20, marginTop: 15, borderRadius: 6 },
   inline: { display: "flex", gap: 10, marginBottom: 10 },
-  inlineInput: {
-    width: 70,
-    padding: 4,
-    textAlign: "center",
-    border: "1px solid #ccc",
-    borderRadius: 4,
-  },
   badgeActive: { color: "green", fontWeight: 600 },
   badgeCap: { color: "red", fontWeight: 600 },
   badgeFallback: { color: "#ca8a04", fontWeight: 600 },
