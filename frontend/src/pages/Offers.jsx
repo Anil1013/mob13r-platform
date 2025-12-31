@@ -64,6 +64,17 @@ export default function Offers() {
     fetchOffers();
   }, []);
 
+  /* ---------------- UPDATE OFFER ---------------- */
+  const updateOffer = async (offerId, payload) => {
+    await fetch(`${API_BASE}/api/offers/${offerId}`, {
+      method: "PATCH",
+      headers: authHeaders,
+      body: JSON.stringify(payload),
+    });
+
+    fetchOffers(offerForm.advertiser_id);
+  };
+
   /* ---------------- CREATE OFFER ---------------- */
   const createOffer = async (e) => {
     e.preventDefault();
@@ -125,14 +136,6 @@ export default function Offers() {
   };
 
   /* ---------------- HELPERS ---------------- */
-  const getStatusBadge = (o) => {
-    if (o.service_type === "FALLBACK")
-      return <span style={styles.badgeFallback}>🟡 Fallback</span>;
-    if (o.daily_cap && o.today_hits >= o.daily_cap)
-      return <span style={styles.badgeCap}>🔴 Cap Reached</span>;
-    return <span style={styles.badgeActive}>🟢 Active</span>;
-  };
-
   const remaining = (o) =>
     !o.daily_cap ? "∞" : Math.max(o.daily_cap - o.today_hits, 0);
 
@@ -147,7 +150,7 @@ export default function Offers() {
       <div style={styles.page}>
         <h1>Offers</h1>
 
-        {/* TOP BAR */}
+        {/* CREATE BAR */}
         <form onSubmit={createOffer} style={styles.topBar}>
           <select
             value={offerForm.advertiser_id}
@@ -220,7 +223,7 @@ export default function Offers() {
                 {[
                   "ID","Advertiser","Service","CPA ($)",
                   "Geo","Carrier","Cap","Used","Remain",
-                  "Revenue ($)","Route","Status","Control","Params"
+                  "Revenue ($)","Route","Control","Params"
                 ].map(h => (
                   <th key={h} style={styles.th}>{h}</th>
                 ))}
@@ -231,16 +234,69 @@ export default function Offers() {
                 <tr key={o.id}>
                   <td style={styles.td}>{o.id}</td>
                   <td style={styles.td}>{o.advertiser_name || "-"}</td>
-                  <td style={styles.td}>{o.service_name}</td>
-                  <td style={styles.td}>{o.cpa ? `$${o.cpa}` : "-"}</td>
-                  <td style={styles.td}>{o.geo}</td>
-                  <td style={styles.td}>{o.carrier}</td>
-                  <td style={styles.td}>{o.daily_cap || "∞"}</td>
+
+                  {/* SERVICE */}
+                  <td style={styles.td}>
+                    <input
+                      defaultValue={o.service_name}
+                      onBlur={(e) =>
+                        updateOffer(o.id, { service_name: e.target.value })
+                      }
+                    />
+                  </td>
+
+                  {/* CPA */}
+                  <td style={styles.td}>
+                    <input
+                      defaultValue={o.cpa || ""}
+                      style={{ width: 70 }}
+                      onBlur={(e) =>
+                        updateOffer(o.id, { cpa: e.target.value })
+                      }
+                    />
+                  </td>
+
+                  {/* GEO */}
+                  <td style={styles.td}>
+                    <input
+                      defaultValue={o.geo || ""}
+                      style={{ width: 60 }}
+                      onBlur={(e) =>
+                        updateOffer(o.id, { geo: e.target.value })
+                      }
+                    />
+                  </td>
+
+                  {/* CARRIER */}
+                  <td style={styles.td}>
+                    <input
+                      defaultValue={o.carrier || ""}
+                      style={{ width: 80 }}
+                      onBlur={(e) =>
+                        updateOffer(o.id, { carrier: e.target.value })
+                      }
+                    />
+                  </td>
+
+                  {/* CAP */}
+                  <td style={styles.td}>
+                    <input
+                      defaultValue={o.daily_cap || ""}
+                      placeholder="∞"
+                      style={{ width: 70 }}
+                      onBlur={(e) =>
+                        updateOffer(o.id, {
+                          daily_cap: e.target.value || null,
+                        })
+                      }
+                    />
+                  </td>
+
                   <td style={styles.td}>{o.today_hits}</td>
                   <td style={styles.td}>{remaining(o)}</td>
                   <td style={styles.td}>{autoRevenue(o)}</td>
                   <td style={styles.td}>{o.service_type}</td>
-                  <td style={styles.td}>{getStatusBadge(o)}</td>
+
                   <td style={styles.td}>
                     {o.service_type === "NORMAL" ? (
                       <button onClick={() => changeServiceType(o.id, "FALLBACK")}>
@@ -252,6 +308,7 @@ export default function Offers() {
                       </button>
                     )}
                   </td>
+
                   <td style={styles.td}>
                     <button onClick={() => {
                       setSelectedOffer(o);
@@ -319,7 +376,4 @@ const styles = {
   td: { border: "1px solid #ddd", padding: 8 },
   card: { background: "#fff", padding: 20, marginTop: 15, borderRadius: 6 },
   inline: { display: "flex", gap: 10, marginBottom: 10 },
-  badgeActive: { color: "green", fontWeight: 600 },
-  badgeCap: { color: "red", fontWeight: 600 },
-  badgeFallback: { color: "#ca8a04", fontWeight: 600 },
 };
