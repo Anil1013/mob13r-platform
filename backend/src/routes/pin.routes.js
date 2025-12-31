@@ -56,7 +56,6 @@ async function findFallbackOffer(primary) {
     `,
     [primary.advertiser_id, primary.geo, primary.carrier]
   );
-
   return result.rows[0] || null;
 }
 
@@ -70,7 +69,7 @@ function getAdvMethod(staticParams) {
 }
 
 /* =====================================================
-   🔐 PIN SEND (ADV RESPONSE = SOURCE OF TRUTH)
+   🔐 PIN SEND
 ===================================================== */
 router.all("/pin/send/:offer_id", async (req, res) => {
   try {
@@ -171,7 +170,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       [offer.id, msisdn, sessionToken, finalParams]
     );
 
-    /* 🔗 CALL ADVERTISER */
+    /* CALL ADVERTISER */
     const advResp =
       advMethod === "GET"
         ? await axios.get(pinSendUrl, { params: finalParams })
@@ -179,7 +178,6 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const advData = advResp.data;
 
-    /* Save ADV session key if any */
     if (advData?.sessionKey) {
       await pool.query(
         `
@@ -196,7 +194,6 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       [offer.id]
     );
 
-    /* 🔥 MAP ADV RESPONSE */
     const mapped = mapPinSendResponse(advData);
 
     return res.status(mapped.httpCode).json({
@@ -206,148 +203,159 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       session_token: sessionToken,
     });
   } catch (err) {
-    console.error("PIN SEND ERROR:", err.response?.data || err.message);
+    console.error("PIN SEND ERROR:", err.message);
     return res.status(500).json({
       status: "FAILED",
       message: "PIN send failed",
-      error: err.response?.data || err.message,
     });
   }
 });
 
 /* =====================================================
-   🔐 PIN VERIFY (ADV DECIDES SUCCESS / FAILURE)
+   🔐 COMMON VERIFY HANDLER
 ===================================================== */
-router.post("/pin/verify", async (req, res) => {
-  try {
-    const { session_token, otp } = req.body;
+async function handlePinVerify({ session_token, msisdn, offer_id, otp }, res) {
+  if (!otp) {
+    return res.status(400).json({
+      status: "FAILED",
+      message: "otp is required",
+    });
+  }
 
-    if (!session_token || !otp) {
-      return res.status(400).json({
-        status: "FAILED",
-        message: "session_token and otp required",
-      });
-    }
+  let sessionRes;
 
-    const sessionRes = await pool.query(
+  /* MODE 1: session_token */
+  if (session_token) {
+    sessionRes = await pool.query(
+      `SELECT * FROM pin_sessions WHERE session_token = $1`,
+      [session_token]
+    );
+  }
+
+  /* MODE 2: msisdn + offer_id */
+  else if (msisdn && offer_id) {
+    sessionRes = await pool.query(
       `
       SELECT *
       FROM pin_sessions
-      WHERE session_token = $1
+      WHERE msisdn = $1
+        AND offer_id = $2
+      ORDER BY created_at DESC
+      LIMIT 1
       `,
-      [session_token]
+      [msisdn, offer_id]
     );
-
-    if (!sessionRes.rows.length) {
-      return res.status(400).json({
-        status: "FAILED",
-        message: "Invalid session",
-      });
-    }
-
-    const session = sessionRes.rows[0];
-
-    if (session.otp_attempts >= MAX_OTP_ATTEMPTS) {
-      return res.status(429).json({
-        status: "BLOCKED",
-        message: "OTP attempts exceeded",
-      });
-    }
-
-    const paramRes = await pool.query(
-      `
-      SELECT param_key, param_value
-      FROM offer_parameters
-      WHERE offer_id = $1
-      `,
-      [session.offer_id]
-    );
-
-    const staticParams = {};
-    paramRes.rows.forEach((p) => {
-      staticParams[p.param_key] = p.param_value;
+  } else {
+    return res.status(400).json({
+      status: "FAILED",
+      message: "session_token OR (msisdn + offer_id) required",
     });
+  }
 
-    const pinVerifyUrl = staticParams.verify_pin_url;
-    if (!pinVerifyUrl) {
-      return res.status(500).json({
-        status: "FAILED",
-        message: "verify_pin_url missing",
-      });
-    }
+  if (!sessionRes.rows.length) {
+    return res.status(400).json({
+      status: "FAILED",
+      message: "Invalid session",
+    });
+  }
 
-    const advMethod = getAdvMethod(staticParams);
+  const session = sessionRes.rows[0];
 
-    const verifyPayload = {
-      ...session.params,
-      otp,
-      sessionKey: session.adv_session_key,
-    };
+  if (session.otp_attempts >= MAX_OTP_ATTEMPTS) {
+    return res.status(429).json({
+      status: "BLOCKED",
+      message: "OTP attempts exceeded",
+    });
+  }
 
-    const advResp =
-      advMethod === "GET"
-        ? await axios.get(pinVerifyUrl, { params: verifyPayload })
-        : await axios.post(pinVerifyUrl, verifyPayload);
+  const paramRes = await pool.query(
+    `SELECT param_key, param_value FROM offer_parameters WHERE offer_id = $1`,
+    [session.offer_id]
+  );
 
-    const advData = advResp.data;
+  const staticParams = {};
+  paramRes.rows.forEach((p) => (staticParams[p.param_key] = p.param_value));
 
-    /* 🔥 MAP VERIFY RESPONSE */
-    const mapped = mapPinVerifyResponse(advData);
-
-    if (mapped.body.status === "SUCCESS") {
-      await pool.query(
-        `
-        UPDATE pin_sessions
-        SET status = 'VERIFIED',
-            verified_at = NOW()
-        WHERE session_token = $1
-        `,
-        [session_token]
-      );
-    } else {
-      await pool.query(
-        `
-        UPDATE pin_sessions
-        SET otp_attempts = otp_attempts + 1
-        WHERE session_token = $1
-        `,
-        [session_token]
-      );
-    }
-
-    return res.status(mapped.httpCode).json(mapped.body);
-  } catch (err) {
-    console.error("PIN VERIFY ERROR:", err.response?.data || err.message);
+  const pinVerifyUrl = staticParams.verify_pin_url;
+  if (!pinVerifyUrl) {
     return res.status(500).json({
       status: "FAILED",
-      message: "PIN verify failed",
-      error: err.response?.data || err.message,
+      message: "verify_pin_url missing",
     });
+  }
+
+  const advMethod = getAdvMethod(staticParams);
+
+  const verifyPayload = {
+    ...session.params,
+    otp,
+    sessionKey: session.adv_session_key,
+  };
+
+  const advResp =
+    advMethod === "GET"
+      ? await axios.get(pinVerifyUrl, { params: verifyPayload })
+      : await axios.post(pinVerifyUrl, verifyPayload);
+
+  const advData = advResp.data;
+  const mapped = mapPinVerifyResponse(advData);
+
+  if (mapped.body.status === "SUCCESS") {
+    await pool.query(
+      `
+      UPDATE pin_sessions
+      SET status='VERIFIED',
+          verified_at=NOW()
+      WHERE id=$1
+      `,
+      [session.id]
+    );
+  } else {
+    await pool.query(
+      `
+      UPDATE pin_sessions
+      SET otp_attempts = otp_attempts + 1
+      WHERE id=$1
+      `,
+      [session.id]
+    );
+  }
+
+  return res.status(mapped.httpCode).json(mapped.body);
+}
+
+/* ================= POST VERIFY ================= */
+router.post("/pin/verify", async (req, res) => {
+  try {
+    await handlePinVerify(req.body, res);
+  } catch (err) {
+    console.error("PIN VERIFY POST ERROR:", err.message);
+    return res.status(500).json({ status: "FAILED" });
   }
 });
 
-/* =====================================================
-   🔁 CHECK STATUS
-===================================================== */
+/* ================= GET VERIFY ================= */
+router.get("/pin/verify", async (req, res) => {
+  try {
+    await handlePinVerify(req.query, res);
+  } catch (err) {
+    console.error("PIN VERIFY GET ERROR:", err.message);
+    return res.status(500).json({ status: "FAILED" });
+  }
+});
+
+/* ================= STATUS ================= */
 router.get("/pin/status", async (req, res) => {
   try {
     const { session_token, msisdn } = req.query;
 
-    if (!session_token && !msisdn) {
-      return res.status(400).json({
-        status: "FAILED",
-        message: "session_token or msisdn required",
-      });
-    }
-
     let sessionRes;
-
     if (session_token) {
       sessionRes = await pool.query(
         `SELECT * FROM pin_sessions WHERE session_token = $1`,
         [session_token]
       );
-    } else {
+    } else if (msisdn) {
       sessionRes = await pool.query(
         `
         SELECT *
@@ -358,6 +366,8 @@ router.get("/pin/status", async (req, res) => {
         `,
         [msisdn]
       );
+    } else {
+      return res.status(400).json({ status: "FAILED" });
     }
 
     if (!sessionRes.rows.length) {
@@ -383,11 +393,7 @@ router.get("/pin/status", async (req, res) => {
       offer_id: s.offer_id,
     });
   } catch (err) {
-    console.error("CHECK STATUS ERROR:", err.message);
-    return res.status(500).json({
-      status: "FAILED",
-      message: "Check status failed",
-    });
+    return res.status(500).json({ status: "FAILED" });
   }
 });
 
