@@ -220,7 +220,7 @@ export default function Offers() {
           <table style={styles.table}>
             <thead>
               <tr>
-                {["ID","Advertiser","Service","Geo","Carrier","Cap","Used","Remain","Route","Status","Control","Params"]
+                {["ID","Advertiser","Service","cpa","Geo","Carrier","Cap","Used","Remain","Route","Status","Control","Params"]
                   .map(h => <th key={h} style={styles.th}>{h}</th>)}
               </tr>
             </thead>
@@ -230,6 +230,7 @@ export default function Offers() {
                   <td style={styles.td}>{o.id}</td>
                   <td style={styles.td}>{o.advertiser_name || "-"}</td>
                   <td style={styles.td}>{o.service_name}</td>
+                  <td>{o.cpa || "-"}</td>
                   <td style={styles.td}>{o.geo}</td>
                   <td style={styles.td}>{o.carrier}</td>
                   <td style={styles.td}>{o.daily_cap || "∞"}</td>
