@@ -373,12 +373,15 @@ const getStatusBadge = (o) => {
 
 /* ---------------- STYLES ---------------- */
 const styles = {
-  page: { padding: "60px 30px", fontFamily: "Inter, system-ui, Arial" },
-  topBar: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 15 },
-  tableWrap: { display: "flex", justifyContent: "center", marginTop: 15 },
-  table: { width: "95%", borderCollapse: "collapse", textAlign: "center" },
-  th: { border: "1px solid #ddd", padding: 8, background: "#f3f4f6" },
-  td: { border: "1px solid #ddd", padding: 8 },
-  card: { background: "#fff", padding: 20, marginTop: 15, borderRadius: 6 },
-  inline: { display: "flex", gap: 10, marginBottom: 10 },
-};
+ page: { padding: "60px 30px", fontFamily: "Inter, system-ui, Arial" }, 
+ topBar: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 15 }, 
+ tableWrap: { display: "flex", justifyContent: "center", marginTop: 15 }, 
+ table: { width: "95%", borderCollapse: "collapse", textAlign: "center" }, 
+ th: { border: "1px solid #ddd", padding: 8, background: "#f3f4f6" }, 
+ td: { border: "1px solid #ddd", padding: 8 }, 
+ card: { background: "#fff", padding: 20, marginTop: 15, borderRadius: 6 }, 
+ inline: { display: "flex", gap: 10, marginBottom: 10 }, 
+ badgeActive: { color: "green", fontWeight: 600 }, 
+ badgeCap: { color: "red", fontWeight: 600 }, 
+ badgeFallback: { color: "#ca8a04", fontWeight: 600 },
+ };
