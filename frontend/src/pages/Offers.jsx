@@ -136,6 +136,11 @@ export default function Offers() {
   };
 
   /* ---------------- HELPERS ---------------- */
+const getStatusBadge = (o) => {
+ if (o.service_type === "FALLBACK") return <span style={styles.badgeFallback}>🟡 Fallback</span>;
+ if (o.daily_cap && o.today_hits >= o.daily_cap) return <span style={styles.badgeCap}>🔴 Cap Reached</span>; 
+ return <span style={styles.badgeActive}>🟢 Active</span>; };
+  
   const remaining = (o) =>
     !o.daily_cap ? "∞" : Math.max(o.daily_cap - o.today_hits, 0);
 
