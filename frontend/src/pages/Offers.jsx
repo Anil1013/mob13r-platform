@@ -19,7 +19,6 @@ export default function Offers() {
     daily_cap: "",
     geo: "",
     carrier: "",
-    otp_length: 4,
     service_type: "NORMAL",
   });
 
@@ -76,7 +75,7 @@ export default function Offers() {
     });
 
     const data = await res.json();
-    setOffers((prev) => [...prev, data]);
+    setOffers((prev) => [data, ...prev]);
 
     setOfferForm({
       ...offerForm,
@@ -87,6 +86,17 @@ export default function Offers() {
       carrier: "",
       service_type: "NORMAL",
     });
+  };
+
+  /* ---------------- UPDATE CPA / CAP ---------------- */
+  const updateOfferField = async (offerId, payload) => {
+    await fetch(`${API_BASE}/api/offers/${offerId}`, {
+      method: "PATCH",
+      headers: authHeaders,
+      body: JSON.stringify(payload),
+    });
+
+    fetchOffers(offerForm.advertiser_id);
   };
 
   /* ---------------- PARAMETERS ---------------- */
@@ -145,7 +155,7 @@ export default function Offers() {
       <div style={styles.page}>
         <h1>Offers</h1>
 
-        {/* TOP BAR (FILTER + CREATE INLINE) */}
+        {/* TOP BAR */}
         <form onSubmit={createOffer} style={styles.topBar}>
           <select
             value={offerForm.advertiser_id}
@@ -170,6 +180,7 @@ export default function Offers() {
               setOfferForm({ ...offerForm, service_name: e.target.value })
             }
           />
+
           <input
             placeholder="CPA"
             value={offerForm.cpa}
@@ -178,6 +189,7 @@ export default function Offers() {
             }
             style={{ width: 70 }}
           />
+
           <input
             placeholder="Cap"
             value={offerForm.daily_cap}
@@ -186,6 +198,7 @@ export default function Offers() {
             }
             style={{ width: 80 }}
           />
+
           <input
             placeholder="Geo"
             value={offerForm.geo}
@@ -194,6 +207,7 @@ export default function Offers() {
             }
             style={{ width: 70 }}
           />
+
           <input
             placeholder="Carrier"
             value={offerForm.carrier}
@@ -202,6 +216,7 @@ export default function Offers() {
             }
             style={{ width: 90 }}
           />
+
           <select
             value={offerForm.service_type}
             onChange={(e) =>
@@ -220,7 +235,7 @@ export default function Offers() {
           <table style={styles.table}>
             <thead>
               <tr>
-                {["ID","Advertiser","Service","cpa","Geo","Carrier","Cap","Used","Remain","Route","Status","Control","Params"]
+                {["ID","Advertiser","Service","CPA","Geo","Carrier","Cap","Used","Remain","Route","Status","Control","Params"]
                   .map(h => <th key={h} style={styles.th}>{h}</th>)}
               </tr>
             </thead>
@@ -230,14 +245,42 @@ export default function Offers() {
                   <td style={styles.td}>{o.id}</td>
                   <td style={styles.td}>{o.advertiser_name || "-"}</td>
                   <td style={styles.td}>{o.service_name}</td>
-                  <td>{o.cpa || "-"}</td>
+
+                  {/* CPA EDIT */}
+                  <td style={styles.td}>
+                    <input
+                      type="number"
+                      step="0.01"
+                      defaultValue={o.cpa}
+                      disabled={o.service_type === "FALLBACK"}
+                      style={styles.inlineInput}
+                      onBlur={(e) =>
+                        updateOfferField(o.id, { cpa: e.target.value })
+                      }
+                    />
+                  </td>
+
                   <td style={styles.td}>{o.geo}</td>
                   <td style={styles.td}>{o.carrier}</td>
-                  <td style={styles.td}>{o.daily_cap || "∞"}</td>
+
+                  {/* CAP EDIT */}
+                  <td style={styles.td}>
+                    <input
+                      type="number"
+                      defaultValue={o.daily_cap}
+                      disabled={o.service_type === "FALLBACK"}
+                      style={styles.inlineInput}
+                      onBlur={(e) =>
+                        updateOfferField(o.id, { daily_cap: e.target.value })
+                      }
+                    />
+                  </td>
+
                   <td style={styles.td}>{o.today_hits}</td>
                   <td style={styles.td}>{remaining(o)}</td>
                   <td style={styles.td}>{o.service_type}</td>
                   <td style={styles.td}>{getStatusBadge(o)}</td>
+
                   <td style={styles.td}>
                     {o.service_type === "NORMAL" ? (
                       <button onClick={() => changeServiceType(o.id, "FALLBACK")}>
@@ -249,6 +292,7 @@ export default function Offers() {
                       </button>
                     )}
                   </td>
+
                   <td style={styles.td}>
                     <button onClick={() => {
                       setSelectedOffer(o);
@@ -285,20 +329,6 @@ export default function Offers() {
               />
               <button>Add</button>
             </form>
-
-            <table style={styles.table}>
-              <tbody>
-                {parameters.map((p) => (
-                  <tr key={p.id}>
-                    <td style={styles.td}>{p.param_key}</td>
-                    <td style={styles.td}>{p.param_value}</td>
-                    <td style={styles.td}>
-                      <button onClick={() => deleteParameter(p.id)}>❌</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         )}
       </div>
@@ -316,6 +346,13 @@ const styles = {
   td: { border: "1px solid #ddd", padding: 8 },
   card: { background: "#fff", padding: 20, marginTop: 15, borderRadius: 6 },
   inline: { display: "flex", gap: 10, marginBottom: 10 },
+  inlineInput: {
+    width: 70,
+    padding: 4,
+    textAlign: "center",
+    border: "1px solid #ccc",
+    borderRadius: 4,
+  },
   badgeActive: { color: "green", fontWeight: 600 },
   badgeCap: { color: "red", fontWeight: 600 },
   badgeFallback: { color: "#ca8a04", fontWeight: 600 },
