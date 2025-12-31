@@ -74,7 +74,7 @@ export default function Offers() {
     fetchOffers(offerForm.advertiser_id);
   };
 
-  /* ---------------- CREATE OFFER (UNCHANGED) ---------------- */
+  /* ---------------- CREATE OFFER ---------------- */
   const createOffer = async (e) => {
     e.preventDefault();
 
@@ -140,12 +140,15 @@ export default function Offers() {
   const autoRevenue = (o) =>
     o.cpa ? `$${(Number(o.cpa) * Number(o.today_hits || 0)).toFixed(2)}` : "$0.00";
 
-  const routeBadge = (o) =>
-    o.service_type === "FALLBACK" ? (
-      <span style={styles.badgeFallback}>🟡 Fallback</span>
-    ) : (
-      <span style={styles.badgeActive}>🟢 Primary</span>
-    );
+  const routeBadge = (o) => {
+    if (o.daily_cap && o.today_hits >= o.daily_cap) {
+      return <span style={styles.badgeCap}>🔴 Cap Reached</span>;
+    }
+    if (o.service_type === "FALLBACK") {
+      return <span style={styles.badgeFallback}>🟡 Fallback</span>;
+    }
+    return <span style={styles.badgePrimary}>🟢 Primary</span>;
+  };
 
   /* ---------------- UI ---------------- */
   return (
@@ -155,7 +158,7 @@ export default function Offers() {
       <div style={styles.page}>
         <h1>Offers</h1>
 
-        {/* CREATE BAR – SAME AS BEFORE */}
+        {/* CREATE BAR */}
         <form onSubmit={createOffer} style={styles.topBar}>
           <select
             value={offerForm.advertiser_id}
@@ -222,8 +225,9 @@ export default function Offers() {
             <thead>
               <tr>
                 {[
-                  "ID","Advertiser","Service","CPA ($)","Geo","Carrier",
-                  "Cap","Used","Remain","Revenue ($)","Route","Control","Params"
+                  "ID","Advertiser","Service","CPA ($)",
+                  "Geo","Carrier","Cap","Used","Remain",
+                  "Revenue ($)","Route","Control","Params"
                 ].map(h => (
                   <th key={h} style={styles.th}>{h}</th>
                 ))}
@@ -236,28 +240,56 @@ export default function Offers() {
                   <td style={styles.td}>{o.advertiser_name || "-"}</td>
 
                   <td style={styles.td}>
-                    <input defaultValue={o.service_name}
-                      onBlur={(e) => updateOffer(o.id,{service_name:e.target.value})}/>
+                    <input
+                      style={styles.input}
+                      defaultValue={o.service_name}
+                      onBlur={(e) =>
+                        updateOffer(o.id, { service_name: e.target.value })
+                      }
+                    />
                   </td>
 
                   <td style={styles.td}>
-                    <input defaultValue={o.cpa || ""}
-                      onBlur={(e) => updateOffer(o.id,{cpa:e.target.value})}/>
+                    <input
+                      style={styles.input}
+                      defaultValue={o.cpa || ""}
+                      onBlur={(e) =>
+                        updateOffer(o.id, { cpa: e.target.value })
+                      }
+                    />
                   </td>
 
                   <td style={styles.td}>
-                    <input defaultValue={o.geo || ""}
-                      onBlur={(e) => updateOffer(o.id,{geo:e.target.value})}/>
+                    <input
+                      style={styles.input}
+                      defaultValue={o.geo || ""}
+                      onBlur={(e) =>
+                        updateOffer(o.id, { geo: e.target.value })
+                      }
+                    />
                   </td>
 
                   <td style={styles.td}>
-                    <input defaultValue={o.carrier || ""}
-                      onBlur={(e) => updateOffer(o.id,{carrier:e.target.value})}/>
+                    <input
+                      style={styles.input}
+                      defaultValue={o.carrier || ""}
+                      onBlur={(e) =>
+                        updateOffer(o.id, { carrier: e.target.value })
+                      }
+                    />
                   </td>
 
                   <td style={styles.td}>
-                    <input defaultValue={o.daily_cap || ""}
-                      onBlur={(e) => updateOffer(o.id,{daily_cap:e.target.value || null})}/>
+                    <input
+                      style={styles.input}
+                      defaultValue={o.daily_cap || ""}
+                      placeholder="∞"
+                      onBlur={(e) =>
+                        updateOffer(o.id, {
+                          daily_cap: e.target.value || null,
+                        })
+                      }
+                    />
                   </td>
 
                   <td style={styles.td}>{o.today_hits}</td>
@@ -267,11 +299,11 @@ export default function Offers() {
 
                   <td style={styles.td}>
                     {o.service_type === "NORMAL" ? (
-                      <button onClick={() => changeServiceType(o.id,"FALLBACK")}>
+                      <button onClick={() => changeServiceType(o.id, "FALLBACK")}>
                         Make Fallback
                       </button>
                     ) : (
-                      <button onClick={() => changeServiceType(o.id,"NORMAL")}>
+                      <button onClick={() => changeServiceType(o.id, "NORMAL")}>
                         Make Primary
                       </button>
                     )}
@@ -281,13 +313,54 @@ export default function Offers() {
                     <button onClick={() => {
                       setSelectedOffer(o);
                       fetchParameters(o.id);
-                    }}>Manage</button>
+                    }}>
+                      Manage
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
+        {/* PARAMETERS */}
+        {selectedOffer && (
+          <div style={styles.card}>
+            <h3>Parameters – {selectedOffer.service_name}</h3>
+
+            <form onSubmit={addParameter} style={styles.inline}>
+              <input
+                placeholder="param_key"
+                value={paramForm.param_key}
+                onChange={(e) =>
+                  setParamForm({ ...paramForm, param_key: e.target.value })
+                }
+              />
+              <input
+                placeholder="param_value"
+                value={paramForm.param_value}
+                onChange={(e) =>
+                  setParamForm({ ...paramForm, param_value: e.target.value })
+                }
+              />
+              <button>Add</button>
+            </form>
+
+            <table style={styles.table}>
+              <tbody>
+                {parameters.map((p) => (
+                  <tr key={p.id}>
+                    <td style={styles.td}>{p.param_key}</td>
+                    <td style={styles.td}>{p.param_value}</td>
+                    <td style={styles.td}>
+                      <button onClick={() => deleteParameter(p.id)}>❌</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </>
   );
@@ -295,12 +368,21 @@ export default function Offers() {
 
 /* ---------------- STYLES ---------------- */
 const styles = {
-  page:{ padding:"60px 30px", fontFamily:"Inter, system-ui, Arial"},
-  topBar:{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:15},
-  tableWrap:{ display:"flex", justifyContent:"center", marginTop:15},
-  table:{ width:"95%", borderCollapse:"collapse", textAlign:"center"},
-  th:{ border:"1px solid #ddd", padding:8, background:"#f3f4f6"},
-  td:{ border:"1px solid #ddd", padding:6, textAlign:"center"},
-  badgeActive:{ color:"green", fontWeight:600},
-  badgeFallback:{ color:"#ca8a04", fontWeight:600},
+  page: { padding: "60px 30px", fontFamily: "Inter, system-ui, Arial" },
+  topBar: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 15 },
+  tableWrap: { display: "flex", justifyContent: "center", marginTop: 15 },
+  table: { width: "95%", borderCollapse: "collapse", textAlign: "center" },
+  th: { border: "1px solid #ddd", padding: 8, background: "#f3f4f6" },
+  td: { border: "1px solid #ddd", padding: 8, textAlign: "center" },
+  input: {
+    width: "90%",
+    textAlign: "center",
+    padding: 4,
+  },
+  card: { background: "#fff", padding: 20, marginTop: 15, borderRadius: 6 },
+  inline: { display: "flex", gap: 10, marginBottom: 10 },
+
+  badgePrimary: { color: "green", fontWeight: 600 },
+  badgeFallback: { color: "#ca8a04", fontWeight: 600 },
+  badgeCap: { color: "red", fontWeight: 600 },
 };
