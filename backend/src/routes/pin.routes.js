@@ -294,24 +294,26 @@ async function handlePinVerify(input, res) {
   const advData = advResp.data;
   const mapped = mapPinVerifyResponse(advData);
 
+  /* 🔥 CRITICAL FIX: UPDATE BY session_token (NOT id) */
   if (mapped.body.status === "SUCCESS") {
     await pool.query(
       `
       UPDATE pin_sessions
       SET status = 'VERIFIED',
           verified_at = NOW()
-      WHERE id = $1
+      WHERE session_token = $1
       `,
-      [session.id]
+      [session.session_token]
     );
   } else {
     await pool.query(
       `
       UPDATE pin_sessions
       SET otp_attempts = otp_attempts + 1
-      WHERE id = $1
+      WHERE session_token = $1
+        AND status != 'VERIFIED'
       `,
-      [session.id]
+      [session.session_token]
     );
   }
 
