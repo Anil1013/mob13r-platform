@@ -69,7 +69,7 @@ function getAdvMethod(staticParams) {
 }
 
 /* =====================================================
-   🔐 PIN SEND
+   🔐 PIN SEND (GET / POST)
 ===================================================== */
 router.all("/pin/send/:offer_id", async (req, res) => {
   try {
@@ -77,7 +77,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const { offer_id } = req.params;
     const incomingParams = { ...req.query, ...req.body };
-    const msisdn = incomingParams.msisdn;
+    const { msisdn } = incomingParams;
 
     if (!msisdn) {
       return res.status(400).json({
@@ -135,7 +135,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     );
 
     const staticParams = {};
-    paramRes.rows.forEach((p) => (staticParams[p.param_key] = p.param_value));
+    paramRes.rows.forEach(p => (staticParams[p.param_key] = p.param_value));
 
     if (!staticParams.pin_send_url) {
       return res.status(500).json({
@@ -158,7 +158,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       `
       INSERT INTO pin_sessions
       (offer_id, msisdn, session_token, params, status)
-      VALUES ($1, $2, $3, $4, 'OTP_SENT')
+      VALUES ($1,$2,$3,$4,'OTP_SENT')
       `,
       [offer.id, msisdn, sessionToken, finalParams]
     );
@@ -205,7 +205,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 });
 
 /* =====================================================
-   🔐 COMMON VERIFY HANDLER
+   🔐 COMMON VERIFY HANDLER (GET + POST)
 ===================================================== */
 async function handlePinVerify(input, res) {
   const { session_token, msisdn, offer_id, otp } = input;
@@ -265,7 +265,7 @@ async function handlePinVerify(input, res) {
   );
 
   const staticParams = {};
-  paramRes.rows.forEach((p) => (staticParams[p.param_key] = p.param_value));
+  paramRes.rows.forEach(p => (staticParams[p.param_key] = p.param_value));
 
   if (!staticParams.verify_pin_url) {
     return res.status(500).json({
@@ -290,7 +290,7 @@ async function handlePinVerify(input, res) {
   const advData = advResp.data;
   const mapped = mapPinVerifyResponse(advData);
 
-  /* ✅ SUCCESS FLOW */
+  /* ✅ SUCCESS */
   if (mapped.body.status === "SUCCESS") {
     await pool.query(
       `
@@ -302,14 +302,18 @@ async function handlePinVerify(input, res) {
       [session.session_token]
     );
 
-    /* 🔥 INSERT PUBLISHER CONVERSION (ONLY ONCE) */
+    /* 🔥 INSERT PUBLISHER CONVERSION (IDEMPOTENT) */
     if (session.publisher_id && session.publisher_cpa) {
       await pool.query(
         `
         INSERT INTO publisher_conversions
         (publisher_id, offer_id, pin_session_id, publisher_cpa, status)
-        VALUES ($1,$2,$3,$4,'SUCCESS')
-        ON CONFLICT DO NOTHING
+        SELECT $1,$2,$3,$4,'SUCCESS'
+        WHERE NOT EXISTS (
+          SELECT 1 FROM publisher_conversions
+          WHERE pin_session_id = $3
+            AND status = 'SUCCESS'
+        )
         `,
         [
           session.publisher_id,
@@ -403,6 +407,58 @@ router.get("/pin/status", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ status: "FAILED" });
+  }
+});
+
+/* =========================
+   UPDATE OFFER (Editable Fields)
+========================= */
+router.patch("/:id", async (req, res) => {
+  try {
+    const offerId = Number(req.params.id);
+
+    const {
+      service_name,
+      cpa,
+      daily_cap,
+      geo,
+      carrier
+    } = req.body;
+
+    if (isNaN(offerId)) {
+      return res.status(400).json({ message: "Invalid offer id" });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE offers
+      SET
+        service_name = COALESCE($1, service_name),
+        cpa = COALESCE($2, cpa),
+        daily_cap = COALESCE($3, daily_cap),
+        geo = COALESCE($4, geo),
+        carrier = COALESCE($5, carrier)
+      WHERE id = $6
+      RETURNING *
+      `,
+      [
+        service_name,
+        cpa,
+        daily_cap,
+        geo,
+        carrier,
+        offerId
+      ]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ message: "Offer not found" });
+    }
+
+    return res.json(result.rows[0]);
+  } catch (err) {
+    console.error("UPDATE OFFER ERROR:", err.message);
+    return res.status(500).json({ message: "Failed to update offer" });
   }
 });
 
