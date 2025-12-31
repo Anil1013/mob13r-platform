@@ -1,12 +1,14 @@
 /* =====================================================
    Advertiser Response Mapper
-   Single source of truth for PIN SEND / VERIFY
+   SINGLE SOURCE OF TRUTH
 ===================================================== */
 
+/* ================= PIN SEND ================= */
 export function mapPinSendResponse(advData) {
   if (!advData) {
     return {
       httpCode: 502,
+      isSuccess: false,
       body: {
         status: "ADV_NO_RESPONSE",
         message: "No response from advertiser",
@@ -14,21 +16,22 @@ export function mapPinSendResponse(advData) {
     };
   }
 
-  // ✅ SUCCESS
+  /* ✅ SUCCESS */
   if (advData.status === true) {
     return {
       httpCode: 200,
+      isSuccess: true,
       body: {
         status: "OTP_SENT",
-        session_token: advData.sessionKey || null,
         adv_response: advData,
       },
     };
   }
 
-  // ❌ FAILURE (pass-through)
+  /* ❌ FAILURE (pass-through advertiser reason) */
   return {
     httpCode: 400,
+    isSuccess: false,
     body: {
       status: "OTP_FAILED",
       message:
@@ -41,12 +44,12 @@ export function mapPinSendResponse(advData) {
   };
 }
 
-/* --------------------------------------------------- */
-
+/* ================= PIN VERIFY ================= */
 export function mapPinVerifyResponse(advData) {
   if (!advData) {
     return {
       httpCode: 502,
+      isSuccess: false,
       body: {
         status: "ADV_NO_RESPONSE",
         message: "No response from advertiser",
@@ -54,10 +57,11 @@ export function mapPinVerifyResponse(advData) {
     };
   }
 
-  // ✅ VERIFIED
+  /* ✅ VERIFIED */
   if (advData.status === true) {
     return {
       httpCode: 200,
+      isSuccess: true,
       body: {
         status: "SUCCESS",
         adv_response: advData,
@@ -65,9 +69,10 @@ export function mapPinVerifyResponse(advData) {
     };
   }
 
-  // ❌ WRONG OTP / FAILED
+  /* ❌ WRONG OTP / FAILED */
   return {
     httpCode: 400,
+    isSuccess: false,
     body: {
       status: "OTP_INVALID",
       message:
