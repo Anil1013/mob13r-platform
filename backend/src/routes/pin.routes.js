@@ -69,7 +69,7 @@ function getAdvMethod(staticParams) {
 }
 
 /* =====================================================
-   🔐 PIN SEND (GET / POST)
+   🔐 PIN SEND
 ===================================================== */
 router.all("/pin/send/:offer_id", async (req, res) => {
   try {
@@ -205,7 +205,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 });
 
 /* =====================================================
-   🔐 COMMON VERIFY HANDLER (GET + POST)
+   🔐 COMMON VERIFY HANDLER
 ===================================================== */
 async function handlePinVerify(input, res) {
   const { session_token, msisdn, offer_id, otp } = input;
@@ -219,16 +219,12 @@ async function handlePinVerify(input, res) {
 
   let sessionRes;
 
-  /* MODE 1: session_token */
   if (session_token) {
     sessionRes = await pool.query(
       `SELECT * FROM pin_sessions WHERE session_token = $1`,
       [session_token]
     );
-  }
-
-  /* MODE 2: msisdn + offer_id */
-  else if (msisdn && offer_id) {
+  } else if (msisdn && offer_id) {
     sessionRes = await pool.query(
       `
       SELECT *
@@ -294,7 +290,7 @@ async function handlePinVerify(input, res) {
   const advData = advResp.data;
   const mapped = mapPinVerifyResponse(advData);
 
-  /* 🔥 CRITICAL FIX: UPDATE BY session_token (NOT id) */
+  /* ✅ SUCCESS FLOW */
   if (mapped.body.status === "SUCCESS") {
     await pool.query(
       `
@@ -305,6 +301,24 @@ async function handlePinVerify(input, res) {
       `,
       [session.session_token]
     );
+
+    /* 🔥 INSERT PUBLISHER CONVERSION (ONLY ONCE) */
+    if (session.publisher_id && session.publisher_cpa) {
+      await pool.query(
+        `
+        INSERT INTO publisher_conversions
+        (publisher_id, offer_id, pin_session_id, publisher_cpa, status)
+        VALUES ($1,$2,$3,$4,'SUCCESS')
+        ON CONFLICT DO NOTHING
+        `,
+        [
+          session.publisher_id,
+          session.offer_id,
+          session.id,
+          session.publisher_cpa,
+        ]
+      );
+    }
   } else {
     await pool.query(
       `
@@ -320,7 +334,7 @@ async function handlePinVerify(input, res) {
   return res.status(mapped.httpCode).json(mapped.body);
 }
 
-/* ================= POST VERIFY ================= */
+/* ================= VERIFY ROUTES ================= */
 router.post("/pin/verify", async (req, res) => {
   try {
     await handlePinVerify(req.body, res);
@@ -330,7 +344,6 @@ router.post("/pin/verify", async (req, res) => {
   }
 });
 
-/* ================= GET VERIFY ================= */
 router.get("/pin/verify", async (req, res) => {
   try {
     await handlePinVerify(req.query, res);
