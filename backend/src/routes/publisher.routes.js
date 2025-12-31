@@ -47,11 +47,12 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
     const offersRes = await pool.query(
       `
       SELECT
-        po.id AS publisher_offer_id,
         po.publisher_cpa,
         po.pass_percent,
         po.weight,
-        o.*
+        o.id AS offer_id,
+        o.geo,
+        o.carrier
       FROM publisher_offers po
       JOIN offers o ON o.id = po.offer_id
       WHERE po.publisher_id = $1
@@ -80,17 +81,17 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
       await pool.query(
         `
         INSERT INTO publisher_conversions
-        (publisher_id, offer_id, status, revenue)
-        VALUES ($1,$2,'HOLD',0)
+        (publisher_id, offer_id, status, publisher_cpa)
+        VALUES ($1, $2, 'HOLD', 0)
         `,
-        [publisher.id, picked.id]
+        [publisher.id, picked.offer_id]
       );
 
       return res.json({
         status: "HOLD",
         message: "Conversion held by pass_percent rule",
         publisher: publisher.name,
-        routed_offer_id: picked.id,
+        routed_offer_id: picked.offer_id,
       });
     }
 
@@ -98,11 +99,11 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
     const internalResp =
       req.method === "GET"
         ? await axios.get(
-            `${INTERNAL_API}/api/pin/send/${picked.id}`,
+            `${INTERNAL_API}/api/pin/send/${picked.offer_id}`,
             { params }
           )
         : await axios.post(
-            `${INTERNAL_API}/api/pin/send/${picked.id}`,
+            `${INTERNAL_API}/api/pin/send/${picked.offer_id}`,
             params
           );
 
@@ -124,11 +125,11 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
     return res.json({
       ...data,
       publisher: publisher.name,
-      routed_offer_id: picked.id,
+      routed_offer_id: picked.offer_id,
       publisher_cpa: picked.publisher_cpa,
     });
   } catch (err) {
-    console.error("PUBLISHER PIN SEND ERROR:", err.response?.data || err.message);
+    console.error("PUBLISHER PIN SEND ERROR:", err.message);
     return res.status(500).json({
       status: "FAILED",
       message: "Publisher pin send failed",
