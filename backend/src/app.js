@@ -5,6 +5,7 @@ import authRoutes from "./routes/auth.routes.js";
 import advertisersRoutes from "./routes/advertisers.routes.js";
 import pinRoutes from "./routes/pin.routes.js";
 import offersRoutes from "./routes/offers.routes.js";
+import publisherRoutes from "./routes/publisher.routes.js";
 
 const app = express();
 
@@ -19,5 +20,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/advertisers", advertisersRoutes);
 app.use("/api", pinRoutes);
 app.use("/api/offers", offersRoutes);
+app.use("/api/publisher", publisherRoutes);
 
 export default app;
