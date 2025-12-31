@@ -63,13 +63,13 @@ async function findFallbackOffer(primary) {
 function getAdvMethod(staticParams) {
   const m = (staticParams.method || "GET").toUpperCase();
   if (!["GET", "POST"].includes(m)) {
-    throw new Error("Invalid method in panel (GET / POST only)");
+    throw new Error("Invalid method (GET / POST only)");
   }
   return m;
 }
 
 /* =====================================================
-   🔐 PIN SEND
+   🔐 PIN SEND (GET / POST)
 ===================================================== */
 router.all("/pin/send/:offer_id", async (req, res) => {
   try {
@@ -93,7 +93,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       });
     }
 
-    /* Load PRIMARY offer */
+    /* PRIMARY OFFER */
     const offerRes = await pool.query(
       `
       SELECT *
@@ -128,23 +128,16 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       route = "FALLBACK";
     }
 
-    /* Load offer params */
+    /* OFFER PARAMS */
     const paramRes = await pool.query(
-      `
-      SELECT param_key, param_value
-      FROM offer_parameters
-      WHERE offer_id = $1
-      `,
+      `SELECT param_key, param_value FROM offer_parameters WHERE offer_id = $1`,
       [offer.id]
     );
 
     const staticParams = {};
-    paramRes.rows.forEach((p) => {
-      staticParams[p.param_key] = p.param_value;
-    });
+    paramRes.rows.forEach((p) => (staticParams[p.param_key] = p.param_value));
 
-    const pinSendUrl = staticParams.pin_send_url;
-    if (!pinSendUrl) {
+    if (!staticParams.pin_send_url) {
       return res.status(500).json({
         status: "FAILED",
         message: "pin_send_url missing",
@@ -173,8 +166,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     /* CALL ADVERTISER */
     const advResp =
       advMethod === "GET"
-        ? await axios.get(pinSendUrl, { params: finalParams })
-        : await axios.post(pinSendUrl, finalParams);
+        ? await axios.get(staticParams.pin_send_url, { params: finalParams })
+        : await axios.post(staticParams.pin_send_url, finalParams);
 
     const advData = advResp.data;
 
@@ -212,9 +205,11 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 });
 
 /* =====================================================
-   🔐 COMMON VERIFY HANDLER
+   🔐 COMMON VERIFY HANDLER (GET + POST)
 ===================================================== */
-async function handlePinVerify({ session_token, msisdn, offer_id, otp }, res) {
+async function handlePinVerify(input, res) {
+  const { session_token, msisdn, offer_id, otp } = input;
+
   if (!otp) {
     return res.status(400).json({
       status: "FAILED",
@@ -276,8 +271,7 @@ async function handlePinVerify({ session_token, msisdn, offer_id, otp }, res) {
   const staticParams = {};
   paramRes.rows.forEach((p) => (staticParams[p.param_key] = p.param_value));
 
-  const pinVerifyUrl = staticParams.verify_pin_url;
-  if (!pinVerifyUrl) {
+  if (!staticParams.verify_pin_url) {
     return res.status(500).json({
       status: "FAILED",
       message: "verify_pin_url missing",
@@ -294,8 +288,8 @@ async function handlePinVerify({ session_token, msisdn, offer_id, otp }, res) {
 
   const advResp =
     advMethod === "GET"
-      ? await axios.get(pinVerifyUrl, { params: verifyPayload })
-      : await axios.post(pinVerifyUrl, verifyPayload);
+      ? await axios.get(staticParams.verify_pin_url, { params: verifyPayload })
+      : await axios.post(staticParams.verify_pin_url, verifyPayload);
 
   const advData = advResp.data;
   const mapped = mapPinVerifyResponse(advData);
@@ -304,9 +298,9 @@ async function handlePinVerify({ session_token, msisdn, offer_id, otp }, res) {
     await pool.query(
       `
       UPDATE pin_sessions
-      SET status='VERIFIED',
-          verified_at=NOW()
-      WHERE id=$1
+      SET status = 'VERIFIED',
+          verified_at = NOW()
+      WHERE id = $1
       `,
       [session.id]
     );
@@ -315,7 +309,7 @@ async function handlePinVerify({ session_token, msisdn, offer_id, otp }, res) {
       `
       UPDATE pin_sessions
       SET otp_attempts = otp_attempts + 1
-      WHERE id=$1
+      WHERE id = $1
       `,
       [session.id]
     );
@@ -330,7 +324,7 @@ router.post("/pin/verify", async (req, res) => {
     await handlePinVerify(req.body, res);
   } catch (err) {
     console.error("PIN VERIFY POST ERROR:", err.message);
-    return res.status(500).json({ status: "FAILED" });
+    res.status(500).json({ status: "FAILED" });
   }
 });
 
@@ -340,7 +334,7 @@ router.get("/pin/verify", async (req, res) => {
     await handlePinVerify(req.query, res);
   } catch (err) {
     console.error("PIN VERIFY GET ERROR:", err.message);
-    return res.status(500).json({ status: "FAILED" });
+    res.status(500).json({ status: "FAILED" });
   }
 });
 
@@ -393,7 +387,7 @@ router.get("/pin/status", async (req, res) => {
       offer_id: s.offer_id,
     });
   } catch (err) {
-    return res.status(500).json({ status: "FAILED" });
+    res.status(500).json({ status: "FAILED" });
   }
 });
 
