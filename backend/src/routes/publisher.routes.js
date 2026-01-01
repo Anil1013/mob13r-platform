@@ -5,7 +5,12 @@ import axios from "axios";
 
 const router = express.Router();
 
-const INTERNAL_API = "https://backend.mob13r.com";
+/* ================= INTERNAL API ================= */
+const INTERNAL_API = process.env.INTERNAL_API_BASE;
+
+if (!INTERNAL_API) {
+  throw new Error("INTERNAL_API_BASE env not set");
+}
 
 /* ================= WEIGHTED PICK ================= */
 function pickOfferByWeight(rows) {
@@ -27,6 +32,7 @@ function pickOfferByWeight(rows) {
 
 /* =====================================================
    🔐 PUBLISHER PIN SEND (GET / POST)
+   URL: /api/publisher/pin/send
 ===================================================== */
 router.all("/pin/send", publisherAuth, async (req, res) => {
   try {
@@ -46,7 +52,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
     const offersRes = await pool.query(
       `
       SELECT
-        po.id AS publisher_offer_id,      -- 🔥 IMPORTANT
+        po.id AS publisher_offer_id,
         po.publisher_cpa,
         po.pass_percent,
         po.weight,
@@ -77,18 +83,13 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
     /* 🔁 PASS % HOLD LOGIC */
     const passRand = Math.random() * 100;
     if (passRand > Number(picked.pass_percent)) {
-      /* 🟡 SAVE HOLD CONVERSION */
       await pool.query(
         `
         INSERT INTO publisher_conversions
         (publisher_id, offer_id, publisher_offer_id, status, publisher_cpa)
         VALUES ($1, $2, $3, 'HOLD', 0)
         `,
-        [
-          publisher.id,
-          picked.offer_id,
-          picked.publisher_offer_id,
-        ]
+        [publisher.id, picked.offer_id, picked.publisher_offer_id]
       );
 
       return res.json({
@@ -98,26 +99,22 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
     }
 
     /* 🔗 INTERNAL PIN SEND */
+    const internalUrl = `${INTERNAL_API}/api/pin/send/${picked.offer_id}`;
+
     const internalResp =
       req.method === "GET"
-        ? await axios.get(
-            `${INTERNAL_API}/api/pin/send/${picked.offer_id}`,
-            { params }
-          )
-        : await axios.post(
-            `${INTERNAL_API}/api/pin/send/${picked.offer_id}`,
-            params
-          );
+        ? await axios.get(internalUrl, { params })
+        : await axios.post(internalUrl, params);
 
     const data = internalResp.data;
 
-    /* 🔐 MAP PUBLISHER DATA TO PIN SESSION (🔥 FIX) */
+    /* 🔐 MAP PUBLISHER DATA TO PIN SESSION */
     if (data.session_token) {
       await pool.query(
         `
         UPDATE pin_sessions
         SET publisher_id = $1,
-            publisher_offer_id = $2,   -- 🔥 JOIN FIX
+            publisher_offer_id = $2,
             publisher_cpa = $3
         WHERE session_token = $4
         `,
@@ -130,13 +127,19 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
       );
     }
 
-    /* ✅ CLEAN RESPONSE (NO TRAFFIC SPLIT LEAK) */
+    /* ✅ CLEAN RESPONSE */
     return res.json({
       ...data,
       publisher_cpa: picked.publisher_cpa,
     });
   } catch (err) {
-    console.error("PUBLISHER PIN SEND ERROR:", err.message);
+    if (err.response) {
+      console.error("INTERNAL PIN STATUS:", err.response.status);
+      console.error("INTERNAL PIN DATA:", err.response.data);
+    } else {
+      console.error("PUBLISHER PIN SEND ERROR:", err.message);
+    }
+
     return res.status(500).json({
       status: "FAILED",
       message: "Publisher pin send failed",
