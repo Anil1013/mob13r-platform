@@ -10,15 +10,24 @@ const router = express.Router();
 const INTERNAL_API_BASE =
   process.env.INTERNAL_API_BASE || "https://backend.mob13r.com";
 
+/* ================= HELPERS ================= */
+function enrichParams(req, params) {
+  return {
+    ...params,
+    ip: req.headers["x-forwarded-for"]?.split(",")[0] || req.ip,
+    user_agent: req.headers["user-agent"] || "",
+  };
+}
+
 /* =====================================================
    📤 PUBLISHER PIN SEND
    GET / POST  /api/publisher/pin/send
 ===================================================== */
 router.all("/pin/send", publisherAuth, async (req, res) => {
   try {
-    const params = { ...req.query, ...req.body };
+    const baseParams = { ...req.query, ...req.body };
+    const { msisdn, geo, carrier } = baseParams;
 
-    const { msisdn, geo, carrier } = params;
     if (!msisdn || !geo || !carrier) {
       return res.status(400).json({
         status: "FAILED",
@@ -26,15 +35,13 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
       });
     }
 
-    /* 🔗 CALL INTERNAL PIN SEND */
+    const params = enrichParams(req, baseParams);
+
     const internalResp =
       req.method === "GET"
-        ? await axios.get(`${INTERNAL_API_BASE}/api/pin/send`, {
-            params,
-          })
+        ? await axios.get(`${INTERNAL_API_BASE}/api/pin/send`, { params })
         : await axios.post(`${INTERNAL_API_BASE}/api/pin/send`, params);
 
-    /* 👉 ADV RESPONSE 그대로 publisher ko */
     return res.json(
       mapPublisherResponse(internalResp.data)
     );
@@ -48,13 +55,13 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 });
 
 /* =====================================================
-   ✅ PUBLISHER PIN VERIFY (PASS % LOGIC HERE)
+   ✅ PUBLISHER PIN VERIFY
    GET / POST  /api/publisher/pin/verify
 ===================================================== */
 router.all("/pin/verify", publisherAuth, async (req, res) => {
   try {
-    const params = { ...req.query, ...req.body };
-    const { session_token, otp } = params;
+    const baseParams = { ...req.query, ...req.body };
+    const { session_token, otp } = baseParams;
 
     if (!session_token || !otp) {
       return res.status(400).json({
@@ -63,30 +70,23 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       });
     }
 
-    /* 🔗 CALL INTERNAL VERIFY */
+    const params = enrichParams(req, baseParams);
+
     const internalResp =
       req.method === "GET"
-        ? await axios.get(
-            `${INTERNAL_API_BASE}/api/pin/verify`,
-            { params }
-          )
-        : await axios.post(
-            `${INTERNAL_API_BASE}/api/pin/verify`,
-            params
-          );
+        ? await axios.get(`${INTERNAL_API_BASE}/api/pin/verify`, { params })
+        : await axios.post(`${INTERNAL_API_BASE}/api/pin/verify`, params);
 
     const advData = internalResp.data;
 
-    /* ================= ADV FAILED ================= */
+    /* ========= ADV FAILED → SAME RESPONSE ========= */
     if (advData.status !== "SUCCESS") {
       return res.json(
         mapPublisherResponse(advData)
       );
     }
 
-    /* ================= PASS % LOGIC ================= */
-
-    // 🔍 Fetch conversion + pass %
+    /* ========= PASS % LOGIC ========= */
     const convRes = await pool.query(
       `
       SELECT id, pass_percent
@@ -102,7 +102,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
     const passPercent = Number(conversion?.pass_percent ?? 100);
     const rand = Math.random() * 100;
 
-    /* ================= HOLD CASE ================= */
+    /* ========= HOLD ========= */
     if (rand > passPercent) {
       await pool.query(
         `
@@ -120,7 +120,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       );
     }
 
-    /* ================= PASS CASE ================= */
+    /* ========= PASS ========= */
     await pool.query(
       `
       UPDATE publisher_conversions
@@ -140,6 +140,80 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       status: "FAILED",
       message: "Publisher pin verify failed",
     });
+  }
+});
+
+/* =====================================================
+   📊 PUBLISHER PIN STATUS
+   GET /api/publisher/pin/status
+===================================================== */
+router.get("/pin/status", publisherAuth, async (req, res) => {
+  try {
+    const { session_token } = req.query;
+
+    if (!session_token) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "session_token required",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT status, updated_at
+      FROM pin_sessions
+      WHERE session_token = $1
+      `,
+      [session_token]
+    );
+
+    if (!result.rows.length) {
+      return res.json({ status: "NO_SESSION" });
+    }
+
+    return res.json({
+      status: result.rows[0].status,
+      updated_at: result.rows[0].updated_at,
+    });
+  } catch (err) {
+    return res.status(500).json({ status: "FAILED" });
+  }
+});
+
+/* =====================================================
+   🔗 PUBLISHER PORTAL REDIRECT
+   GET /api/publisher/portal
+===================================================== */
+router.get("/portal", publisherAuth, async (req, res) => {
+  try {
+    const { session_token } = req.query;
+
+    if (!session_token) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "session_token required",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT portal_url
+      FROM pin_sessions
+      WHERE session_token = $1
+      `,
+      [session_token]
+    );
+
+    if (!result.rows.length || !result.rows[0].portal_url) {
+      return res.status(404).json({
+        status: "FAILED",
+        message: "Portal URL not found",
+      });
+    }
+
+    return res.redirect(result.rows[0].portal_url);
+  } catch (err) {
+    return res.status(500).json({ status: "FAILED" });
   }
 });
 
