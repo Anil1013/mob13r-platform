@@ -4,6 +4,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Advertisers from "./pages/Advertisers";
 import Offers from "./pages/Offers";
+import Publishers from "./pages/Publishers";
 import ProtectedRoute from "./auth/ProtectedRoute";
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/advertisers" element={<Advertisers />} />
           <Route path="/offers" element={<Offers />} />
+          <Route path="/publishers" element={<Publishers />} />
         </Route>
 
         {/* Default & fallback */}
