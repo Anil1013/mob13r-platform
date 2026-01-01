@@ -12,84 +12,95 @@ export default function Publishers() {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [toast, setToast] = useState(null);
+  const [visibleKeys, setVisibleKeys] = useState({});
+
   const token = localStorage.getItem("token");
 
   /* ================= AUTH GUARD ================= */
   useEffect(() => {
-    if (!token) {
-      navigate("/login");
-    } else {
-      loadPublishers();
-    }
+    if (!token) navigate("/login");
+    else loadPublishers();
     // eslint-disable-next-line
   }, []);
 
-  /* ================= FETCH PUBLISHERS ================= */
+  /* ================= FETCH ================= */
   const loadPublishers = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/publishers`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await res.json();
-      if (data.status === "SUCCESS") {
-        setPublishers(data.data);
-      }
-    } catch (err) {
-      console.error("LOAD PUBLISHERS ERROR", err);
-    }
+    const res = await fetch(`${API_BASE}/api/publishers`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (data.status === "SUCCESS") setPublishers(data.data);
   };
 
-  /* ================= ADD PUBLISHER ================= */
+  /* ================= TOAST ================= */
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2000);
+  };
+
+  /* ================= ADD ================= */
   const addPublisher = async () => {
-    if (!name.trim()) {
-      alert("Publisher name required");
-      return;
-    }
+    if (!name.trim()) return showToast("Publisher name required");
 
     setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/publishers`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ name }),
-      });
+    const res = await fetch(`${API_BASE}/api/publishers`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ name }),
+    });
 
-      const data = await res.json();
-      if (data.status === "SUCCESS") {
-        setName("");
-        loadPublishers();
-      } else {
-        alert(data.message || "Failed to add publisher");
-      }
-    } catch (err) {
-      console.error("ADD PUBLISHER ERROR", err);
+    const data = await res.json();
+    if (data.status === "SUCCESS") {
+      setPublishers((p) => [...p, data.data]); // optimistic add
+      setName("");
+      showToast("Publisher added");
     }
     setLoading(false);
   };
 
-  /* ================= TOGGLE STATUS ================= */
-  const toggleStatus = async (id, status) => {
-    try {
-      await fetch(`${API_BASE}/api/publishers/${id}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          status: status === "active" ? "paused" : "active",
-        }),
-      });
+  /* ================= COPY ================= */
+  const copyApiKey = async (key) => {
+    await navigator.clipboard.writeText(key);
+    showToast("API key copied");
+  };
 
-      loadPublishers();
-    } catch (err) {
-      console.error("TOGGLE STATUS ERROR", err);
+  /* ================= TOGGLE KEY VISIBILITY ================= */
+  const toggleKey = (id) => {
+    setVisibleKeys((v) => ({ ...v, [id]: !v[id] }));
+  };
+
+  /* ================= OPTIMISTIC STATUS ================= */
+  const toggleStatus = async (id, status) => {
+    const newStatus = status === "active" ? "paused" : "active";
+
+    // optimistic update
+    setPublishers((list) =>
+      list.map((p) =>
+        p.id === id ? { ...p, status: newStatus } : p
+      )
+    );
+
+    const res = await fetch(`${API_BASE}/api/publishers/${id}/status`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ status: newStatus }),
+    });
+
+    if (!res.ok) {
+      // rollback on fail
+      setPublishers((list) =>
+        list.map((p) =>
+          p.id === id ? { ...p, status } : p
+        )
+      );
+      showToast("Status update failed");
     }
   };
 
@@ -97,70 +108,80 @@ export default function Publishers() {
     <>
       <Navbar />
 
+      {/* ================= TOAST ================= */}
+      {toast && (
+        <div style={toastStyle}>
+          {toast}
+        </div>
+      )}
+
       <div style={{ padding: 20 }}>
         <h2>Publishers</h2>
 
-        {/* ================= ADD PUBLISHER ================= */}
-        <div
-          style={{
-            marginBottom: 20,
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-          }}
-        >
+        {/* ADD */}
+        <div style={{ marginBottom: 20, display: "flex", gap: 10 }}>
           <input
-            type="text"
-            placeholder="Publisher name"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            placeholder="Publisher name"
             style={{ padding: 6, width: 250 }}
           />
-
           <button onClick={addPublisher} disabled={loading}>
             {loading ? "Adding..." : "Add Publisher"}
           </button>
         </div>
 
-        {/* ================= PUBLISHER TABLE ================= */}
-        <table
-          width="100%"
-          cellPadding="10"
-          cellSpacing="0"
-          border="1"
-          style={{ borderCollapse: "collapse" }}
-        >
-          <thead style={{ background: "#f5f5f5" }}>
+        {/* TABLE */}
+        <table width="100%" border="1" style={{ borderCollapse: "collapse" }}>
+          <thead>
             <tr>
-              <th>ID</th>
-              <th>Name</th>
-              <th>API Key</th>
-              <th>Status</th>
-              <th>Created At</th>
-              <th>Action</th>
+              <th style={th}>ID</th>
+              <th style={th}>Name</th>
+              <th style={th}>API Key</th>
+              <th style={th}>Status</th>
+              <th style={th}>Created</th>
+              <th style={th}>Action</th>
             </tr>
           </thead>
 
           <tbody>
             {publishers.map((p) => (
               <tr key={p.id}>
-                <td>{p.id}</td>
-                <td>{p.name}</td>
-                <td style={{ maxWidth: 320 }}>
-                  <code style={{ fontSize: 12 }}>{p.api_key}</code>
+                <td style={td}>{p.id}</td>
+                <td style={td}>{p.name}</td>
+
+                {/* API KEY */}
+                <td style={td}>
+                  <div style={apiWrap}>
+                    <code>
+                      {visibleKeys[p.id]
+                        ? p.api_key
+                        : "••••••••••••••••"}
+                    </code>
+
+                    <button onClick={() => toggleKey(p.id)}>👁</button>
+                    <button onClick={() => copyApiKey(p.api_key)}>📋</button>
+                  </div>
                 </td>
-                <td>
+
+                {/* STATUS */}
+                <td style={td}>
                   <span
                     style={{
-                      color: p.status === "active" ? "green" : "red",
-                      fontWeight: "bold",
+                      ...badge,
+                      background:
+                        p.status === "active" ? "#22c55e" : "#ef4444",
                     }}
                   >
                     {p.status.toUpperCase()}
                   </span>
                 </td>
-                <td>{new Date(p.created_at).toLocaleString()}</td>
-                <td>
+
+                <td style={td}>
+                  {new Date(p.created_at).toLocaleString()}
+                </td>
+
+                <td style={td}>
                   <button onClick={() => toggleStatus(p.id, p.status)}>
                     {p.status === "active" ? "Pause" : "Activate"}
                   </button>
@@ -170,7 +191,7 @@ export default function Publishers() {
 
             {!publishers.length && (
               <tr>
-                <td colSpan="6" align="center">
+                <td colSpan="6" style={td}>
                   No publishers found
                 </td>
               </tr>
@@ -181,3 +202,33 @@ export default function Publishers() {
     </>
   );
 }
+
+/* ================= STYLES ================= */
+const th = { padding: 10, textAlign: "center" };
+const td = { padding: 10, textAlign: "center" };
+
+const apiWrap = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
+};
+
+const badge = {
+  padding: "4px 12px",
+  borderRadius: 20,
+  color: "#fff",
+  fontWeight: 600,
+  fontSize: 12,
+};
+
+const toastStyle = {
+  position: "fixed",
+  top: 20,
+  right: 20,
+  background: "#111827",
+  color: "#fff",
+  padding: "10px 16px",
+  borderRadius: 6,
+  zIndex: 9999,
+};
