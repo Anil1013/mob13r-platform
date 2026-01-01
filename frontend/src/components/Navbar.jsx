@@ -21,6 +21,7 @@ export default function Navbar() {
             Mob13r
           </div>
 
+          {/* ADMIN NAV */}
           <NavLink to="/dashboard" style={navStyle}>
             Dashboard
           </NavLink>
@@ -33,23 +34,20 @@ export default function Navbar() {
             Offers
           </NavLink>
 
-          {/* ✅ FIXED */}
           <NavLink to="/publishers" style={navStyle}>
             Publishers
           </NavLink>
-        </div>
 
           <NavLink to="/publishers/assign" style={navStyle}>
             Assign Offers
-           </NavLink>
-         </div>
+          </NavLink>
 
-        
+          {/* PUBLISHER NAV */}
           <NavLink to="/publisher/dashboard" style={navStyle}>
             Publisher Dashboard
-           </NavLink>
-          </div>
-    
+          </NavLink>
+        </div>
+
         {/* RIGHT */}
         <div style={styles.right}>
           <span style={styles.user}>{user?.email}</span>
