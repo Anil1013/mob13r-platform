@@ -1,32 +1,50 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-import Login from "./pages/Login";
+/* AUTH */
+import Login from "./auth/Login";
+
+/* ADMIN */
 import Dashboard from "./pages/Dashboard";
 import Advertisers from "./pages/Advertisers";
 import Offers from "./pages/Offers";
 import Publishers from "./pages/Publishers";
+import PublisherAssignOffers from "./pages/PublisherAssignOffers";
+
+/* PUBLISHER */
 import PublisherDashboard from "./pages/PublisherDashboard";
+
+/* GUARD */
 import ProtectedRoute from "./auth/ProtectedRoute";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public routes */}
+        {/* AUTH */}
         <Route path="/login" element={<Login />} />
 
-        {/* Protected routes (ALL INSIDE ONE WRAPPER) */}
+        {/* ADMIN */}
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/advertisers" element={<Advertisers />} />
           <Route path="/offers" element={<Offers />} />
           <Route path="/publishers" element={<Publishers />} />
-          <Route path="/publisher/dashboard" element={<PublisherDashboard />} />
+          <Route
+            path="/publishers/assign"
+            element={<PublisherAssignOffers />}
+          />
         </Route>
 
-        {/* Default & fallback */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* PUBLISHER */}
+        <Route element={<ProtectedRoute />}>
+          <Route
+            path="/publisher/dashboard"
+            element={<PublisherDashboard />}
+          />
+        </Route>
+
+        {/* DEFAULT */}
+        <Route path="*" element={<Login />} />
       </Routes>
     </BrowserRouter>
   );
