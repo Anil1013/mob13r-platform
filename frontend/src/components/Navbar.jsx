@@ -39,6 +39,11 @@ export default function Navbar() {
           </NavLink>
         </div>
 
+          <NavLink to="/publisher/dashboard" style={navStyle}>
+            Publisher Dashboard
+        </NavLink>
+
+        
         {/* RIGHT */}
         <div style={styles.right}>
           <span style={styles.user}>{user?.email}</span>
