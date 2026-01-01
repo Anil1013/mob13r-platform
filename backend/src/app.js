@@ -10,6 +10,7 @@ import pinRoutes from "./routes/pin.routes.js";
 /* 👉 PUBLISHER ROUTES */
 import publisherRoutes from "./routes/publisher.routes.js";
 import publisherDashboardRoutes from "./routes/publisher.dashboard.routes.js";
+import publishersRoutes from "./routes/publishers.routes.js";
 
 const app = express();
 
@@ -42,5 +43,6 @@ app.use("/api/publisher", publisherRoutes);
  * → /api/publisher/dashboard/offers
  */
 app.use("/api/publisher", publisherDashboardRoutes);
+app.use("/api/publishers", publishersRoutes);
 
 export default app;
