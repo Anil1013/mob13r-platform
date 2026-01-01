@@ -19,12 +19,30 @@ function enrichParams(req, params) {
   };
 }
 
+function pickOfferByWeight(rows) {
+  const safeRows = rows.map((r) => ({
+    ...r,
+    weight: Number(r.weight) > 0 ? Number(r.weight) : 1,
+  }));
+
+  const total = safeRows.reduce((s, r) => s + r.weight, 0);
+  let rand = Math.random() * total;
+
+  for (const r of safeRows) {
+    if (rand < r.weight) return r;
+    rand -= r.weight;
+  }
+
+  return safeRows[0];
+}
+
 /* =====================================================
    📤 PUBLISHER PIN SEND
    GET / POST  /api/publisher/pin/send
 ===================================================== */
 router.all("/pin/send", publisherAuth, async (req, res) => {
   try {
+    const publisher = req.publisher;
     const baseParams = { ...req.query, ...req.body };
     const { msisdn, geo, carrier } = baseParams;
 
@@ -37,16 +55,74 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 
     const params = enrichParams(req, baseParams);
 
+    /* 🔍 LOAD PUBLISHER ASSIGNED OFFERS */
+    const offersRes = await pool.query(
+      `
+      SELECT
+        po.id AS publisher_offer_id,
+        po.publisher_cpa,
+        po.pass_percent,
+        po.weight,
+        o.id AS offer_id
+      FROM publisher_offers po
+      JOIN offers o ON o.id = po.offer_id
+      WHERE po.publisher_id = $1
+        AND po.status = 'active'
+        AND o.status = 'active'
+        AND o.geo = $2
+        AND o.carrier = $3
+      `,
+      [publisher.id, geo, carrier]
+    );
+
+    if (!offersRes.rows.length) {
+      return res.status(404).json({
+        status: "NO_OFFER",
+        message: "No matching offers for publisher",
+      });
+    }
+
+    /* 🎯 PICK OFFER (WEIGHTED) */
+    const picked = pickOfferByWeight(offersRes.rows);
+
+    /* 🔗 CALL INTERNAL PIN SEND (🔥 IMPORTANT FIX) */
     const internalResp =
       req.method === "GET"
-        ? await axios.get(`${INTERNAL_API_BASE}/api/pin/send`, { params })
-        : await axios.post(`${INTERNAL_API_BASE}/api/pin/send`, params);
+        ? await axios.get(
+            `${INTERNAL_API_BASE}/api/pin/send/${picked.offer_id}`,
+            { params }
+          )
+        : await axios.post(
+            `${INTERNAL_API_BASE}/api/pin/send/${picked.offer_id}`,
+            params
+          );
+
+    const data = internalResp.data;
+
+    /* 🔐 MAP PUBLISHER INFO INTO PIN SESSION */
+    if (data.session_token) {
+      await pool.query(
+        `
+        UPDATE pin_sessions
+        SET publisher_id = $1,
+            publisher_offer_id = $2,
+            publisher_cpa = $3
+        WHERE session_token = $4
+        `,
+        [
+          publisher.id,
+          picked.publisher_offer_id,
+          picked.publisher_cpa,
+          data.session_token,
+        ]
+      );
+    }
 
     return res.json(
-      mapPublisherResponse(internalResp.data)
+      mapPublisherResponse(data)
     );
   } catch (err) {
-    console.error("PUBLISHER PIN SEND ERROR:", err.message);
+    console.error("PUBLISHER PIN SEND ERROR:", err);
     return res.status(500).json({
       status: "FAILED",
       message: "Publisher pin send failed",
@@ -72,6 +148,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     const params = enrichParams(req, baseParams);
 
+    /* 🔗 INTERNAL VERIFY */
     const internalResp =
       req.method === "GET"
         ? await axios.get(`${INTERNAL_API_BASE}/api/pin/verify`, { params })
@@ -79,14 +156,14 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     const advData = internalResp.data;
 
-    /* ========= ADV FAILED → SAME RESPONSE ========= */
+    /* ❌ ADV FAILED → SAME RESPONSE */
     if (advData.status !== "SUCCESS") {
       return res.json(
         mapPublisherResponse(advData)
       );
     }
 
-    /* ========= PASS % LOGIC ========= */
+    /* 🔢 PASS % LOGIC */
     const convRes = await pool.query(
       `
       SELECT id, pass_percent
@@ -102,7 +179,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
     const passPercent = Number(conversion?.pass_percent ?? 100);
     const rand = Math.random() * 100;
 
-    /* ========= HOLD ========= */
+    /* 🟡 HOLD → INVALID / ALREADY_SUBSCRIBED */
     if (rand > passPercent) {
       await pool.query(
         `
@@ -120,7 +197,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       );
     }
 
-    /* ========= PASS ========= */
+    /* 🟢 PASS */
     await pool.query(
       `
       UPDATE publisher_conversions
@@ -135,7 +212,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       mapPublisherResponse(advData)
     );
   } catch (err) {
-    console.error("PUBLISHER PIN VERIFY ERROR:", err.message);
+    console.error("PUBLISHER PIN VERIFY ERROR:", err);
     return res.status(500).json({
       status: "FAILED",
       message: "Publisher pin verify failed",
