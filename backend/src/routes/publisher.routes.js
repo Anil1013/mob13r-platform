@@ -5,8 +5,7 @@ import axios from "axios";
 
 const router = express.Router();
 
-const INTERNAL_API =
-  process.env.INTERNAL_API_BASE || "http://localhost:3000";
+const INTERNAL_API = "https://backend.mob13r.com";
 
 /* ================= WEIGHTED PICK ================= */
 function pickOfferByWeight(rows) {
