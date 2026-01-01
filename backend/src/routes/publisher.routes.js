@@ -19,6 +19,7 @@ function enrichParams(req, params) {
   };
 }
 
+/* ================= WEIGHTED PICK ================= */
 function pickOfferByWeight(rows) {
   const safeRows = rows.map((r) => ({
     ...r,
@@ -55,7 +56,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 
     const params = enrichParams(req, baseParams);
 
-    /* 🔍 LOAD PUBLISHER ASSIGNED OFFERS */
+    /* 🔍 LOAD PUBLISHER OFFERS */
     const offersRes = await pool.query(
       `
       SELECT
@@ -85,22 +86,19 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
     /* 🎯 PICK OFFER (WEIGHTED) */
     const picked = pickOfferByWeight(offersRes.rows);
 
-    /* 🔗 CALL INTERNAL PIN SEND (🔥 IMPORTANT FIX) */
-    const internalResp =
-      req.method === "GET"
-        ? await axios.get(
-            `${INTERNAL_API_BASE}/api/pin/send/${picked.offer_id}`,
-            { params }
-          )
-        : await axios.post(
-            `${INTERNAL_API_BASE}/api/pin/send/${picked.offer_id}`,
-            params
-          );
+    /* 🔗 CALL INTERNAL PIN SEND (🔥 FIXED) */
+    const internalResp = await axios({
+      method: req.method,
+      url: `${INTERNAL_API_BASE}/api/pin/send/${picked.offer_id}`,
+      params: req.method === "GET" ? params : undefined,
+      data: req.method !== "GET" ? params : undefined,
+      validateStatus: () => true, // 🔥 IMPORTANT
+    });
 
     const data = internalResp.data;
 
-    /* 🔐 MAP PUBLISHER INFO INTO PIN SESSION */
-    if (data.session_token) {
+    /* 🔐 MAP PUBLISHER INTO SESSION */
+    if (data?.session_token) {
       await pool.query(
         `
         UPDATE pin_sessions
@@ -118,9 +116,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
       );
     }
 
-    return res.json(
-      mapPublisherResponse(data)
-    );
+    return res.json(mapPublisherResponse(data));
   } catch (err) {
     console.error("PUBLISHER PIN SEND ERROR:", err);
     return res.status(500).json({
@@ -148,19 +144,19 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     const params = enrichParams(req, baseParams);
 
-    /* 🔗 INTERNAL VERIFY */
-    const internalResp =
-      req.method === "GET"
-        ? await axios.get(`${INTERNAL_API_BASE}/api/pin/verify`, { params })
-        : await axios.post(`${INTERNAL_API_BASE}/api/pin/verify`, params);
+    const internalResp = await axios({
+      method: req.method,
+      url: `${INTERNAL_API_BASE}/api/pin/verify`,
+      params: req.method === "GET" ? params : undefined,
+      data: req.method !== "GET" ? params : undefined,
+      validateStatus: () => true,
+    });
 
     const advData = internalResp.data;
 
-    /* ❌ ADV FAILED → SAME RESPONSE */
+    /* ❌ ADV FAIL */
     if (advData.status !== "SUCCESS") {
-      return res.json(
-        mapPublisherResponse(advData)
-      );
+      return res.json(mapPublisherResponse(advData));
     }
 
     /* 🔢 PASS % LOGIC */
@@ -179,7 +175,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
     const passPercent = Number(conversion?.pass_percent ?? 100);
     const rand = Math.random() * 100;
 
-    /* 🟡 HOLD → INVALID / ALREADY_SUBSCRIBED */
+    /* 🟡 HOLD */
     if (rand > passPercent) {
       await pool.query(
         `
@@ -192,9 +188,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
         [conversion.id]
       );
 
-      return res.json(
-        mapPublisherResponse(advData, { isHold: true })
-      );
+      return res.json(mapPublisherResponse(advData, { isHold: true }));
     }
 
     /* 🟢 PASS */
@@ -208,9 +202,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       [conversion.id]
     );
 
-    return res.json(
-      mapPublisherResponse(advData)
-    );
+    return res.json(mapPublisherResponse(advData));
   } catch (err) {
     console.error("PUBLISHER PIN VERIFY ERROR:", err);
     return res.status(500).json({
@@ -222,7 +214,6 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
 /* =====================================================
    📊 PUBLISHER PIN STATUS
-   GET /api/publisher/pin/status
 ===================================================== */
 router.get("/pin/status", publisherAuth, async (req, res) => {
   try {
@@ -248,10 +239,7 @@ router.get("/pin/status", publisherAuth, async (req, res) => {
       return res.json({ status: "NO_SESSION" });
     }
 
-    return res.json({
-      status: result.rows[0].status,
-      updated_at: result.rows[0].updated_at,
-    });
+    return res.json(result.rows[0]);
   } catch (err) {
     return res.status(500).json({ status: "FAILED" });
   }
@@ -259,7 +247,6 @@ router.get("/pin/status", publisherAuth, async (req, res) => {
 
 /* =====================================================
    🔗 PUBLISHER PORTAL REDIRECT
-   GET /api/publisher/portal
 ===================================================== */
 router.get("/portal", publisherAuth, async (req, res) => {
   try {
