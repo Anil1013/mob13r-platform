@@ -39,11 +39,17 @@ export default function Navbar() {
           </NavLink>
         </div>
 
-          <NavLink to="/publisher/dashboard" style={navStyle}>
-            Publisher Dashboard
-        </NavLink>
+          <NavLink to="/publishers/assign" style={navStyle}>
+            Assign Offers
+           </NavLink>
+         </div>
 
         
+          <NavLink to="/publisher/dashboard" style={navStyle}>
+            Publisher Dashboard
+           </NavLink>
+          </div>
+    
         {/* RIGHT */}
         <div style={styles.right}>
           <span style={styles.user}>{user?.email}</span>
