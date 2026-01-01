@@ -32,13 +32,13 @@ export default function Navbar() {
           <NavLink to="/offers" style={navStyle}>
             Offers
           </NavLink>
-        </div>
 
-        <NavLink to="/offers" style={navStyle}>
+          {/* ✅ FIXED */}
+          <NavLink to="/publishers" style={navStyle}>
             Publishers
           </NavLink>
         </div>
-        
+
         {/* RIGHT */}
         <div style={styles.right}>
           <span style={styles.user}>{user?.email}</span>
