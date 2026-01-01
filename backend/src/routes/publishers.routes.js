@@ -1,7 +1,7 @@
 import express from "express";
 import crypto from "crypto";
 import pool from "../db.js";
-import authMiddleware from "../middleware/authMiddleware.js";
+import authMiddleware from "../middleware/publisherAuth.js";
 
 const router = express.Router();
 
