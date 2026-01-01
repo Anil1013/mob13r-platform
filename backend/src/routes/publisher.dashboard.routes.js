@@ -11,7 +11,8 @@ router.get("/dashboard/summary", publisherAuth, async (req, res) => {
   try {
     const publisherId = req.publisher.id;
 
-    /* ---------------- PIN SEND ---------------- */
+    /* ---------------- PIN REQUESTS ---------------- */
+    // NOTE: pin_sessions is a proxy for pin requests (improve later with request logs)
     const pinReqRes = await pool.query(
       `
       SELECT
@@ -44,15 +45,17 @@ router.get("/dashboard/summary", publisherAuth, async (req, res) => {
         COUNT(DISTINCT msisdn) AS unique_pin_verification_requests
       FROM pin_sessions
       WHERE publisher_id = $1
-        AND otp_attempts > 0
+        AND (otp_attempts >= 1 OR status = 'VERIFIED')
       `,
       [publisherId]
     );
 
-    /* ---------------- VERIFIED ---------------- */
+    /* ---------------- VERIFIED + REVENUE ---------------- */
     const verifiedRes = await pool.query(
       `
-      SELECT COUNT(*) AS pin_verified
+      SELECT
+        COUNT(DISTINCT pin_session_id) AS pin_verified,
+        COALESCE(SUM(publisher_cpa),0) AS revenue
       FROM publisher_conversions
       WHERE publisher_id = $1
         AND status = 'SUCCESS'
@@ -60,23 +63,19 @@ router.get("/dashboard/summary", publisherAuth, async (req, res) => {
       [publisherId]
     );
 
-    const total_pin_requests =
-      Number(pinReqRes.rows[0].total_pin_requests);
-    const unique_pin_requests =
-      Number(pinReqRes.rows[0].unique_pin_requests);
+    const total_pin_requests = Number(pinReqRes.rows[0].total_pin_requests);
+    const unique_pin_requests = Number(pinReqRes.rows[0].unique_pin_requests);
 
-    const total_pin_sent =
-      Number(pinSentRes.rows[0].total_pin_sent);
-    const unique_pin_sent =
-      Number(pinSentRes.rows[0].unique_pin_sent);
+    const total_pin_sent = Number(pinSentRes.rows[0].total_pin_sent);
+    const unique_pin_sent = Number(pinSentRes.rows[0].unique_pin_sent);
 
     const pin_verification_requests =
       Number(verifyReqRes.rows[0].pin_verification_requests);
     const unique_pin_verification_requests =
       Number(verifyReqRes.rows[0].unique_pin_verification_requests);
 
-    const pin_verified =
-      Number(verifiedRes.rows[0].pin_verified);
+    const pin_verified = Number(verifiedRes.rows[0].pin_verified);
+    const revenue = Number(verifiedRes.rows[0].revenue);
 
     /* ---------------- CR ---------------- */
     const CR =
@@ -95,6 +94,7 @@ router.get("/dashboard/summary", publisherAuth, async (req, res) => {
         unique_pin_verification_requests,
         pin_verified,
         CR: `${CR}%`,
+        revenue: `$${revenue.toFixed(2)}`
       },
     });
   } catch (err) {
