@@ -47,6 +47,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
     const offersRes = await pool.query(
       `
       SELECT
+        po.id AS publisher_offer_id,      -- 🔥 IMPORTANT
         po.publisher_cpa,
         po.pass_percent,
         po.weight,
@@ -71,7 +72,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
       });
     }
 
-    /* 🎯 PICK OFFER */
+    /* 🎯 PICK OFFER (WEIGHT BASED) */
     const picked = pickOfferByWeight(offersRes.rows);
 
     /* 🔁 PASS % HOLD LOGIC */
@@ -81,17 +82,19 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
       await pool.query(
         `
         INSERT INTO publisher_conversions
-        (publisher_id, offer_id, status, publisher_cpa)
-        VALUES ($1, $2, 'HOLD', 0)
+        (publisher_id, offer_id, publisher_offer_id, status, publisher_cpa)
+        VALUES ($1, $2, $3, 'HOLD', 0)
         `,
-        [publisher.id, picked.offer_id]
+        [
+          publisher.id,
+          picked.offer_id,
+          picked.publisher_offer_id,
+        ]
       );
 
       return res.json({
         status: "HOLD",
-        message: "Conversion held by pass_percent rule",
-        publisher: publisher.name,
-        routed_offer_id: picked.offer_id,
+        message: "Conversion held",
       });
     }
 
@@ -109,23 +112,28 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 
     const data = internalResp.data;
 
-    /* 🔐 MAP PUBLISHER DATA TO SESSION */
+    /* 🔐 MAP PUBLISHER DATA TO PIN SESSION (🔥 FIX) */
     if (data.session_token) {
       await pool.query(
         `
         UPDATE pin_sessions
         SET publisher_id = $1,
-            publisher_cpa = $2
-        WHERE session_token = $3
+            publisher_offer_id = $2,   -- 🔥 JOIN FIX
+            publisher_cpa = $3
+        WHERE session_token = $4
         `,
-        [publisher.id, picked.publisher_cpa, data.session_token]
+        [
+          publisher.id,
+          picked.publisher_offer_id,
+          picked.publisher_cpa,
+          data.session_token,
+        ]
       );
     }
 
+    /* ✅ CLEAN RESPONSE (NO TRAFFIC SPLIT LEAK) */
     return res.json({
       ...data,
-      publisher: publisher.name,
-      routed_offer_id: picked.offer_id,
       publisher_cpa: picked.publisher_cpa,
     });
   } catch (err) {
