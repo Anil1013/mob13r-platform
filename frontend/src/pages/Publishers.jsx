@@ -185,22 +185,24 @@ export default function Publishers() {
 
                   {/* ✅ ASSIGN OFFERS — FIXED */}
                   <button
-                    type="button"   // 🔥 IMPORTANT FIX
-                    onClick={() =>
-                      navigate(`/assign-offers?publisherId=${p.id}`)
-                    }
-                    style={{
-                      background: "#2563eb",
-                      color: "#fff",
-                      border: "none",
-                      padding: "6px 10px",
-                      borderRadius: 4,
-                      cursor: "pointer",
+                    type="button"
+                   onClick={(e) => {
+                     e.preventDefault();
+                     e.stopPropagation();
+                      navigate(`/assign-offers?publisherId=${p.id}`);
+                     }}
+                       style={{
+                       background: "#2563eb",
+                       color: "#fff",
+                       border: "none",
+                       padding: "6px 10px",
+                       borderRadius: 4,
+                       cursor: "pointer",
                       fontSize: 13,
-                    }}
-                  >
-                    Assign Offers
-                  </button>
+                      }}
+                      >
+                      Assign Offers
+                      </button>
                 </td>
               </tr>
             ))}
