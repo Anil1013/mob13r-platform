@@ -19,7 +19,7 @@ function enrichParams(req, params) {
   };
 }
 
-/* ================= WEIGHTED PICK ================= */
+/* ================= WEIGHTED PICK (SEND ONLY) ================= */
 function pickOfferByWeight(rows) {
   const safeRows = rows.map((r) => ({
     ...r,
@@ -39,7 +39,6 @@ function pickOfferByWeight(rows) {
 
 /* =====================================================
    📤 PUBLISHER PIN SEND
-   GET / POST  /api/publisher/pin/send
 ===================================================== */
 router.all("/pin/send", publisherAuth, async (req, res) => {
   try {
@@ -56,13 +55,14 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 
     const params = enrichParams(req, baseParams);
 
-    /* 🔍 LOAD PUBLISHER OFFERS */
+    /* 🔍 LOAD ACTIVE PUBLISHER OFFERS */
     const offersRes = await pool.query(
       `
       SELECT
         po.id AS publisher_offer_id,
         po.publisher_cpa,
         po.pass_percent,
+        po.daily_cap,
         po.weight,
         o.id AS offer_id
       FROM publisher_offers po
@@ -83,7 +83,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
       });
     }
 
-    /* 🎯 PICK OFFER (WEIGHT ONLY) */
+    /* 🎯 PICK OFFER (WEIGHT ONLY — NO CAP HERE) */
     const picked = pickOfferByWeight(offersRes.rows);
 
     /* 🔗 CALL INTERNAL PIN SEND */
@@ -128,12 +128,22 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 
 /* =====================================================
    ✅ PUBLISHER PIN VERIFY
-   (NO pass %, NO cap logic here)
-===================================================== */
+   🔥 FULL PASS % + CAP + HOLD LOGIC (FINAL)
+=====================================================/compiler*/
 router.all("/pin/verify", publisherAuth, async (req, res) => {
+  const client = await pool.connect();
   try {
     const params = enrichParams(req, { ...req.query, ...req.body });
+    const { session_token } = params;
 
+    if (!session_token) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "session_token required",
+      });
+    }
+
+    /* 🔗 STEP 1: CALL INTERNAL VERIFY (ADVERTISER TRUTH) */
     const internalResp = await axios({
       method: req.method,
       url: `${INTERNAL_API_BASE}/api/pin/verify`,
@@ -142,13 +152,129 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       validateStatus: () => true,
     });
 
-    return res.json(mapPublisherResponse(internalResp.data));
+    const advData = internalResp.data;
+
+    if (advData.status !== "SUCCESS") {
+      return res.json(mapPublisherResponse(advData));
+    }
+
+    /* 🔐 STEP 2: TRANSACTION START */
+    await client.query("BEGIN");
+
+    /* 🔒 LOCK SESSION */
+    const sessionRes = await client.query(
+      `
+      SELECT *
+      FROM pin_sessions
+      WHERE session_token = $1
+      FOR UPDATE
+      `,
+      [session_token]
+    );
+
+    if (!sessionRes.rows.length) {
+      await client.query("ROLLBACK");
+      return res.json(mapPublisherResponse(advData));
+    }
+
+    const session = sessionRes.rows[0];
+
+    /* 🛑 IDEMPOTENT */
+    if (session.publisher_credited === true) {
+      await client.query("COMMIT");
+      return res.json(mapPublisherResponse(advData));
+    }
+
+    if (!session.publisher_id || !session.publisher_offer_id) {
+      await client.query("COMMIT");
+      return res.json(mapPublisherResponse(advData));
+    }
+
+    /* 🔢 LOAD PUBLISHER RULES */
+    const ruleRes = await client.query(
+      `
+      SELECT daily_cap, pass_percent
+      FROM publisher_offers
+      WHERE id = $1
+        AND status = 'active'
+      `,
+      [session.publisher_offer_id]
+    );
+
+    if (!ruleRes.rows.length) {
+      await client.query("ROLLBACK");
+      return res.json(mapPublisherResponse(advData));
+    }
+
+    const { daily_cap, pass_percent } = ruleRes.rows[0];
+
+    /* 📊 CURRENT CREDITED COUNT */
+    const creditedRes = await client.query(
+      `
+      SELECT COUNT(*)::int AS credited
+      FROM pin_sessions
+      WHERE publisher_id = $1
+        AND offer_id = $2
+        AND publisher_credited = TRUE
+      `,
+      [session.publisher_id, session.offer_id]
+    );
+
+    const credited = creditedRes.rows[0].credited;
+
+    /* 🚫 HARD CAP BLOCK */
+    if (daily_cap !== null && credited >= daily_cap) {
+      await client.query("COMMIT");
+      return res.json(mapPublisherResponse(advData, { isHold: true }));
+    }
+
+    /* 🎯 PASS % CHECK */
+    const rand = Math.random() * 100;
+    if (rand > Number(pass_percent)) {
+      await client.query("COMMIT");
+      return res.json(mapPublisherResponse(advData, { isHold: true }));
+    }
+
+    /* 🟢 ATOMIC CREDIT */
+    const updateRes = await client.query(
+      `
+      UPDATE pin_sessions
+      SET publisher_credited = TRUE,
+          credited_at = NOW()
+      WHERE session_id = $1
+        AND publisher_credited = FALSE
+        AND (
+          SELECT COUNT(*)
+          FROM pin_sessions
+          WHERE publisher_id = $2
+            AND offer_id = $3
+            AND publisher_credited = TRUE
+        ) < $4
+      `,
+      [
+        session.session_id,
+        session.publisher_id,
+        session.offer_id,
+        daily_cap ?? 1000000000,
+      ]
+    );
+
+    if (updateRes.rowCount === 0) {
+      await client.query("COMMIT");
+      return res.json(mapPublisherResponse(advData, { isHold: true }));
+    }
+
+    await client.query("COMMIT");
+    return res.json(mapPublisherResponse(advData));
   } catch (err) {
+    await pool.query("ROLLBACK");
     console.error("PUBLISHER PIN VERIFY ERROR:", err);
     return res.status(500).json({
       status: "FAILED",
       message: "Publisher pin verify failed",
     });
+  } finally {
+    client.release();
   }
 });
 
@@ -168,7 +294,7 @@ router.get("/pin/status", publisherAuth, async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT status, verified_at
+      SELECT status, verified_at, publisher_credited
       FROM pin_sessions
       WHERE session_token = $1
       `,
