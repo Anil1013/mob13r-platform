@@ -3,20 +3,22 @@ import { NavLink, useNavigate } from "react-router-dom";
 export default function Navbar() {
   const navigate = useNavigate();
 
-  // ✅ SAFE USER PARSE (FIX)
-  let user = null;
-  try {
-    const raw = localStorage.getItem("user");
-    user = raw ? JSON.parse(raw) : null;
-  } catch (err) {
-    console.warn("Invalid user in localStorage");
-    user = null;
-  }
+  const token = localStorage.getItem("token");
+  const user =
+    JSON.parse(localStorage.getItem("user")) || { email: "Admin" };
 
   const logout = () => {
-    localStorage.clear();
+    localStorage.removeItem("token");
+    localStorage.removeItem("token_expiry");
+    localStorage.removeItem("user");
     navigate("/login", { replace: true });
   };
+
+  // ⛔ token hi nahi hai → login
+  if (!token) {
+    navigate("/login", { replace: true });
+    return null;
+  }
 
   const navStyle = ({ isActive }) =>
     isActive ? styles.activeLink : styles.link;
@@ -24,7 +26,6 @@ export default function Navbar() {
   return (
     <>
       <div style={styles.navbar}>
-        {/* LEFT */}
         <div style={styles.left}>
           <div style={styles.brand} onClick={() => navigate("/dashboard")}>
             Mob13r
@@ -33,32 +34,22 @@ export default function Navbar() {
           <NavLink to="/dashboard" style={navStyle}>
             Dashboard
           </NavLink>
-
           <NavLink to="/advertisers" style={navStyle}>
             Advertisers
           </NavLink>
-
           <NavLink to="/offers" style={navStyle}>
             Offers
           </NavLink>
-
           <NavLink to="/publishers" style={navStyle}>
             Publishers
           </NavLink>
-
-          {/* 🔥 REMOVE STATIC ASSIGN LINK (important) */}
-          {/* Assign page is contextual, not global */}
-
-          <NavLink to="/publisher/dashboard" style={navStyle}>
-            Publisher Dashboard
+          <NavLink to="/publishers/assign" style={navStyle}>
+            Assign Offers
           </NavLink>
         </div>
 
-        {/* RIGHT */}
         <div style={styles.right}>
-          <span style={styles.user}>
-            {user?.email || "Admin"}
-          </span>
+          <span style={styles.user}>{user.email}</span>
           <button style={styles.logoutBtn} onClick={logout}>
             Logout
           </button>
@@ -83,43 +74,18 @@ const styles = {
     alignItems: "center",
     padding: "0 28px",
     zIndex: 1000,
-    boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
-    fontFamily: "Inter, system-ui, Arial",
   },
-  left: {
-    display: "flex",
-    alignItems: "center",
-    gap: 28,
-  },
-  brand: {
-    fontSize: 18,
-    fontWeight: 700,
-    cursor: "pointer",
-    color: "#fff",
-  },
-  link: {
-    color: "#cbd5f5",
-    textDecoration: "none",
-    fontSize: 16,
-    fontWeight: 500,
-  },
+  left: { display: "flex", alignItems: "center", gap: 28 },
+  brand: { fontSize: 18, fontWeight: 700, cursor: "pointer", color: "#fff" },
+  link: { color: "#cbd5f5", textDecoration: "none", fontSize: 16 },
   activeLink: {
-    color: "#ffffff",
-    fontSize: 16,
+    color: "#fff",
     fontWeight: 600,
-    borderBottom: "2px solid #ffffff",
+    borderBottom: "2px solid #fff",
     paddingBottom: 6,
   },
-  right: {
-    display: "flex",
-    alignItems: "center",
-    gap: 16,
-  },
-  user: {
-    fontSize: 14,
-    opacity: 0.9,
-    color: "#e5e7eb",
-  },
+  right: { display: "flex", alignItems: "center", gap: 16 },
+  user: { fontSize: 14, color: "#e5e7eb" },
   logoutBtn: {
     backgroundColor: "#ef4444",
     color: "#fff",
@@ -127,6 +93,5 @@ const styles = {
     padding: "7px 14px",
     borderRadius: 6,
     cursor: "pointer",
-    fontSize: 14,
   },
 };
