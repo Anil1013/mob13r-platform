@@ -14,6 +14,8 @@ export default function PublisherAssignOffers() {
   const [publisherId, setPublisherId] = useState("");
   const [assigned, setAssigned] = useState([]);
 
+  const [toast, setToast] = useState(null);
+
   const [form, setForm] = useState({
     offer_id: "",
     publisher_cpa: "",
@@ -22,101 +24,145 @@ export default function PublisherAssignOffers() {
     weight: 100,
   });
 
+  /* ================= TOAST ================= */
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  };
+
   /* ================= AUTH GUARD ================= */
   useEffect(() => {
-    if (!token) navigate("/login");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
     loadBaseData();
     // eslint-disable-next-line
   }, []);
 
+  /* ================= LOAD BASE ================= */
   const loadBaseData = async () => {
-    const [pRes, oRes] = await Promise.all([
-      fetch(`${API_BASE}/api/publishers`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }),
-      fetch(`${API_BASE}/api/offers`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }),
-    ]);
+    try {
+      const [pRes, oRes] = await Promise.all([
+        fetch(`${API_BASE}/api/publishers`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API_BASE}/api/offers`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
 
-    const pData = await pRes.json();
-    const oData = await oRes.json();
+      const pData = await pRes.json();
+      const oData = await oRes.json();
 
-    setPublishers(pData.data || []);
-    setOffers(oData || []);
+      if (pData.status === "SUCCESS") setPublishers(pData.data || []);
+      if (oData.status === "SUCCESS") setOffers(oData.data || []);
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to load base data");
+    }
   };
 
   /* ================= LOAD ASSIGNED ================= */
   const loadAssigned = async (pid) => {
-    const res = await fetch(`${API_BASE}/api/publishers/${pid}/offers`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json();
-    setAssigned(data.data || []);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/publishers/${pid}/offers`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const data = await res.json();
+      if (data.status === "SUCCESS") {
+        setAssigned(data.data || []);
+      } else {
+        setAssigned([]);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to load assigned offers");
+    }
   };
 
-  /* ================= ASSIGN OFFER ================= */
+  /* ================= ASSIGN ================= */
   const assignOffer = async () => {
     if (!publisherId || !form.offer_id) {
-      alert("Publisher & Offer required");
+      showToast("Publisher & Offer required");
       return;
     }
 
-    const res = await fetch(
-      `${API_BASE}/api/publishers/${publisherId}/offers`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(form),
-      }
-    );
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/publishers/${publisherId}/offers`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(form),
+        }
+      );
 
-    const data = await res.json();
-    if (data.status === "SUCCESS") {
-      setForm({
-        offer_id: "",
-        publisher_cpa: "",
-        daily_cap: "",
-        pass_percent: 100,
-        weight: 100,
-      });
-      loadAssigned(publisherId);
-    } else {
-      alert(data.message);
+      const data = await res.json();
+      if (data.status === "SUCCESS") {
+        showToast("Offer assigned");
+        setForm({
+          offer_id: "",
+          publisher_cpa: "",
+          daily_cap: "",
+          pass_percent: 100,
+          weight: 100,
+        });
+        loadAssigned(publisherId);
+      } else {
+        showToast(data.message || "Assign failed");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Server error");
     }
   };
 
   /* ================= TOGGLE STATUS ================= */
   const toggleStatus = async (row) => {
-    await fetch(
-      `${API_BASE}/api/publishers/${publisherId}/offers/${row.id}`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          status: row.status === "active" ? "paused" : "active",
-        }),
-      }
-    );
+    try {
+      await fetch(
+        `${API_BASE}/api/publishers/${publisherId}/offers/${row.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: row.status === "active" ? "paused" : "active",
+          }),
+        }
+      );
 
-    setAssigned((prev) =>
-      prev.map((r) =>
-        r.id === row.id
-          ? { ...r, status: r.status === "active" ? "paused" : "active" }
-          : r
-      )
-    );
+      setAssigned((prev) =>
+        prev.map((r) =>
+          r.id === row.id
+            ? {
+                ...r,
+                status: r.status === "active" ? "paused" : "active",
+              }
+            : r
+        )
+      );
+    } catch (err) {
+      console.error(err);
+      showToast("Status update failed");
+    }
   };
 
   return (
     <>
       <Navbar />
+
+      {toast && <div style={toastStyle}>{toast}</div>}
+
       <div style={{ padding: 24 }}>
         <h2>Assign Offers to Publisher</h2>
 
@@ -148,7 +194,7 @@ export default function PublisherAssignOffers() {
               <option value="">Select Offer</option>
               {offers.map((o) => (
                 <option key={o.id} value={o.id}>
-                  {o.service_name} | {o.geo} | {o.carrier}
+                  {o.name} | {o.geo} | {o.carrier}
                 </option>
               ))}
             </select>
@@ -207,7 +253,7 @@ export default function PublisherAssignOffers() {
             <tbody>
               {assigned.map((a) => (
                 <tr key={a.id}>
-                  <td>{a.service_name}</td>
+                  <td>{a.name}</td>
                   <td>${a.publisher_cpa}</td>
                   <td>{a.daily_cap || "∞"}</td>
                   <td>{a.pass_percent}%</td>
@@ -236,3 +282,15 @@ export default function PublisherAssignOffers() {
     </>
   );
 }
+
+/* ================= STYLES ================= */
+const toastStyle = {
+  position: "fixed",
+  top: 20,
+  right: 20,
+  background: "#111827",
+  color: "#fff",
+  padding: "10px 16px",
+  borderRadius: 6,
+  zIndex: 9999,
+};
