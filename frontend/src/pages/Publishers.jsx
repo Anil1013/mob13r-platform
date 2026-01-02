@@ -15,24 +15,22 @@ export default function Publishers() {
   const [toast, setToast] = useState(null);
   const [visibleKeys, setVisibleKeys] = useState({});
 
-  const [token, setToken] = useState(null); // ✅ FIX
+  const token = localStorage.getItem("token");
 
-  /* ================= AUTH GUARD (FIXED) ================= */
+  /* ================= AUTH GUARD ================= */
   useEffect(() => {
-    const t = localStorage.getItem("token");
-    if (!t) {
+    if (!token) {
       navigate("/login");
     } else {
-      setToken(t);
-      loadPublishers(t);
+      loadPublishers();
     }
     // eslint-disable-next-line
   }, []);
 
   /* ================= FETCH ================= */
-  const loadPublishers = async (authToken) => {
+  const loadPublishers = async () => {
     const res = await fetch(`${API_BASE}/api/publishers`, {
-      headers: { Authorization: `Bearer ${authToken}` },
+      headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
     if (data.status === "SUCCESS") setPublishers(data.data);
@@ -151,8 +149,12 @@ export default function Publishers() {
                         ? p.api_key
                         : "••••••••••••••••"}
                     </code>
-                    <button type="button" onClick={() => toggleKey(p.id)}>👁</button>
-                    <button type="button" onClick={() => copyApiKey(p.api_key)}>📋</button>
+                    <button type="button" onClick={() => toggleKey(p.id)}>
+                      👁
+                    </button>
+                    <button type="button" onClick={() => copyApiKey(p.api_key)}>
+                      📋
+                    </button>
                   </div>
                 </td>
 
@@ -173,17 +175,31 @@ export default function Publishers() {
                 </td>
 
                 {/* ACTIONS */}
-                <td style={{ ...td, display: "flex", gap: 8, justifyContent: "center" }}>
-                  <button type="button" onClick={() => toggleStatus(p.id, p.status)}>
+                <td
+                  style={{
+                    ...td,
+                    display: "flex",
+                    gap: 8,
+                    justifyContent: "center",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleStatus(p.id, p.status)}
+                  >
                     {p.status === "active" ? "Pause" : "Activate"}
                   </button>
 
-                  {/* ✅ ASSIGN OFFERS — NOW SAFE */}
+                  {/* ✅ ASSIGN OFFERS — FINAL FIX */}
                   <button
                     type="button"
-                    onClick={() =>
-                      navigate(`/assign-offers?publisherId=${p.id}`)
-                    }
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      navigate(
+                        `/publishers/assign?publisherId=${p.id}`
+                      );
+                    }}
                     style={{
                       background: "#2563eb",
                       color: "#fff",
