@@ -14,28 +14,19 @@ function generatePublisherKey() {
 
 /* =====================================================
    📄 GET ALL PUBLISHERS
-   GET /api/publishers
 ===================================================== */
 router.get("/", authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT
-        id,
-        name,
-        api_key,
-        status,
-        created_at
+      SELECT id, name, api_key, status, created_at
       FROM publishers
       ORDER BY id DESC
     `);
 
-    return res.json({
-      status: "SUCCESS",
-      data: result.rows,
-    });
+    res.json({ status: "SUCCESS", data: result.rows });
   } catch (err) {
     console.error("GET PUBLISHERS ERROR:", err);
-    return res.status(500).json({
+    res.status(500).json({
       status: "FAILED",
       message: "Failed to load publishers",
     });
@@ -44,37 +35,30 @@ router.get("/", authMiddleware, async (req, res) => {
 
 /* =====================================================
    ➕ ADD PUBLISHER
-   POST /api/publishers
 ===================================================== */
 router.post("/", authMiddleware, async (req, res) => {
   try {
     const { name } = req.body;
-
-    if (!name) {
-      return res.status(400).json({
-        status: "FAILED",
-        message: "Publisher name required",
-      });
-    }
+    if (!name)
+      return res
+        .status(400)
+        .json({ status: "FAILED", message: "Publisher name required" });
 
     const apiKey = generatePublisherKey();
 
     const result = await pool.query(
       `
       INSERT INTO publishers (name, api_key, status)
-      VALUES ($1, $2, 'active')
-      RETURNING id, name, api_key, status, created_at
+      VALUES ($1,$2,'active')
+      RETURNING *
       `,
       [name, apiKey]
     );
 
-    return res.json({
-      status: "SUCCESS",
-      data: result.rows[0],
-    });
+    res.json({ status: "SUCCESS", data: result.rows[0] });
   } catch (err) {
     console.error("ADD PUBLISHER ERROR:", err);
-    return res.status(500).json({
+    res.status(500).json({
       status: "FAILED",
       message: "Failed to create publisher",
     });
@@ -83,33 +67,26 @@ router.post("/", authMiddleware, async (req, res) => {
 
 /* =====================================================
    🔄 UPDATE PUBLISHER STATUS
-   PATCH /api/publishers/:id/status
 ===================================================== */
 router.patch("/:id/status", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
 
-    if (!["active", "paused"].includes(status)) {
-      return res.status(400).json({
-        status: "FAILED",
-        message: "Invalid status",
-      });
-    }
+    if (!["active", "paused"].includes(status))
+      return res
+        .status(400)
+        .json({ status: "FAILED", message: "Invalid status" });
 
     await pool.query(
-      `
-      UPDATE publishers
-      SET status = $1
-      WHERE id = $2
-      `,
+      `UPDATE publishers SET status=$1 WHERE id=$2`,
       [status, id]
     );
 
-    return res.json({ status: "SUCCESS" });
+    res.json({ status: "SUCCESS" });
   } catch (err) {
     console.error("UPDATE PUBLISHER STATUS ERROR:", err);
-    return res.status(500).json({
+    res.status(500).json({
       status: "FAILED",
       message: "Failed to update publisher status",
     });
@@ -117,9 +94,7 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
 });
 
 /* =====================================================
-   📋 GET ASSIGNED OFFERS FOR PUBLISHER
-   GET /api/publishers/:publisherId/offers
-   ✅ FIXED FOR service_name
+   📋 GET ASSIGNED OFFERS (frontend friendly)
 ===================================================== */
 router.get("/:publisherId/offers", authMiddleware, async (req, res) => {
   try {
@@ -132,10 +107,7 @@ router.get("/:publisherId/offers", authMiddleware, async (req, res) => {
         po.publisher_id,
         po.offer_id,
 
-        -- ✅ frontend-friendly name
         o.service_name AS name,
-
-        o.service_name,
         o.geo,
         o.carrier,
 
@@ -152,13 +124,10 @@ router.get("/:publisherId/offers", authMiddleware, async (req, res) => {
       [publisherId]
     );
 
-    return res.json({
-      status: "SUCCESS",
-      data: result.rows,
-    });
+    res.json({ status: "SUCCESS", data: result.rows });
   } catch (err) {
     console.error("GET ASSIGNED OFFERS ERROR:", err);
-    return res.status(500).json({
+    res.status(500).json({
       status: "FAILED",
       message: "Failed to load assigned offers",
     });
@@ -166,8 +135,7 @@ router.get("/:publisherId/offers", authMiddleware, async (req, res) => {
 });
 
 /* =====================================================
-   ➕ ASSIGN OFFER TO PUBLISHER
-   POST /api/publishers/:publisherId/offers
+   ➕ ASSIGN OFFER
 ===================================================== */
 router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
   try {
@@ -180,36 +148,43 @@ router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
       weight = 100,
     } = req.body;
 
-    if (!offer_id || !publisher_cpa) {
+    if (!offer_id || !publisher_cpa)
       return res.status(400).json({
         status: "FAILED",
         message: "offer_id and publisher_cpa required",
       });
-    }
 
-    /* ❌ prevent duplicate assignment */
+    if (pass_percent < 0 || pass_percent > 100)
+      return res.status(400).json({
+        status: "FAILED",
+        message: "pass_percent must be between 0–100",
+      });
+
+    if (weight < 1)
+      return res.status(400).json({
+        status: "FAILED",
+        message: "weight must be >= 1",
+      });
+
     const exists = await pool.query(
       `
-      SELECT id
-      FROM publisher_offers
-      WHERE publisher_id = $1
-        AND offer_id = $2
+      SELECT id FROM publisher_offers
+      WHERE publisher_id=$1 AND offer_id=$2
       `,
       [publisherId, offer_id]
     );
 
-    if (exists.rows.length) {
+    if (exists.rows.length)
       return res.status(400).json({
         status: "FAILED",
         message: "Offer already assigned to publisher",
       });
-    }
 
     const insert = await pool.query(
       `
       INSERT INTO publisher_offers
       (publisher_id, offer_id, publisher_cpa, daily_cap, pass_percent, weight, status)
-      VALUES ($1, $2, $3, $4, $5, $6, 'active')
+      VALUES ($1,$2,$3,$4,$5,$6,'active')
       RETURNING *
       `,
       [
@@ -222,13 +197,10 @@ router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
       ]
     );
 
-    return res.json({
-      status: "SUCCESS",
-      data: insert.rows[0],
-    });
+    res.json({ status: "SUCCESS", data: insert.rows[0] });
   } catch (err) {
     console.error("ASSIGN OFFER ERROR:", err);
-    return res.status(500).json({
+    res.status(500).json({
       status: "FAILED",
       message: "Offer assignment failed",
     });
@@ -236,36 +208,66 @@ router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
 });
 
 /* =====================================================
-   🔁 TOGGLE ASSIGNED OFFER STATUS
-   PATCH /api/publishers/:publisherId/offers/:id
+   ✏️ UPDATE ASSIGNED OFFER
+   (status / CPA / cap / pass % / weight)
 ===================================================== */
 router.patch("/:publisherId/offers/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const {
+      status,
+      publisher_cpa,
+      daily_cap,
+      pass_percent,
+      weight,
+    } = req.body;
 
-    if (!["active", "paused"].includes(status)) {
+    /* status toggle */
+    if (status && !["active", "paused"].includes(status)) {
+      return res
+        .status(400)
+        .json({ status: "FAILED", message: "Invalid status" });
+    }
+
+    if (pass_percent !== undefined && (pass_percent < 0 || pass_percent > 100))
       return res.status(400).json({
         status: "FAILED",
-        message: "Invalid status",
+        message: "pass_percent must be 0–100",
       });
-    }
+
+    if (weight !== undefined && weight < 1)
+      return res.status(400).json({
+        status: "FAILED",
+        message: "weight must be >= 1",
+      });
 
     await pool.query(
       `
       UPDATE publisher_offers
-      SET status = $1
-      WHERE id = $2
+      SET
+        status = COALESCE($1, status),
+        publisher_cpa = COALESCE($2, publisher_cpa),
+        daily_cap = COALESCE($3, daily_cap),
+        pass_percent = COALESCE($4, pass_percent),
+        weight = COALESCE($5, weight)
+      WHERE id = $6
       `,
-      [status, id]
+      [
+        status,
+        publisher_cpa,
+        daily_cap,
+        pass_percent,
+        weight,
+        id,
+      ]
     );
 
-    return res.json({ status: "SUCCESS" });
+    res.json({ status: "SUCCESS" });
   } catch (err) {
-    console.error("UPDATE ASSIGNED OFFER STATUS ERROR:", err);
-    return res.status(500).json({
+    console.error("UPDATE ASSIGNED OFFER ERROR:", err);
+    res.status(500).json({
       status: "FAILED",
-      message: "Failed to update offer status",
+      message: "Failed to update assigned offer",
     });
   }
 });
