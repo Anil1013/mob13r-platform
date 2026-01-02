@@ -106,9 +106,7 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
       [status, id]
     );
 
-    return res.json({
-      status: "SUCCESS",
-    });
+    return res.json({ status: "SUCCESS" });
   } catch (err) {
     console.error("UPDATE PUBLISHER STATUS ERROR:", err);
     return res.status(500).json({
@@ -121,6 +119,7 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
 /* =====================================================
    📋 GET ASSIGNED OFFERS FOR PUBLISHER
    GET /api/publishers/:publisherId/offers
+   ✅ BACKWARD COMPAT FIX
 ===================================================== */
 router.get("/:publisherId/offers", authMiddleware, async (req, res) => {
   try {
@@ -130,15 +129,21 @@ router.get("/:publisherId/offers", authMiddleware, async (req, res) => {
       `
       SELECT
         po.id,
+        po.publisher_id,
+        po.offer_id,
+
+        -- ✅ backward compatible name
+        COALESCE(o.name, o.service_name) AS name,
+
+        o.service_name,
+        o.geo,
+        o.carrier,
+
         po.publisher_cpa,
         po.daily_cap,
         po.pass_percent,
         po.weight,
-        po.status,
-        o.id AS offer_id,
-        o.name,
-        o.geo,
-        o.carrier
+        po.status
       FROM publisher_offers po
       JOIN offers o ON o.id = po.offer_id
       WHERE po.publisher_id = $1
@@ -234,41 +239,35 @@ router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
    🔁 TOGGLE ASSIGNED OFFER STATUS
    PATCH /api/publishers/:publisherId/offers/:id
 ===================================================== */
-router.patch(
-  "/:publisherId/offers/:id",
-  authMiddleware,
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { status } = req.body;
+router.patch("/:publisherId/offers/:id", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
 
-      if (!["active", "paused"].includes(status)) {
-        return res.status(400).json({
-          status: "FAILED",
-          message: "Invalid status",
-        });
-      }
-
-      await pool.query(
-        `
-        UPDATE publisher_offers
-        SET status = $1
-        WHERE id = $2
-        `,
-        [status, id]
-      );
-
-      return res.json({
-        status: "SUCCESS",
-      });
-    } catch (err) {
-      console.error("UPDATE ASSIGNED OFFER STATUS ERROR:", err);
-      return res.status(500).json({
+    if (!["active", "paused"].includes(status)) {
+      return res.status(400).json({
         status: "FAILED",
-        message: "Failed to update offer status",
+        message: "Invalid status",
       });
     }
+
+    await pool.query(
+      `
+      UPDATE publisher_offers
+      SET status = $1
+      WHERE id = $2
+      `,
+      [status, id]
+    );
+
+    return res.json({ status: "SUCCESS" });
+  } catch (err) {
+    console.error("UPDATE ASSIGNED OFFER STATUS ERROR:", err);
+    return res.status(500).json({
+      status: "FAILED",
+      message: "Failed to update offer status",
+    });
   }
-);
+});
 
 export default router;
