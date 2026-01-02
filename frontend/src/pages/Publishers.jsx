@@ -55,7 +55,7 @@ export default function Publishers() {
 
     const data = await res.json();
     if (data.status === "SUCCESS") {
-      setPublishers((p) => [...p, data.data]); // optimistic
+      setPublishers((p) => [...p, data.data]);
       setName("");
       showToast("Publisher added");
     }
@@ -77,7 +77,6 @@ export default function Publishers() {
   const toggleStatus = async (id, status) => {
     const newStatus = status === "active" ? "paused" : "active";
 
-    // optimistic UI
     setPublishers((list) =>
       list.map((p) => (p.id === id ? { ...p, status: newStatus } : p))
     );
@@ -92,7 +91,6 @@ export default function Publishers() {
     });
 
     if (!res.ok) {
-      // rollback
       setPublishers((list) =>
         list.map((p) => (p.id === id ? { ...p, status } : p))
       );
@@ -104,13 +102,12 @@ export default function Publishers() {
     <>
       <Navbar />
 
-      {/* ================= TOAST ================= */}
       {toast && <div style={toastStyle}>{toast}</div>}
 
       <div style={{ padding: 20 }}>
         <h2>Publishers</h2>
 
-        {/* ================= ADD ================= */}
+        {/* ADD */}
         <div style={{ marginBottom: 20, display: "flex", gap: 10 }}>
           <input
             value={name}
@@ -123,7 +120,7 @@ export default function Publishers() {
           </button>
         </div>
 
-        {/* ================= TABLE ================= */}
+        {/* TABLE */}
         <table width="100%" border="1" style={{ borderCollapse: "collapse" }}>
           <thead>
             <tr>
@@ -142,7 +139,6 @@ export default function Publishers() {
                 <td style={td}>{p.id}</td>
                 <td style={td}>{p.name}</td>
 
-                {/* API KEY */}
                 <td style={td}>
                   <div style={apiWrap}>
                     <code>
@@ -155,7 +151,6 @@ export default function Publishers() {
                   </div>
                 </td>
 
-                {/* STATUS */}
                 <td style={td}>
                   <span
                     style={{
@@ -181,15 +176,14 @@ export default function Publishers() {
                     justifyContent: "center",
                   }}
                 >
-                  {/* Pause / Activate */}
                   <button onClick={() => toggleStatus(p.id, p.status)}>
                     {p.status === "active" ? "Pause" : "Activate"}
                   </button>
 
-                  {/* ✅ ASSIGN OFFERS */}
+                  {/* ✅ FIXED ASSIGN BUTTON */}
                   <button
                     onClick={() =>
-                      navigate(`/publishers/${p.id}/offers`)
+                      navigate(`/assign-offers?publisherId=${p.id}`)
                     }
                     style={{
                       background: "#2563eb",
