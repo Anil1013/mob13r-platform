@@ -94,7 +94,7 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
 });
 
 /* =====================================================
-   📋 GET ASSIGNED OFFERS (frontend friendly)
+   📋 GET ASSIGNED OFFERS (SINGLE PUBLISHER)
 ===================================================== */
 router.get("/:publisherId/offers", authMiddleware, async (req, res) => {
   try {
@@ -135,7 +135,47 @@ router.get("/:publisherId/offers", authMiddleware, async (req, res) => {
 });
 
 /* =====================================================
-   ➕ ASSIGN OFFER
+   📋 GET ASSIGNED OFFERS (ALL PUBLISHERS)
+   👉 Used when no publisher selected
+===================================================== */
+router.get("/offers/all", authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        po.id,
+        po.publisher_id,
+        p.name AS publisher_name,
+
+        po.offer_id,
+        o.service_name AS name,
+        o.geo,
+        o.carrier,
+
+        po.publisher_cpa,
+        po.daily_cap,
+        po.pass_percent,
+        po.weight,
+        po.status
+      FROM publisher_offers po
+      JOIN publishers p ON p.id = po.publisher_id
+      JOIN offers o ON o.id = po.offer_id
+      ORDER BY p.name, po.id DESC
+      `
+    );
+
+    res.json({ status: "SUCCESS", data: result.rows });
+  } catch (err) {
+    console.error("GET ALL ASSIGNED OFFERS ERROR:", err);
+    res.status(500).json({
+      status: "FAILED",
+      message: "Failed to load all assigned offers",
+    });
+  }
+});
+
+/* =====================================================
+   ➕ ASSIGN OFFER TO PUBLISHER
 ===================================================== */
 router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
   try {
@@ -209,7 +249,7 @@ router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
 
 /* =====================================================
    ✏️ UPDATE ASSIGNED OFFER
-   (status / CPA / cap / pass % / weight)
+   (CPA / cap / pass % / weight / status)
 ===================================================== */
 router.patch("/:publisherId/offers/:id", authMiddleware, async (req, res) => {
   try {
@@ -222,7 +262,6 @@ router.patch("/:publisherId/offers/:id", authMiddleware, async (req, res) => {
       weight,
     } = req.body;
 
-    /* status toggle */
     if (status && !["active", "paused"].includes(status)) {
       return res
         .status(400)
