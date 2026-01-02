@@ -23,7 +23,6 @@ export default function PublisherAssignOffers() {
     weight: 100,
   });
 
-  /* ================= TOAST ================= */
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
@@ -39,7 +38,7 @@ export default function PublisherAssignOffers() {
     // eslint-disable-next-line
   }, []);
 
-  /* ================= LOAD BASE DATA ================= */
+  /* ================= LOAD BASE ================= */
   const loadBaseData = async () => {
     try {
       const [pRes, oRes] = await Promise.all([
@@ -56,12 +55,9 @@ export default function PublisherAssignOffers() {
 
       if (pData.status === "SUCCESS") setPublishers(pData.data || []);
 
-      // offers API backward compatible
       if (Array.isArray(oData)) setOffers(oData);
       else if (oData.status === "SUCCESS") setOffers(oData.data || []);
-      else setOffers([]);
-    } catch (err) {
-      console.error(err);
+    } catch {
       showToast("Failed to load publishers / offers");
     }
   };
@@ -74,20 +70,18 @@ export default function PublisherAssignOffers() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      if (!res.ok) {
-        setAssigned([]);
-        return;
-      }
-
       const data = await res.json();
-      setAssigned(data.status === "SUCCESS" ? data.data : []);
-    } catch (err) {
-      console.error(err);
+      setAssigned(
+        data.status === "SUCCESS"
+          ? data.data.map((r) => ({ ...r, isEditing: false }))
+          : []
+      );
+    } catch {
       showToast("Failed to load assigned offers");
     }
   };
 
-  /* ================= ASSIGN ================= */
+  /* ================= ASSIGN OFFER ================= */
   const assignOffer = async () => {
     if (!publisherId || !form.offer_id || !form.publisher_cpa) {
       showToast("Publisher, Offer & CPA required");
@@ -127,16 +121,15 @@ export default function PublisherAssignOffers() {
       } else {
         showToast(data.message || "Assign failed");
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
       showToast("Server error");
     }
   };
 
-  /* ================= TOGGLE STATUS ================= */
-  const toggleStatus = async (row) => {
+  /* ================= SAVE EDIT ================= */
+  const saveEdit = async (row) => {
     try {
-      await fetch(
+      const res = await fetch(
         `${API_BASE}/api/publishers/${publisherId}/offers/${row.id}`,
         {
           method: "PATCH",
@@ -145,28 +138,55 @@ export default function PublisherAssignOffers() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            status: row.status === "active" ? "paused" : "active",
+            publisher_cpa: Number(row.publisher_cpa),
+            daily_cap: row.daily_cap ? Number(row.daily_cap) : null,
+            pass_percent: Number(row.pass_percent),
+            weight: Number(row.weight),
           }),
         }
       );
 
-      setAssigned((prev) =>
-        prev.map((r) =>
-          r.id === row.id
-            ? {
-                ...r,
-                status: r.status === "active" ? "paused" : "active",
-              }
-            : r
-        )
-      );
-    } catch (err) {
-      console.error(err);
-      showToast("Status update failed");
+      const data = await res.json();
+      if (data.status === "SUCCESS") {
+        showToast("Updated");
+        setAssigned((prev) =>
+          prev.map((r) =>
+            r.id === row.id ? { ...row, isEditing: false } : r
+          )
+        );
+      } else {
+        showToast("Update failed");
+      }
+    } catch {
+      showToast("Server error");
     }
   };
 
-  /* ================= FILTER UNASSIGNED OFFERS ================= */
+  /* ================= TOGGLE STATUS ================= */
+  const toggleStatus = async (row) => {
+    await fetch(
+      `${API_BASE}/api/publishers/${publisherId}/offers/${row.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: row.status === "active" ? "paused" : "active",
+        }),
+      }
+    );
+
+    setAssigned((prev) =>
+      prev.map((r) =>
+        r.id === row.id
+          ? { ...r, status: r.status === "active" ? "paused" : "active" }
+          : r
+      )
+    );
+  };
+
   const assignedOfferIds = assigned.map((a) => a.offer_id);
   const availableOffers = offers.filter(
     (o) => !assignedOfferIds.includes(o.id)
@@ -180,7 +200,6 @@ export default function PublisherAssignOffers() {
       <div style={{ padding: 24 }}>
         <h2>Assign Offers to Publisher</h2>
 
-        {/* SELECT PUBLISHER */}
         <select
           value={publisherId}
           onChange={(e) => {
@@ -197,7 +216,6 @@ export default function PublisherAssignOffers() {
           ))}
         </select>
 
-        {/* ASSIGN FORM */}
         {publisherId && (
           <div style={{ marginTop: 20, display: "flex", gap: 8 }}>
             <select
@@ -215,14 +233,14 @@ export default function PublisherAssignOffers() {
             </select>
 
             <input
-              placeholder="Publisher CPA"
+              placeholder="CPA"
               value={form.publisher_cpa}
               onChange={(e) =>
                 setForm({ ...form, publisher_cpa: e.target.value })
               }
             />
             <input
-              placeholder="Daily Cap"
+              placeholder="Cap"
               value={form.daily_cap}
               onChange={(e) =>
                 setForm({ ...form, daily_cap: e.target.value })
@@ -247,7 +265,6 @@ export default function PublisherAssignOffers() {
           </div>
         )}
 
-        {/* ASSIGNED TABLE */}
         {assigned.length > 0 && (
           <table
             border="1"
@@ -262,31 +279,83 @@ export default function PublisherAssignOffers() {
                 <th>Pass %</th>
                 <th>Weight</th>
                 <th>Status</th>
-                <th>Action</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {assigned.map((a) => (
                 <tr key={a.id}>
                   <td>{a.name}</td>
-                  <td>${a.publisher_cpa}</td>
-                  <td>{a.daily_cap || "∞"}</td>
-                  <td>{a.pass_percent}%</td>
-                  <td>{a.weight}</td>
+
+                  {["publisher_cpa", "daily_cap", "pass_percent", "weight"].map(
+                    (field) => (
+                      <td key={field}>
+                        {a.isEditing ? (
+                          <input
+                            value={a[field] ?? ""}
+                            onChange={(e) =>
+                              setAssigned((prev) =>
+                                prev.map((r) =>
+                                  r.id === a.id
+                                    ? { ...r, [field]: e.target.value }
+                                    : r
+                                )
+                              )
+                            }
+                          />
+                        ) : field === "daily_cap" ? (
+                          a.daily_cap || "∞"
+                        ) : (
+                          a[field]
+                        )}
+                      </td>
+                    )
+                  )}
+
                   <td>
-                    <span
-                      style={{
-                        color: a.status === "active" ? "green" : "red",
-                        fontWeight: 600,
-                      }}
-                    >
+                    <b style={{ color: a.status === "active" ? "green" : "red" }}>
                       {a.status.toUpperCase()}
-                    </span>
+                    </b>
                   </td>
+
                   <td>
-                    <button onClick={() => toggleStatus(a)}>
-                      {a.status === "active" ? "Pause" : "Activate"}
-                    </button>
+                    {a.isEditing ? (
+                      <>
+                        <button onClick={() => saveEdit(a)}>Save</button>{" "}
+                        <button
+                          onClick={() =>
+                            setAssigned((prev) =>
+                              prev.map((r) =>
+                                r.id === a.id
+                                  ? { ...r, isEditing: false }
+                                  : r
+                              )
+                            )
+                          }
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() =>
+                            setAssigned((prev) =>
+                              prev.map((r) =>
+                                r.id === a.id
+                                  ? { ...r, isEditing: true }
+                                  : r
+                              )
+                            )
+                          }
+                        >
+                          Edit
+                        </button>{" "}
+                        <button onClick={() => toggleStatus(a)}>
+                          {a.status === "active" ? "Pause" : "Activate"}
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -298,7 +367,6 @@ export default function PublisherAssignOffers() {
   );
 }
 
-/* ================= STYLES ================= */
 const toastStyle = {
   position: "fixed",
   top: 20,
