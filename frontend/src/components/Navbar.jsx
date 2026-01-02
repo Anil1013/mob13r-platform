@@ -48,6 +48,11 @@ export default function Navbar() {
           </NavLink>
         </div>
 
+        <NavLink to="/publisher/dashboard" style={navStyle}>
+            Publisher Dashboard
+          </NavLink>
+        </div>
+        
         <div style={styles.right}>
           <span style={styles.user}>{user.email}</span>
           <button style={styles.logoutBtn} onClick={logout}>
