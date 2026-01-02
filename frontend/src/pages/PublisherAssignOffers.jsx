@@ -13,7 +13,6 @@ export default function PublisherAssignOffers() {
   const [offers, setOffers] = useState([]);
   const [publisherId, setPublisherId] = useState("");
   const [assigned, setAssigned] = useState([]);
-
   const [toast, setToast] = useState(null);
 
   const [form, setForm] = useState({
@@ -55,27 +54,19 @@ export default function PublisherAssignOffers() {
       const pData = await pRes.json();
       const oData = await oRes.json();
 
-      if (pData.status === "SUCCESS") {
-        setPublishers(pData.data || []);
-      }
+      if (pData.status === "SUCCESS") setPublishers(pData.data || []);
 
-      /* 🔴 IMPORTANT FIX
-         offers API returns ARRAY directly, not {status,data}
-      */
-      if (Array.isArray(oData)) {
-        setOffers(oData);
-      } else if (oData.status === "SUCCESS") {
-        setOffers(oData.data || []);
-      } else {
-        setOffers([]);
-      }
+      // offers API backward compatible
+      if (Array.isArray(oData)) setOffers(oData);
+      else if (oData.status === "SUCCESS") setOffers(oData.data || []);
+      else setOffers([]);
     } catch (err) {
       console.error(err);
       showToast("Failed to load publishers / offers");
     }
   };
 
-  /* ================= LOAD ASSIGNED OFFERS ================= */
+  /* ================= LOAD ASSIGNED ================= */
   const loadAssigned = async (pid) => {
     try {
       const res = await fetch(
@@ -89,21 +80,17 @@ export default function PublisherAssignOffers() {
       }
 
       const data = await res.json();
-      if (data.status === "SUCCESS") {
-        setAssigned(data.data || []);
-      } else {
-        setAssigned([]);
-      }
+      setAssigned(data.status === "SUCCESS" ? data.data : []);
     } catch (err) {
       console.error(err);
       showToast("Failed to load assigned offers");
     }
   };
 
-  /* ================= ASSIGN OFFER ================= */
+  /* ================= ASSIGN ================= */
   const assignOffer = async () => {
-    if (!publisherId || !form.offer_id) {
-      showToast("Publisher & Offer required");
+    if (!publisherId || !form.offer_id || !form.publisher_cpa) {
+      showToast("Publisher, Offer & CPA required");
       return;
     }
 
@@ -116,7 +103,13 @@ export default function PublisherAssignOffers() {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(form),
+          body: JSON.stringify({
+            offer_id: Number(form.offer_id),
+            publisher_cpa: Number(form.publisher_cpa),
+            daily_cap: form.daily_cap ? Number(form.daily_cap) : null,
+            pass_percent: Number(form.pass_percent),
+            weight: Number(form.weight),
+          }),
         }
       );
 
@@ -173,23 +166,27 @@ export default function PublisherAssignOffers() {
     }
   };
 
+  /* ================= FILTER UNASSIGNED OFFERS ================= */
+  const assignedOfferIds = assigned.map((a) => a.offer_id);
+  const availableOffers = offers.filter(
+    (o) => !assignedOfferIds.includes(o.id)
+  );
+
   return (
     <>
       <Navbar />
-
       {toast && <div style={toastStyle}>{toast}</div>}
 
       <div style={{ padding: 24 }}>
         <h2>Assign Offers to Publisher</h2>
 
-        {/* ================= SELECT PUBLISHER ================= */}
+        {/* SELECT PUBLISHER */}
         <select
           value={publisherId}
           onChange={(e) => {
             const pid = e.target.value;
             setPublisherId(pid);
-            if (pid) loadAssigned(pid);
-            else setAssigned([]);
+            pid ? loadAssigned(pid) : setAssigned([]);
           }}
         >
           <option value="">Select Publisher</option>
@@ -200,7 +197,7 @@ export default function PublisherAssignOffers() {
           ))}
         </select>
 
-        {/* ================= ASSIGN FORM ================= */}
+        {/* ASSIGN FORM */}
         {publisherId && (
           <div style={{ marginTop: 20, display: "flex", gap: 8 }}>
             <select
@@ -210,7 +207,7 @@ export default function PublisherAssignOffers() {
               }
             >
               <option value="">Select Offer</option>
-              {offers.map((o) => (
+              {availableOffers.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.service_name || o.name} | {o.geo} | {o.carrier}
                 </option>
@@ -250,7 +247,7 @@ export default function PublisherAssignOffers() {
           </div>
         )}
 
-        {/* ================= ASSIGNED TABLE ================= */}
+        {/* ASSIGNED TABLE */}
         {assigned.length > 0 && (
           <table
             border="1"
@@ -271,7 +268,7 @@ export default function PublisherAssignOffers() {
             <tbody>
               {assigned.map((a) => (
                 <tr key={a.id}>
-                  <td>{a.offer_name}</td>
+                  <td>{a.name}</td>
                   <td>${a.publisher_cpa}</td>
                   <td>{a.daily_cap || "∞"}</td>
                   <td>{a.pass_percent}%</td>
