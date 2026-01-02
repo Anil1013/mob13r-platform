@@ -1,7 +1,7 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 
-const IDLE_LIMIT = 15 * 60 * 1000; // 15 min
+const IDLE_LIMIT = 60 * 60 * 1000; // 60 min
 
 const clearSession = () => {
   localStorage.removeItem("token");
