@@ -39,7 +39,7 @@ export default function PublisherAssignOffers() {
       return;
     }
     loadBaseData();
-    loadAssigned(); // load ALL by default
+    loadAssigned();
     // eslint-disable-next-line
   }, []);
 
@@ -244,32 +244,37 @@ export default function PublisherAssignOffers() {
         </div>
 
         {/* TABLE */}
-        <table width="100%" border="1" cellPadding="8">
+        <table
+          width="100%"
+          border="1"
+          cellPadding="8"
+          style={{ borderCollapse: "collapse", textAlign: "center" }}
+        >
           <thead>
             <tr>
-              {!publisherId && <th>Publisher</th>}
-              <th>Offer</th>
-              <th>Geo</th>
-              <th>Carrier</th>
-              <th>CPA</th>
-              <th>Cap</th>
-              <th>Pass %</th>
-              <th>Weight</th>
-              <th>Status</th>
-              <th>Actions</th>
+              {!publisherId && <th style={th}>Publisher</th>}
+              <th style={th}>Offer</th>
+              <th style={th}>Geo</th>
+              <th style={th}>Carrier</th>
+              <th style={th}>CPA</th>
+              <th style={th}>Cap</th>
+              <th style={th}>Pass %</th>
+              <th style={th}>Weight</th>
+              <th style={th}>Status</th>
+              <th style={th}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {assigned.map((a) => (
               <tr key={a.id}>
-                {!publisherId && <td>{a.publisher_name}</td>}
-                <td>{a.name}</td>
-                <td>{a.geo}</td>
-                <td>{a.carrier}</td>
+                {!publisherId && <td style={td}>{a.publisher_name}</td>}
+                <td style={td}>{a.name}</td>
+                <td style={td}>{a.geo}</td>
+                <td style={td}>{a.carrier}</td>
 
                 {editingId === a.id ? (
                   <>
-                    <td>
+                    <td style={td}>
                       <input
                         value={editRow.publisher_cpa}
                         onChange={(e) =>
@@ -280,7 +285,7 @@ export default function PublisherAssignOffers() {
                         }
                       />
                     </td>
-                    <td>
+                    <td style={td}>
                       <input
                         value={editRow.daily_cap || ""}
                         onChange={(e) =>
@@ -291,7 +296,7 @@ export default function PublisherAssignOffers() {
                         }
                       />
                     </td>
-                    <td>
+                    <td style={td}>
                       <input
                         value={editRow.pass_percent}
                         onChange={(e) =>
@@ -302,7 +307,7 @@ export default function PublisherAssignOffers() {
                         }
                       />
                     </td>
-                    <td>
+                    <td style={td}>
                       <input
                         value={editRow.weight}
                         onChange={(e) =>
@@ -316,18 +321,24 @@ export default function PublisherAssignOffers() {
                   </>
                 ) : (
                   <>
-                    <td>{a.publisher_cpa}</td>
-                    <td>{a.daily_cap || "∞"}</td>
-                    <td>{a.pass_percent}</td>
-                    <td>{a.weight}</td>
+                    <td style={td}>{a.publisher_cpa}</td>
+                    <td style={td}>{a.daily_cap || "∞"}</td>
+                    <td style={td}>{a.pass_percent}</td>
+                    <td style={td}>{a.weight}</td>
                   </>
                 )}
 
-                <td style={{ color: a.status === "active" ? "green" : "red" }}>
+                <td
+                  style={{
+                    ...td,
+                    color: a.status === "active" ? "green" : "red",
+                    fontWeight: 600,
+                  }}
+                >
                   {a.status.toUpperCase()}
                 </td>
 
-                <td>
+                <td style={td}>
                   {editingId === a.id ? (
                     <button onClick={() => saveEdit(a)}>Save</button>
                   ) : (
@@ -354,6 +365,18 @@ export default function PublisherAssignOffers() {
 }
 
 /* ================= STYLES ================= */
+const th = {
+  textAlign: "center",
+  padding: 10,
+  whiteSpace: "nowrap",
+};
+
+const td = {
+  textAlign: "center",
+  padding: 10,
+  verticalAlign: "middle",
+};
+
 const toastStyle = {
   position: "fixed",
   top: 20,
