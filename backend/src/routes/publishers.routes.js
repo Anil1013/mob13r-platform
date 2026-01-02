@@ -39,17 +39,20 @@ router.get("/", authMiddleware, async (req, res) => {
 router.post("/", authMiddleware, async (req, res) => {
   try {
     const { name } = req.body;
-    if (!name)
-      return res
-        .status(400)
-        .json({ status: "FAILED", message: "Publisher name required" });
+
+    if (!name) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Publisher name required",
+      });
+    }
 
     const apiKey = generatePublisherKey();
 
     const result = await pool.query(
       `
       INSERT INTO publishers (name, api_key, status)
-      VALUES ($1,$2,'active')
+      VALUES ($1, $2, 'active')
       RETURNING *
       `,
       [name, apiKey]
@@ -73,13 +76,15 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    if (!["active", "paused"].includes(status))
-      return res
-        .status(400)
-        .json({ status: "FAILED", message: "Invalid status" });
+    if (!["active", "paused"].includes(status)) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Invalid status",
+      });
+    }
 
     await pool.query(
-      `UPDATE publishers SET status=$1 WHERE id=$2`,
+      `UPDATE publishers SET status = $1 WHERE id = $2`,
       [status, id]
     );
 
@@ -136,7 +141,6 @@ router.get("/:publisherId/offers", authMiddleware, async (req, res) => {
 
 /* =====================================================
    📋 GET ASSIGNED OFFERS (ALL PUBLISHERS)
-   👉 Used when no publisher selected
 ===================================================== */
 router.get("/offers/all", authMiddleware, async (req, res) => {
   try {
@@ -188,37 +192,41 @@ router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
       weight = 100,
     } = req.body;
 
-    if (!offer_id || !publisher_cpa)
+    if (!offer_id || publisher_cpa === undefined) {
       return res.status(400).json({
         status: "FAILED",
         message: "offer_id and publisher_cpa required",
       });
+    }
 
-    if (pass_percent < 0 || pass_percent > 100)
+    if (pass_percent < 0 || pass_percent > 100) {
       return res.status(400).json({
         status: "FAILED",
         message: "pass_percent must be between 0–100",
       });
+    }
 
-    if (weight < 1)
+    if (weight < 1) {
       return res.status(400).json({
         status: "FAILED",
         message: "weight must be >= 1",
       });
+    }
 
     const exists = await pool.query(
       `
       SELECT id FROM publisher_offers
-      WHERE publisher_id=$1 AND offer_id=$2
+      WHERE publisher_id = $1 AND offer_id = $2
       `,
       [publisherId, offer_id]
     );
 
-    if (exists.rows.length)
+    if (exists.rows.length) {
       return res.status(400).json({
         status: "FAILED",
         message: "Offer already assigned to publisher",
       });
+    }
 
     const insert = await pool.query(
       `
@@ -231,7 +239,7 @@ router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
         publisherId,
         offer_id,
         publisher_cpa,
-        daily_cap || null,
+        daily_cap || 0,
         pass_percent,
         weight,
       ]
@@ -249,7 +257,6 @@ router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
 
 /* =====================================================
    ✏️ UPDATE ASSIGNED OFFER
-   (CPA / cap / pass % / weight / status)
 ===================================================== */
 router.patch("/:publisherId/offers/:id", authMiddleware, async (req, res) => {
   try {
@@ -263,22 +270,25 @@ router.patch("/:publisherId/offers/:id", authMiddleware, async (req, res) => {
     } = req.body;
 
     if (status && !["active", "paused"].includes(status)) {
-      return res
-        .status(400)
-        .json({ status: "FAILED", message: "Invalid status" });
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Invalid status",
+      });
     }
 
-    if (pass_percent !== undefined && (pass_percent < 0 || pass_percent > 100))
+    if (pass_percent !== undefined && (pass_percent < 0 || pass_percent > 100)) {
       return res.status(400).json({
         status: "FAILED",
         message: "pass_percent must be 0–100",
       });
+    }
 
-    if (weight !== undefined && weight < 1)
+    if (weight !== undefined && weight < 1) {
       return res.status(400).json({
         status: "FAILED",
         message: "weight must be >= 1",
       });
+    }
 
     await pool.query(
       `
