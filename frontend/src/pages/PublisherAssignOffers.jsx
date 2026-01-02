@@ -30,7 +30,7 @@ export default function PublisherAssignOffers() {
     setTimeout(() => setToast(null), 2500);
   };
 
-  /* ================= AUTH GUARD ================= */
+  /* ================= AUTH ================= */
   useEffect(() => {
     if (!token) {
       navigate("/login");
@@ -40,7 +40,7 @@ export default function PublisherAssignOffers() {
     // eslint-disable-next-line
   }, []);
 
-  /* ================= LOAD BASE ================= */
+  /* ================= LOAD BASE DATA ================= */
   const loadBaseData = async () => {
     try {
       const [pRes, oRes] = await Promise.all([
@@ -55,23 +55,39 @@ export default function PublisherAssignOffers() {
       const pData = await pRes.json();
       const oData = await oRes.json();
 
-      if (pData.status === "SUCCESS") setPublishers(pData.data || []);
-      if (oData.status === "SUCCESS") setOffers(oData.data || []);
+      if (pData.status === "SUCCESS") {
+        setPublishers(pData.data || []);
+      }
+
+      /* 🔴 IMPORTANT FIX
+         offers API returns ARRAY directly, not {status,data}
+      */
+      if (Array.isArray(oData)) {
+        setOffers(oData);
+      } else if (oData.status === "SUCCESS") {
+        setOffers(oData.data || []);
+      } else {
+        setOffers([]);
+      }
     } catch (err) {
       console.error(err);
-      showToast("Failed to load base data");
+      showToast("Failed to load publishers / offers");
     }
   };
 
-  /* ================= LOAD ASSIGNED ================= */
+  /* ================= LOAD ASSIGNED OFFERS ================= */
   const loadAssigned = async (pid) => {
     try {
       const res = await fetch(
         `${API_BASE}/api/publishers/${pid}/offers`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
+
+      if (!res.ok) {
+        setAssigned([]);
+        return;
+      }
+
       const data = await res.json();
       if (data.status === "SUCCESS") {
         setAssigned(data.data || []);
@@ -84,7 +100,7 @@ export default function PublisherAssignOffers() {
     }
   };
 
-  /* ================= ASSIGN ================= */
+  /* ================= ASSIGN OFFER ================= */
   const assignOffer = async () => {
     if (!publisherId || !form.offer_id) {
       showToast("Publisher & Offer required");
@@ -166,12 +182,14 @@ export default function PublisherAssignOffers() {
       <div style={{ padding: 24 }}>
         <h2>Assign Offers to Publisher</h2>
 
-        {/* SELECT PUBLISHER */}
+        {/* ================= SELECT PUBLISHER ================= */}
         <select
           value={publisherId}
           onChange={(e) => {
-            setPublisherId(e.target.value);
-            loadAssigned(e.target.value);
+            const pid = e.target.value;
+            setPublisherId(pid);
+            if (pid) loadAssigned(pid);
+            else setAssigned([]);
           }}
         >
           <option value="">Select Publisher</option>
@@ -182,7 +200,7 @@ export default function PublisherAssignOffers() {
           ))}
         </select>
 
-        {/* ASSIGN FORM */}
+        {/* ================= ASSIGN FORM ================= */}
         {publisherId && (
           <div style={{ marginTop: 20, display: "flex", gap: 8 }}>
             <select
@@ -194,7 +212,7 @@ export default function PublisherAssignOffers() {
               <option value="">Select Offer</option>
               {offers.map((o) => (
                 <option key={o.id} value={o.id}>
-                  {o.name} | {o.geo} | {o.carrier}
+                  {o.service_name || o.name} | {o.geo} | {o.carrier}
                 </option>
               ))}
             </select>
@@ -232,7 +250,7 @@ export default function PublisherAssignOffers() {
           </div>
         )}
 
-        {/* ASSIGNED TABLE */}
+        {/* ================= ASSIGNED TABLE ================= */}
         {assigned.length > 0 && (
           <table
             border="1"
@@ -253,7 +271,7 @@ export default function PublisherAssignOffers() {
             <tbody>
               {assigned.map((a) => (
                 <tr key={a.id}>
-                  <td>{a.name}</td>
+                  <td>{a.offer_name}</td>
                   <td>${a.publisher_cpa}</td>
                   <td>{a.daily_cap || "∞"}</td>
                   <td>{a.pass_percent}%</td>
