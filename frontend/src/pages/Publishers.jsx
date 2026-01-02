@@ -167,7 +167,7 @@ export default function Publishers() {
                   {new Date(p.created_at).toLocaleString()}
                 </td>
 
-                {/* ✅ ACTIONS */}
+                {/* ACTIONS */}
                 <td
                   style={{
                     ...td,
@@ -176,12 +176,16 @@ export default function Publishers() {
                     justifyContent: "center",
                   }}
                 >
-                  <button onClick={() => toggleStatus(p.id, p.status)}>
+                  <button
+                    type="button"
+                    onClick={() => toggleStatus(p.id, p.status)}
+                  >
                     {p.status === "active" ? "Pause" : "Activate"}
                   </button>
 
-                  {/* ✅ FIXED ASSIGN BUTTON */}
+                  {/* ✅ ASSIGN OFFERS — FIXED */}
                   <button
+                    type="button"   // 🔥 IMPORTANT FIX
                     onClick={() =>
                       navigate(`/assign-offers?publisherId=${p.id}`)
                     }
