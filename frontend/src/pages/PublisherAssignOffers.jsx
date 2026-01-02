@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
 
 const API_BASE =
@@ -7,6 +7,7 @@ const API_BASE =
 
 export default function PublisherAssignOffers() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const token = localStorage.getItem("token");
 
   const [publishers, setPublishers] = useState([]);
@@ -32,14 +33,22 @@ export default function PublisherAssignOffers() {
     setTimeout(() => setToast(null), 2500);
   };
 
-  /* ================= AUTH ================= */
+  /* ================= AUTH + INIT ================= */
   useEffect(() => {
     if (!token) {
       navigate("/login");
       return;
     }
+
     loadBaseData();
-    loadAssigned();
+
+    const pidFromUrl = searchParams.get("publisherId");
+    if (pidFromUrl) {
+      setPublisherId(pidFromUrl);
+      loadAssigned(pidFromUrl);
+    } else {
+      loadAssigned();
+    }
     // eslint-disable-next-line
   }, []);
 
