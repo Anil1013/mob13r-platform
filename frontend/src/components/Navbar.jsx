@@ -2,7 +2,16 @@ import { NavLink, useNavigate } from "react-router-dom";
 
 export default function Navbar() {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem("user"));
+
+  // ✅ SAFE USER PARSE (FIX)
+  let user = null;
+  try {
+    const raw = localStorage.getItem("user");
+    user = raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    console.warn("Invalid user in localStorage");
+    user = null;
+  }
 
   const logout = () => {
     localStorage.clear();
@@ -21,7 +30,6 @@ export default function Navbar() {
             Mob13r
           </div>
 
-          {/* ADMIN NAV */}
           <NavLink to="/dashboard" style={navStyle}>
             Dashboard
           </NavLink>
@@ -38,11 +46,9 @@ export default function Navbar() {
             Publishers
           </NavLink>
 
-          <NavLink to="/publishers/assign" style={navStyle}>
-            Assign Offers
-          </NavLink>
+          {/* 🔥 REMOVE STATIC ASSIGN LINK (important) */}
+          {/* Assign page is contextual, not global */}
 
-          {/* PUBLISHER NAV */}
           <NavLink to="/publisher/dashboard" style={navStyle}>
             Publisher Dashboard
           </NavLink>
@@ -50,14 +56,15 @@ export default function Navbar() {
 
         {/* RIGHT */}
         <div style={styles.right}>
-          <span style={styles.user}>{user?.email}</span>
+          <span style={styles.user}>
+            {user?.email || "Admin"}
+          </span>
           <button style={styles.logoutBtn} onClick={logout}>
             Logout
           </button>
         </div>
       </div>
 
-      {/* spacer for fixed navbar */}
       <div style={{ height: 60 }} />
     </>
   );
