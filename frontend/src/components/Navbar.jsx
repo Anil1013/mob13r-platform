@@ -46,9 +46,7 @@ export default function Navbar() {
           <NavLink to="/publishers/assign" style={navStyle}>
             Assign Offers
           </NavLink>
-        </div>
-
-        <NavLink to="/publisher/dashboard" style={navStyle}>
+         <NavLink to="/publisher/dashboard" style={navStyle}>
             Publisher Dashboard
           </NavLink>
         </div>
