@@ -55,7 +55,7 @@ export default function Publishers() {
 
     const data = await res.json();
     if (data.status === "SUCCESS") {
-      setPublishers((p) => [...p, data.data]); // optimistic add
+      setPublishers((p) => [...p, data.data]); // optimistic
       setName("");
       showToast("Publisher added");
     }
@@ -68,20 +68,18 @@ export default function Publishers() {
     showToast("API key copied");
   };
 
-  /* ================= TOGGLE KEY VISIBILITY ================= */
+  /* ================= TOGGLE KEY ================= */
   const toggleKey = (id) => {
     setVisibleKeys((v) => ({ ...v, [id]: !v[id] }));
   };
 
-  /* ================= OPTIMISTIC STATUS ================= */
+  /* ================= TOGGLE STATUS ================= */
   const toggleStatus = async (id, status) => {
     const newStatus = status === "active" ? "paused" : "active";
 
-    // optimistic update
+    // optimistic UI
     setPublishers((list) =>
-      list.map((p) =>
-        p.id === id ? { ...p, status: newStatus } : p
-      )
+      list.map((p) => (p.id === id ? { ...p, status: newStatus } : p))
     );
 
     const res = await fetch(`${API_BASE}/api/publishers/${id}/status`, {
@@ -94,11 +92,9 @@ export default function Publishers() {
     });
 
     if (!res.ok) {
-      // rollback on fail
+      // rollback
       setPublishers((list) =>
-        list.map((p) =>
-          p.id === id ? { ...p, status } : p
-        )
+        list.map((p) => (p.id === id ? { ...p, status } : p))
       );
       showToast("Status update failed");
     }
@@ -109,16 +105,12 @@ export default function Publishers() {
       <Navbar />
 
       {/* ================= TOAST ================= */}
-      {toast && (
-        <div style={toastStyle}>
-          {toast}
-        </div>
-      )}
+      {toast && <div style={toastStyle}>{toast}</div>}
 
       <div style={{ padding: 20 }}>
         <h2>Publishers</h2>
 
-        {/* ADD */}
+        {/* ================= ADD ================= */}
         <div style={{ marginBottom: 20, display: "flex", gap: 10 }}>
           <input
             value={name}
@@ -131,7 +123,7 @@ export default function Publishers() {
           </button>
         </div>
 
-        {/* TABLE */}
+        {/* ================= TABLE ================= */}
         <table width="100%" border="1" style={{ borderCollapse: "collapse" }}>
           <thead>
             <tr>
@@ -158,7 +150,6 @@ export default function Publishers() {
                         ? p.api_key
                         : "••••••••••••••••"}
                     </code>
-
                     <button onClick={() => toggleKey(p.id)}>👁</button>
                     <button onClick={() => copyApiKey(p.api_key)}>📋</button>
                   </div>
@@ -181,9 +172,36 @@ export default function Publishers() {
                   {new Date(p.created_at).toLocaleString()}
                 </td>
 
-                <td style={td}>
+                {/* ✅ ACTIONS */}
+                <td
+                  style={{
+                    ...td,
+                    display: "flex",
+                    gap: 8,
+                    justifyContent: "center",
+                  }}
+                >
+                  {/* Pause / Activate */}
                   <button onClick={() => toggleStatus(p.id, p.status)}>
                     {p.status === "active" ? "Pause" : "Activate"}
+                  </button>
+
+                  {/* ✅ ASSIGN OFFERS */}
+                  <button
+                    onClick={() =>
+                      navigate(`/publishers/${p.id}/offers`)
+                    }
+                    style={{
+                      background: "#2563eb",
+                      color: "#fff",
+                      border: "none",
+                      padding: "6px 10px",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                      fontSize: 13,
+                    }}
+                  >
+                    Assign Offers
                   </button>
                 </td>
               </tr>
