@@ -83,16 +83,16 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
       });
     }
 
-    /* 🎯 PICK OFFER (WEIGHTED) */
+    /* 🎯 PICK OFFER (WEIGHT ONLY) */
     const picked = pickOfferByWeight(offersRes.rows);
 
-    /* 🔗 CALL INTERNAL PIN SEND (🔥 FIXED) */
+    /* 🔗 CALL INTERNAL PIN SEND */
     const internalResp = await axios({
       method: req.method,
       url: `${INTERNAL_API_BASE}/api/pin/send/${picked.offer_id}`,
       params: req.method === "GET" ? params : undefined,
       data: req.method !== "GET" ? params : undefined,
-      validateStatus: () => true, // 🔥 IMPORTANT
+      validateStatus: () => true,
     });
 
     const data = internalResp.data;
@@ -128,21 +128,11 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 
 /* =====================================================
    ✅ PUBLISHER PIN VERIFY
-   GET / POST  /api/publisher/pin/verify
+   (NO pass %, NO cap logic here)
 ===================================================== */
 router.all("/pin/verify", publisherAuth, async (req, res) => {
   try {
-    const baseParams = { ...req.query, ...req.body };
-    const { session_token, otp } = baseParams;
-
-    if (!session_token || !otp) {
-      return res.status(400).json({
-        status: "FAILED",
-        message: "session_token and otp required",
-      });
-    }
-
-    const params = enrichParams(req, baseParams);
+    const params = enrichParams(req, { ...req.query, ...req.body });
 
     const internalResp = await axios({
       method: req.method,
@@ -152,57 +142,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       validateStatus: () => true,
     });
 
-    const advData = internalResp.data;
-
-    /* ❌ ADV FAIL */
-    if (advData.status !== "SUCCESS") {
-      return res.json(mapPublisherResponse(advData));
-    }
-
-    /* 🔢 PASS % LOGIC */
-    const convRes = await pool.query(
-      `
-      SELECT id, pass_percent
-      FROM publisher_conversions
-      WHERE session_token = $1
-      ORDER BY id DESC
-      LIMIT 1
-      `,
-      [session_token]
-    );
-
-    const conversion = convRes.rows[0];
-    const passPercent = Number(conversion?.pass_percent ?? 100);
-    const rand = Math.random() * 100;
-
-    /* 🟡 HOLD */
-    if (rand > passPercent) {
-      await pool.query(
-        `
-        UPDATE publisher_conversions
-        SET status = 'HOLD',
-            publisher_cpa = 0,
-            updated_at = NOW()
-        WHERE id = $1
-        `,
-        [conversion.id]
-      );
-
-      return res.json(mapPublisherResponse(advData, { isHold: true }));
-    }
-
-    /* 🟢 PASS */
-    await pool.query(
-      `
-      UPDATE publisher_conversions
-      SET status = 'SUCCESS',
-          updated_at = NOW()
-      WHERE id = $1
-      `,
-      [conversion.id]
-    );
-
-    return res.json(mapPublisherResponse(advData));
+    return res.json(mapPublisherResponse(internalResp.data));
   } catch (err) {
     console.error("PUBLISHER PIN VERIFY ERROR:", err);
     return res.status(500).json({
@@ -228,7 +168,7 @@ router.get("/pin/status", publisherAuth, async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT status, updated_at
+      SELECT status, verified_at
       FROM pin_sessions
       WHERE session_token = $1
       `,
