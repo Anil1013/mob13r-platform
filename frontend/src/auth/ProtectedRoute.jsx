@@ -1,23 +1,31 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 
 const IDLE_LIMIT = 15 * 60 * 1000; // 15 min
 
+const clearSession = () => {
+  localStorage.removeItem("token");
+  localStorage.removeItem("token_expiry");
+  localStorage.removeItem("last_activity");
+};
+
 export default function ProtectedRoute() {
+  const location = useLocation();
+
   const token = localStorage.getItem("token");
   const expiry = localStorage.getItem("token_expiry");
 
-  // ✅ HARD FIX: expiry missing ko logout ka reason mat banao
-  if (!token) {
+  // ❌ no token or expired
+  if (!token || !expiry || Date.now() > Number(expiry)) {
     clearSession();
     return <Navigate to="/login" replace />;
   }
 
-  // ⛔ expiry missing → allow session
-  if (expiry && Date.now() > Number(expiry)) {
-    clearSession();
-    return <Navigate to="/login" replace />;
-  }
+  /* ✅ VERY IMPORTANT FIX */
+  useEffect(() => {
+    // 🔥 ROUTE CHANGE = ACTIVITY
+    localStorage.setItem("last_activity", Date.now());
+  }, [location.pathname]);
 
   useEffect(() => {
     const updateActivity = () => {
@@ -32,24 +40,17 @@ export default function ProtectedRoute() {
       }
     };
 
-    updateActivity();
     window.addEventListener("mousemove", updateActivity);
     window.addEventListener("keydown", updateActivity);
 
-    const timer = setInterval(checkIdle, 60000);
+    const interval = setInterval(checkIdle, 60 * 1000);
 
     return () => {
       window.removeEventListener("mousemove", updateActivity);
       window.removeEventListener("keydown", updateActivity);
-      clearInterval(timer);
+      clearInterval(interval);
     };
   }, []);
 
   return <Outlet />;
-}
-
-function clearSession() {
-  localStorage.removeItem("token");
-  localStorage.removeItem("token_expiry");
-  localStorage.removeItem("user");
 }
