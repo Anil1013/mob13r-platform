@@ -119,7 +119,7 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
 /* =====================================================
    📋 GET ASSIGNED OFFERS FOR PUBLISHER
    GET /api/publishers/:publisherId/offers
-   ✅ BACKWARD COMPAT FIX
+   ✅ FIXED FOR service_name
 ===================================================== */
 router.get("/:publisherId/offers", authMiddleware, async (req, res) => {
   try {
@@ -132,8 +132,8 @@ router.get("/:publisherId/offers", authMiddleware, async (req, res) => {
         po.publisher_id,
         po.offer_id,
 
-        -- ✅ backward compatible name
-        COALESCE(o.name, o.service_name) AS name,
+        -- ✅ frontend-friendly name
+        o.service_name AS name,
 
         o.service_name,
         o.geo,
@@ -209,7 +209,7 @@ router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
       `
       INSERT INTO publisher_offers
       (publisher_id, offer_id, publisher_cpa, daily_cap, pass_percent, weight, status)
-      VALUES ($1,$2,$3,$4,$5,$6,'active')
+      VALUES ($1, $2, $3, $4, $5, $6, 'active')
       RETURNING *
       `,
       [
