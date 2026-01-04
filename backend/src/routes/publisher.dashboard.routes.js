@@ -5,97 +5,92 @@ import publisherAuth from "../middleware/publisherAuth.js";
 const router = express.Router();
 
 /* =====================================================
-   📊 PUBLISHER DASHBOARD SUMMARY
+   🕛 DAILY FILTER
+===================================================== */
+const TODAY = `CURRENT_DATE`;
+
+/* =====================================================
+   📊 DASHBOARD SUMMARY (TOP CARDS)
 ===================================================== */
 router.get("/dashboard/summary", publisherAuth, async (req, res) => {
   try {
     const publisherId = req.publisher.id;
 
-    const pinReqRes = await pool.query(
+    const result = await pool.query(
       `
       SELECT
-        COUNT(*)::int AS total_pin_requests,
-        COUNT(DISTINCT msisdn)::int AS unique_pin_requests
+        COUNT(*)                                                AS total_pin_requests,
+        COUNT(DISTINCT msisdn)                                  AS unique_pin_requests,
+
+        COUNT(*) FILTER (
+          WHERE status IN ('OTP_SENT','VERIFIED')
+        )                                                       AS total_pin_sent,
+
+        COUNT(DISTINCT msisdn) FILTER (
+          WHERE status IN ('OTP_SENT','VERIFIED')
+        )                                                       AS unique_pin_sent,
+
+        COUNT(*) FILTER (
+          WHERE otp_attempts >= 1 OR status = 'VERIFIED'
+        )                                                       AS pin_verification_requests,
+
+        COUNT(DISTINCT msisdn) FILTER (
+          WHERE otp_attempts >= 1 OR status = 'VERIFIED'
+        )                                                       AS unique_pin_verification_requests,
+
+        COUNT(*) FILTER (
+          WHERE publisher_credited = TRUE
+        )                                                       AS pin_verified
+
       FROM pin_sessions
       WHERE publisher_id = $1
+        AND created_at::date = ${TODAY}
       `,
       [publisherId]
     );
 
-    const pinSentRes = await pool.query(
+    const revenueRes = await pool.query(
       `
-      SELECT
-        COUNT(*)::int AS total_pin_sent,
-        COUNT(DISTINCT msisdn)::int AS unique_pin_sent
-      FROM pin_sessions
+      SELECT COALESCE(SUM(publisher_cpa),0) AS revenue
+      FROM publisher_conversions
       WHERE publisher_id = $1
-        AND status IN ('OTP_SENT','VERIFIED')
+        AND status = 'SUCCESS'
+        AND created_at::date = ${TODAY}
       `,
       [publisherId]
     );
 
-    const verifyReqRes = await pool.query(
-      `
-      SELECT
-        COUNT(*)::int AS pin_verification_requests,
-        COUNT(DISTINCT msisdn)::int AS unique_pin_verification_requests
-      FROM pin_sessions
-      WHERE publisher_id = $1
-        AND (otp_attempts > 0 OR status = 'VERIFIED')
-      `,
-      [publisherId]
-    );
-
-    const verifiedRes = await pool.query(
-      `
-      SELECT
-        COUNT(*)::int AS pin_verified,
-        COALESCE(SUM(publisher_cpa),0)::numeric AS revenue
-      FROM pin_sessions
-      WHERE publisher_id = $1
-        AND publisher_credited = TRUE
-      `,
-      [publisherId]
-    );
-
-    const uniquePinSent = pinSentRes.rows[0].unique_pin_sent;
-    const pinVerified = verifiedRes.rows[0].pin_verified;
+    const r = result.rows[0];
 
     const CR =
-      uniquePinSent > 0
-        ? ((pinVerified / uniquePinSent) * 100).toFixed(2)
+      Number(r.unique_pin_sent) > 0
+        ? ((Number(r.pin_verified) / Number(r.unique_pin_sent)) * 100).toFixed(2)
         : "0.00";
 
     return res.json({
       status: "SUCCESS",
       data: {
-        total_pin_requests: pinReqRes.rows[0].total_pin_requests,
-        unique_pin_requests: pinReqRes.rows[0].unique_pin_requests,
-
-        total_pin_sent: pinSentRes.rows[0].total_pin_sent,
-        unique_pin_sent: uniquePinSent,
-
-        pin_verification_requests:
-          verifyReqRes.rows[0].pin_verification_requests,
-        unique_pin_verification_requests:
-          verifyReqRes.rows[0].unique_pin_verification_requests,
-
-        pin_verified: pinVerified,
+        total_pin_requests: Number(r.total_pin_requests),
+        unique_pin_requests: Number(r.unique_pin_requests),
+        total_pin_sent: Number(r.total_pin_sent),
+        unique_pin_sent: Number(r.unique_pin_sent),
+        pin_verification_requests: Number(r.pin_verification_requests),
+        unique_pin_verification_requests: Number(
+          r.unique_pin_verification_requests
+        ),
+        pin_verified: Number(r.pin_verified),
         CR: `${CR}%`,
-        revenue: `$${Number(verifiedRes.rows[0].revenue).toFixed(2)}`,
+        revenue: `$${Number(revenueRes.rows[0].revenue).toFixed(2)}`,
       },
     });
   } catch (err) {
-    console.error("PUBLISHER DASHBOARD SUMMARY ERROR:", err);
-    return res.status(500).json({
-      status: "FAILED",
-      message: "Dashboard summary failed",
-    });
+    console.error("DASHBOARD SUMMARY ERROR:", err.message);
+    res.status(500).json({ status: "FAILED" });
   }
 });
 
 /* =====================================================
-   📋 PUBLISHER DASHBOARD OFFERS TABLE
+   📋 DASHBOARD OFFERS TABLE (DAILY)
 ===================================================== */
 router.get("/dashboard/offers", publisherAuth, async (req, res) => {
   try {
@@ -104,51 +99,52 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
     const result = await pool.query(
       `
       SELECT
-        o.id                         AS offer_id,
-        o.service_name               AS offer_name,
+        o.id                      AS offer_id,
+        o.service_name            AS offer_name,
         o.geo,
         o.carrier,
+        po.publisher_cpa          AS cpa,
+        po.daily_cap              AS cap,
 
-        po.publisher_cpa             AS cpa,
-        po.daily_cap                 AS cap,
+        COUNT(ps.id)              AS pin_request_count,
+        COUNT(DISTINCT ps.msisdn) AS unique_pin_request_count,
 
-        COUNT(ps.session_id)::int                                        AS pin_request_count,
-        COUNT(DISTINCT ps.msisdn)::int                                   AS unique_pin_request_count,
-
-        COUNT(ps.session_id) FILTER (
+        COUNT(ps.id) FILTER (
           WHERE ps.status IN ('OTP_SENT','VERIFIED')
-        )::int                                                           AS pin_send_count,
+        )                          AS pin_send_count,
 
         COUNT(DISTINCT ps.msisdn) FILTER (
           WHERE ps.status IN ('OTP_SENT','VERIFIED')
-        )::int                                                           AS unique_pin_sent,
+        )                          AS unique_pin_sent,
 
-        COUNT(ps.session_id) FILTER (
-          WHERE ps.otp_attempts > 0 OR ps.status='VERIFIED'
-        )::int                                                           AS pin_validation_request_count,
+        COUNT(ps.id) FILTER (
+          WHERE ps.otp_attempts >= 1 OR ps.status='VERIFIED'
+        )                          AS pin_validation_request_count,
 
         COUNT(DISTINCT ps.msisdn) FILTER (
-          WHERE ps.otp_attempts > 0 OR ps.status='VERIFIED'
-        )::int                                                           AS unique_pin_validation_request_count,
+          WHERE ps.otp_attempts >= 1 OR ps.status='VERIFIED'
+        )                          AS unique_pin_validation_request_count,
 
-        COUNT(ps.session_id) FILTER (
+        COUNT(ps.id) FILTER (
           WHERE ps.publisher_credited = TRUE
-        )::int                                                           AS unique_pin_verified,
+        )                          AS unique_pin_verified,
 
-        COALESCE(SUM(ps.publisher_cpa) FILTER (
-          WHERE ps.publisher_credited = TRUE
-        ),0)::numeric                                                    AS revenue,
+        COALESCE(SUM(pc.publisher_cpa),0) AS revenue,
 
-        MAX(ps.created_at)                                                AS last_pin_gen_date,
-        MAX(ps.verified_at)                                               AS last_pin_verification_date,
-        MAX(ps.credited_at) FILTER (
-          WHERE ps.publisher_credited = TRUE
-        )                                                                 AS last_success_pin_verification_date
+        MAX(ps.created_at)         AS last_pin_gen_date,
+        MAX(ps.verified_at)        AS last_pin_verification_date
 
       FROM publisher_offers po
       JOIN offers o ON o.id = po.offer_id
+
       LEFT JOIN pin_sessions ps
         ON ps.publisher_offer_id = po.id
+       AND ps.created_at::date = ${TODAY}
+
+      LEFT JOIN publisher_conversions pc
+        ON pc.pin_session_id = ps.id
+       AND pc.status = 'SUCCESS'
+       AND pc.created_at::date = ${TODAY}
 
       WHERE po.publisher_id = $1
         AND po.status = 'active'
@@ -164,9 +160,10 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
 
     const data = result.rows.map((r) => {
       const cr =
-        r.unique_pin_sent > 0
+        Number(r.unique_pin_sent) > 0
           ? (
-              (r.unique_pin_verified / r.unique_pin_sent) *
+              (Number(r.unique_pin_verified) /
+                Number(r.unique_pin_sent)) *
               100
             ).toFixed(2)
           : "0.00";
@@ -176,41 +173,35 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
         offer: r.offer_name,
         geo: r.geo,
         carrier: r.carrier,
-
         cpa: `$${Number(r.cpa).toFixed(2)}`,
         cap: r.cap,
 
-        pin_request_count: r.pin_request_count,
-        unique_pin_request_count: r.unique_pin_request_count,
+        pin_request_count: Number(r.pin_request_count),
+        unique_pin_request_count: Number(r.unique_pin_request_count),
 
-        pin_send_count: r.pin_send_count,
-        unique_pin_sent: r.unique_pin_sent,
+        pin_send_count: Number(r.pin_send_count),
+        unique_pin_sent: Number(r.unique_pin_sent),
 
-        pin_validation_request_count: r.pin_validation_request_count,
-        unique_pin_validation_request_count:
-          r.unique_pin_validation_request_count,
+        pin_validation_request_count: Number(
+          r.pin_validation_request_count
+        ),
+        unique_pin_validation_request_count: Number(
+          r.unique_pin_validation_request_count
+        ),
 
-        unique_pin_verified: r.unique_pin_verified,
+        unique_pin_verified: Number(r.unique_pin_verified),
         CR: `${cr}%`,
         revenue: `$${Number(r.revenue).toFixed(2)}`,
 
         last_pin_gen_date: r.last_pin_gen_date,
         last_pin_verification_date: r.last_pin_verification_date,
-        last_success_pin_verification_date:
-          r.last_success_pin_verification_date,
       };
     });
 
-    return res.json({
-      status: "SUCCESS",
-      data,
-    });
+    return res.json({ status: "SUCCESS", data });
   } catch (err) {
-    console.error("PUBLISHER DASHBOARD OFFERS ERROR:", err);
-    return res.status(500).json({
-      status: "FAILED",
-      message: "Dashboard offers failed",
-    });
+    console.error("DASHBOARD OFFERS ERROR:", err.message);
+    res.status(500).json({ status: "FAILED" });
   }
 });
 
