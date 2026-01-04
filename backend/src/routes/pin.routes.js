@@ -50,7 +50,6 @@ async function findFallbackOffer(primary) {
       AND carrier = $3
       AND service_type = 'FALLBACK'
       AND status = 'active'
-      AND (daily_cap IS NULL OR today_hits < daily_cap)
     ORDER BY id ASC
     LIMIT 1
     `,
@@ -69,7 +68,7 @@ function getAdvMethod(staticParams) {
 }
 
 /* =====================================================
-   🔐 PIN SEND (GET / POST)
+   🔐 PIN SEND (NO CAP HERE ANYMORE)
 ===================================================== */
 router.all("/pin/send/:offer_id", async (req, res) => {
   try {
@@ -93,7 +92,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       });
     }
 
-    /* PRIMARY OFFER */
+    /* PRIMARY OFFER (NO CAP CHECK) */
     const offerRes = await pool.query(
       `
       SELECT *
@@ -112,21 +111,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       });
     }
 
-    let offer = offerRes.rows[0];
-    let route = "PRIMARY";
-
-    /* CAP CHECK */
-    if (offer.daily_cap && offer.today_hits >= offer.daily_cap) {
-      const fallback = await findFallbackOffer(offer);
-      if (!fallback) {
-        return res.status(429).json({
-          status: "CAP_REACHED",
-          message: "Primary cap reached, no fallback available",
-        });
-      }
-      offer = fallback;
-      route = "FALLBACK";
-    }
+    const offer = offerRes.rows[0];
 
     /* OFFER PARAMS */
     const paramRes = await pool.query(
@@ -163,7 +148,6 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       [offer.id, msisdn, sessionToken, finalParams]
     );
 
-    /* CALL ADVERTISER */
     const advResp =
       advMethod === "GET"
         ? await axios.get(staticParams.pin_send_url, { params: finalParams })
@@ -182,18 +166,11 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       );
     }
 
-    await pool.query(
-      `UPDATE offers SET today_hits = today_hits + 1 WHERE id = $1`,
-      [offer.id]
-    );
-
-    const mapped = mapPinSendResponse(advData);
-
-    return res.status(mapped.httpCode).json({
-      ...mapped.body,
-      route,
+    return res.status(200).json({
+      ...mapPinSendResponse(advData).body,
       offer_id: offer.id,
       session_token: sessionToken,
+      route: "PRIMARY",
     });
   } catch (err) {
     console.error("PIN SEND ERROR:", err.message);
@@ -205,7 +182,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 });
 
 /* =====================================================
-   🔐 COMMON VERIFY HANDLER (GET + POST)
+   🔐 COMMON VERIFY HANDLER (CAP + FALLBACK HERE)
 ===================================================== */
 async function handlePinVerify(input, res) {
   const { session_token, msisdn, offer_id, otp } = input;
@@ -259,20 +236,45 @@ async function handlePinVerify(input, res) {
     });
   }
 
+  /* 🔢 VERIFIED COUNT (CAP CHECK HERE) */
+  const capRes = await pool.query(
+    `
+    SELECT COUNT(*) 
+    FROM pin_sessions
+    WHERE offer_id = $1
+      AND status = 'VERIFIED'
+    `,
+    [session.offer_id]
+  );
+
+  const offerRes = await pool.query(
+    `SELECT * FROM offers WHERE id = $1`,
+    [session.offer_id]
+  );
+
+  let offer = offerRes.rows[0];
+  let route = "PRIMARY";
+
+  if (offer.daily_cap && Number(capRes.rows[0].count) >= offer.daily_cap) {
+    const fallback = await findFallbackOffer(offer);
+    if (!fallback) {
+      return res.status(429).json({
+        status: "CAP_REACHED",
+        message: "Verified cap reached, no fallback available",
+      });
+    }
+    offer = fallback;
+    route = "FALLBACK";
+  }
+
+  /* OFFER PARAMS */
   const paramRes = await pool.query(
     `SELECT param_key, param_value FROM offer_parameters WHERE offer_id = $1`,
-    [session.offer_id]
+    [offer.id]
   );
 
   const staticParams = {};
   paramRes.rows.forEach(p => (staticParams[p.param_key] = p.param_value));
-
-  if (!staticParams.verify_pin_url) {
-    return res.status(500).json({
-      status: "FAILED",
-      message: "verify_pin_url missing",
-    });
-  }
 
   const advMethod = getAdvMethod(staticParams);
 
@@ -290,7 +292,6 @@ async function handlePinVerify(input, res) {
   const advData = advResp.data;
   const mapped = mapPinVerifyResponse(advData);
 
-  /* ✅ SUCCESS */
   if (mapped.body.status === "SUCCESS") {
     await pool.query(
       `
@@ -301,41 +302,21 @@ async function handlePinVerify(input, res) {
       `,
       [session.session_token]
     );
-
-    /* 🔥 INSERT PUBLISHER CONVERSION (IDEMPOTENT) */
-    if (session.publisher_id && session.publisher_cpa) {
-      await pool.query(
-        `
-        INSERT INTO publisher_conversions
-        (publisher_id, offer_id, pin_session_id, publisher_cpa, status)
-        SELECT $1,$2,$3,$4,'SUCCESS'
-        WHERE NOT EXISTS (
-          SELECT 1 FROM publisher_conversions
-          WHERE pin_session_id = $3
-            AND status = 'SUCCESS'
-        )
-        `,
-        [
-          session.publisher_id,
-          session.offer_id,
-          session.id,
-          session.publisher_cpa,
-        ]
-      );
-    }
   } else {
     await pool.query(
       `
       UPDATE pin_sessions
       SET otp_attempts = otp_attempts + 1
       WHERE session_token = $1
-        AND status != 'VERIFIED'
       `,
       [session.session_token]
     );
   }
 
-  return res.status(mapped.httpCode).json(mapped.body);
+  return res.status(mapped.httpCode).json({
+    ...mapped.body,
+    route,
+  });
 }
 
 /* ================= VERIFY ROUTES ================= */
@@ -343,7 +324,6 @@ router.post("/pin/verify", async (req, res) => {
   try {
     await handlePinVerify(req.body, res);
   } catch (err) {
-    console.error("PIN VERIFY POST ERROR:", err.message);
     res.status(500).json({ status: "FAILED" });
   }
 });
@@ -352,12 +332,11 @@ router.get("/pin/verify", async (req, res) => {
   try {
     await handlePinVerify(req.query, res);
   } catch (err) {
-    console.error("PIN VERIFY GET ERROR:", err.message);
     res.status(500).json({ status: "FAILED" });
   }
 });
 
-/* ================= STATUS ================= */
+/* ================= STATUS (RESTORED) ================= */
 router.get("/pin/status", async (req, res) => {
   try {
     const { session_token, msisdn } = req.query;
@@ -405,7 +384,7 @@ router.get("/pin/status", async (req, res) => {
       otp_attempts: s.otp_attempts,
       offer_id: s.offer_id,
     });
-  } catch (err) {
+  } catch {
     res.status(500).json({ status: "FAILED" });
   }
 });
