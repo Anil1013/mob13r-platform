@@ -4,6 +4,27 @@ import publisherAuth from "../middleware/publisherAuth.js";
 
 const router = express.Router();
 
+// 👇 CORS for Publisher Dashboard ONLY
+router.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "https://dashboard.mob13r.com");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, x-publisher-key"
+  );
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, OPTIONS"
+  );
+
+  // Preflight request
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
+
+
 /* =====================================================
    🧠 DATE FILTER HELPER (SAFE)
 ===================================================== */
