@@ -95,7 +95,7 @@ export default function PublisherDashboard() {
       "Verify Requests",
       "Unique Verify",
       "Verified",
-      "CR",
+      "CR %",
       "Revenue",
     ];
 
@@ -130,99 +130,103 @@ export default function PublisherDashboard() {
   };
 
   return (
-    <div style={{ padding: 20 }}>
-      <h2>Publisher Dashboard</h2>
+    <>
+      <Navbar />
 
-      {/* ================= FILTERS ================= */}
-      <div style={filters}>
-        <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-        <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+      <div style={{ padding: 20 }}>
+        <h2>Publisher Dashboard</h2>
 
-        <button onClick={loadOffers}>Apply</button>
-        <button onClick={downloadCSV} style={{ background: "#0ea5e9", color: "#fff" }}>
-          Download CSV
-        </button>
+        {/* FILTERS */}
+        <div style={filters}>
+          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
 
-        <input
-          placeholder="Search Offer"
-          value={searchOffer}
-          onChange={(e) => setSearchOffer(e.target.value)}
-        />
+          <button onClick={loadOffers}>Apply</button>
+          <button onClick={downloadCSV} style={{ background: "#0ea5e9", color: "#fff" }}>
+            Download CSV
+          </button>
 
-        <input
-          placeholder="Search Geo"
-          value={searchGeo}
-          onChange={(e) => setSearchGeo(e.target.value)}
-        />
-      </div>
+          <input
+            placeholder="Search Offer"
+            value={searchOffer}
+            onChange={(e) => setSearchOffer(e.target.value)}
+          />
 
-      {/* ================= TABLE ================= */}
-      <div style={wrapper}>
-        <table style={table}>
-          <thead>
-            <tr>
-              <th style={{ ...th, ...stickyOffer }}>Offer</th>
-              <th style={{ ...th, ...stickyGeo }}>Geo</th>
-              <th style={{ ...th, ...stickyCarrier }}>Carrier</th>
+          <input
+            placeholder="Search Geo"
+            value={searchGeo}
+            onChange={(e) => setSearchGeo(e.target.value)}
+          />
+        </div>
 
-              {[
-                "CPA ($)",
-                "Cap",
-                "Pin Req",
-                "Unique Req",
-                "Pin Sent",
-                "Unique Sent",
-                "Verify Req",
-                "Unique Verify",
-                "Verified",
-                "CR",
-                "Revenue",
-              ].map((h) => (
-                <th key={h} style={th}>{h}</th>
+        {/* TABLE */}
+        <div style={wrapper}>
+          <table style={table}>
+            <thead>
+              <tr>
+                <th style={{ ...th, ...stickyOffer }}>Offer</th>
+                <th style={{ ...th, ...stickyGeo }}>Geo</th>
+                <th style={{ ...th, ...stickyCarrier }}>Carrier</th>
+
+                {[
+                  "CPA",
+                  "Cap",
+                  "Pin Req",
+                  "Unique Req",
+                  "Pin Sent",
+                  "Unique Sent",
+                  "Verify Req",
+                  "Unique Verify",
+                  "Verified",
+                  "CR %",
+                  "Revenue",
+                ].map((h) => (
+                  <th key={h} style={th}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+
+            <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan="14" style={center}>Loading...</td>
+                </tr>
+              )}
+
+              {!loading && !filtered.length && (
+                <tr>
+                  <td colSpan="14" style={center}>No offers assigned</td>
+                </tr>
+              )}
+
+              {filtered.map((o) => (
+                <tr
+                  key={o.offer_id}
+                  onClick={() => navigate(`/publisher/offers/${o.offer_id}`)}
+                  style={{ cursor: "pointer" }}
+                >
+                  <td style={{ ...td, ...stickyOffer }}>{o.offer_name}</td>
+                  <td style={{ ...td, ...stickyGeo }}>{o.geo}</td>
+                  <td style={{ ...td, ...stickyCarrier }}>{o.carrier}</td>
+
+                  <td style={center}>${o.cpa}</td>
+                  <td style={center}>{o.cap}</td>
+                  <td style={center}>{o.pin_requests}</td>
+                  <td style={center}>{o.unique_pin_requests}</td>
+                  <td style={center}>{o.pin_sent}</td>
+                  <td style={center}>{o.unique_pin_sent}</td>
+                  <td style={center}>{o.verify_requests}</td>
+                  <td style={center}>{o.unique_verify_requests}</td>
+                  <td style={center}>{o.verified}</td>
+                  <td style={center}>{o.cr}%</td>
+                  <td style={center}>${o.revenue}</td>
+                </tr>
               ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {loading && (
-              <tr>
-                <td colSpan="14" style={center}>Loading...</td>
-              </tr>
-            )}
-
-            {!loading && !filtered.length && (
-              <tr>
-                <td colSpan="14" style={center}>No offers assigned</td>
-              </tr>
-            )}
-
-            {filtered.map((o) => (
-              <tr
-                key={o.offer_id}
-                onClick={() => navigate(`/publisher/offers/${o.offer_id}`)}
-                style={{ cursor: "pointer" }}
-              >
-                <td style={{ ...td, ...stickyOffer }}>{o.offer_name}</td>
-                <td style={{ ...td, ...stickyGeo }}>{o.geo}</td>
-                <td style={{ ...td, ...stickyCarrier }}>{o.carrier}</td>
-
-                <td style={center}>${o.cpa}</td>
-                <td style={center}>{o.cap}</td>
-                <td style={center}>{o.pin_requests}</td>
-                <td style={center}>{o.unique_pin_requests}</td>
-                <td style={center}>{o.pin_sent}</td>
-                <td style={center}>{o.unique_pin_sent}</td>
-                <td style={center}>{o.verify_requests}</td>
-                <td style={center}>{o.unique_verify_requests}</td>
-                <td style={center}>{o.verified}</td>
-                <td style={center}>{o.cr}%</td>
-                <td style={center}>${o.revenue}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -262,7 +266,6 @@ const td = {
 
 const center = { ...td, textAlign: "center" };
 
-/* ✅ Correct sticky offsets (NO OVERLAP) */
 const stickyBase = {
   position: "sticky",
   left: 0,
