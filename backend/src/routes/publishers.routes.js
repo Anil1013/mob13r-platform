@@ -99,11 +99,53 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
 });
 
 /* =====================================================
+   📋 GET ASSIGNED OFFERS (ALL PUBLISHERS)  ✅ ROUTE ORDER FIX
+===================================================== */
+router.get("/offers/all", authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        po.id,
+        po.publisher_id,
+        p.name AS publisher_name,
+        po.offer_id,
+        o.service_name AS name,
+        o.geo,
+        o.carrier,
+        po.publisher_cpa,
+        po.daily_cap,
+        po.pass_percent,
+        po.weight,
+        po.status
+      FROM publisher_offers po
+      JOIN publishers p ON p.id = po.publisher_id
+      JOIN offers o ON o.id = po.offer_id
+      ORDER BY p.name, po.id DESC
+    `);
+
+    res.json({ status: "SUCCESS", data: result.rows });
+  } catch (err) {
+    console.error("GET ALL ASSIGNED OFFERS ERROR:", err);
+    res.status(500).json({
+      status: "FAILED",
+      message: "Failed to load assigned offers",
+    });
+  }
+});
+
+/* =====================================================
    📋 GET ASSIGNED OFFERS (SINGLE PUBLISHER)
 ===================================================== */
 router.get("/:publisherId/offers", authMiddleware, async (req, res) => {
   try {
     const { publisherId } = req.params;
+
+    if (isNaN(publisherId)) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Invalid publisher ID",
+      });
+    }
 
     const result = await pool.query(
       `
@@ -111,11 +153,9 @@ router.get("/:publisherId/offers", authMiddleware, async (req, res) => {
         po.id,
         po.publisher_id,
         po.offer_id,
-
         o.service_name AS name,
         o.geo,
         o.carrier,
-
         po.publisher_cpa,
         po.daily_cap,
         po.pass_percent,
@@ -140,45 +180,6 @@ router.get("/:publisherId/offers", authMiddleware, async (req, res) => {
 });
 
 /* =====================================================
-   📋 GET ASSIGNED OFFERS (ALL PUBLISHERS)
-===================================================== */
-router.get("/offers/all", authMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `
-      SELECT
-        po.id,
-        po.publisher_id,
-        p.name AS publisher_name,
-
-        po.offer_id,
-        o.service_name AS name,
-        o.geo,
-        o.carrier,
-
-        po.publisher_cpa,
-        po.daily_cap,
-        po.pass_percent,
-        po.weight,
-        po.status
-      FROM publisher_offers po
-      JOIN publishers p ON p.id = po.publisher_id
-      JOIN offers o ON o.id = po.offer_id
-      ORDER BY p.name, po.id DESC
-      `
-    );
-
-    res.json({ status: "SUCCESS", data: result.rows });
-  } catch (err) {
-    console.error("GET ALL ASSIGNED OFFERS ERROR:", err);
-    res.status(500).json({
-      status: "FAILED",
-      message: "Failed to load all assigned offers",
-    });
-  }
-});
-
-/* =====================================================
    ➕ ASSIGN OFFER TO PUBLISHER
 ===================================================== */
 router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
@@ -187,15 +188,15 @@ router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
     const {
       offer_id,
       publisher_cpa,
-      daily_cap,
+      daily_cap = 0,
       pass_percent = 100,
       weight = 100,
     } = req.body;
 
-    if (!offer_id || publisher_cpa === undefined) {
+    if (isNaN(publisherId) || !offer_id || publisher_cpa === undefined) {
       return res.status(400).json({
         status: "FAILED",
-        message: "offer_id and publisher_cpa required",
+        message: "publisherId, offer_id and publisher_cpa required",
       });
     }
 
@@ -224,7 +225,7 @@ router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
     if (exists.rows.length) {
       return res.status(400).json({
         status: "FAILED",
-        message: "Offer already assigned to publisher",
+        message: "Offer already assigned",
       });
     }
 
@@ -239,7 +240,7 @@ router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
         publisherId,
         offer_id,
         publisher_cpa,
-        daily_cap || 0,
+        daily_cap,
         pass_percent,
         weight,
       ]
@@ -256,11 +257,11 @@ router.post("/:publisherId/offers", authMiddleware, async (req, res) => {
 });
 
 /* =====================================================
-   ✏️ UPDATE ASSIGNED OFFER
+   ✏️ UPDATE ASSIGNED OFFER  🔒 SECURITY FIX
 ===================================================== */
 router.patch("/:publisherId/offers/:id", authMiddleware, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { publisherId, id } = req.params;
     const {
       status,
       publisher_cpa,
@@ -276,20 +277,6 @@ router.patch("/:publisherId/offers/:id", authMiddleware, async (req, res) => {
       });
     }
 
-    if (pass_percent !== undefined && (pass_percent < 0 || pass_percent > 100)) {
-      return res.status(400).json({
-        status: "FAILED",
-        message: "pass_percent must be 0–100",
-      });
-    }
-
-    if (weight !== undefined && weight < 1) {
-      return res.status(400).json({
-        status: "FAILED",
-        message: "weight must be >= 1",
-      });
-    }
-
     await pool.query(
       `
       UPDATE publisher_offers
@@ -299,7 +286,7 @@ router.patch("/:publisherId/offers/:id", authMiddleware, async (req, res) => {
         daily_cap = COALESCE($3, daily_cap),
         pass_percent = COALESCE($4, pass_percent),
         weight = COALESCE($5, weight)
-      WHERE id = $6
+      WHERE id = $6 AND publisher_id = $7
       `,
       [
         status,
@@ -308,6 +295,7 @@ router.patch("/:publisherId/offers/:id", authMiddleware, async (req, res) => {
         pass_percent,
         weight,
         id,
+        publisherId,
       ]
     );
 
