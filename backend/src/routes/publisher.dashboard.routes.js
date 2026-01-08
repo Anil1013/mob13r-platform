@@ -6,97 +6,90 @@ const router = express.Router();
 
 /**
  * GET /api/publisher/dashboard/offers
- * server-side datatable
+ * Header: x-publisher-key
  */
 router.get("/dashboard/offers", publisherAuth, async (req, res) => {
   try {
     const publisherId = req.publisher.id;
 
-    const {
-      start = 0,
-      length = 10,
-      search = "",
-      from,
-      to,
-      draw = 1,
-    } = req.query;
-
-    const dateFilter =
-      from && to
-        ? `AND ps.created_at::date BETWEEN $3 AND $4`
-        : "";
-
-    const params = from && to
-      ? [publisherId, `%${search}%`, from, to, length, start]
-      : [publisherId, `%${search}%`, length, start];
-
-    const baseSQL = `
-      FROM publisher_offers po
-      JOIN offers o ON o.id = po.offer_id
-      LEFT JOIN pin_sessions ps
-        ON ps.publisher_offer_id = po.id
-        AND ps.publisher_id = po.publisher_id
-        ${dateFilter}
-      LEFT JOIN publisher_conversions pc
-        ON pc.pin_session_uuid = ps.session_id
-        AND pc.publisher_id = po.publisher_id
-        AND pc.status='SUCCESS'
-      WHERE po.publisher_id = $1
-        AND po.status='active'
-        AND o.service_name ILIKE $2
-    `;
-
-    const dataSQL = `
+    const result = await pool.query(
+      `
       SELECT
-        o.service_name AS offer_name,
+        po.id AS publisher_offer_id,
+        o.service_name AS offer,
         o.geo,
         o.carrier,
         po.publisher_cpa AS cpa,
         po.daily_cap AS cap,
 
-        COUNT(ps.session_id) AS pin_requests,
-        COUNT(DISTINCT ps.msisdn) AS unique_pin_requests,
+        COUNT(ps.session_id) AS pin_request_count,
+        COUNT(DISTINCT ps.msisdn) AS unique_pin_request_count,
 
-        COUNT(ps.session_id)
-          FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')) AS pin_sent,
-        COUNT(DISTINCT ps.msisdn)
-          FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')) AS unique_pin_sent,
+        COUNT(*) FILTER (
+          WHERE ps.status IN ('OTP_SENT','VERIFIED')
+        ) AS pin_send_count,
 
-        COUNT(ps.session_id)
-          FILTER (WHERE ps.otp_attempts > 0 OR ps.status='VERIFIED') AS verify_requests,
-        COUNT(DISTINCT ps.msisdn)
-          FILTER (WHERE ps.otp_attempts > 0 OR ps.status='VERIFIED') AS unique_verify_requests,
+        COUNT(DISTINCT ps.msisdn) FILTER (
+          WHERE ps.status IN ('OTP_SENT','VERIFIED')
+        ) AS unique_pin_sent,
 
-        COUNT(ps.session_id)
-          FILTER (WHERE ps.publisher_credited=TRUE) AS verified,
+        COUNT(*) FILTER (
+          WHERE ps.otp_attempts > 0
+        ) AS pin_validation_request_count,
 
-        COALESCE(SUM(pc.publisher_cpa),0) AS revenue
-      ${baseSQL}
-      GROUP BY o.id, po.publisher_cpa, po.daily_cap
-      ORDER BY o.id DESC
-      LIMIT $${params.length - 1}
-      OFFSET $${params.length}
-    `;
+        COUNT(DISTINCT ps.msisdn) FILTER (
+          WHERE ps.otp_attempts > 0
+        ) AS unique_pin_validation_request_count,
 
-    const countSQL = `
-      SELECT COUNT(DISTINCT o.id) AS total
-      ${baseSQL}
-    `;
+        COUNT(DISTINCT pc.pin_session_uuid) AS unique_pin_verified,
 
-    const [rows, count] = await Promise.all([
-      pool.query(dataSQL, params),
-      pool.query(countSQL, params.slice(0, params.length - 2)),
-    ]);
+        ROUND(
+          COUNT(DISTINCT pc.pin_session_uuid)::numeric /
+          NULLIF(
+            COUNT(DISTINCT ps.msisdn)
+              FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')),
+            0
+          ) * 100,
+          2
+        ) AS cr,
+
+        COALESCE(SUM(pc.publisher_cpa), 0) AS revenue,
+
+        MAX(ps.created_at) AS last_pin_gen_date,
+        MAX(ps.created_at) FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED'))
+          AS last_pin_gen_success_date,
+        MAX(ps.verified_at) AS last_pin_verification_date,
+        MAX(ps.credited_at) FILTER (WHERE ps.publisher_credited = TRUE)
+          AS last_success_pin_verification_date
+
+      FROM publisher_offers po
+      JOIN offers o ON o.id = po.offer_id
+      LEFT JOIN pin_sessions ps
+        ON ps.publisher_offer_id = po.id
+      LEFT JOIN publisher_conversions pc
+        ON pc.pin_session_uuid = ps.session_id
+       AND pc.status = 'SUCCESS'
+
+      WHERE po.publisher_id = $1
+      GROUP BY
+        po.id, o.service_name, o.geo, o.carrier,
+        po.publisher_cpa, po.daily_cap
+
+      ORDER BY revenue DESC, o.geo, o.carrier, po.publisher_cpa, po.daily_cap
+      `,
+      [publisherId]
+    );
 
     res.json({
-      draw: Number(draw),
-      recordsTotal: Number(count.rows[0].total),
-      recordsFiltered: Number(count.rows[0].total),
-      data: rows.rows,
+      status: "SUCCESS",
+      data: result.rows,
     });
   } catch (err) {
-    console.error("PUBLISHER DASHBOARD ERROR", err);
-    res.status(500).json({ status: "FAILED" });
+    console.error("PUBLISHER DASHBOARD OFFERS ERROR:", err);
+    res.status(500).json({
+      status: "FAILED",
+      message: "Failed to load publisher dashboard",
+    });
   }
 });
 
