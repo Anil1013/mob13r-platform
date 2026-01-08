@@ -4,97 +4,98 @@ import publisherAuth from "../middleware/publisherAuth.js";
 
 const router = express.Router();
 
-/* ================= CORS (FIXED) ================= */
-router.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://dashboard.mob13r.com");
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization, x-publisher-key"
-  );
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PATCH, DELETE, OPTIONS"
-  );
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
-  next();
-});
-
-/* ================= DATE FILTER ================= */
-function buildDateFilter(query, baseIndex = 2) {
-  const { from, to } = query;
-
-  if (from && to) {
-    return {
-      sql: `ps.created_at::date BETWEEN $${baseIndex} AND $${baseIndex + 1}`,
-      params: [from, to],
-    };
-  }
-
-  return {
-    sql: "ps.created_at::date = CURRENT_DATE",
-    params: [],
-  };
-}
-
-/* ================= DASHBOARD OFFERS ================= */
+/**
+ * GET /api/publisher/dashboard/offers
+ * server-side datatable
+ */
 router.get("/dashboard/offers", publisherAuth, async (req, res) => {
   try {
     const publisherId = req.publisher.id;
-    const dateFilter = buildDateFilter(req.query, 2);
 
-    const result = await pool.query(
-      `
-      SELECT
-        o.id AS offer_id,
-        o.service_name AS offer_name,
-        o.geo,
-        o.carrier,
-        po.publisher_cpa AS cpa,
-        o.daily_cap AS cap,
+    const {
+      start = 0,
+      length = 10,
+      search = "",
+      from,
+      to,
+      draw = 1,
+    } = req.query;
 
-        COUNT(ps.id) AS pin_request_count,
-        COUNT(DISTINCT ps.msisdn) AS unique_pin_request_count,
+    const dateFilter =
+      from && to
+        ? `AND ps.created_at::date BETWEEN $3 AND $4`
+        : "";
 
-        COUNT(ps.id) FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')) AS pin_send_count,
-        COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')) AS unique_pin_sent,
+    const params = from && to
+      ? [publisherId, `%${search}%`, from, to, length, start]
+      : [publisherId, `%${search}%`, length, start];
 
-        COUNT(ps.id) FILTER (WHERE ps.otp_attempts >= 1 OR ps.status='VERIFIED') AS pin_validation_request_count,
-        COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.otp_attempts >= 1 OR ps.status='VERIFIED') AS unique_pin_validation_request_count,
-
-        COUNT(pc.id) AS unique_pin_verified,
-        COALESCE(SUM(pc.publisher_cpa),0) AS revenue
-
+    const baseSQL = `
       FROM publisher_offers po
       JOIN offers o ON o.id = po.offer_id
       LEFT JOIN pin_sessions ps
         ON ps.publisher_offer_id = po.id
-        AND ${dateFilter.sql}
+        AND ps.publisher_id = po.publisher_id
+        ${dateFilter}
       LEFT JOIN publisher_conversions pc
-        ON pc.pin_session_id = ps.id
-        AND pc.status = 'SUCCESS'
-
+        ON pc.pin_session_uuid = ps.session_id
+        AND pc.publisher_id = po.publisher_id
+        AND pc.status='SUCCESS'
       WHERE po.publisher_id = $1
-        AND po.status = 'active'
+        AND po.status='active'
+        AND o.service_name ILIKE $2
+    `;
 
-      GROUP BY
-        o.id, o.service_name, o.geo, o.carrier,
-        po.publisher_cpa, o.daily_cap
+    const dataSQL = `
+      SELECT
+        o.service_name AS offer_name,
+        o.geo,
+        o.carrier,
+        po.publisher_cpa AS cpa,
+        po.daily_cap AS cap,
 
-      ORDER BY o.id
-      `,
-      [publisherId, ...dateFilter.params]
-    );
+        COUNT(ps.session_id) AS pin_requests,
+        COUNT(DISTINCT ps.msisdn) AS unique_pin_requests,
+
+        COUNT(ps.session_id)
+          FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')) AS pin_sent,
+        COUNT(DISTINCT ps.msisdn)
+          FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')) AS unique_pin_sent,
+
+        COUNT(ps.session_id)
+          FILTER (WHERE ps.otp_attempts > 0 OR ps.status='VERIFIED') AS verify_requests,
+        COUNT(DISTINCT ps.msisdn)
+          FILTER (WHERE ps.otp_attempts > 0 OR ps.status='VERIFIED') AS unique_verify_requests,
+
+        COUNT(ps.session_id)
+          FILTER (WHERE ps.publisher_credited=TRUE) AS verified,
+
+        COALESCE(SUM(pc.publisher_cpa),0) AS revenue
+      ${baseSQL}
+      GROUP BY o.id, po.publisher_cpa, po.daily_cap
+      ORDER BY o.id DESC
+      LIMIT $${params.length - 1}
+      OFFSET $${params.length}
+    `;
+
+    const countSQL = `
+      SELECT COUNT(DISTINCT o.id) AS total
+      ${baseSQL}
+    `;
+
+    const [rows, count] = await Promise.all([
+      pool.query(dataSQL, params),
+      pool.query(countSQL, params.slice(0, params.length - 2)),
+    ]);
 
     res.json({
-      status: "SUCCESS",
-      data: result.rows,
+      draw: Number(draw),
+      recordsTotal: Number(count.rows[0].total),
+      recordsFiltered: Number(count.rows[0].total),
+      data: rows.rows,
     });
   } catch (err) {
-    console.error("PUBLISHER DASHBOARD OFFERS ERROR", err);
+    console.error("PUBLISHER DASHBOARD ERROR", err);
     res.status(500).json({ status: "FAILED" });
   }
 });
