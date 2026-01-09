@@ -1,19 +1,18 @@
 import express from "express";
-import pool from "../db.js";
+import pool from "../config/db.js";
 import publisherAuth from "../middleware/publisherAuth.js";
 
 const router = express.Router();
 
 /**
  * GET /api/publisher/dashboard/offers
- * Header: x-publisher-key
+ * Publisher Dashboard Data
  */
-router.get("/dashboard/offers", publisherAuth, async (req, res) => {
+router.get("/offers", publisherAuth, async (req, res) => {
   try {
-    const publisherId = req.publisher.id;
+    const publisherId = req.publisher.id; // from publisherAuth
 
-    const result = await pool.query(
-      `
+    const query = `
       SELECT
         po.id AS publisher_offer_id,
         o.service_name AS offer,
@@ -56,11 +55,13 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
         COALESCE(SUM(pc.publisher_cpa), 0) AS revenue,
 
         MAX(ps.created_at) AS last_pin_gen_date,
-        MAX(ps.created_at) FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED'))
-          AS last_pin_gen_success_date,
+        MAX(ps.created_at) FILTER (
+          WHERE ps.status IN ('OTP_SENT','VERIFIED')
+        ) AS last_pin_gen_success_date,
         MAX(ps.verified_at) AS last_pin_verification_date,
-        MAX(ps.credited_at) FILTER (WHERE ps.publisher_credited = TRUE)
-          AS last_success_pin_verification_date
+        MAX(ps.credited_at) FILTER (
+          WHERE ps.publisher_credited = TRUE
+        ) AS last_success_pin_verification_date
 
       FROM publisher_offers po
       JOIN offers o ON o.id = po.offer_id
@@ -71,25 +72,29 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
        AND pc.status = 'SUCCESS'
 
       WHERE po.publisher_id = $1
+
       GROUP BY
-        po.id, o.service_name, o.geo, o.carrier,
-        po.publisher_cpa, po.daily_cap
+        po.id,
+        o.service_name,
+        o.geo,
+        o.carrier,
+        po.publisher_cpa,
+        po.daily_cap
 
-      ORDER BY revenue DESC, o.geo, o.carrier, po.publisher_cpa, po.daily_cap
-      `,
-      [publisherId]
-    );
+      ORDER BY
+        revenue DESC,
+        o.geo,
+        o.carrier,
+        po.publisher_cpa,
+        po.daily_cap
+    `;
 
-    res.json({
-      status: "SUCCESS",
-      data: result.rows,
-    });
+    const { rows } = await pool.query(query, [publisherId]);
+
+    res.json(rows);
   } catch (err) {
-    console.error("PUBLISHER DASHBOARD OFFERS ERROR:", err);
-    res.status(500).json({
-      status: "FAILED",
-      message: "Failed to load publisher dashboard",
-    });
+    console.error("PUBLISHER DASHBOARD ERROR:", err);
+    res.status(500).json({ error: "Failed to load dashboard data" });
   }
 });
 
