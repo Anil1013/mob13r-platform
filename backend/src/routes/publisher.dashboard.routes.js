@@ -5,34 +5,69 @@ import publisherAuth from "../middleware/publisherAuth.js";
 const router = express.Router();
 
 /**
+ * =========================================================
  * GET /api/publisher/dashboard/offers
  *
- * Default: Today data
+ * Default: Today (date-wise rows)
  * Optional:
  * ?from=ISO_DATE
  * ?to=ISO_DATE
+ *
+ * Returns:
+ * {
+ *   publisher: { id, name },
+ *   summary: {
+ *     total_pin_requests,
+ *     total_verified,
+ *     total_revenue
+ *   },
+ *   rows: [
+ *     {
+ *       stat_date,
+ *       publisher_offer_id,
+ *       offer,
+ *       geo,
+ *       carrier,
+ *       cpa,
+ *       cap,
+ *       pin_request_count,
+ *       unique_pin_request_count,
+ *       pin_send_count,
+ *       unique_pin_sent,
+ *       pin_validation_request_count,
+ *       unique_pin_validation_request_count,
+ *       unique_pin_verified,
+ *       cr,
+ *       revenue,
+ *       last_pin_gen_date,
+ *       last_pin_gen_success_date,
+ *       last_pin_verification_date,
+ *       last_success_pin_verification_date
+ *     }
+ *   ]
+ * }
+ * =========================================================
  */
 router.get("/dashboard/offers", publisherAuth, async (req, res) => {
   try {
     const publisherId = req.publisher.id;
     let { from, to } = req.query;
 
-    /* ================= DEFAULT DATE (TODAY) ================= */
+    /* ---------- DEFAULT = TODAY ---------- */
     if (!from || !to) {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
-
       from = start.toISOString();
       to = new Date().toISOString();
     }
 
     const params = [publisherId, from, to];
 
-    /* ================= QUERY ================= */
-
     const query = `
       WITH offer_stats AS (
         SELECT
+          DATE(ps.created_at) AS stat_date,
+
           po.id AS publisher_offer_id,
           o.service_name AS offer,
           o.geo,
@@ -83,7 +118,8 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
           ) AS last_success_pin_verification_date
 
         FROM publisher_offers po
-        JOIN offers o ON o.id = po.offer_id
+        JOIN offers o
+          ON o.id = po.offer_id
 
         LEFT JOIN pin_sessions ps
           ON ps.publisher_offer_id = po.id
@@ -96,6 +132,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
         WHERE po.publisher_id = $1
 
         GROUP BY
+          DATE(ps.created_at),
           po.id,
           o.service_name,
           o.geo,
@@ -110,12 +147,10 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
         (SELECT COALESCE(SUM(unique_pin_verified),0) FROM offer_stats) AS total_verified,
         (SELECT COALESCE(SUM(revenue),0) FROM offer_stats) AS total_revenue
       FROM offer_stats
-      ORDER BY revenue DESC, geo, carrier
+      ORDER BY stat_date, revenue DESC, geo, carrier
     `;
 
     const { rows } = await pool.query(query, params);
-
-    /* ================= SUMMARY ================= */
 
     const summary = {
       total_pin_requests: rows[0]?.total_pin_requests || 0,
@@ -123,22 +158,15 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
       total_revenue: rows[0]?.total_revenue || 0,
     };
 
-    /* ================= CLEAN ROWS ================= */
-
     const cleanRows = rows.map(
-      ({ total_pin_requests, total_verified, total_revenue, ...rest }) =>
-        rest
+      ({ total_pin_requests, total_verified, total_revenue, ...rest }) => rest
     );
 
-    /* ================= PUBLISHER INFO ================= */
-
-    const publisher = {
-      id: req.publisher.id,
-      name: req.publisher.name,
-    };
-
     res.json({
-      publisher,
+      publisher: {
+        id: req.publisher.id,
+        name: req.publisher.name,
+      },
       summary,
       rows: cleanRows,
     });
@@ -149,12 +177,11 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
 });
 
 /**
+ * =========================================================
  * GET /api/publisher/dashboard/offers/:publisherOfferId/hourly
- * Hourly stats for selected offer
  *
- * Query:
- * ?from=ISO_DATE
- * ?to=ISO_DATE
+ * Hourly stats for selected offer (date range aware)
+ * =========================================================
  */
 router.get(
   "/dashboard/offers/:publisherOfferId/hourly",
@@ -165,7 +192,6 @@ router.get(
       const { publisherOfferId } = req.params;
       let { from, to } = req.query;
 
-      /* DEFAULT → TODAY */
       if (!from || !to) {
         const start = new Date();
         start.setHours(0, 0, 0, 0);
@@ -173,12 +199,7 @@ router.get(
         to = new Date().toISOString();
       }
 
-      const params = [
-        publisherId,
-        publisherOfferId,
-        from,
-        to,
-      ];
+      const params = [publisherId, publisherOfferId, from, to];
 
       const query = `
         SELECT
@@ -224,9 +245,7 @@ router.get(
       });
     } catch (err) {
       console.error("❌ HOURLY DASHBOARD ERROR:", err);
-      res.status(500).json({
-        error: "Failed to load hourly data",
-      });
+      res.status(500).json({ error: "Failed to load hourly data" });
     }
   }
 );
