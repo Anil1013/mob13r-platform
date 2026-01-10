@@ -6,25 +6,29 @@ const router = express.Router();
 
 /**
  * GET /api/publisher/dashboard/offers
+ *
  * Default: Today data
  * Optional:
- * ?from=YYYY-MM-DD or ISO
- * ?to=YYYY-MM-DD or ISO
+ * ?from=ISO_DATE
+ * ?to=ISO_DATE
  */
 router.get("/dashboard/offers", publisherAuth, async (req, res) => {
   try {
     const publisherId = req.publisher.id;
     let { from, to } = req.query;
 
-    // 🕒 DEFAULT = TODAY
+    /* ================= DEFAULT DATE (TODAY) ================= */
     if (!from || !to) {
-      from = new Date();
-      from.setHours(0, 0, 0, 0);
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
 
-      to = new Date(); // now
+      from = start.toISOString();
+      to = new Date().toISOString();
     }
 
     const params = [publisherId, from, to];
+
+    /* ================= QUERY ================= */
 
     const query = `
       WITH offer_stats AS (
@@ -80,9 +84,11 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
 
         FROM publisher_offers po
         JOIN offers o ON o.id = po.offer_id
+
         LEFT JOIN pin_sessions ps
           ON ps.publisher_offer_id = po.id
          AND ps.created_at BETWEEN $2::timestamptz AND $3::timestamptz
+
         LEFT JOIN publisher_conversions pc
           ON pc.pin_session_uuid = ps.session_id
          AND pc.status = 'SUCCESS'
@@ -100,33 +106,39 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
 
       SELECT
         *,
-        (SELECT SUM(pin_request_count) FROM offer_stats) AS total_pin_requests,
-        (SELECT SUM(unique_pin_verified) FROM offer_stats) AS total_verified,
-        (SELECT SUM(revenue) FROM offer_stats) AS total_revenue
+        (SELECT COALESCE(SUM(pin_request_count),0) FROM offer_stats) AS total_pin_requests,
+        (SELECT COALESCE(SUM(unique_pin_verified),0) FROM offer_stats) AS total_verified,
+        (SELECT COALESCE(SUM(revenue),0) FROM offer_stats) AS total_revenue
       FROM offer_stats
       ORDER BY revenue DESC, geo, carrier
     `;
 
     const { rows } = await pool.query(query, params);
 
-    // 🧾 Summary extract
+    /* ================= SUMMARY ================= */
+
     const summary = {
       total_pin_requests: rows[0]?.total_pin_requests || 0,
       total_verified: rows[0]?.total_verified || 0,
       total_revenue: rows[0]?.total_revenue || 0,
     };
 
-    // Clean rows (remove duplicated summary fields)
+    /* ================= CLEAN ROWS ================= */
+
     const cleanRows = rows.map(
-      ({
-        total_pin_requests,
-        total_verified,
-        total_revenue,
-        ...rest
-      }) => rest
+      ({ total_pin_requests, total_verified, total_revenue, ...rest }) =>
+        rest
     );
 
+    /* ================= PUBLISHER INFO ================= */
+
+    const publisher = {
+      id: req.publisher.id,
+      name: req.publisher.name,
+    };
+
     res.json({
+      publisher,
       summary,
       rows: cleanRows,
     });
