@@ -62,6 +62,11 @@ export default function PublisherDashboard() {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const intervalRef = useRef(null);
 
+  /* ===== HOURLY STATE ===== */
+  const [selectedOffer, setSelectedOffer] = useState(null);
+  const [hourlyRows, setHourlyRows] = useState([]);
+  const [hourlyLoading, setHourlyLoading] = useState(false);
+
   /* ================= FETCH ================= */
 
   const fetchData = async (params = {}) => {
@@ -107,6 +112,46 @@ export default function PublisherDashboard() {
       setPublisherName("");
     } finally {
       setLoading(false);
+    }
+  };
+
+  /* ================= FETCH HOURLY ================= */
+
+  const fetchHourly = async (offer) => {
+    try {
+      setSelectedOffer(offer);
+      setHourlyLoading(true);
+      setHourlyRows([]);
+
+      const publisherKey = localStorage.getItem("publisher_key");
+
+      const params = {
+        from: fromDate ? dateInputToISO(fromDate) : undefined,
+        to: toDate ? dateInputToISO(toDate, true) : undefined,
+      };
+
+      const query = new URLSearchParams(params).toString();
+
+      const res = await fetch(
+        `${API_BASE}/api/publisher/dashboard/offers/${offer.publisher_offer_id}/hourly${
+          query ? `?${query}` : ""
+        }`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "x-publisher-key": publisherKey,
+          },
+        }
+      );
+
+      if (!res.ok) throw new Error("Hourly API failed");
+
+      const data = await res.json();
+      setHourlyRows(data.rows || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setHourlyLoading(false);
     }
   };
 
@@ -315,6 +360,53 @@ export default function PublisherDashboard() {
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+{/* HOURLY TABLE */}
+      {selectedOffer && (
+        <div style={{ marginTop: 30 }}>
+          <h3>
+            Hourly Stats – {selectedOffer.offer}
+            <button
+              style={{ marginLeft: 15 }}
+              onClick={() => setSelectedOffer(null)}
+            >
+              ✖ Close
+            </button>
+          </h3>
+
+          {hourlyLoading ? (
+            <p>Loading hourly data…</p>
+          ) : (
+            <table border="1" cellPadding="8" width="100%">
+              <thead>
+                <tr>
+                  <th>Hour</th>
+                  <th>Unique Pin Req</th>
+                  <th>Unique Sent</th>
+                  <th>Unique Verify Req</th>
+                  <th>Verified</th>
+                  <th>Revenue ($)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hourlyRows.map((h, i) => (
+                  <tr key={i}>
+                    <td>{formatHour(h.hour)}</td>
+                    <td>{h.unique_pin_requests}</td>
+                    <td>{h.unique_pin_sent}</td>
+                    <td>{h.unique_pin_verification_requests}</td>
+                    <td>{h.pin_verified}</td>
+                    <td>${h.revenue}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
   );
 }
