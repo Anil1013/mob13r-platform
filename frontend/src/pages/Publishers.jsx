@@ -101,6 +101,18 @@ export default function Publishers() {
     }
   };
 
+  /* ================= OPEN DASHBOARD (NEW) ================= */
+  const openPublisherDashboard = (publisher) => {
+    // required for publisherAuth
+    localStorage.setItem("publisher_key", publisher.api_key);
+
+    // optional (debug / future use)
+    localStorage.setItem("publisher_id", publisher.id);
+    localStorage.setItem("publisher_name", publisher.name);
+
+    navigate("/publisher/dashboard");
+  };
+
   return (
     <>
       <Navbar />
@@ -190,15 +202,13 @@ export default function Publishers() {
                     {p.status === "active" ? "Pause" : "Activate"}
                   </button>
 
-                  {/* ✅ ASSIGN OFFERS — FINAL FIX */}
+                  {/* ASSIGN OFFERS */}
                   <button
                     type="button"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      navigate(
-                        `/publishers/assign?publisherId=${p.id}`
-                      );
+                      navigate(`/publishers/assign?publisherId=${p.id}`);
                     }}
                     style={{
                       background: "#2563eb",
@@ -211,6 +221,23 @@ export default function Publishers() {
                     }}
                   >
                     Assign Offers
+                  </button>
+
+                  {/* ✅ NEW — OPEN DASHBOARD */}
+                  <button
+                    type="button"
+                    onClick={() => openPublisherDashboard(p)}
+                    style={{
+                      background: "#16a34a",
+                      color: "#fff",
+                      border: "none",
+                      padding: "6px 10px",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                      fontSize: 13,
+                    }}
+                  >
+                    Dashboard
                   </button>
                 </td>
               </tr>
