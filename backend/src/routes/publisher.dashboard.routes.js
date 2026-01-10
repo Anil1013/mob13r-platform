@@ -8,7 +8,7 @@ const router = express.Router();
  * =========================================================
  * GET /api/publisher/dashboard/offers
  *
- * Default: Today (date-wise rows)
+ * Default: Today (DATE-WISE rows)
  * Optional:
  * ?from=ISO_DATE
  * ?to=ISO_DATE
@@ -106,6 +106,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
             2
           ) AS cr,
 
+          /* ✅ REVENUE = SUM of frozen CPA per conversion */
           COALESCE(SUM(pc.publisher_cpa), 0) AS revenue,
 
           MAX(ps.created_at) AS last_pin_gen_date,
@@ -147,7 +148,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
         (SELECT COALESCE(SUM(unique_pin_verified),0) FROM offer_stats) AS total_verified,
         (SELECT COALESCE(SUM(revenue),0) FROM offer_stats) AS total_revenue
       FROM offer_stats
-      ORDER BY stat_date, revenue DESC, geo, carrier
+      ORDER BY stat_date ASC, offer, geo, carrier
     `;
 
     const { rows } = await pool.query(query, params);
@@ -180,7 +181,8 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
  * =========================================================
  * GET /api/publisher/dashboard/offers/:publisherOfferId/hourly
  *
- * Hourly stats for selected offer (date range aware)
+ * Hourly stats for selected offer
+ * (date-range aware, revenue CPA-safe)
  * =========================================================
  */
 router.get(
@@ -192,6 +194,7 @@ router.get(
       const { publisherOfferId } = req.params;
       let { from, to } = req.query;
 
+      /* DEFAULT = TODAY */
       if (!from || !to) {
         const start = new Date();
         start.setHours(0, 0, 0, 0);
@@ -217,6 +220,7 @@ router.get(
 
           COUNT(DISTINCT pc.pin_session_uuid) AS pin_verified,
 
+          /* ✅ Revenue per hour = SUM of frozen CPA */
           COALESCE(SUM(pc.publisher_cpa), 0) AS revenue
 
         FROM publisher_offers po
@@ -232,7 +236,7 @@ router.get(
           AND po.id = $2
 
         GROUP BY hour
-        ORDER BY hour
+        ORDER BY hour ASC
       `;
 
       const { rows } = await pool.query(query, params);
