@@ -1,27 +1,31 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE || "https://backend.mob13r.com";
 
 /* ================= HELPERS ================= */
 
+// Backend already sends IST → render as string
 const formatDateOnly = (value) => {
   if (!value) return "-";
-  return new Date(value).toLocaleDateString("en-GB");
+  return value.toString().slice(0, 10).split("-").reverse().join("/");
 };
 
 const formatDateTime = (value) => {
   if (!value) return "-";
-  return new Date(value).toLocaleString("en-GB");
+  const [date, time] = value.replace("T", " ").split(".");
+  const [y, m, d] = date.split("-");
+  return `${d}/${m}/${y}, ${time}`;
 };
 
-const hourLabel = (iso) => {
-  const d = new Date(iso);
-  const h1 = d.getHours().toString().padStart(2, "0");
-  const h2 = ((d.getHours() + 1) % 24).toString().padStart(2, "0");
-  return `${h1}:00 – ${h2}:00`;
+const hourLabel = (hourValue) => {
+  if (!hourValue) return "-";
+  const hour = hourValue.slice(11, 13);
+  const next = String((Number(hour) + 1) % 24).padStart(2, "0");
+  return `${hour}:00 – ${next}:00`;
 };
 
+// Date picker → ISO (IST safe)
 const dateInputToISO = (date, end = false) => {
   const d = new Date(date);
   if (end) d.setHours(23, 59, 59, 999);
@@ -29,15 +33,80 @@ const dateInputToISO = (date, end = false) => {
   return d.toISOString();
 };
 
+// CSV Export
+const exportCSV = (rows) => {
+  if (!rows.length) return;
+
+  const headers = [
+    "Date",
+    "Offer",
+    "Geo",
+    "Carrier",
+    "CPA",
+    "Cap",
+    "Pin Req",
+    "Unique Req",
+    "Pin Sent",
+    "Unique Sent",
+    "Verify Req",
+    "Unique Verify",
+    "Verified",
+    "CR %",
+    "Revenue",
+    "Last Pin Gen",
+    "Last Pin Gen Success",
+    "Last Verification",
+    "Last Success Verification",
+  ];
+
+  const csvRows = [
+    headers.join(","),
+    ...rows.map((r) =>
+      [
+        formatDateOnly(r.stat_date),
+        r.offer,
+        r.geo,
+        r.carrier,
+        r.cpa,
+        r.cap,
+        r.pin_request_count,
+        r.unique_pin_request_count,
+        r.pin_send_count,
+        r.unique_pin_sent,
+        r.pin_validation_request_count,
+        r.unique_pin_validation_request_count,
+        r.unique_pin_verified,
+        r.cr,
+        r.revenue,
+        formatDateTime(r.last_pin_gen_date),
+        formatDateTime(r.last_pin_gen_success_date),
+        formatDateTime(r.last_pin_verification_date),
+        formatDateTime(r.last_success_pin_verification_date),
+      ].join(",")
+    ),
+  ].join("\n");
+
+  const blob = new Blob([csvRows], { type: "text/csv" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "publisher_dashboard.csv";
+  a.click();
+  window.URL.revokeObjectURL(url);
+};
+
 /* ================= COMPONENT ================= */
 
 export default function PublisherDashboard() {
+  const today = new Date().toISOString().slice(0, 10);
+
   const [rows, setRows] = useState([]);
   const [publisherName, setPublisherName] = useState("");
   const [summary, setSummary] = useState({});
 
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  // 🔥 Default = TODAY
+  const [fromDate, setFromDate] = useState(today);
+  const [toDate, setToDate] = useState(today);
 
   const [filterOffer, setFilterOffer] = useState("");
   const [filterGeo, setFilterGeo] = useState("");
@@ -58,22 +127,21 @@ export default function PublisherDashboard() {
       setLoading(true);
       const key = localStorage.getItem("publisher_key");
 
-      const qs = new URLSearchParams();
-      if (fromDate) qs.append("from", dateInputToISO(fromDate));
-      if (toDate) qs.append("to", dateInputToISO(toDate, true));
+      const qs = new URLSearchParams({
+        from: dateInputToISO(fromDate),
+        to: dateInputToISO(toDate, true),
+      });
 
       const res = await fetch(
         `${API_BASE}/api/publisher/dashboard/offers?${qs}`,
-        {
-          headers: { "x-publisher-key": key },
-        }
+        { headers: { "x-publisher-key": key } }
       );
 
       const data = await res.json();
       setRows(data.rows || []);
       setSummary(data.summary || {});
       setPublisherName(data.publisher?.name || "");
-    } catch (e) {
+    } catch {
       setError("Failed to load dashboard");
     } finally {
       setLoading(false);
@@ -84,56 +152,19 @@ export default function PublisherDashboard() {
     fetchData();
   }, []);
 
-  /* ================= FILTERED ROWS ================= */
+  /* ================= FILTERED ================= */
 
   const filteredRows = useMemo(() => {
     return rows.filter((r) => {
-      if (
-        filterOffer &&
-        !r.offer.toLowerCase().includes(filterOffer.toLowerCase())
-      )
+      if (filterOffer && !r.offer.toLowerCase().includes(filterOffer.toLowerCase()))
         return false;
-      if (
-        filterGeo &&
-        !r.geo.toLowerCase().includes(filterGeo.toLowerCase())
-      )
+      if (filterGeo && !r.geo.toLowerCase().includes(filterGeo.toLowerCase()))
         return false;
-      if (
-        filterCarrier &&
-        !r.carrier.toLowerCase().includes(filterCarrier.toLowerCase())
-      )
+      if (filterCarrier && !r.carrier.toLowerCase().includes(filterCarrier.toLowerCase()))
         return false;
       return true;
     });
   }, [rows, filterOffer, filterGeo, filterCarrier]);
-
-  /* ================= TOTALS ================= */
-
-  const totals = useMemo(() => {
-    return filteredRows.reduce(
-      (a, r) => {
-        a.pin += r.pin_request_count;
-        a.uReq += r.unique_pin_request_count;
-        a.sent += r.pin_send_count;
-        a.uSent += r.unique_pin_sent;
-        a.vReq += r.pin_validation_request_count;
-        a.uVer += r.unique_pin_validation_request_count;
-        a.ver += r.unique_pin_verified;
-        a.rev += Number(r.revenue || 0);
-        return a;
-      },
-      {
-        pin: 0,
-        uReq: 0,
-        sent: 0,
-        uSent: 0,
-        vReq: 0,
-        uVer: 0,
-        ver: 0,
-        rev: 0,
-      }
-    );
-  }, [filteredRows]);
 
   /* ================= HOURLY ================= */
 
@@ -170,22 +201,14 @@ export default function PublisherDashboard() {
 
       {/* FILTERS */}
       <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-        <input type="date" onChange={(e) => setFromDate(e.target.value)} />
-        <input type="date" onChange={(e) => setToDate(e.target.value)} />
+        <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+        <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
         <button onClick={fetchData}>Apply</button>
+        <button onClick={() => exportCSV(filteredRows)}>Export CSV</button>
 
-        <input
-          placeholder="Offer"
-          onChange={(e) => setFilterOffer(e.target.value)}
-        />
-        <input
-          placeholder="Geo"
-          onChange={(e) => setFilterGeo(e.target.value)}
-        />
-        <input
-          placeholder="Carrier"
-          onChange={(e) => setFilterCarrier(e.target.value)}
-        />
+        <input placeholder="Offer" onChange={(e) => setFilterOffer(e.target.value)} />
+        <input placeholder="Geo" onChange={(e) => setFilterGeo(e.target.value)} />
+        <input placeholder="Carrier" onChange={(e) => setFilterCarrier(e.target.value)} />
       </div>
 
       {/* TABLE */}
@@ -213,14 +236,11 @@ export default function PublisherDashboard() {
             <th>Last Success Verification</th>
           </tr>
         </thead>
-
         <tbody>
           {filteredRows.map((r, i) => (
             <tr key={i}>
               <td>{formatDateOnly(r.stat_date)}</td>
-              <td>
-                <button onClick={() => openHourly(r)}>{r.offer}</button>
-              </td>
+              <td><button onClick={() => openHourly(r)}>{r.offer}</button></td>
               <td>{r.geo}</td>
               <td>{r.carrier}</td>
               <td>{r.cpa}</td>
@@ -240,25 +260,10 @@ export default function PublisherDashboard() {
               <td>{formatDateTime(r.last_success_pin_verification_date)}</td>
             </tr>
           ))}
-
-          {/* TOTAL */}
-          <tr style={{ fontWeight: "bold", background: "#f3f4f6" }}>
-            <td colSpan="6">TOTAL</td>
-            <td>{totals.pin}</td>
-            <td>{totals.uReq}</td>
-            <td>{totals.sent}</td>
-            <td>{totals.uSent}</td>
-            <td>{totals.vReq}</td>
-            <td>{totals.uVer}</td>
-            <td>{totals.ver}</td>
-            <td></td>
-            <td>${totals.rev}</td>
-            <td colSpan="4"></td>
-          </tr>
         </tbody>
       </table>
 
-      {/* HOURLY MODAL */}
+      {/* HOURLY */}
       {hourlyOpen && (
         <div style={{ marginTop: 30 }}>
           <h3>
