@@ -6,27 +6,51 @@ const router = express.Router();
 
 /* ================== HELPERS ================== */
 
-// Convert YYYY-MM-DD (IST) → UTC ISO start/end
+// safely parse date (YYYY-MM-DD OR ISO)
+const parseISTDate = (value, isEnd = false) => {
+  if (!value) return null;
+
+  // if already ISO
+  if (value.includes("T")) {
+    const d = new Date(value);
+    if (isNaN(d)) return null;
+    return d;
+  }
+
+  // YYYY-MM-DD → IST boundary
+  const time = isEnd ? "23:59:59.999" : "00:00:00.000";
+  const d = new Date(`${value}T${time}+05:30`);
+  if (isNaN(d)) return null;
+  return d;
+};
+
+// Convert IST date range → UTC ISO
 const istDateRangeToUTC = (from, to) => {
-  const fromUTC = new Date(`${from}T00:00:00+05:30`).toISOString();
-  const toUTC = new Date(`${to}T23:59:59.999+05:30`).toISOString();
-  return { fromUTC, toUTC };
+  const fromDate = parseISTDate(from, false);
+  const toDate = parseISTDate(to, true);
+
+  if (!fromDate || !toDate) {
+    throw new Error("Invalid date range");
+  }
+
+  return {
+    fromUTC: fromDate.toISOString(),
+    toUTC: toDate.toISOString(),
+  };
 };
 
 // Today IST (YYYY-MM-DD)
 const todayIST = () => {
   const now = new Date();
-  return new Date(
+  const ist = new Date(
     now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
-  )
-    .toISOString()
-    .slice(0, 10);
+  );
+  return ist.toISOString().slice(0, 10);
 };
 
 /**
  * =========================================================
  * GET /api/publisher/dashboard/offers
- * IST DATE-WISE DASHBOARD
  * =========================================================
  */
 router.get("/dashboard/offers", publisherAuth, async (req, res) => {
@@ -34,7 +58,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
     const publisherId = req.publisher.id;
     let { from, to } = req.query;
 
-    /* ---------- DEFAULT = TODAY (IST) ---------- */
+    // default = today IST
     if (!from || !to) {
       const today = todayIST();
       from = today;
@@ -47,9 +71,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
     const query = `
       WITH offer_stats AS (
         SELECT
-          DATE(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) AS stat_date,
+          DATE(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') AS stat_date,
 
           po.id AS publisher_offer_id,
           o.service_name AS offer,
@@ -83,34 +105,26 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
             COUNT(DISTINCT pc.pin_session_uuid)::numeric /
             NULLIF(
               COUNT(DISTINCT ps.msisdn)
-                FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')),
+              FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')),
               0
             ) * 100,
             2
           ) AS cr,
 
-          /* Revenue (frozen CPA) */
           COALESCE(SUM(pc.publisher_cpa), 0) AS revenue,
 
-          MAX(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) AS last_pin_gen_date,
+          MAX(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') AS last_pin_gen_date,
 
-          MAX(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) FILTER (
-            WHERE ps.status IN ('OTP_SENT','VERIFIED')
-          ) AS last_pin_gen_success_date,
+          MAX(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+          FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED'))
+          AS last_pin_gen_success_date,
 
-          MAX(
-            ps.verified_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) AS last_pin_verification_date,
+          MAX(ps.verified_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+          AS last_pin_verification_date,
 
-          MAX(
-            ps.credited_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) FILTER (
-            WHERE ps.publisher_credited = TRUE
-          ) AS last_success_pin_verification_date
+          MAX(ps.credited_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+          FILTER (WHERE ps.publisher_credited = TRUE)
+          AS last_success_pin_verification_date
 
         FROM publisher_offers po
         JOIN offers o ON o.id = po.offer_id
@@ -135,8 +149,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
           po.daily_cap
       )
 
-      SELECT
-        *,
+      SELECT *,
         (SELECT COALESCE(SUM(pin_request_count),0) FROM offer_stats) AS total_pin_requests,
         (SELECT COALESCE(SUM(unique_pin_verified),0) FROM offer_stats) AS total_verified,
         (SELECT COALESCE(SUM(revenue),0) FROM offer_stats) AS total_revenue
@@ -167,7 +180,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
       rows: cleanRows,
     });
   } catch (err) {
-    console.error("❌ PUBLISHER DASHBOARD ERROR:", err);
+    console.error("❌ PUBLISHER DASHBOARD ERROR:", err.message);
     res.status(500).json({ error: "Failed to load dashboard data" });
   }
 });
@@ -175,7 +188,6 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
 /**
  * =========================================================
  * GET /api/publisher/dashboard/offers/:publisherOfferId/hourly
- * IST HOURLY STATS
  * =========================================================
  */
 router.get(
@@ -205,13 +217,13 @@ router.get(
 
           COUNT(DISTINCT ps.msisdn) AS unique_pin_requests,
 
-          COUNT(DISTINCT ps.msisdn) FILTER (
-            WHERE ps.status IN ('OTP_SENT','VERIFIED')
-          ) AS unique_pin_sent,
+          COUNT(DISTINCT ps.msisdn)
+          FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED'))
+          AS unique_pin_sent,
 
-          COUNT(DISTINCT ps.msisdn) FILTER (
-            WHERE ps.otp_attempts > 0
-          ) AS unique_pin_verification_requests,
+          COUNT(DISTINCT ps.msisdn)
+          FILTER (WHERE ps.otp_attempts > 0)
+          AS unique_pin_verification_requests,
 
           COUNT(DISTINCT pc.pin_session_uuid) AS pin_verified,
 
@@ -242,7 +254,7 @@ router.get(
         rows,
       });
     } catch (err) {
-      console.error("❌ HOURLY DASHBOARD ERROR:", err);
+      console.error("❌ HOURLY DASHBOARD ERROR:", err.message);
       res.status(500).json({ error: "Failed to load hourly data" });
     }
   }
