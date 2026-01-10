@@ -22,23 +22,6 @@ const formatDateTime = (value) => {
   });
 };
 
-const todayRange = () => {
-  const from = new Date();
-  from.setHours(0, 0, 0, 0);
-  return { from: from.toISOString(), to: new Date().toISOString() };
-};
-
-const yesterdayRange = () => {
-  const from = new Date();
-  from.setDate(from.getDate() - 1);
-  from.setHours(0, 0, 0, 0);
-
-  const to = new Date(from);
-  to.setHours(23, 59, 59, 999);
-
-  return { from: from.toISOString(), to: to.toISOString() };
-};
-
 const dateInputToISO = (date, isEnd = false) => {
   if (!date) return undefined;
   const d = new Date(date);
@@ -62,15 +45,15 @@ export default function PublisherDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  /* Filters */
+  /* Date filters (CONTROLLED) */
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+
+  /* Dropdown filters */
   const [offerFilter, setOfferFilter] = useState("");
   const [geoFilter, setGeoFilter] = useState("");
   const [carrierFilter, setCarrierFilter] = useState("");
 
-  /* Auto refresh */
-  const [autoRefresh, setAutoRefresh] = useState(false);
   const intervalRef = useRef(null);
 
   /* ================= FETCH ================= */
@@ -116,24 +99,19 @@ export default function PublisherDashboard() {
   /* ================= INIT ================= */
 
   useEffect(() => {
-    fetchData(todayRange());
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    fetchData({
+      from: today.toISOString(),
+      to: new Date().toISOString(),
+    });
+
+    setFromDate(today.toISOString().slice(0, 10));
+    setToDate(new Date().toISOString().slice(0, 10));
   }, []);
 
-  /* ================= AUTO REFRESH ================= */
-
-  useEffect(() => {
-    if (autoRefresh) {
-      intervalRef.current = setInterval(() => {
-        applyFilter();
-      }, 60000);
-    } else {
-      clearInterval(intervalRef.current);
-    }
-
-    return () => clearInterval(intervalRef.current);
-  }, [autoRefresh, fromDate, toDate]);
-
-  /* ================= FILTER ================= */
+  /* ================= APPLY FILTER ================= */
 
   const applyFilter = () => {
     fetchData({
@@ -172,11 +150,16 @@ export default function PublisherDashboard() {
       "Verified",
       "CR %",
       "Revenue",
+      "Last Pin Gen Date",
+      "Last Pin Gen Success Date",
+      "Last Pin Verification Date",
+      "Last Success Pin Verification Date",
     ];
 
     const csv = [
       `Publisher: ${publisherName}`,
-      `Generated: ${new Date().toLocaleString()}`,
+      `From: ${fromDate || "-"}`,
+      `To: ${toDate || "-"}`,
       "",
       headers.join(","),
       ...filteredRows.map((r) =>
@@ -186,7 +169,7 @@ export default function PublisherDashboard() {
           r.carrier,
           r.cpa,
           r.cap,
-          formatDateOnly(r.last_pin_gen_date),
+          formatDateOnly(r.date || r.last_pin_gen_date),
           r.pin_request_count,
           r.unique_pin_request_count,
           r.pin_send_count,
@@ -196,6 +179,10 @@ export default function PublisherDashboard() {
           r.unique_pin_verified,
           r.cr,
           `$${r.revenue}`,
+          formatDateTime(r.last_pin_gen_date),
+          formatDateTime(r.last_pin_gen_success_date),
+          formatDateTime(r.last_pin_verification_date),
+          formatDateTime(r.last_success_pin_verification_date),
         ].join(",")
       ),
     ].join("\n");
@@ -204,7 +191,7 @@ export default function PublisherDashboard() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${publisherName || "publisher"}_dashboard.csv`;
+    a.download = `${publisherName}_dashboard.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -223,11 +210,16 @@ export default function PublisherDashboard() {
 
       {/* CONTROLS */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <button onClick={() => fetchData(todayRange())}>Today</button>
-        <button onClick={() => fetchData(yesterdayRange())}>Yesterday</button>
-
-        <input type="date" onChange={(e) => setFromDate(e.target.value)} />
-        <input type="date" onChange={(e) => setToDate(e.target.value)} />
+        <input
+          type="date"
+          value={fromDate}
+          onChange={(e) => setFromDate(e.target.value)}
+        />
+        <input
+          type="date"
+          value={toDate}
+          onChange={(e) => setToDate(e.target.value)}
+        />
         <button onClick={applyFilter}>Apply</button>
 
         <select onChange={(e) => setOfferFilter(e.target.value)}>
@@ -273,18 +265,22 @@ export default function PublisherDashboard() {
             <th>Verified</th>
             <th>CR %</th>
             <th>Revenue</th>
+            <th>Last Pin Gen Date</th>
+            <th>Last Pin Gen Success Date</th>
+            <th>Last Pin Verification Date</th>
+            <th>Last Success Pin Verification Date</th>
           </tr>
         </thead>
 
         <tbody>
-          {filteredRows.map((r) => (
-            <tr key={r.publisher_offer_id}>
+          {filteredRows.map((r, i) => (
+            <tr key={i}>
               <td>{r.offer}</td>
               <td>{r.geo}</td>
               <td>{r.carrier}</td>
               <td>{r.cpa}</td>
               <td>{r.cap}</td>
-              <td>{formatDateOnly(r.last_pin_gen_date)}</td>
+              <td>{formatDateOnly(r.date || r.last_pin_gen_date)}</td>
               <td>{r.pin_request_count}</td>
               <td>{r.unique_pin_request_count}</td>
               <td>{r.pin_send_count}</td>
@@ -294,6 +290,10 @@ export default function PublisherDashboard() {
               <td>{r.unique_pin_verified}</td>
               <td>{r.cr}%</td>
               <td>${r.revenue}</td>
+              <td>{formatDateTime(r.last_pin_gen_date)}</td>
+              <td>{formatDateTime(r.last_pin_gen_success_date)}</td>
+              <td>{formatDateTime(r.last_pin_verification_date)}</td>
+              <td>{formatDateTime(r.last_success_pin_verification_date)}</td>
             </tr>
           ))}
 
@@ -304,6 +304,7 @@ export default function PublisherDashboard() {
             <td>{summary.total_verified}</td>
             <td></td>
             <td>${summary.total_revenue}</td>
+            <td colSpan="4"></td>
           </tr>
         </tbody>
       </table>
