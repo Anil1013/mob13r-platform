@@ -148,4 +148,87 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/publisher/dashboard/offers/:publisherOfferId/hourly
+ * Hourly stats for selected offer
+ *
+ * Query:
+ * ?from=ISO_DATE
+ * ?to=ISO_DATE
+ */
+router.get(
+  "/dashboard/offers/:publisherOfferId/hourly",
+  publisherAuth,
+  async (req, res) => {
+    try {
+      const publisherId = req.publisher.id;
+      const { publisherOfferId } = req.params;
+      let { from, to } = req.query;
+
+      /* DEFAULT → TODAY */
+      if (!from || !to) {
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        from = start.toISOString();
+        to = new Date().toISOString();
+      }
+
+      const params = [
+        publisherId,
+        publisherOfferId,
+        from,
+        to,
+      ];
+
+      const query = `
+        SELECT
+          DATE_TRUNC('hour', ps.created_at) AS hour,
+
+          COUNT(DISTINCT ps.msisdn) AS unique_pin_requests,
+
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.status IN ('OTP_SENT','VERIFIED')
+          ) AS unique_pin_sent,
+
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.otp_attempts > 0
+          ) AS unique_pin_verification_requests,
+
+          COUNT(DISTINCT pc.pin_session_uuid) AS pin_verified,
+
+          COALESCE(SUM(pc.publisher_cpa), 0) AS revenue
+
+        FROM publisher_offers po
+        JOIN pin_sessions ps
+          ON ps.publisher_offer_id = po.id
+         AND ps.created_at BETWEEN $3::timestamptz AND $4::timestamptz
+
+        LEFT JOIN publisher_conversions pc
+          ON pc.pin_session_uuid = ps.session_id
+         AND pc.status = 'SUCCESS'
+
+        WHERE po.publisher_id = $1
+          AND po.id = $2
+
+        GROUP BY hour
+        ORDER BY hour
+      `;
+
+      const { rows } = await pool.query(query, params);
+
+      res.json({
+        offer_id: publisherOfferId,
+        from,
+        to,
+        rows,
+      });
+    } catch (err) {
+      console.error("❌ HOURLY DASHBOARD ERROR:", err);
+      res.status(500).json({
+        error: "Failed to load hourly data",
+      });
+    }
+  }
+);
+
 export default router;
