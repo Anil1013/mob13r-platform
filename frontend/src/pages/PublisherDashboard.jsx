@@ -16,8 +16,7 @@ const formatDateOnly = (value) => {
 
 const formatDateTime = (value) => {
   if (!value) return "-";
-  let v = value.toString();
-  v = v.replace("T", " ").replace("Z", "").split(".")[0];
+  let v = value.replace("T", " ").replace("Z", "").split(".")[0];
   const [date, time] = v.split(" ");
   if (!date || !time) return "-";
   const [y, m, d] = date.split("-");
@@ -26,8 +25,7 @@ const formatDateTime = (value) => {
 
 const hourLabel = (hourValue) => {
   if (!hourValue) return "-";
-  const v = hourValue.replace("T", " ").replace("Z", "").split(".")[0];
-  const h = v.slice(11, 13);
+  const h = hourValue.slice(11, 13);
   const n = String((Number(h) + 1) % 24).padStart(2, "0");
   return `${h}:00 – ${n}:00`;
 };
@@ -99,8 +97,9 @@ const exportCSV = (rows, fromDate, toDate, publisherName) => {
   const blob = new Blob([csvRows], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
 
-  const safePublisher = safeFileName(publisherName);
-  const filename = `${safePublisher}_${fromDate}_to_${toDate}.csv`;
+  const filename = `${safeFileName(
+    publisherName
+  )}_${fromDate}_to_${toDate}.csv`;
 
   const link = document.createElement("a");
   link.href = url;
@@ -158,44 +157,31 @@ export default function PublisherDashboard() {
     fetchData();
   }, []);
 
-  /* ================= DROPDOWNS ================= */
+  /* ================= FILTERS ================= */
 
-  const offerOptions = useMemo(
-    () => [...new Set(rows.map((r) => r.offer))],
-    [rows]
-  );
-  const geoOptions = useMemo(
-    () => [...new Set(rows.map((r) => r.geo))],
-    [rows]
-  );
-  const carrierOptions = useMemo(
-    () => [...new Set(rows.map((r) => r.carrier))],
-    [rows]
-  );
+  const offerOptions = [...new Set(rows.map((r) => r.offer))];
+  const geoOptions = [...new Set(rows.map((r) => r.geo))];
+  const carrierOptions = [...new Set(rows.map((r) => r.carrier))];
 
-  /* ================= FILTERED ================= */
-
-  const filteredRows = useMemo(() => {
-    return rows.filter((r) => {
-      if (filterOffer && r.offer !== filterOffer) return false;
-      if (filterGeo && r.geo !== filterGeo) return false;
-      if (filterCarrier && r.carrier !== filterCarrier) return false;
-      return true;
-    });
-  }, [rows, filterOffer, filterGeo, filterCarrier]);
+  const filteredRows = rows.filter((r) => {
+    if (filterOffer && r.offer !== filterOffer) return false;
+    if (filterGeo && r.geo !== filterGeo) return false;
+    if (filterCarrier && r.carrier !== filterCarrier) return false;
+    return true;
+  });
 
   /* ================= TOTALS ================= */
 
   const totals = useMemo(() => {
     return filteredRows.reduce(
       (a, r) => {
-        a.pin += r.pin_request_count;
-        a.uReq += r.unique_pin_request_count;
-        a.sent += r.pin_send_count;
-        a.uSent += r.unique_pin_sent;
-        a.vReq += r.pin_validation_request_count;
-        a.uVer += r.unique_pin_validation_request_count;
-        a.ver += r.unique_pin_verified;
+        a.pin += Number(r.pin_request_count || 0);
+        a.uReq += Number(r.unique_pin_request_count || 0);
+        a.sent += Number(r.pin_send_count || 0);
+        a.uSent += Number(r.unique_pin_sent || 0);
+        a.vReq += Number(r.pin_validation_request_count || 0);
+        a.uVer += Number(r.unique_pin_validation_request_count || 0);
+        a.ver += Number(r.unique_pin_verified || 0);
         a.rev += Number(r.revenue || 0);
         return a;
       },
@@ -233,29 +219,17 @@ export default function PublisherDashboard() {
     setHourlyOpen(true);
   };
 
-  /* ================= UI ================= */
-
   if (loading) return <p style={{ padding: 20 }}>Loading…</p>;
 
   return (
-    <div style={{ padding: 24, fontFamily: "Inter, system-ui" }}>
+    <div style={{ padding: 20 }}>
       <h2>
         Publisher Dashboard –{" "}
         <span style={{ color: "#2563eb" }}>{publisherName}</span>
       </h2>
 
-      {/* FILTER BAR */}
-      <div
-        style={{
-          display: "flex",
-          gap: 10,
-          flexWrap: "wrap",
-          padding: 12,
-          background: "#f9fafb",
-          borderRadius: 8,
-          marginBottom: 16,
-        }}
-      >
+      {/* FILTER BAR – SAME AS ORIGINAL */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
         <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
         <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
         <button onClick={fetchData}>Apply</button>
@@ -271,112 +245,114 @@ export default function PublisherDashboard() {
         <select value={filterOffer} onChange={(e) => setFilterOffer(e.target.value)}>
           <option value="">All Offers</option>
           {offerOptions.map((o) => (
-            <option key={o} value={o}>{o}</option>
+            <option key={o}>{o}</option>
           ))}
         </select>
 
         <select value={filterGeo} onChange={(e) => setFilterGeo(e.target.value)}>
           <option value="">All Geo</option>
           {geoOptions.map((g) => (
-            <option key={g} value={g}>{g}</option>
+            <option key={g}>{g}</option>
           ))}
         </select>
 
         <select value={filterCarrier} onChange={(e) => setFilterCarrier(e.target.value)}>
           <option value="">All Carrier</option>
           {carrierOptions.map((c) => (
-            <option key={c} value={c}>{c}</option>
+            <option key={c}>{c}</option>
           ))}
         </select>
       </div>
 
-      {/* TABLE */}
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead style={{ background: "#eef2ff" }}>
-            <tr>
-              {[
-                "Date","Offer","Geo","Carrier","CPA","Cap",
-                "Pin Req","Unique Req","Pin Sent","Unique Sent",
-                "Verify Req","Unique Verify","Verified","CR %",
-                "Revenue","Last Pin Gen","Last Pin Gen Success",
-                "Last Verification","Last Success Verification",
-              ].map((h) => (
-                <th key={h} style={{ padding: 8, border: "1px solid #ddd" }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {filteredRows.map((r, i) => (
-              <tr key={i} style={{ background: i % 2 ? "#fafafa" : "#fff" }}>
-                <td>{formatDateOnly(r.stat_date)}</td>
-                <td>
-                  <button onClick={() => openHourly(r)}>{r.offer}</button>
-                </td>
-                <td>{r.geo}</td>
-                <td>{r.carrier}</td>
-                <td>{r.cpa}</td>
-                <td>{r.cap}</td>
-                <td>{r.pin_request_count}</td>
-                <td>{r.unique_pin_request_count}</td>
-                <td>{r.pin_send_count}</td>
-                <td>{r.unique_pin_sent}</td>
-                <td>{r.pin_validation_request_count}</td>
-                <td>{r.unique_pin_validation_request_count}</td>
-                <td>{r.unique_pin_verified}</td>
-                <td>{r.cr}%</td>
-                <td>${r.revenue}</td>
-                <td>{formatDateTime(r.last_pin_gen_date)}</td>
-                <td>{formatDateTime(r.last_pin_gen_success_date)}</td>
-                <td>{formatDateTime(r.last_pin_verification_date)}</td>
-                <td>{formatDateTime(r.last_success_pin_verification_date)}</td>
-              </tr>
+      {/* MAIN TABLE – CENTER ALIGNED */}
+      <table
+        border="1"
+        cellPadding="8"
+        width="100%"
+        style={{ textAlign: "center" }}
+      >
+        <thead>
+          <tr>
+            {[
+              "Date","Offer","Geo","Carrier","CPA","Cap",
+              "Pin Req","Unique Req","Pin Sent","Unique Sent",
+              "Verify Req","Unique Verify","Verified","CR %",
+              "Revenue","Last Pin Gen","Last Pin Gen Success",
+              "Last Verification","Last Success Verification",
+            ].map((h) => (
+              <th key={h} style={{ textAlign: "center" }}>{h}</th>
             ))}
+          </tr>
+        </thead>
 
-            {/* TOTAL */}
-            <tr style={{ background: "#f1f5f9", fontWeight: "bold" }}>
-              <td colSpan="6">TOTAL</td>
-              <td>{totals.pin}</td>
-              <td>{totals.uReq}</td>
-              <td>{totals.sent}</td>
-              <td>{totals.uSent}</td>
-              <td>{totals.vReq}</td>
-              <td>{totals.uVer}</td>
-              <td>{totals.ver}</td>
-              <td></td>
-              <td>${totals.rev}</td>
-              <td colSpan="4"></td>
+        <tbody>
+          {filteredRows.map((r, i) => (
+            <tr key={i}>
+              <td>{formatDateOnly(r.stat_date)}</td>
+              <td>{r.offer}</td>
+              <td>{r.geo}</td>
+              <td>{r.carrier}</td>
+              <td>{r.cpa}</td>
+              <td>{r.cap}</td>
+              <td>{r.pin_request_count}</td>
+              <td>{r.unique_pin_request_count}</td>
+              <td>{r.pin_send_count}</td>
+              <td>{r.unique_pin_sent}</td>
+              <td>{r.pin_validation_request_count}</td>
+              <td>{r.unique_pin_validation_request_count}</td>
+              <td>{r.unique_pin_verified}</td>
+              <td>{r.cr}%</td>
+              <td>${r.revenue}</td>
+              <td>{formatDateTime(r.last_pin_gen_date)}</td>
+              <td>{formatDateTime(r.last_pin_gen_success_date)}</td>
+              <td>{formatDateTime(r.last_pin_verification_date)}</td>
+              <td>{formatDateTime(r.last_success_pin_verification_date)}</td>
             </tr>
-          </tbody>
-        </table>
-      </div>
+          ))}
 
-      {/* HOURLY */}
+          {/* TOTAL ROW */}
+          <tr style={{ fontWeight: "bold", background: "#f3f4f6" }}>
+            <td colSpan="6">TOTAL</td>
+            <td>{totals.pin}</td>
+            <td>{totals.uReq}</td>
+            <td>{totals.sent}</td>
+            <td>{totals.uSent}</td>
+            <td>{totals.vReq}</td>
+            <td>{totals.uVer}</td>
+            <td>{totals.ver}</td>
+            <td></td>
+            <td>${totals.rev}</td>
+            <td colSpan="4"></td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* HOURLY TABLE – ALSO CENTER */}
       {hourlyOpen && (
-        <div
-          style={{
-            marginTop: 32,
-            padding: 16,
-            background: "#f9fafb",
-            borderRadius: 8,
-          }}
-        >
+        <div style={{ marginTop: 25 }}>
           <h3>
             Hourly – {hourlyMeta.offer} ({formatDateOnly(hourlyMeta.stat_date)})
             <button onClick={() => setHourlyOpen(false)}> ❌</button>
           </h3>
 
-          <table style={{ width: "100%", marginTop: 10 }}>
+          <table
+            border="1"
+            cellPadding="8"
+            width="100%"
+            style={{ textAlign: "center" }}
+          >
             <thead>
               <tr>
-                {["Hour","Unique Req","Unique Sent","Verify Req","Verified","Revenue"].map(
-                  (h) => (
-                    <th key={h}>{h}</th>
-                  )
-                )}
+                {[
+                  "Hour",
+                  "Unique Req",
+                  "Unique Sent",
+                  "Verify Req",
+                  "Verified",
+                  "Revenue ($)",
+                ].map((h) => (
+                  <th key={h} style={{ textAlign: "center" }}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
