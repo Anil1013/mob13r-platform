@@ -78,13 +78,18 @@ export default function PublisherDashboard() {
               <td>{r.carrier}</td>
               <td>{r.cpa}</td>
               <td>{r.cap}</td>
+
               <td>{r.pin_request_count}</td>
               <td>{r.unique_pin_request_count}</td>
+
               <td>{r.pin_send_count}</td>
               <td>{r.unique_pin_sent}</td>
+
               <td>{r.pin_validation_request_count}</td>
+              <td>{r.unique_pin_validation_request_count}</td>
+
               <td>{r.unique_pin_verified}</td>
-              <td>{r.unique_pin_verified}</td>
+
               <td>{r.cr}%</td>
               <td>{r.revenue}</td>
             </tr>
