@@ -18,24 +18,46 @@ const formatDateTime = (value) => {
 };
 
 const todayRange = () => {
-  const d = new Date();
-  const from = new Date(d.setHours(0, 0, 0, 0)).toISOString();
-  const to = new Date().toISOString();
-  return { from, to };
+  const from = new Date();
+  from.setHours(0, 0, 0, 0);
+  return {
+    from: from.toISOString(),
+    to: new Date().toISOString(),
+  };
 };
 
 const yesterdayRange = () => {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  const from = new Date(d.setHours(0, 0, 0, 0)).toISOString();
-  const to = new Date(d.setHours(23, 59, 59, 999)).toISOString();
-  return { from, to };
+  const from = new Date();
+  from.setDate(from.getDate() - 1);
+  from.setHours(0, 0, 0, 0);
+
+  const to = new Date(from);
+  to.setHours(23, 59, 59, 999);
+
+  return {
+    from: from.toISOString(),
+    to: to.toISOString(),
+  };
+};
+
+const dateInputToISO = (date, isEnd = false) => {
+  if (!date) return null;
+  const d = new Date(date);
+  if (isEnd) d.setHours(23, 59, 59, 999);
+  else d.setHours(0, 0, 0, 0);
+  return d.toISOString();
 };
 
 /* ================= COMPONENT ================= */
 
 export default function PublisherDashboard() {
   const [rows, setRows] = useState([]);
+  const [summary, setSummary] = useState({
+    total_pin_requests: 0,
+    total_verified: 0,
+    total_revenue: 0,
+  });
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -82,11 +104,14 @@ export default function PublisherDashboard() {
       }
 
       const data = await res.json();
-      setRows(Array.isArray(data) ? data : []);
+
+      setRows(data.rows || []);
+      setSummary(data.summary || {});
     } catch (err) {
       console.error("DASHBOARD LOAD ERROR:", err);
       setError(err.message);
       setRows([]);
+      setSummary({});
     } finally {
       setLoading(false);
     }
@@ -95,7 +120,7 @@ export default function PublisherDashboard() {
   /* ================= INIT ================= */
 
   useEffect(() => {
-    fetchData();
+    fetchData(todayRange()); // 🔥 refresh → today
   }, []);
 
   /* ================= AUTO REFRESH ================= */
@@ -103,42 +128,23 @@ export default function PublisherDashboard() {
   useEffect(() => {
     if (autoRefresh) {
       intervalRef.current = setInterval(() => {
-        fetchData(buildDateParams());
-      }, 60000); // 60s
-    } else if (intervalRef.current) {
+        applyFilter();
+      }, 60000);
+    } else {
       clearInterval(intervalRef.current);
     }
 
     return () => clearInterval(intervalRef.current);
-    // eslint-disable-next-line
   }, [autoRefresh, fromDate, toDate]);
 
-  /* ================= DATE FILTER ================= */
-
-  const buildDateParams = () => {
-    const p = {};
-    if (fromDate) p.from = fromDate;
-    if (toDate) p.to = toDate;
-    return p;
-  };
+  /* ================= FILTER ================= */
 
   const applyFilter = () => {
-    fetchData(buildDateParams());
+    fetchData({
+      from: fromDate ? dateInputToISO(fromDate) : undefined,
+      to: toDate ? dateInputToISO(toDate, true) : undefined,
+    });
   };
-
-  /* ================= TOTALS ================= */
-
-  const totals = useMemo(() => {
-    return rows.reduce(
-      (acc, r) => {
-        acc.pinReq += Number(r.pin_request_count || 0);
-        acc.verified += Number(r.unique_pin_verified || 0);
-        acc.revenue += Number(r.revenue || 0);
-        return acc;
-      },
-      { pinReq: 0, verified: 0, revenue: 0 }
-    );
-  }, [rows]);
 
   /* ================= EXPORT ================= */
 
@@ -197,7 +203,6 @@ export default function PublisherDashboard() {
     a.href = url;
     a.download = "publisher_dashboard.csv";
     a.click();
-
     URL.revokeObjectURL(url);
   };
 
@@ -217,7 +222,7 @@ export default function PublisherDashboard() {
     <div style={{ padding: 20 }}>
       <h2>Publisher Dashboard</h2>
 
-      {/* ===== CONTROLS ===== */}
+      {/* CONTROLS */}
       <div style={{ display: "flex", gap: 10, marginBottom: 15 }}>
         <button onClick={() => fetchData(todayRange())}>Today</button>
         <button onClick={() => fetchData(yesterdayRange())}>Yesterday</button>
@@ -238,7 +243,7 @@ export default function PublisherDashboard() {
         </label>
       </div>
 
-      {/* ===== TABLE ===== */}
+      {/* TABLE */}
       <table border="1" cellPadding="8" width="100%">
         <thead>
           <tr>
@@ -287,16 +292,15 @@ export default function PublisherDashboard() {
             </tr>
           ))}
 
-          {/* ===== TOTAL ROW ===== */}
+          {/* TOTAL */}
           {rows.length > 0 && (
             <tr style={{ fontWeight: "bold", background: "#f3f4f6" }}>
               <td colSpan="5">TOTAL</td>
-              <td>{totals.pinReq}</td>
-              <td colSpan="4"></td>
+              <td>{summary.total_pin_requests}</td>
+              <td colSpan="5"></td>
+              <td>{summary.total_verified}</td>
               <td></td>
-              <td>{totals.verified}</td>
-              <td></td>
-              <td>{totals.revenue}</td>
+              <td>{summary.total_revenue}</td>
               <td colSpan="4"></td>
             </tr>
           )}
