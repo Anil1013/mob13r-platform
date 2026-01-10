@@ -8,7 +8,7 @@ const router = express.Router();
  * GET /api/publisher/dashboard/offers
  * Publisher Dashboard Data
  */
-router.get("/offers", publisherAuth, async (req, res) => {
+router.get("/dashboard/offers", publisherAuth, async (req, res) => {
   try {
     const publisherId = req.publisher.id; // from publisherAuth
 
