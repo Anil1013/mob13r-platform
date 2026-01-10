@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 
 const API_BASE =
-  import.meta.env.VITE_API_BASE ||
-  "https://backend.mob13r.com";
+  import.meta.env.VITE_API_BASE || "https://backend.mob13r.com";
 
 export default function PublisherDashboard() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -14,31 +14,62 @@ export default function PublisherDashboard() {
 
   const fetchData = async () => {
     try {
-      const token = localStorage.getItem("token");
+      setLoading(true);
+      setError(null);
+
+      /* ✅ ONLY publisher_key is required */
       const publisherKey = localStorage.getItem("publisher_key");
+
+      if (!publisherKey) {
+        throw new Error("Publisher key missing. Please login again.");
+      }
 
       const res = await fetch(
         `${API_BASE}/api/publisher/dashboard/offers`,
         {
+          method: "GET",
           headers: {
-            Authorization: `Bearer ${token}`,
-            "x-publisher-key": publisherKey
-          }
+            "Content-Type": "application/json",
+            "x-publisher-key": publisherKey,
+          },
         }
       );
 
-      if (!res.ok) throw new Error("Fetch failed");
+      if (res.status === 401) {
+        throw new Error("Unauthorized: Invalid publisher key");
+      }
+
+      if (!res.ok) {
+        throw new Error(`API Error: ${res.status}`);
+      }
 
       const data = await res.json();
-      setRows(data);
+      setRows(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("DASHBOARD LOAD ERROR", err);
+      console.error("DASHBOARD LOAD ERROR:", err);
+      setError(err.message || "Failed to load dashboard");
+      setRows([]);
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) return <p>Loading...</p>;
+  /* ---------------- UI STATES ---------------- */
+
+  if (loading) {
+    return <p style={{ padding: 20 }}>Loading dashboard…</p>;
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: 20, color: "red" }}>
+        <h3>Dashboard Error</h3>
+        <p>{error}</p>
+      </div>
+    );
+  }
+
+  /* ---------------- MAIN UI ---------------- */
 
   return (
     <div style={{ padding: "20px" }}>
@@ -52,12 +83,16 @@ export default function PublisherDashboard() {
             <th>Carrier</th>
             <th>CPA</th>
             <th>Cap</th>
+
             <th>Pin Req</th>
             <th>Unique Req</th>
+
             <th>Pin Sent</th>
             <th>Unique Sent</th>
+
             <th>Verify Req</th>
             <th>Unique Verify</th>
+
             <th>Verified</th>
             <th>CR %</th>
             <th>Revenue</th>
@@ -91,7 +126,6 @@ export default function PublisherDashboard() {
               <td>{r.unique_pin_validation_request_count}</td>
 
               <td>{r.unique_pin_verified}</td>
-
               <td>{r.cr}%</td>
               <td>{r.revenue}</td>
             </tr>
