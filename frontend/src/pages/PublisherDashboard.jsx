@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+const API_BASE = "https://backend.mob13r.com";
 
 export default function PublisherDashboard() {
   const [rows, setRows] = useState([]);
