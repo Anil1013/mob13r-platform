@@ -1,55 +1,60 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE || "https://backend.mob13r.com";
 
 /* ================= HELPERS ================= */
 
-const formatDateOnly = (value) => {
-  if (!value) return "-";
-  const d = new Date(value);
-  return d.toLocaleDateString("en-GB");
+const formatDateOnly = (v) => {
+  if (!v) return "-";
+  return new Date(v).toLocaleDateString("en-GB");
 };
 
-const formatDateTime = (value) => {
-  if (!value) return "-";
-  return new Date(value).toLocaleString("en-GB");
+const formatDateTime = (v) => {
+  if (!v) return "-";
+  return new Date(v).toLocaleString("en-GB");
 };
 
-const formatHourRange = (value) => {
-  if (!value) return "-";
-  const d = new Date(value);
+const formatHourRange = (v) => {
+  if (!v) return "-";
+  const d = new Date(v);
   const h1 = d.getHours().toString().padStart(2, "0");
   const h2 = ((d.getHours() + 1) % 24).toString().padStart(2, "0");
   return `${h1}:00 – ${h2}:00`;
 };
 
-const toISOStart = (date) => {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString();
+const startOfDayISO = (d) => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x.toISOString();
 };
 
-const toISOEnd = (date) => {
-  const d = new Date(date);
-  d.setHours(23, 59, 59, 999);
-  return d.toISOString();
+const endOfDayISO = (d) => {
+  const x = new Date(d);
+  x.setHours(23, 59, 59, 999);
+  return x.toISOString();
 };
 
 /* ================= COMPONENT ================= */
 
 export default function PublisherDashboard() {
+  /* ---------- MAIN DATA ---------- */
   const [rows, setRows] = useState([]);
   const [summary, setSummary] = useState({});
   const [publisherName, setPublisherName] = useState("");
 
+  /* ---------- FILTERS ---------- */
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [filterOffer, setFilterOffer] = useState("");
+  const [filterGeo, setFilterGeo] = useState("");
+  const [filterCarrier, setFilterCarrier] = useState("");
 
+  /* ---------- STATES ---------- */
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  /* Hourly */
+  /* ---------- HOURLY ---------- */
   const [selectedOffer, setSelectedOffer] = useState(null);
   const [hourlyRows, setHourlyRows] = useState([]);
   const [hourlyLoading, setHourlyLoading] = useState(false);
@@ -68,10 +73,10 @@ export default function PublisherDashboard() {
 
       const res = await fetch(
         `${API_BASE}/api/publisher/dashboard/offers${qs ? `?${qs}` : ""}`,
-        {
-          headers: { "x-publisher-key": key },
-        }
+        { headers: { "x-publisher-key": key } }
       );
+
+      if (!res.ok) throw new Error("Dashboard API failed");
 
       const data = await res.json();
 
@@ -87,25 +92,21 @@ export default function PublisherDashboard() {
 
   /* ================= FETCH HOURLY ================= */
 
-  const fetchHourly = async (offer) => {
+  const fetchHourly = async (row) => {
     try {
-      setSelectedOffer(offer);
-      setHourlyLoading(true);
+      setSelectedOffer(row);
       setHourlyRows([]);
+      setHourlyLoading(true);
 
       const key = localStorage.getItem("publisher_key");
 
-      const params = {
-        from: fromDate ? toISOStart(fromDate) : undefined,
-        to: toDate ? toISOEnd(toDate) : undefined,
-      };
-
-      const qs = new URLSearchParams(params).toString();
+      const qs = new URLSearchParams({
+        from: startOfDayISO(fromDate),
+        to: endOfDayISO(toDate),
+      }).toString();
 
       const res = await fetch(
-        `${API_BASE}/api/publisher/dashboard/offers/${offer.publisher_offer_id}/hourly${
-          qs ? `?${qs}` : ""
-        }`,
+        `${API_BASE}/api/publisher/dashboard/offers/${row.publisher_offer_id}/hourly?${qs}`,
         { headers: { "x-publisher-key": key } }
       );
 
@@ -122,44 +123,61 @@ export default function PublisherDashboard() {
     const today = new Date().toISOString().slice(0, 10);
     setFromDate(today);
     setToDate(today);
-    fetchDashboard({ from: toISOStart(today), to: toISOEnd(today) });
+    fetchDashboard({
+      from: startOfDayISO(today),
+      to: endOfDayISO(today),
+    });
   }, []);
 
   /* ================= APPLY FILTER ================= */
 
   const applyFilter = () => {
     if (!fromDate || !toDate) return;
+
     fetchDashboard({
-      from: toISOStart(fromDate),
-      to: toISOEnd(toDate),
+      from: startOfDayISO(fromDate),
+      to: endOfDayISO(toDate),
     });
   };
 
+  /* ================= FILTERED ROWS ================= */
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((r) => {
+      if (filterOffer && !r.offer.toLowerCase().includes(filterOffer.toLowerCase())) return false;
+      if (filterGeo && !r.geo.toLowerCase().includes(filterGeo.toLowerCase())) return false;
+      if (filterCarrier && !r.carrier.toLowerCase().includes(filterCarrier.toLowerCase())) return false;
+      return true;
+    });
+  }, [rows, filterOffer, filterGeo, filterCarrier]);
+
   /* ================= TOTALS ================= */
 
-  const totals = rows.reduce(
-    (a, r) => {
-      a.pinReq += Number(r.pin_request_count || 0);
-      a.uniqueReq += Number(r.unique_pin_request_count || 0);
-      a.pinSent += Number(r.pin_send_count || 0);
-      a.uniqueSent += Number(r.unique_pin_sent || 0);
-      a.verifyReq += Number(r.pin_validation_request_count || 0);
-      a.uniqueVerify += Number(r.unique_pin_validation_request_count || 0);
-      a.verified += Number(r.unique_pin_verified || 0);
-      a.revenue += Number(r.revenue || 0);
-      return a;
-    },
-    {
-      pinReq: 0,
-      uniqueReq: 0,
-      pinSent: 0,
-      uniqueSent: 0,
-      verifyReq: 0,
-      uniqueVerify: 0,
-      verified: 0,
-      revenue: 0,
-    }
-  );
+  const totals = useMemo(() => {
+    return filteredRows.reduce(
+      (a, r) => {
+        a.pinReq += +r.pin_request_count || 0;
+        a.uniqueReq += +r.unique_pin_request_count || 0;
+        a.pinSent += +r.pin_send_count || 0;
+        a.uniqueSent += +r.unique_pin_sent || 0;
+        a.verifyReq += +r.pin_validation_request_count || 0;
+        a.uniqueVerify += +r.unique_pin_validation_request_count || 0;
+        a.verified += +r.unique_pin_verified || 0;
+        a.revenue += +r.revenue || 0;
+        return a;
+      },
+      {
+        pinReq: 0,
+        uniqueReq: 0,
+        pinSent: 0,
+        uniqueSent: 0,
+        verifyReq: 0,
+        uniqueVerify: 0,
+        verified: 0,
+        revenue: 0,
+      }
+    );
+  }, [filteredRows]);
 
   /* ================= UI ================= */
 
@@ -173,14 +191,17 @@ export default function PublisherDashboard() {
         <span style={{ color: "#2563eb" }}>{publisherName}</span>
       </h2>
 
-      {/* FILTER */}
+      {/* FILTER BAR */}
       <div style={{ marginBottom: 10 }}>
-        <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-        <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-        <button onClick={applyFilter}>Apply</button>
+        <button onClick={applyFilter}>Apply</button>{" "}
+        <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />{" "}
+        <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />{" "}
+        <input placeholder="Offer" value={filterOffer} onChange={(e) => setFilterOffer(e.target.value)} />{" "}
+        <input placeholder="Geo" value={filterGeo} onChange={(e) => setFilterGeo(e.target.value)} />{" "}
+        <input placeholder="Carrier" value={filterCarrier} onChange={(e) => setFilterCarrier(e.target.value)} />
       </div>
 
-      {/* TABLE */}
+      {/* MAIN TABLE */}
       <table border="1" cellPadding="6" width="100%">
         <thead>
           <tr>
@@ -207,9 +228,9 @@ export default function PublisherDashboard() {
         </thead>
 
         <tbody>
-          {rows.map((r, i) => (
+          {filteredRows.map((r, i) => (
             <tr key={i}>
-              <td>{formatDateOnly(r.date)}</td>
+              <td>{formatDateOnly(fromDate)}</td>
               <td>
                 <button onClick={() => fetchHourly(r)}>{r.offer}</button>
               </td>
@@ -250,11 +271,11 @@ export default function PublisherDashboard() {
         </tbody>
       </table>
 
-      {/* HOURLY */}
+      {/* HOURLY TABLE */}
       {selectedOffer && (
         <div style={{ marginTop: 30 }}>
           <h3>
-            Hourly – {selectedOffer.offer}
+            Hourly – {selectedOffer.offer}{" "}
             <button onClick={() => setSelectedOffer(null)}>✖</button>
           </h3>
 
