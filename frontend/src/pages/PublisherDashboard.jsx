@@ -3,6 +3,19 @@ import { useEffect, useState } from "react";
 const API_BASE =
   import.meta.env.VITE_API_BASE || "https://backend.mob13r.com";
 
+/* 🔹 Helper: format date + time safely */
+const formatDateTime = (value) => {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("en-GB", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+};
+
 export default function PublisherDashboard() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -96,13 +109,19 @@ export default function PublisherDashboard() {
             <th>Verified</th>
             <th>CR %</th>
             <th>Revenue</th>
+
+            {/* ✅ NEW DATE + TIME COLUMNS */}
+            <th>Last Pin Gen Date</th>
+            <th>Last Pin Gen Success Date</th>
+            <th>Last Pin Verification Date</th>
+            <th>Last Success Pin Verification Date</th>
           </tr>
         </thead>
 
         <tbody>
           {rows.length === 0 && (
             <tr>
-              <td colSpan="14" align="center">
+              <td colSpan="18" align="center">
                 No offers assigned
               </td>
             </tr>
@@ -128,6 +147,12 @@ export default function PublisherDashboard() {
               <td>{r.unique_pin_verified}</td>
               <td>{r.cr}%</td>
               <td>{r.revenue}</td>
+
+              {/* ✅ DATE + TIME */}
+              <td>{formatDateTime(r.last_pin_gen_date)}</td>
+              <td>{formatDateTime(r.last_pin_gen_success_date)}</td>
+              <td>{formatDateTime(r.last_pin_verification_date)}</td>
+              <td>{formatDateTime(r.last_success_pin_verification_date)}</td>
             </tr>
           ))}
         </tbody>
