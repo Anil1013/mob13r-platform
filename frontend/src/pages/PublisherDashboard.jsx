@@ -5,7 +5,6 @@ const API_BASE =
 
 /* ================= HELPERS ================= */
 
-// Backend already sends IST → render as string
 const formatDateOnly = (value) => {
   if (!value) return "-";
   return value.toString().slice(0, 10).split("-").reverse().join("/");
@@ -20,79 +19,16 @@ const formatDateTime = (value) => {
 
 const hourLabel = (hourValue) => {
   if (!hourValue) return "-";
-  const hour = hourValue.slice(11, 13);
-  const next = String((Number(hour) + 1) % 24).padStart(2, "0");
-  return `${hour}:00 – ${next}:00`;
+  const h = hourValue.slice(11, 13);
+  const n = String((Number(h) + 1) % 24).padStart(2, "0");
+  return `${h}:00 – ${n}:00`;
 };
 
-// Date picker → ISO (IST safe)
 const dateInputToISO = (date, end = false) => {
   const d = new Date(date);
   if (end) d.setHours(23, 59, 59, 999);
   else d.setHours(0, 0, 0, 0);
   return d.toISOString();
-};
-
-// CSV Export
-const exportCSV = (rows) => {
-  if (!rows.length) return;
-
-  const headers = [
-    "Date",
-    "Offer",
-    "Geo",
-    "Carrier",
-    "CPA",
-    "Cap",
-    "Pin Req",
-    "Unique Req",
-    "Pin Sent",
-    "Unique Sent",
-    "Verify Req",
-    "Unique Verify",
-    "Verified",
-    "CR %",
-    "Revenue",
-    "Last Pin Gen",
-    "Last Pin Gen Success",
-    "Last Verification",
-    "Last Success Verification",
-  ];
-
-  const csvRows = [
-    headers.join(","),
-    ...rows.map((r) =>
-      [
-        formatDateOnly(r.stat_date),
-        r.offer,
-        r.geo,
-        r.carrier,
-        r.cpa,
-        r.cap,
-        r.pin_request_count,
-        r.unique_pin_request_count,
-        r.pin_send_count,
-        r.unique_pin_sent,
-        r.pin_validation_request_count,
-        r.unique_pin_validation_request_count,
-        r.unique_pin_verified,
-        r.cr,
-        r.revenue,
-        formatDateTime(r.last_pin_gen_date),
-        formatDateTime(r.last_pin_gen_success_date),
-        formatDateTime(r.last_pin_verification_date),
-        formatDateTime(r.last_success_pin_verification_date),
-      ].join(",")
-    ),
-  ].join("\n");
-
-  const blob = new Blob([csvRows], { type: "text/csv" });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "publisher_dashboard.csv";
-  a.click();
-  window.URL.revokeObjectURL(url);
 };
 
 /* ================= COMPONENT ================= */
@@ -102,12 +38,11 @@ export default function PublisherDashboard() {
 
   const [rows, setRows] = useState([]);
   const [publisherName, setPublisherName] = useState("");
-  const [summary, setSummary] = useState({});
 
-  // 🔥 Default = TODAY
   const [fromDate, setFromDate] = useState(today);
   const [toDate, setToDate] = useState(today);
 
+  /* 🔽 DROPDOWN FILTERS */
   const [filterOffer, setFilterOffer] = useState("");
   const [filterGeo, setFilterGeo] = useState("");
   const [filterCarrier, setFilterCarrier] = useState("");
@@ -120,7 +55,7 @@ export default function PublisherDashboard() {
   const [hourlyRows, setHourlyRows] = useState([]);
   const [hourlyMeta, setHourlyMeta] = useState(null);
 
-  /* ================= FETCH MAIN ================= */
+  /* ================= FETCH ================= */
 
   const fetchData = async () => {
     try {
@@ -139,7 +74,6 @@ export default function PublisherDashboard() {
 
       const data = await res.json();
       setRows(data.rows || []);
-      setSummary(data.summary || {});
       setPublisherName(data.publisher?.name || "");
     } catch {
       setError("Failed to load dashboard");
@@ -152,19 +86,59 @@ export default function PublisherDashboard() {
     fetchData();
   }, []);
 
-  /* ================= FILTERED ================= */
+  /* ================= DROPDOWN OPTIONS ================= */
+
+  const offerOptions = useMemo(
+    () => [...new Set(rows.map((r) => r.offer))],
+    [rows]
+  );
+  const geoOptions = useMemo(
+    () => [...new Set(rows.map((r) => r.geo))],
+    [rows]
+  );
+  const carrierOptions = useMemo(
+    () => [...new Set(rows.map((r) => r.carrier))],
+    [rows]
+  );
+
+  /* ================= FILTERED ROWS ================= */
 
   const filteredRows = useMemo(() => {
     return rows.filter((r) => {
-      if (filterOffer && !r.offer.toLowerCase().includes(filterOffer.toLowerCase()))
-        return false;
-      if (filterGeo && !r.geo.toLowerCase().includes(filterGeo.toLowerCase()))
-        return false;
-      if (filterCarrier && !r.carrier.toLowerCase().includes(filterCarrier.toLowerCase()))
-        return false;
+      if (filterOffer && r.offer !== filterOffer) return false;
+      if (filterGeo && r.geo !== filterGeo) return false;
+      if (filterCarrier && r.carrier !== filterCarrier) return false;
       return true;
     });
   }, [rows, filterOffer, filterGeo, filterCarrier]);
+
+  /* ================= TOTALS ================= */
+
+  const totals = useMemo(() => {
+    return filteredRows.reduce(
+      (a, r) => {
+        a.pin += r.pin_request_count;
+        a.uReq += r.unique_pin_request_count;
+        a.sent += r.pin_send_count;
+        a.uSent += r.unique_pin_sent;
+        a.vReq += r.pin_validation_request_count;
+        a.uVer += r.unique_pin_validation_request_count;
+        a.ver += r.unique_pin_verified;
+        a.rev += Number(r.revenue || 0);
+        return a;
+      },
+      {
+        pin: 0,
+        uReq: 0,
+        sent: 0,
+        uSent: 0,
+        vReq: 0,
+        uVer: 0,
+        ver: 0,
+        rev: 0,
+      }
+    );
+  }, [filteredRows]);
 
   /* ================= HOURLY ================= */
 
@@ -199,16 +173,32 @@ export default function PublisherDashboard() {
         <span style={{ color: "#2563eb" }}>{publisherName}</span>
       </h2>
 
-      {/* FILTERS */}
+      {/* FILTER BAR */}
       <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
         <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
         <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
         <button onClick={fetchData}>Apply</button>
-        <button onClick={() => exportCSV(filteredRows)}>Export CSV</button>
 
-        <input placeholder="Offer" onChange={(e) => setFilterOffer(e.target.value)} />
-        <input placeholder="Geo" onChange={(e) => setFilterGeo(e.target.value)} />
-        <input placeholder="Carrier" onChange={(e) => setFilterCarrier(e.target.value)} />
+        <select value={filterOffer} onChange={(e) => setFilterOffer(e.target.value)}>
+          <option value="">All Offers</option>
+          {offerOptions.map((o) => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+        </select>
+
+        <select value={filterGeo} onChange={(e) => setFilterGeo(e.target.value)}>
+          <option value="">All Geo</option>
+          {geoOptions.map((g) => (
+            <option key={g} value={g}>{g}</option>
+          ))}
+        </select>
+
+        <select value={filterCarrier} onChange={(e) => setFilterCarrier(e.target.value)}>
+          <option value="">All Carrier</option>
+          {carrierOptions.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
       </div>
 
       {/* TABLE */}
@@ -236,6 +226,7 @@ export default function PublisherDashboard() {
             <th>Last Success Verification</th>
           </tr>
         </thead>
+
         <tbody>
           {filteredRows.map((r, i) => (
             <tr key={i}>
@@ -260,6 +251,21 @@ export default function PublisherDashboard() {
               <td>{formatDateTime(r.last_success_pin_verification_date)}</td>
             </tr>
           ))}
+
+          {/* ✅ TOTAL ROW */}
+          <tr style={{ fontWeight: "bold", background: "#f3f4f6" }}>
+            <td colSpan="6">TOTAL</td>
+            <td>{totals.pin}</td>
+            <td>{totals.uReq}</td>
+            <td>{totals.sent}</td>
+            <td>{totals.uSent}</td>
+            <td>{totals.vReq}</td>
+            <td>{totals.uVer}</td>
+            <td>{totals.ver}</td>
+            <td></td>
+            <td>${totals.rev}</td>
+            <td colSpan="4"></td>
+          </tr>
         </tbody>
       </table>
 
