@@ -46,25 +46,11 @@ const exportCSV = (rows, fromDate, toDate, publisherName) => {
   }
 
   const headers = [
-    "Date",
-    "Offer",
-    "Geo",
-    "Carrier",
-    "CPA",
-    "Cap",
-    "Pin Req",
-    "Unique Req",
-    "Pin Sent",
-    "Unique Sent",
-    "Verify Req",
-    "Unique Verify",
-    "Verified",
-    "CR %",
-    "Revenue",
-    "Last Pin Gen",
-    "Last Pin Gen Success",
-    "Last Verification",
-    "Last Success Verification",
+    "Date","Offer","Geo","Carrier","CPA","Cap",
+    "Pin Req","Unique Req","Pin Sent","Unique Sent",
+    "Verify Req","Unique Verify","Verified","CR %",
+    "Revenue","Last Pin Gen","Last Pin Gen Success",
+    "Last Verification","Last Success Verification",
   ];
 
   const csvRows = [
@@ -105,7 +91,6 @@ const exportCSV = (rows, fromDate, toDate, publisherName) => {
   link.href = url;
   link.download = filename;
   link.click();
-
   URL.revokeObjectURL(url);
 };
 
@@ -228,7 +213,7 @@ export default function PublisherDashboard() {
         <span style={{ color: "#2563eb" }}>{publisherName}</span>
       </h2>
 
-      {/* FILTER BAR – SAME AS ORIGINAL */}
+      {/* FILTER BAR – ORIGINAL */}
       <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
         <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
         <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
@@ -264,7 +249,7 @@ export default function PublisherDashboard() {
         </select>
       </div>
 
-      {/* MAIN TABLE – CENTER ALIGNED */}
+      {/* MAIN TABLE */}
       <table
         border="1"
         cellPadding="8"
@@ -280,7 +265,7 @@ export default function PublisherDashboard() {
               "Revenue","Last Pin Gen","Last Pin Gen Success",
               "Last Verification","Last Success Verification",
             ].map((h) => (
-              <th key={h} style={{ textAlign: "center" }}>{h}</th>
+              <th key={h}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -289,7 +274,9 @@ export default function PublisherDashboard() {
           {filteredRows.map((r, i) => (
             <tr key={i}>
               <td>{formatDateOnly(r.stat_date)}</td>
-              <td>{r.offer}</td>
+              <td>
+                <button onClick={() => openHourly(r)}>{r.offer}</button>
+              </td>
               <td>{r.geo}</td>
               <td>{r.carrier}</td>
               <td>{r.cpa}</td>
@@ -310,7 +297,7 @@ export default function PublisherDashboard() {
             </tr>
           ))}
 
-          {/* TOTAL ROW */}
+          {/* TOTAL */}
           <tr style={{ fontWeight: "bold", background: "#f3f4f6" }}>
             <td colSpan="6">TOTAL</td>
             <td>{totals.pin}</td>
@@ -327,7 +314,7 @@ export default function PublisherDashboard() {
         </tbody>
       </table>
 
-      {/* HOURLY TABLE – ALSO CENTER */}
+      {/* HOURLY TABLE */}
       {hourlyOpen && (
         <div style={{ marginTop: 25 }}>
           <h3>
@@ -351,7 +338,7 @@ export default function PublisherDashboard() {
                   "Verified",
                   "Revenue ($)",
                 ].map((h) => (
-                  <th key={h} style={{ textAlign: "center" }}>{h}</th>
+                  <th key={h}>{h}</th>
                 ))}
               </tr>
             </thead>
