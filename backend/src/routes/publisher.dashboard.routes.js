@@ -6,134 +6,133 @@ const router = express.Router();
 
 /**
  * GET /api/publisher/dashboard/offers
- * Publisher Dashboard (LIVE)
- * Optional filters:
- *  - from=YYYY-MM-DD
- *  - to=YYYY-MM-DD
+ * Default: Today data
+ * Optional:
+ * ?from=YYYY-MM-DD or ISO
+ * ?to=YYYY-MM-DD or ISO
  */
 router.get("/dashboard/offers", publisherAuth, async (req, res) => {
   try {
     const publisherId = req.publisher.id;
+    let { from, to } = req.query;
 
-    /* ================= DATE FILTER ================= */
+    // 🕒 DEFAULT = TODAY
+    if (!from || !to) {
+      from = new Date();
+      from.setHours(0, 0, 0, 0);
 
-    const { from, to } = req.query;
-
-    let dateFilterSQL = "";
-    const values = [publisherId];
-
-    if (from) {
-      values.push(`${from} 00:00:00`);
-      dateFilterSQL += ` AND ps.created_at >= $${values.length}`;
+      to = new Date(); // now
     }
 
-    if (to) {
-      values.push(`${to} 23:59:59`);
-      dateFilterSQL += ` AND ps.created_at <= $${values.length}`;
-    }
-
-    /* ================= MAIN QUERY ================= */
+    const params = [publisherId, from, to];
 
     const query = `
+      WITH offer_stats AS (
+        SELECT
+          po.id AS publisher_offer_id,
+          o.service_name AS offer,
+          o.geo,
+          o.carrier,
+          po.publisher_cpa AS cpa,
+          po.daily_cap AS cap,
+
+          COUNT(ps.session_id) AS pin_request_count,
+          COUNT(DISTINCT ps.msisdn) AS unique_pin_request_count,
+
+          COUNT(*) FILTER (
+            WHERE ps.status IN ('OTP_SENT','VERIFIED')
+          ) AS pin_send_count,
+
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.status IN ('OTP_SENT','VERIFIED')
+          ) AS unique_pin_sent,
+
+          COUNT(*) FILTER (
+            WHERE ps.otp_attempts > 0
+          ) AS pin_validation_request_count,
+
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.otp_attempts > 0
+          ) AS unique_pin_validation_request_count,
+
+          COUNT(DISTINCT pc.pin_session_uuid) AS unique_pin_verified,
+
+          ROUND(
+            COUNT(DISTINCT pc.pin_session_uuid)::numeric /
+            NULLIF(
+              COUNT(DISTINCT ps.msisdn)
+                FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')),
+              0
+            ) * 100,
+            2
+          ) AS cr,
+
+          COALESCE(SUM(pc.publisher_cpa), 0) AS revenue,
+
+          MAX(ps.created_at) AS last_pin_gen_date,
+          MAX(ps.created_at) FILTER (
+            WHERE ps.status IN ('OTP_SENT','VERIFIED')
+          ) AS last_pin_gen_success_date,
+          MAX(ps.verified_at) AS last_pin_verification_date,
+          MAX(ps.credited_at) FILTER (
+            WHERE ps.publisher_credited = TRUE
+          ) AS last_success_pin_verification_date
+
+        FROM publisher_offers po
+        JOIN offers o ON o.id = po.offer_id
+        LEFT JOIN pin_sessions ps
+          ON ps.publisher_offer_id = po.id
+         AND ps.created_at BETWEEN $2::timestamptz AND $3::timestamptz
+        LEFT JOIN publisher_conversions pc
+          ON pc.pin_session_uuid = ps.session_id
+         AND pc.status = 'SUCCESS'
+
+        WHERE po.publisher_id = $1
+
+        GROUP BY
+          po.id,
+          o.service_name,
+          o.geo,
+          o.carrier,
+          po.publisher_cpa,
+          po.daily_cap
+      )
+
       SELECT
-        po.id AS publisher_offer_id,
-        o.service_name AS offer,
-        o.geo,
-        o.carrier,
-        po.publisher_cpa AS cpa,
-        po.daily_cap AS cap,
-
-        /* -------- PIN REQUESTS -------- */
-        COUNT(ps.session_id) AS pin_request_count,
-        COUNT(DISTINCT ps.msisdn) AS unique_pin_request_count,
-
-        /* -------- PIN SENT -------- */
-        COUNT(*) FILTER (
-          WHERE ps.status IN ('OTP_SENT','VERIFIED')
-        ) AS pin_send_count,
-
-        COUNT(DISTINCT ps.msisdn) FILTER (
-          WHERE ps.status IN ('OTP_SENT','VERIFIED')
-        ) AS unique_pin_sent,
-
-        /* -------- VERIFY REQUESTS -------- */
-        COUNT(*) FILTER (
-          WHERE ps.otp_attempts > 0
-        ) AS pin_validation_request_count,
-
-        COUNT(DISTINCT ps.msisdn) FILTER (
-          WHERE ps.otp_attempts > 0
-        ) AS unique_pin_validation_request_count,
-
-        /* -------- VERIFIED -------- */
-        COUNT(DISTINCT pc.pin_session_uuid) AS unique_pin_verified,
-
-        /* -------- CR -------- */
-        ROUND(
-          COUNT(DISTINCT pc.pin_session_uuid)::numeric /
-          NULLIF(
-            COUNT(DISTINCT ps.msisdn)
-              FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')),
-            0
-          ) * 100,
-          2
-        ) AS cr,
-
-        /* -------- REVENUE -------- */
-        COALESCE(SUM(pc.publisher_cpa), 0) AS revenue,
-
-        /* -------- LAST ACTIVITY -------- */
-        MAX(ps.created_at) AS last_pin_gen_date,
-
-        MAX(ps.created_at) FILTER (
-          WHERE ps.status IN ('OTP_SENT','VERIFIED')
-        ) AS last_pin_gen_success_date,
-
-        MAX(ps.verified_at) AS last_pin_verification_date,
-
-        MAX(ps.credited_at) FILTER (
-          WHERE ps.publisher_credited = TRUE
-        ) AS last_success_pin_verification_date
-
-      FROM publisher_offers po
-      JOIN offers o
-        ON o.id = po.offer_id
-
-      LEFT JOIN pin_sessions ps
-        ON ps.publisher_offer_id = po.id
-        ${dateFilterSQL}
-
-      LEFT JOIN publisher_conversions pc
-        ON pc.pin_session_uuid = ps.session_id
-       AND pc.status = 'SUCCESS'
-
-      WHERE po.publisher_id = $1
-
-      GROUP BY
-        po.id,
-        o.service_name,
-        o.geo,
-        o.carrier,
-        po.publisher_cpa,
-        po.daily_cap
-
-      ORDER BY
-        revenue DESC,
-        o.geo,
-        o.carrier,
-        po.publisher_cpa,
-        po.daily_cap
+        *,
+        (SELECT SUM(pin_request_count) FROM offer_stats) AS total_pin_requests,
+        (SELECT SUM(unique_pin_verified) FROM offer_stats) AS total_verified,
+        (SELECT SUM(revenue) FROM offer_stats) AS total_revenue
+      FROM offer_stats
+      ORDER BY revenue DESC, geo, carrier
     `;
 
-    const { rows } = await pool.query(query, values);
+    const { rows } = await pool.query(query, params);
 
-    res.json(rows);
-  } catch (err) {
-    console.error("PUBLISHER DASHBOARD ERROR:", err);
-    res.status(500).json({
-      status: "FAILED",
-      message: "Failed to load dashboard data",
+    // 🧾 Summary extract
+    const summary = {
+      total_pin_requests: rows[0]?.total_pin_requests || 0,
+      total_verified: rows[0]?.total_verified || 0,
+      total_revenue: rows[0]?.total_revenue || 0,
+    };
+
+    // Clean rows (remove duplicated summary fields)
+    const cleanRows = rows.map(
+      ({
+        total_pin_requests,
+        total_verified,
+        total_revenue,
+        ...rest
+      }) => rest
+    );
+
+    res.json({
+      summary,
+      rows: cleanRows,
     });
+  } catch (err) {
+    console.error("❌ PUBLISHER DASHBOARD ERROR:", err);
+    res.status(500).json({ error: "Failed to load dashboard data" });
   }
 });
 
