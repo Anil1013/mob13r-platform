@@ -17,16 +17,6 @@ const formatDateTime = (value) => {
   });
 };
 
-// 🔧 FIX #2: missing helper
-const formatHour = (value) => {
-  if (!value) return "-";
-  const d = new Date(value);
-  return d.toLocaleString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
-
 const todayRange = () => {
   const from = new Date();
   from.setHours(0, 0, 0, 0);
@@ -72,11 +62,6 @@ export default function PublisherDashboard() {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const intervalRef = useRef(null);
 
-  /* ===== HOURLY STATE ===== */
-  const [selectedOffer, setSelectedOffer] = useState(null);
-  const [hourlyRows, setHourlyRows] = useState([]);
-  const [hourlyLoading, setHourlyLoading] = useState(false);
-
   /* ================= FETCH ================= */
 
   const fetchData = async (params = {}) => {
@@ -102,66 +87,17 @@ export default function PublisherDashboard() {
         }
       );
 
-      if (res.status === 401) {
-        localStorage.removeItem("publisher_key");
-        throw new Error("Unauthorized. Publisher key invalid.");
-      }
-
       if (!res.ok) throw new Error(`API Error ${res.status}`);
 
       const data = await res.json();
-
       setRows(data.rows || []);
       setSummary(data.summary || {});
       setPublisherName(data.publisher?.name || "");
     } catch (err) {
-      console.error("DASHBOARD LOAD ERROR:", err);
       setError(err.message);
       setRows([]);
-      setSummary({});
-      setPublisherName("");
     } finally {
       setLoading(false);
-    }
-  };
-
-  /* ================= FETCH HOURLY ================= */
-
-  const fetchHourly = async (offer) => {
-    try {
-      setSelectedOffer(offer);
-      setHourlyLoading(true);
-      setHourlyRows([]);
-
-      const publisherKey = localStorage.getItem("publisher_key");
-
-      const params = {
-        from: fromDate ? dateInputToISO(fromDate) : undefined,
-        to: toDate ? dateInputToISO(toDate, true) : undefined,
-      };
-
-      const query = new URLSearchParams(params).toString();
-
-      const res = await fetch(
-        `${API_BASE}/api/publisher/dashboard/offers/${offer.publisher_offer_id}/hourly${
-          query ? `?${query}` : ""
-        }`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "x-publisher-key": publisherKey,
-          },
-        }
-      );
-
-      if (!res.ok) throw new Error("Hourly API failed");
-
-      const data = await res.json();
-      setHourlyRows(data.rows || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setHourlyLoading(false);
     }
   };
 
@@ -181,7 +117,6 @@ export default function PublisherDashboard() {
     } else {
       clearInterval(intervalRef.current);
     }
-
     return () => clearInterval(intervalRef.current);
   }, [autoRefresh, fromDate, toDate]);
 
@@ -194,26 +129,95 @@ export default function PublisherDashboard() {
     });
   };
 
+  /* ================= EXPORT CSV ================= */
+
+  const exportCSV = () => {
+    const meta = [
+      `Publisher: ${publisherName || "-"}`,
+      `Generated At: ${new Date().toLocaleString()}`,
+      "",
+    ];
+
+    const headers = [
+      "Offer",
+      "Geo",
+      "Carrier",
+      "CPA",
+      "Cap",
+      "Last Pin Date",
+      "Pin Req",
+      "Unique Req",
+      "Pin Sent",
+      "Unique Sent",
+      "Verify Req",
+      "Unique Verify",
+      "Verified",
+      "CR %",
+      "Revenue",
+      "Last Pin Gen Date",
+      "Last Pin Gen Success Date",
+      "Last Pin Verification Date",
+      "Last Success Pin Verification Date",
+    ];
+
+    const csv = [
+      ...meta,
+      headers.join(","),
+      ...rows.map((r) =>
+        [
+          r.offer,
+          r.geo,
+          r.carrier,
+          r.cpa,
+          r.cap,
+          formatDateTime(r.last_pin_gen_date),
+          r.pin_request_count,
+          r.unique_pin_request_count,
+          r.pin_send_count,
+          r.unique_pin_sent,
+          r.pin_validation_request_count,
+          r.unique_pin_validation_request_count,
+          r.unique_pin_verified,
+          r.cr,
+          r.revenue,
+          formatDateTime(r.last_pin_gen_date),
+          formatDateTime(r.last_pin_gen_success_date),
+          formatDateTime(r.last_pin_verification_date),
+          formatDateTime(r.last_success_pin_verification_date),
+        ].join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "publisher_dashboard.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   /* ================= UI ================= */
 
   if (loading) return <p style={{ padding: 20 }}>Loading dashboard…</p>;
-
-  if (error)
-    return (
-      <div style={{ padding: 20, color: "red" }}>
-        <h3>Dashboard Error</h3>
-        <p>{error}</p>
-      </div>
-    );
+  if (error) return <p style={{ padding: 20, color: "red" }}>{error}</p>;
 
   return (
     <div style={{ padding: 20 }}>
       <h2>
-        Publisher Dashboard
-        {publisherName && (
-          <span style={{ color: "#2563eb" }}> – {publisherName}</span>
-        )}
+        Publisher Dashboard{" "}
+        <span style={{ color: "#2563eb" }}>{publisherName}</span>
       </h2>
+
+      {/* CONTROLS */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 15 }}>
+        <button onClick={() => fetchData(todayRange())}>Today</button>
+        <button onClick={() => fetchData(yesterdayRange())}>Yesterday</button>
+        <input type="date" onChange={(e) => setFromDate(e.target.value)} />
+        <input type="date" onChange={(e) => setToDate(e.target.value)} />
+        <button onClick={applyFilter}>Apply</button>
+        <button onClick={exportCSV}>Export CSV</button>
+      </div>
 
       {/* TABLE */}
       <table border="1" cellPadding="8" width="100%">
@@ -224,6 +228,7 @@ export default function PublisherDashboard() {
             <th>Carrier</th>
             <th>CPA</th>
             <th>Cap</th>
+            <th>Last Pin Date</th>
             <th>Pin Req</th>
             <th>Unique Req</th>
             <th>Pin Sent</th>
@@ -243,17 +248,12 @@ export default function PublisherDashboard() {
         <tbody>
           {rows.map((r) => (
             <tr key={r.publisher_offer_id}>
-              {/* 🔧 FIX #3: clickable offer */}
-              <td
-                style={{ color: "#2563eb", cursor: "pointer" }}
-                onClick={() => fetchHourly(r)}
-              >
-                {r.offer}
-              </td>
+              <td>{r.offer}</td>
               <td>{r.geo}</td>
               <td>{r.carrier}</td>
               <td>{r.cpa}</td>
               <td>{r.cap}</td>
+              <td>{formatDateTime(r.last_pin_gen_date)}</td>
               <td>{r.pin_request_count}</td>
               <td>{r.unique_pin_request_count}</td>
               <td>{r.pin_send_count}</td>
@@ -271,50 +271,6 @@ export default function PublisherDashboard() {
           ))}
         </tbody>
       </table>
-
-      {/* 🔧 FIX #1: HOURLY TABLE MOVED INSIDE RETURN */}
-      {selectedOffer && (
-        <div style={{ marginTop: 30 }}>
-          <h3>
-            Hourly Stats – {selectedOffer.offer}
-            <button
-              style={{ marginLeft: 15 }}
-              onClick={() => setSelectedOffer(null)}
-            >
-              ✖ Close
-            </button>
-          </h3>
-
-          {hourlyLoading ? (
-            <p>Loading hourly data…</p>
-          ) : (
-            <table border="1" cellPadding="8" width="100%">
-              <thead>
-                <tr>
-                  <th>Hour</th>
-                  <th>Unique Pin Req</th>
-                  <th>Unique Sent</th>
-                  <th>Unique Verify Req</th>
-                  <th>Verified</th>
-                  <th>Revenue ($)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {hourlyRows.map((h, i) => (
-                  <tr key={i}>
-                    <td>{formatHour(h.hour)}</td>
-                    <td>{h.unique_pin_requests}</td>
-                    <td>{h.unique_pin_sent}</td>
-                    <td>{h.unique_pin_verification_requests}</td>
-                    <td>{h.pin_verified}</td>
-                    <td>${h.revenue}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
     </div>
   );
 }
