@@ -8,44 +8,10 @@ const router = express.Router();
  * =========================================================
  * GET /api/publisher/dashboard/offers
  *
- * Default: Today (DATE-WISE rows)
+ * Default: Today (IST date-wise rows)
  * Optional:
  * ?from=ISO_DATE
  * ?to=ISO_DATE
- *
- * Returns:
- * {
- *   publisher: { id, name },
- *   summary: {
- *     total_pin_requests,
- *     total_verified,
- *     total_revenue
- *   },
- *   rows: [
- *     {
- *       stat_date,
- *       publisher_offer_id,
- *       offer,
- *       geo,
- *       carrier,
- *       cpa,
- *       cap,
- *       pin_request_count,
- *       unique_pin_request_count,
- *       pin_send_count,
- *       unique_pin_sent,
- *       pin_validation_request_count,
- *       unique_pin_validation_request_count,
- *       unique_pin_verified,
- *       cr,
- *       revenue,
- *       last_pin_gen_date,
- *       last_pin_gen_success_date,
- *       last_pin_verification_date,
- *       last_success_pin_verification_date
- *     }
- *   ]
- * }
  * =========================================================
  */
 router.get("/dashboard/offers", publisherAuth, async (req, res) => {
@@ -53,11 +19,15 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
     const publisherId = req.publisher.id;
     let { from, to } = req.query;
 
-    /* ---------- DEFAULT = TODAY ---------- */
+    /* ---------- DEFAULT = TODAY (IST) ---------- */
     if (!from || !to) {
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
-      from = start.toISOString();
+      const now = new Date();
+      const istStart = new Date(
+        now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+      );
+      istStart.setHours(0, 0, 0, 0);
+
+      from = istStart.toISOString();
       to = new Date().toISOString();
     }
 
@@ -66,7 +36,9 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
     const query = `
       WITH offer_stats AS (
         SELECT
-          DATE(ps.created_at) AS stat_date,
+          DATE(
+            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+          ) AS stat_date,
 
           po.id AS publisher_offer_id,
           o.service_name AS offer,
@@ -106,15 +78,26 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
             2
           ) AS cr,
 
-          /* ✅ REVENUE = SUM of frozen CPA per conversion */
+          /* ✅ Revenue = frozen CPA */
           COALESCE(SUM(pc.publisher_cpa), 0) AS revenue,
 
-          MAX(ps.created_at) AS last_pin_gen_date,
-          MAX(ps.created_at) FILTER (
+          MAX(
+            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+          ) AS last_pin_gen_date,
+
+          MAX(
+            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+          ) FILTER (
             WHERE ps.status IN ('OTP_SENT','VERIFIED')
           ) AS last_pin_gen_success_date,
-          MAX(ps.verified_at) AS last_pin_verification_date,
-          MAX(ps.credited_at) FILTER (
+
+          MAX(
+            ps.verified_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+          ) AS last_pin_verification_date,
+
+          MAX(
+            ps.credited_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+          ) FILTER (
             WHERE ps.publisher_credited = TRUE
           ) AS last_success_pin_verification_date
 
@@ -124,7 +107,9 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
 
         LEFT JOIN pin_sessions ps
           ON ps.publisher_offer_id = po.id
-         AND ps.created_at BETWEEN $2::timestamptz AND $3::timestamptz
+         AND (
+           ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+         ) BETWEEN $2::timestamptz AND $3::timestamptz
 
         LEFT JOIN publisher_conversions pc
           ON pc.pin_session_uuid = ps.session_id
@@ -133,7 +118,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
         WHERE po.publisher_id = $1
 
         GROUP BY
-          DATE(ps.created_at),
+          stat_date,
           po.id,
           o.service_name,
           o.geo,
@@ -168,6 +153,8 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
         id: req.publisher.id,
         name: req.publisher.name,
       },
+      from,
+      to,
       summary,
       rows: cleanRows,
     });
@@ -180,9 +167,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
 /**
  * =========================================================
  * GET /api/publisher/dashboard/offers/:publisherOfferId/hourly
- *
- * Hourly stats for selected offer
- * (date-range aware, revenue CPA-safe)
+ * Hourly stats (IST based)
  * =========================================================
  */
 router.get(
@@ -194,11 +179,15 @@ router.get(
       const { publisherOfferId } = req.params;
       let { from, to } = req.query;
 
-      /* DEFAULT = TODAY */
+      /* DEFAULT = TODAY (IST) */
       if (!from || !to) {
-        const start = new Date();
-        start.setHours(0, 0, 0, 0);
-        from = start.toISOString();
+        const now = new Date();
+        const istStart = new Date(
+          now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+        );
+        istStart.setHours(0, 0, 0, 0);
+
+        from = istStart.toISOString();
         to = new Date().toISOString();
       }
 
@@ -206,7 +195,10 @@ router.get(
 
       const query = `
         SELECT
-          DATE_TRUNC('hour', ps.created_at) AS hour,
+          DATE_TRUNC(
+            'hour',
+            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+          ) AS hour,
 
           COUNT(DISTINCT ps.msisdn) AS unique_pin_requests,
 
@@ -220,13 +212,14 @@ router.get(
 
           COUNT(DISTINCT pc.pin_session_uuid) AS pin_verified,
 
-          /* ✅ Revenue per hour = SUM of frozen CPA */
           COALESCE(SUM(pc.publisher_cpa), 0) AS revenue
 
         FROM publisher_offers po
         JOIN pin_sessions ps
           ON ps.publisher_offer_id = po.id
-         AND ps.created_at BETWEEN $3::timestamptz AND $4::timestamptz
+         AND (
+           ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+         ) BETWEEN $3::timestamptz AND $4::timestamptz
 
         LEFT JOIN publisher_conversions pc
           ON pc.pin_session_uuid = ps.session_id
