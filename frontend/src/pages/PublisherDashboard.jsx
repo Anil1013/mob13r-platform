@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE || "https://backend.mob13r.com";
@@ -20,10 +20,7 @@ const formatDateTime = (value) => {
 const todayRange = () => {
   const from = new Date();
   from.setHours(0, 0, 0, 0);
-  return {
-    from: from.toISOString(),
-    to: new Date().toISOString(),
-  };
+  return { from: from.toISOString(), to: new Date().toISOString() };
 };
 
 const yesterdayRange = () => {
@@ -34,10 +31,7 @@ const yesterdayRange = () => {
   const to = new Date(from);
   to.setHours(23, 59, 59, 999);
 
-  return {
-    from: from.toISOString(),
-    to: to.toISOString(),
-  };
+  return { from: from.toISOString(), to: to.toISOString() };
 };
 
 const dateInputToISO = (date, isEnd = false) => {
@@ -52,6 +46,7 @@ const dateInputToISO = (date, isEnd = false) => {
 
 export default function PublisherDashboard() {
   const [rows, setRows] = useState([]);
+  const [publisherName, setPublisherName] = useState("");
   const [summary, setSummary] = useState({
     total_pin_requests: 0,
     total_verified: 0,
@@ -61,11 +56,9 @@ export default function PublisherDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  /* Filters */
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
-  /* Auto refresh */
   const [autoRefresh, setAutoRefresh] = useState(false);
   const intervalRef = useRef(null);
 
@@ -99,19 +92,19 @@ export default function PublisherDashboard() {
         throw new Error("Unauthorized. Publisher key invalid.");
       }
 
-      if (!res.ok) {
-        throw new Error(`API Error ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`API Error ${res.status}`);
 
       const data = await res.json();
 
       setRows(data.rows || []);
       setSummary(data.summary || {});
+      setPublisherName(data.publisher?.name || "");
     } catch (err) {
       console.error("DASHBOARD LOAD ERROR:", err);
       setError(err.message);
       setRows([]);
       setSummary({});
+      setPublisherName("");
     } finally {
       setLoading(false);
     }
@@ -120,7 +113,7 @@ export default function PublisherDashboard() {
   /* ================= INIT ================= */
 
   useEffect(() => {
-    fetchData(todayRange()); // 🔥 refresh → today
+    fetchData(todayRange());
   }, []);
 
   /* ================= AUTO REFRESH ================= */
@@ -146,9 +139,15 @@ export default function PublisherDashboard() {
     });
   };
 
-  /* ================= EXPORT ================= */
+  /* ================= EXPORT CSV ================= */
 
   const exportCSV = () => {
+    const meta = [
+      `Publisher: ${publisherName || "-"}`,
+      `Generated At: ${new Date().toLocaleString()}`,
+      "",
+    ];
+
     const headers = [
       "Offer",
       "Geo",
@@ -171,6 +170,7 @@ export default function PublisherDashboard() {
     ];
 
     const csv = [
+      ...meta,
       headers.join(","),
       ...rows.map((r) =>
         [
@@ -199,9 +199,13 @@ export default function PublisherDashboard() {
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
 
+    const safeName = publisherName
+      ? publisherName.replace(/\s+/g, "_").toLowerCase()
+      : "publisher";
+
     const a = document.createElement("a");
     a.href = url;
-    a.download = "publisher_dashboard.csv";
+    a.download = `${safeName}_dashboard.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -220,7 +224,13 @@ export default function PublisherDashboard() {
 
   return (
     <div style={{ padding: 20 }}>
-      <h2>Publisher Dashboard</h2>
+      {/* 🔥 TITLE WITH PUBLISHER NAME */}
+      <h2>
+        Publisher Dashboard
+        {publisherName && (
+          <span style={{ color: "#2563eb" }}> – {publisherName}</span>
+        )}
+      </h2>
 
       {/* CONTROLS */}
       <div style={{ display: "flex", gap: 10, marginBottom: 15 }}>
@@ -292,7 +302,6 @@ export default function PublisherDashboard() {
             </tr>
           ))}
 
-          {/* TOTAL */}
           {rows.length > 0 && (
             <tr style={{ fontWeight: "bold", background: "#f3f4f6" }}>
               <td colSpan="5">TOTAL</td>
