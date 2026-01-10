@@ -4,31 +4,31 @@ import publisherAuth from "../middleware/publisherAuth.js";
 
 const router = express.Router();
 
-/**
- * GET /api/publisher/dashboard/offers
- *
- * Default: Today data
- * Optional:
- * ?from=ISO_DATE
- * ?to=ISO_DATE
- */
+/* ============================================================
+   GET /api/publisher/dashboard/offers
+   - Default: TODAY data
+   - Optional:
+     ?from=ISO_DATE
+     ?to=ISO_DATE
+   - Returns:
+     publisher info
+     summary totals
+     offer-wise rows
+============================================================ */
 router.get("/dashboard/offers", publisherAuth, async (req, res) => {
   try {
     const publisherId = req.publisher.id;
     let { from, to } = req.query;
 
-    /* ================= DEFAULT DATE (TODAY) ================= */
+    /* ===== DEFAULT DATE = TODAY ===== */
     if (!from || !to) {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
-
       from = start.toISOString();
       to = new Date().toISOString();
     }
 
     const params = [publisherId, from, to];
-
-    /* ================= QUERY ================= */
 
     const query = `
       WITH offer_stats AS (
@@ -115,30 +115,24 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
 
     const { rows } = await pool.query(query, params);
 
-    /* ================= SUMMARY ================= */
-
+    /* ===== SUMMARY ===== */
     const summary = {
       total_pin_requests: rows[0]?.total_pin_requests || 0,
       total_verified: rows[0]?.total_verified || 0,
       total_revenue: rows[0]?.total_revenue || 0,
     };
 
-    /* ================= CLEAN ROWS ================= */
-
+    /* ===== CLEAN ROWS ===== */
     const cleanRows = rows.map(
-      ({ total_pin_requests, total_verified, total_revenue, ...rest }) =>
-        rest
+      ({ total_pin_requests, total_verified, total_revenue, ...rest }) => rest
     );
 
-    /* ================= PUBLISHER INFO ================= */
-
-    const publisher = {
-      id: req.publisher.id,
-      name: req.publisher.name,
-    };
-
+    /* ===== RESPONSE ===== */
     res.json({
-      publisher,
+      publisher: {
+        id: req.publisher.id,
+        name: req.publisher.name,
+      },
       summary,
       rows: cleanRows,
     });
@@ -147,5 +141,89 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
     res.status(500).json({ error: "Failed to load dashboard data" });
   }
 });
+
+/* ============================================================
+   GET /api/publisher/dashboard/offers/:publisherOfferId/hourly
+   - Hourly breakdown for selected offer
+   - Uses SAME date filter as dashboard
+============================================================ */
+router.get(
+  "/dashboard/offers/:publisherOfferId/hourly",
+  publisherAuth,
+  async (req, res) => {
+    try {
+      const publisherId = req.publisher.id;
+      const { publisherOfferId } = req.params;
+      let { from, to } = req.query;
+
+      /* DEFAULT = TODAY */
+      if (!from || !to) {
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        from = start.toISOString();
+        to = new Date().toISOString();
+      }
+
+      const params = [
+        publisherId,
+        publisherOfferId,
+        from,
+        to,
+      ];
+
+      const query = `
+        SELECT
+          DATE_TRUNC('hour', ps.created_at) AS hour,
+
+          COUNT(DISTINCT ps.msisdn) AS unique_pin_requests,
+
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.status IN ('OTP_SENT','VERIFIED')
+          ) AS unique_pin_sent,
+
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.otp_attempts > 0
+          ) AS unique_pin_verification_requests,
+
+          COUNT(DISTINCT pc.pin_session_uuid) AS pin_verified,
+
+          COALESCE(SUM(pc.publisher_cpa), 0) AS revenue
+
+        FROM publisher_offers po
+        JOIN pin_sessions ps
+          ON ps.publisher_offer_id = po.id
+         AND ps.created_at BETWEEN $3::timestamptz AND $4::timestamptz
+
+        LEFT JOIN publisher_conversions pc
+          ON pc.pin_session_uuid = ps.session_id
+         AND pc.status = 'SUCCESS'
+
+        WHERE po.publisher_id = $1
+          AND po.id = $2
+
+        GROUP BY hour
+        ORDER BY hour
+      `;
+
+      const { rows } = await pool.query(query, params);
+
+      res.json({
+        publisher: {
+          id: req.publisher.id,
+          name: req.publisher.name,
+        },
+        offer_id: publisherOfferId,
+        from,
+        to,
+        rows,
+      });
+    } catch (err) {
+      console.error("❌ HOURLY DASHBOARD ERROR:", err);
+      res.status(500).json({
+        error: "Failed to load hourly data",
+      });
+    }
+  }
+);
 
 export default router;
