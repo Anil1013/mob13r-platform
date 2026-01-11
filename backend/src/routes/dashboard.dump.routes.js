@@ -4,17 +4,12 @@ import authMiddleware from "../middleware/auth.js";
 
 const router = express.Router();
 
-/**
- * ================================
- * MAIN DUMP DASHBOARD API
- * ================================
- * GET /api/dashboard/dump
- */
+/* ================= PREFLIGHT ================= */
 router.options("/dashboard/dump", (req, res) => {
-  // 🔥 VERY IMPORTANT FOR CORS PREFLIGHT
   return res.sendStatus(204);
 });
 
+/* ================= MAIN DUMP API ================= */
 router.get(
   "/dashboard/dump",
   authMiddleware,
@@ -22,28 +17,30 @@ router.get(
     try {
       const query = `
         SELECT
-          d.offer_id,
-          p.name               AS publisher_name,
-          o.name               AS offer_name,
-          d.geo,
-          d.carrier,
-          d.msisdn,
+          ps.id                          AS session_id,
+          po.offer_id                   AS offer_id,
+          pub.name                      AS publisher_name,
+          o.name                        AS offer_name,
+          ps.geo,
+          ps.carrier,
+          ps.msisdn,
 
-          d.publisher_request,
-          d.publisher_response,
-          d.advertiser_request,
-          d.advertiser_response,
+          ps.publisher_request,
+          ps.publisher_response,
+          ps.adv_request                AS advertiser_request,
+          ps.adv_response               AS advertiser_response,
 
-          d.status,
+          ps.status,
 
-          -- 🔥 IST TIMEZONE FIX
-          (d.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
-            AS created_ist
+          (ps.created_at AT TIME ZONE 'UTC'
+            AT TIME ZONE 'Asia/Kolkata') AS created_ist
 
-        FROM dump_logs d
-        LEFT JOIN publishers p ON p.id = d.publisher_id
-        LEFT JOIN offers o     ON o.id = d.offer_id
-        ORDER BY d.created_at DESC
+        FROM pin_sessions ps
+        JOIN publisher_offers po ON po.id = ps.publisher_offer_id
+        JOIN publishers pub      ON pub.id = po.publisher_id
+        JOIN offers o            ON o.id = po.offer_id
+
+        ORDER BY ps.created_at DESC
         LIMIT 500;
       `;
 
