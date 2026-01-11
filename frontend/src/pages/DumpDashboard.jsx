@@ -10,7 +10,13 @@ export default function DumpDashboard() {
   useEffect(() => {
     const token = localStorage.getItem("token");
 
-    fetch(`${import.meta.env.VITE_API_URL}/api/dashboard/dump`, {
+    if (!API_BASE) {
+      console.error("API_BASE missing");
+      setLoading(false);
+      return;
+    }
+
+    fetch(`${API_BASE}/api/dashboard/dump`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -33,6 +39,7 @@ export default function DumpDashboard() {
   return (
     <div>
       <h1>Main Dump Dashboard</h1>
+
       <table border="1" cellPadding="6">
         <thead>
           <tr>
@@ -50,6 +57,7 @@ export default function DumpDashboard() {
             <th>Date/Time (IST)</th>
           </tr>
         </thead>
+
         <tbody>
           {rows.map((r, i) => (
             <tr key={i}>
@@ -59,10 +67,20 @@ export default function DumpDashboard() {
               <td>{r.geo}</td>
               <td>{r.carrier}</td>
               <td>{r.msisdn}</td>
-              <td><pre>{JSON.stringify(r.publisher_request, null, 2)}</pre></td>
-              <td><pre>{JSON.stringify(r.publisher_response, null, 2)}</pre></td>
-              <td><pre>{JSON.stringify(r.advertiser_request, null, 2)}</pre></td>
-              <td><pre>{JSON.stringify(r.advertiser_response, null, 2)}</pre></td>
+
+              <td>
+                <pre>{JSON.stringify(r.publisher_request, null, 2)}</pre>
+              </td>
+              <td>
+                <pre>{JSON.stringify(r.publisher_response, null, 2)}</pre>
+              </td>
+              <td>
+                <pre>{JSON.stringify(r.advertiser_request, null, 2)}</pre>
+              </td>
+              <td>
+                <pre>{JSON.stringify(r.advertiser_response, null, 2)}</pre>
+              </td>
+
               <td>{r.status}</td>
               <td>{r.created_ist}</td>
             </tr>
