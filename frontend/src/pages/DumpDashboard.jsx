@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
+
 export default function DumpDashboard() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
