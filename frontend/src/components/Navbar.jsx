@@ -45,6 +45,9 @@ export default function Navbar() {
           </NavLink>
           <NavLink to="/publishers/assign" style={navStyle}>
             Assign Offers
+            </NavLink>
+          <Link to="/dashboard/dump">Dump Logs</Link>
+            DumpDashboard
           </NavLink>
          <NavLink to="/publisher/dashboard" style={navStyle}>
             Publisher Dashboard
