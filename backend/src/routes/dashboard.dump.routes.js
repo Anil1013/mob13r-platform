@@ -9,7 +9,7 @@ router.options("/dashboard/dump", (req, res) => {
   return res.sendStatus(204);
 });
 
-/* ================= MAIN DUMP API ================= */
+/* ================= DUMP DASHBOARD ================= */
 router.get(
   "/dashboard/dump",
   authMiddleware,
@@ -17,23 +17,24 @@ router.get(
     try {
       const query = `
         SELECT
-          ps.id                          AS session_id,
-          po.offer_id                   AS offer_id,
-          pub.name                      AS publisher_name,
-          o.name                        AS offer_name,
+          ps.id                                  AS session_id,
+          po.offer_id                           AS offer_id,
+          pub.name                              AS publisher_name,
+          o.title                               AS offer_name,
+
           ps.geo,
           ps.carrier,
           ps.msisdn,
 
           ps.publisher_request,
           ps.publisher_response,
-          ps.adv_request                AS advertiser_request,
-          ps.adv_response               AS advertiser_response,
+          ps.adv_request                        AS advertiser_request,
+          ps.adv_response                       AS advertiser_response,
 
           ps.status,
 
           (ps.created_at AT TIME ZONE 'UTC'
-            AT TIME ZONE 'Asia/Kolkata') AS created_ist
+            AT TIME ZONE 'Asia/Kolkata')         AS created_ist
 
         FROM pin_sessions ps
         JOIN publisher_offers po ON po.id = ps.publisher_offer_id
