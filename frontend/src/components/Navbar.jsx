@@ -14,7 +14,7 @@ export default function Navbar() {
     navigate("/login", { replace: true });
   };
 
-  // ⛔ token hi nahi hai → login
+  // ⛔ token nahi hai → login
   if (!token) {
     navigate("/login", { replace: true });
     return null;
@@ -34,26 +34,33 @@ export default function Navbar() {
           <NavLink to="/dashboard" style={navStyle}>
             Dashboard
           </NavLink>
+
           <NavLink to="/advertisers" style={navStyle}>
             Advertisers
           </NavLink>
+
           <NavLink to="/offers" style={navStyle}>
             Offers
           </NavLink>
+
           <NavLink to="/publishers" style={navStyle}>
             Publishers
           </NavLink>
+
           <NavLink to="/publishers/assign" style={navStyle}>
             Assign Offers
-            </NavLink>
-          <Link to="/dashboard/dump">Dump Logs</Link>
-            DumpDashboard
           </NavLink>
-         <NavLink to="/publisher/dashboard" style={navStyle}>
+
+          {/* ✅ MAIN DUMP DASHBOARD */}
+          <NavLink to="/dashboard/dump" style={navStyle}>
+            Dump Logs
+          </NavLink>
+
+          <NavLink to="/publisher/dashboard" style={navStyle}>
             Publisher Dashboard
           </NavLink>
         </div>
-        
+
         <div style={styles.right}>
           <span style={styles.user}>{user.email}</span>
           <button style={styles.logoutBtn} onClick={logout}>
@@ -62,6 +69,7 @@ export default function Navbar() {
         </div>
       </div>
 
+      {/* Navbar height spacer */}
       <div style={{ height: 60 }} />
     </>
   );
@@ -81,17 +89,37 @@ const styles = {
     padding: "0 28px",
     zIndex: 1000,
   },
-  left: { display: "flex", alignItems: "center", gap: 28 },
-  brand: { fontSize: 18, fontWeight: 700, cursor: "pointer", color: "#fff" },
-  link: { color: "#cbd5f5", textDecoration: "none", fontSize: 16 },
+  left: {
+    display: "flex",
+    alignItems: "center",
+    gap: 28,
+  },
+  brand: {
+    fontSize: 18,
+    fontWeight: 700,
+    cursor: "pointer",
+    color: "#fff",
+  },
+  link: {
+    color: "#cbd5f5",
+    textDecoration: "none",
+    fontSize: 16,
+  },
   activeLink: {
     color: "#fff",
     fontWeight: 600,
     borderBottom: "2px solid #fff",
     paddingBottom: 6,
   },
-  right: { display: "flex", alignItems: "center", gap: 16 },
-  user: { fontSize: 14, color: "#e5e7eb" },
+  right: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+  },
+  user: {
+    fontSize: 14,
+    color: "#e5e7eb",
+  },
   logoutBtn: {
     backgroundColor: "#ef4444",
     color: "#fff",
