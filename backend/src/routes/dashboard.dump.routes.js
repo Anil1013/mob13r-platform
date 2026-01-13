@@ -5,78 +5,56 @@ import authMiddleware from "../middleware/auth.js";
 const router = express.Router();
 
 /**
- * =========================================================
- * MAIN DUMP DASHBOARD
- * URL: GET /api/dashboard/dump
- * AUTH: ADMIN (JWT)
- * TIMEZONE: IST
- * =========================================================
+ * =====================================================
+ * DUMP DASHBOARD (SAFE VERSION)
+ * URL: /api/dashboard/dump
+ * =====================================================
  */
-router.get(
-  "/dashboard/dump",
-  authMiddleware,
-  async (req, res) => {
-    try {
-      const query = `
-        SELECT
-          ps.id AS session_id,
+router.get("/dashboard/dump", authMiddleware, async (req, res) => {
+  try {
+    const query = `
+      SELECT
+        ps.id AS session_id,
 
-          -- Offer
-          o.id AS offer_id,
-          o.service_name AS offer_name,
-          o.geo,
-          o.carrier,
+        o.id AS offer_id,
+        o.service_name AS offer_name,
+        o.geo,
+        o.carrier,
 
-          -- Publisher
-          pub.id AS publisher_id,
-          pub.name AS publisher_name,
+        pub.id AS publisher_id,
+        pub.name AS publisher_name,
 
-          -- MSISDN
-          ps.msisdn,
+        ps.msisdn,
+        ps.status,
 
-          -- Requests / Responses
-          ps.publisher_request,
-          ps.publisher_response,
-          ps.advertiser_request,
-          ps.advertiser_response,
+        (ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') AS created_ist
 
-          -- Status
-          ps.status,
+      FROM pin_sessions ps
 
-          -- IST Time
-          (ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') AS created_ist
+      JOIN offers o
+        ON o.id = ps.offer_id
 
-        FROM pin_sessions ps
+      JOIN publisher_offers po
+        ON po.offer_id = o.id
 
-        JOIN offers o
-          ON o.id = ps.offer_id
+      JOIN publishers pub
+        ON pub.id = po.publisher_id
 
-        JOIN publisher_offers po
-          ON po.offer_id = o.id
+      ORDER BY ps.created_at DESC
+      LIMIT 500;
+    `;
 
-        JOIN publishers pub
-          ON pub.id = po.publisher_id
+    const { rows } = await pool.query(query);
 
-        ORDER BY ps.created_at DESC
-        LIMIT 500;
-      `;
-
-      const { rows } = await pool.query(query);
-
-      res.json({
-        success: true,
-        count: rows.length,
-        data: rows,
-      });
-    } catch (error) {
-      console.error("❌ Dump Dashboard Error:", error);
-
-      res.status(500).json({
-        success: false,
-        message: "Failed to load dump dashboard",
-      });
-    }
+    res.json({
+      success: true,
+      count: rows.length,
+      data: rows,
+    });
+  } catch (err) {
+    console.error("❌ Dump Dashboard Error:", err);
+    res.status(500).json({ success: false });
   }
-);
+});
 
 export default router;
