@@ -8,7 +8,6 @@ const formatIST = (value) => {
   if (!value) return "-";
   const date = new Date(value);
   return date.toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
