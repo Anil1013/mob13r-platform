@@ -6,7 +6,7 @@ const router = express.Router();
 
 /**
  * =====================================================
- * DUMP DASHBOARD (SAFE VERSION)
+ * MAIN DUMP DASHBOARD (FINAL, IST SAFE)
  * URL: /api/dashboard/dump
  * =====================================================
  */
@@ -24,15 +24,24 @@ router.get("/dashboard/dump", authMiddleware, async (req, res) => {
         pub.id AS publisher_id,
         pub.name AS publisher_name,
 
+        adv.name AS advertiser_name,
+
         ps.msisdn,
         ps.status,
 
-        (ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') AS created_ist
+        -- 🔥 IMPORTANT: FORCE STRING (NO TIMESTAMP)
+        to_char(
+          ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata',
+          'YYYY-MM-DD HH24:MI:SS'
+        ) AS created_ist
 
       FROM pin_sessions ps
 
       JOIN offers o
         ON o.id = ps.offer_id
+
+      JOIN advertisers adv
+        ON adv.id = o.advertiser_id
 
       JOIN publisher_offers po
         ON po.offer_id = o.id
@@ -53,7 +62,10 @@ router.get("/dashboard/dump", authMiddleware, async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Dump Dashboard Error:", err);
-    res.status(500).json({ success: false });
+    res.status(500).json({
+      success: false,
+      message: "Dump dashboard failed",
+    });
   }
 });
 
