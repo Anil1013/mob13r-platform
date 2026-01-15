@@ -3,25 +3,24 @@ import { useEffect, useMemo, useState } from "react";
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 
-/* ---------- IST DATE FORMATTER ---------- */
+/* =====================================================
+   IST FORMATTER (NO TIMEZONE CONVERSION)
+   created_ist is already IST from backend
+===================================================== */
 const formatIST = (value) => {
   if (!value) return "-";
-  const date = new Date(value);
-  return date.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+
+  // expected: "2026-01-15 21:22:13"
+  const [date, time] = value.split(" ");
+  const [y, m, d] = date.split("-");
+  return `${d}/${m}/${y}, ${time}`;
 };
 
-/* ---------- JSON SAFE VIEW ---------- */
+/* ---------- SAFE JSON VIEW ---------- */
 const renderJSON = (data) => {
   if (!data) return "-";
   return (
-    <pre style={{ maxHeight: 120, overflow: "auto" }}>
+    <pre style={{ maxHeight: 120, overflow: "auto", margin: 0 }}>
       {JSON.stringify(data, null, 2)}
     </pre>
   );
@@ -37,9 +36,10 @@ export default function DumpDashboard() {
   const [offer, setOffer] = useState("");
   const [publisher, setPublisher] = useState("");
   const [advertiser, setAdvertiser] = useState("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState(""); // YYYY-MM-DD
+  const [toDate, setToDate] = useState("");     // YYYY-MM-DD
 
+  /* ---------- FETCH DATA ---------- */
   useEffect(() => {
     const token = localStorage.getItem("token");
 
@@ -58,31 +58,43 @@ export default function DumpDashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  /* ---------- FILTER LOGIC ---------- */
+  /* =====================================================
+     FILTER LOGIC (STRING-BASED, IST SAFE)
+     created_ist → "YYYY-MM-DD HH:mm:ss"
+===================================================== */
   const filteredRows = useMemo(() => {
     return rows.filter((r) => {
       if (msisdn && !r.msisdn?.includes(msisdn)) return false;
-      if (offer && !r.offer_name?.toLowerCase().includes(offer.toLowerCase()))
+
+      if (
+        offer &&
+        !r.offer_name?.toLowerCase().includes(offer.toLowerCase())
+      )
         return false;
+
       if (
         publisher &&
         !r.publisher_name?.toLowerCase().includes(publisher.toLowerCase())
       )
         return false;
+
       if (
         advertiser &&
         !r.advertiser_name?.toLowerCase().includes(advertiser.toLowerCase())
       )
         return false;
 
+      // ---- DATE FILTER (IST SAFE) ----
       if (fromDate) {
-        if (new Date(r.created_ist) < new Date(fromDate)) return false;
+        if (!r.created_ist) return false;
+        const rowDate = r.created_ist.slice(0, 10); // YYYY-MM-DD
+        if (rowDate < fromDate) return false;
       }
 
       if (toDate) {
-        const end = new Date(toDate);
-        end.setHours(23, 59, 59, 999);
-        if (new Date(r.created_ist) > end) return false;
+        if (!r.created_ist) return false;
+        const rowDate = r.created_ist.slice(0, 10);
+        if (rowDate > toDate) return false;
       }
 
       return true;
@@ -96,13 +108,13 @@ export default function DumpDashboard() {
     <div style={{ padding: 20 }}>
       <h1>Main Dump Dashboard</h1>
 
-      {/* ---------- FILTER BAR ---------- */}
+      {/* ================= FILTER BAR ================= */}
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(6, 1fr)",
           gap: 10,
-          marginBottom: 15,
+          marginBottom: 12,
         }}
       >
         <input
@@ -151,7 +163,7 @@ export default function DumpDashboard() {
         Clear Filters
       </button>
 
-      {/* ---------- TABLE ---------- */}
+      {/* ================= TABLE ================= */}
       <div style={{ overflowX: "auto" }}>
         <table
           border="1"
