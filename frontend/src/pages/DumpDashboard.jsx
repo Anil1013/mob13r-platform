@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import Navbar from "../components/Navbar";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
