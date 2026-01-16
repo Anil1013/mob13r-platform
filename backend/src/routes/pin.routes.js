@@ -8,42 +8,36 @@ import {
   mapPinVerifyResponse,
 } from "../services/advResponseMapper.js";
 
+import { mapPublisherResponse } from "../services/pubResponseMapper.js";
+
 const router = express.Router();
 
 /* ================= CONFIG ================= */
 const MAX_MSISDN_DAILY = 7;
 const MAX_OTP_ATTEMPTS = 10;
 
-/* ================= HELPERS ================= */
-function buildFinalUrl(baseUrl, params = {}) {
-  const clean = {};
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && !String(v).includes("{")) {
-      clean[k] = v;
-    }
-  });
-  const qs = new URLSearchParams(clean).toString();
-  return qs ? `${baseUrl}?${qs}` : baseUrl;
+/* ================= UTILS ================= */
+function getClientIP(req) {
+  return (
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+    req.socket?.remoteAddress ||
+    ""
+  );
 }
 
-function getMethod(staticParams) {
+function getUserAgent(req) {
+  return req.headers["user-agent"] || "";
+}
+
+function getAdvMethod(staticParams) {
   const m = (staticParams.method || "GET").toUpperCase();
   if (!["GET", "POST"].includes(m)) {
-    throw new Error("Invalid HTTP method");
+    throw new Error("Invalid advertiser method");
   }
   return m;
 }
 
-/* ================= DAILY RESET ================= */
-async function resetDailyHits() {
-  await pool.query(`
-    UPDATE offers
-    SET today_hits = 0,
-        last_reset_date = CURRENT_DATE
-    WHERE last_reset_date < CURRENT_DATE
-  `);
-}
-
+/* ================= MSISDN DAILY LIMIT ================= */
 async function isMsisdnLimitReached(msisdn) {
   const r = await pool.query(
     `
@@ -62,22 +56,24 @@ async function isMsisdnLimitReached(msisdn) {
 ===================================================== */
 router.all("/pin/send/:offer_id", async (req, res) => {
   try {
-    await resetDailyHits();
-
     const { offer_id } = req.params;
     const incoming = { ...req.query, ...req.body };
-    const { msisdn, geo, carrier } = incoming;
+    const { msisdn } = incoming;
 
     if (!msisdn) {
       return res.status(400).json({ status: "FAILED", message: "msisdn required" });
     }
 
     if (await isMsisdnLimitReached(msisdn)) {
-      return res.status(429).json({ status: "BLOCKED", message: "MSISDN limit" });
+      return res.status(429).json({
+        status: "BLOCKED",
+        message: "MSISDN daily limit reached",
+      });
     }
 
+    /* ---------- OFFER ---------- */
     const offerRes = await pool.query(
-      `SELECT * FROM offers WHERE id = $1 AND status = 'active'`,
+      `SELECT * FROM offers WHERE id=$1 AND status='active'`,
       [offer_id]
     );
     if (!offerRes.rows.length) {
@@ -85,8 +81,9 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     }
     const offer = offerRes.rows[0];
 
+    /* ---------- OFFER PARAMS ---------- */
     const paramRes = await pool.query(
-      `SELECT param_key, param_value FROM offer_parameters WHERE offer_id = $1`,
+      `SELECT param_key, param_value FROM offer_parameters WHERE offer_id=$1`,
       [offer.id]
     );
 
@@ -94,84 +91,73 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     paramRes.rows.forEach(p => (staticParams[p.param_key] = p.param_value));
 
     if (!staticParams.pin_send_url) {
-      return res.status(500).json({ status: "FAILED", message: "pin_send_url missing" });
+      return res.status(500).json({
+        status: "FAILED",
+        message: "pin_send_url missing",
+      });
     }
 
+    const advMethod = getAdvMethod(staticParams);
     const sessionToken = uuidv4();
 
-    const publisherParams = {
-      msisdn,
-      geo,
-      carrier,
-      ip: req.ip,
-      user_agent: req.headers["user-agent"],
-    };
-
-    const publisherRequest = {
-      url: buildFinalUrl(
-        `${req.protocol}://${req.get("host")}/api/pin/send/${offer.id}`,
-        publisherParams
-      ),
-      body: null,
-      method: "GET",
-      params: publisherParams,
-      headers: {
-        "User-Agent": req.headers["user-agent"] || "",
-        "Content-Type": "application/json",
-        "X-Forwarded-For": req.headers["x-forwarded-for"] || "",
-        "X-Publisher-Key": req.headers["x-publisher-key"] || "",
-      },
-    };
-
-    await pool.query(
-      `
-      INSERT INTO pin_sessions
-      (offer_id, msisdn, session_token, params, status, publisher_request)
-      VALUES ($1,$2,$3,$4,'OTP_SENT',$5)
-      `,
-      [offer.id, msisdn, sessionToken, publisherParams, publisherRequest]
-    );
-
-    /* -------- ADVERTISER PIN SEND -------- */
+    /* ---------- ADVERTISER SENDPIN PARAMS (STRICT) ---------- */
     const advParams = {
       cid: staticParams.cid,
       msisdn,
-      user_ip: req.ip,
-      ua: req.headers["user-agent"],
       pub_id: staticParams.pub_id,
       sub_pub_id: staticParams.sub_pub_id,
+      user_ip: incoming.ip || getClientIP(req),
+      ua: incoming.ua || getUserAgent(req),
+      geo: incoming.geo,
+      carrier: incoming.carrier,
     };
 
-    const advUrl = buildFinalUrl(staticParams.pin_send_url, advParams);
+    /* ---------- SAVE SESSION ---------- */
+    await pool.query(
+      `
+      INSERT INTO pin_sessions
+        (offer_id, msisdn, session_token, params, status)
+      VALUES ($1,$2,$3,$4,'OTP_SENT')
+      `,
+      [offer.id, msisdn, sessionToken, advParams]
+    );
 
-    const advertiserRequest = {
-      url: advUrl,
-      data: null,
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    };
-
-    const advResp = await axios.get(advUrl, {
-      headers: advertiserRequest.headers,
-    });
+    /* ---------- CALL ADVERTISER SENDPIN ---------- */
+    const advResp =
+      advMethod === "GET"
+        ? await axios.get(staticParams.pin_send_url, { params: advParams })
+        : await axios.post(staticParams.pin_send_url, advParams);
 
     const advMapped = mapPinSendResponse(advResp.data);
+    const pubMapped = mapPublisherResponse(advMapped.body);
 
+    /* ---------- STORE RESPONSES ---------- */
     await pool.query(
       `
       UPDATE pin_sessions
-      SET advertiser_request = $1,
-          advertiser_response = $2,
-          status = $3
-      WHERE session_token = $4
+      SET
+        advertiser_request = $1,
+        advertiser_response = $2,
+        publisher_response  = $3,
+        status = $4
+      WHERE session_token = $5
       `,
-      [advertiserRequest, advMapped.body, advMapped.body.status, sessionToken]
+      [
+        {
+          url: `${staticParams.pin_send_url}`,
+          method: advMethod,
+          params: advParams,
+          headers: { "Content-Type": "application/json" },
+        },
+        advMapped.body,
+        pubMapped,
+        pubMapped.status,
+        sessionToken,
+      ]
     );
 
     return res.status(advMapped.httpCode).json({
-      ...advMapped.body,
+      ...pubMapped,
       offer_id: offer.id,
       session_token: sessionToken,
       route: "PRIMARY",
@@ -187,13 +173,18 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 ===================================================== */
 router.all("/pin/verify", async (req, res) => {
   try {
-    const { session_token, otp } = { ...req.query, ...req.body };
-    if (!otp || !session_token) {
-      return res.status(400).json({ status: "FAILED", message: "otp + session_token required" });
+    const input = { ...req.query, ...req.body };
+    const { session_token, otp } = input;
+
+    if (!session_token || !otp) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "session_token and otp required",
+      });
     }
 
     const sRes = await pool.query(
-      `SELECT * FROM pin_sessions WHERE session_token = $1`,
+      `SELECT * FROM pin_sessions WHERE session_token=$1`,
       [session_token]
     );
     if (!sRes.rows.length) {
@@ -201,49 +192,75 @@ router.all("/pin/verify", async (req, res) => {
     }
     const session = sRes.rows[0];
 
-    const paramRes = await pool.query(
-      `SELECT param_key, param_value FROM offer_parameters WHERE offer_id = $1`,
+    if (session.otp_attempts >= MAX_OTP_ATTEMPTS) {
+      return res.status(429).json({ status: "BLOCKED" });
+    }
+
+    /* ---------- OFFER ---------- */
+    const offerRes = await pool.query(
+      `SELECT * FROM offers WHERE id=$1`,
       [session.offer_id]
+    );
+    const offer = offerRes.rows[0];
+
+    /* ---------- OFFER PARAMS ---------- */
+    const paramRes = await pool.query(
+      `SELECT param_key, param_value FROM offer_parameters WHERE offer_id=$1`,
+      [offer.id]
     );
     const staticParams = {};
     paramRes.rows.forEach(p => (staticParams[p.param_key] = p.param_value));
 
-    const verifyParams = {
+    if (!staticParams.verify_pin_url) {
+      return res.status(500).json({
+        status: "FAILED",
+        message: "verify_pin_url missing",
+      });
+    }
+
+    const advMethod = getAdvMethod(staticParams);
+
+    /* ---------- ADVERTISER VERIFYPIN PARAMS ---------- */
+    const advVerifyParams = {
       cid: staticParams.cid,
       msisdn: session.msisdn,
       otp,
-      user_ip: req.ip,
-      ua: req.headers["user-agent"],
       pub_id: staticParams.pub_id,
       sub_pub_id: staticParams.sub_pub_id,
+      user_ip: input.ip || getClientIP(req),
+      ua: input.ua || getUserAgent(req),
     };
 
-    const advVerifyUrl = buildFinalUrl(staticParams.verify_pin_url, verifyParams);
-
-    const advertiserRequest = {
-      url: advVerifyUrl,
-      data: null,
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    };
-
-    const advResp = await axios.get(advVerifyUrl, {
-      headers: advertiserRequest.headers,
-    });
+    const advResp =
+      advMethod === "GET"
+        ? await axios.get(staticParams.verify_pin_url, {
+            params: advVerifyParams,
+          })
+        : await axios.post(staticParams.verify_pin_url, advVerifyParams);
 
     const mapped = mapPinVerifyResponse(advResp.data);
 
     await pool.query(
       `
       UPDATE pin_sessions
-      SET advertiser_request = $1,
-          advertiser_response = $2,
-          status = $3
+      SET
+        advertiser_request = $1,
+        advertiser_response = $2,
+        otp_attempts = otp_attempts + 1,
+        status = $3
       WHERE session_token = $4
       `,
-      [advertiserRequest, mapped.body, mapped.body.status, session.session_token]
+      [
+        {
+          url: staticParams.verify_pin_url,
+          method: advMethod,
+          params: advVerifyParams,
+          headers: { "Content-Type": "application/json" },
+        },
+        mapped.body,
+        mapped.body.status,
+        session.session_token,
+      ]
     );
 
     return res.status(mapped.httpCode).json(mapped.body);
