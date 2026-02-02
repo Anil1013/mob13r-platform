@@ -12,14 +12,22 @@ import { mapPublisherResponse } from "../services/pubResponseMapper.js";
 
 const router = express.Router();
 
-/* ================= HELPERS ================= */
+/* =====================================================
+   HELPERS
+===================================================== */
 
 function buildQueryUrl(baseUrl, params = {}) {
-  const qs = new URLSearchParams(params).toString();
-  return `${baseUrl}?${qs}`;
+  const clean = {};
+  Object.keys(params || {}).forEach((k) => {
+    if (params[k] !== undefined && params[k] !== null && params[k] !== "") {
+      clean[k] = params[k];
+    }
+  });
+  const qs = new URLSearchParams(clean).toString();
+  return qs ? `${baseUrl}?${qs}` : baseUrl;
 }
 
-function pickHeaders(req) {
+function pickPublisherHeaders(req) {
   return {
     "User-Agent": req.headers["user-agent"] || "",
     "X-Forwarded-For": req.headers["x-forwarded-for"] || req.ip,
@@ -30,6 +38,7 @@ function pickHeaders(req) {
 
 /* =====================================================
    🔐 PIN SEND
+   Publisher → Mob13r → Advertiser (sendpin)
 ===================================================== */
 router.all("/pin/send/:offer_id", async (req, res) => {
   try {
@@ -38,7 +47,10 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     const { msisdn } = incomingParams;
 
     if (!msisdn) {
-      return res.status(400).json({ status: "FAILED", message: "msisdn required" });
+      return res.status(400).json({
+        status: "FAILED",
+        message: "msisdn is required",
+      });
     }
 
     /* ---------- OFFER ---------- */
@@ -47,7 +59,10 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       [offer_id]
     );
     if (!offerRes.rows.length) {
-      return res.status(404).json({ status: "FAILED", message: "Offer not found" });
+      return res.status(404).json({
+        status: "FAILED",
+        message: "Offer not found",
+      });
     }
     const offer = offerRes.rows[0];
 
@@ -58,7 +73,16 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     );
 
     const staticParams = {};
-    paramRes.rows.forEach(p => (staticParams[p.param_key] = p.param_value));
+    paramRes.rows.forEach((p) => {
+      staticParams[p.param_key] = p.param_value;
+    });
+
+    if (!staticParams.pin_send_url || !staticParams.verify_pin_url) {
+      return res.status(500).json({
+        status: "FAILED",
+        message: "pin_send_url / verify_pin_url missing",
+      });
+    }
 
     const sessionToken = uuidv4();
 
@@ -67,51 +91,68 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       url: `${req.protocol}://${req.get("host")}${req.originalUrl}`,
       method: req.method,
       params: incomingParams,
-      headers: pickHeaders(req),
       body: req.body || null,
+      headers: pickPublisherHeaders(req),
     };
 
-    /* ---------- BUILD ADV SEND URL ---------- */
+    /* ---------- BUILD ADVERTISER SEND URL ---------- */
     const advParams = {
       ...staticParams,
       ...incomingParams,
       msisdn,
     };
 
-    const advUrl = buildQueryUrl(staticParams.pin_send_url, advParams);
+    const advSendUrl = buildQueryUrl(
+      staticParams.pin_send_url,
+      advParams
+    );
 
     const advertiserRequest = {
-      url: advUrl,
-      method: "GET",
+      url: advSendUrl,
       data: null,
-      headers: { "Content-Type": "application/json" },
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
     };
 
     /* ---------- CREATE SESSION ---------- */
     await pool.query(
       `
       INSERT INTO pin_sessions
-      (offer_id, msisdn, session_token, status,
-       publisher_request, advertiser_request)
-      VALUES ($1,$2,$3,'INIT',$4,$5)
+      (
+        offer_id,
+        msisdn,
+        session_token,
+        status,
+        params,
+        pin_send_url,
+        verify_pin_url,
+        publisher_request,
+        advertiser_request
+      )
+      VALUES ($1,$2,$3,'INIT',$4,$5,$6,$7,$8)
       `,
       [
         offer.id,
         msisdn,
         sessionToken,
+        advParams,
+        staticParams.pin_send_url,
+        staticParams.verify_pin_url,
         publisherRequest,
         advertiserRequest,
       ]
     );
 
-    /* ---------- CALL ADVERTISER ---------- */
-    const advResp = await axios.get(advUrl);
+    /* ---------- CALL ADVERTISER (SEND) ---------- */
+    const advResp = await axios.get(advSendUrl);
     const advData = advResp.data;
 
     const advMapped = mapPinSendResponse(advData);
     const pubMapped = mapPublisherResponse(advMapped.body);
 
-    /* ---------- SAVE RESPONSES ---------- */
+    /* ---------- UPDATE SESSION ---------- */
     await pool.query(
       `
       UPDATE pin_sessions
@@ -134,13 +175,17 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       session_token: sessionToken,
     });
   } catch (err) {
-    console.error("PIN SEND ERROR:", err.message);
-    return res.status(500).json({ status: "FAILED" });
+    console.error("❌ PIN SEND ERROR:", err);
+    return res.status(500).json({
+      status: "FAILED",
+      message: "PIN send failed",
+    });
   }
 });
 
 /* =====================================================
    🔐 PIN VERIFY
+   Publisher → Mob13r → Advertiser (verifypin)
 ===================================================== */
 router.all("/pin/verify", async (req, res) => {
   try {
@@ -148,15 +193,22 @@ router.all("/pin/verify", async (req, res) => {
     const { session_token, otp } = input;
 
     if (!session_token || !otp) {
-      return res.status(400).json({ status: "FAILED", message: "missing params" });
+      return res.status(400).json({
+        status: "FAILED",
+        message: "session_token and otp required",
+      });
     }
 
     const sessionRes = await pool.query(
       `SELECT * FROM pin_sessions WHERE session_token = $1`,
       [session_token]
     );
+
     if (!sessionRes.rows.length) {
-      return res.status(400).json({ status: "FAILED", message: "Invalid session" });
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Invalid session",
+      });
     }
 
     const session = sessionRes.rows[0];
@@ -165,34 +217,39 @@ router.all("/pin/verify", async (req, res) => {
     if (session.status === "SEND_FAILED") {
       return res.status(400).json({
         status: "FAILED",
-        message: "OTP not sent, verification blocked",
+        message: "OTP was not sent, verification blocked",
       });
     }
 
-    /* ---------- BUILD VERIFY URL ---------- */
-    const advParams = {
+    /* ---------- BUILD ADVERTISER VERIFY URL ---------- */
+    const verifyParams = {
       ...session.params,
       otp,
       sessionKey: session.adv_session_key,
     };
 
-    const advUrl = buildQueryUrl(session.verify_pin_url, advParams);
+    const advVerifyUrl = buildQueryUrl(
+      session.verify_pin_url,
+      verifyParams
+    );
 
     const advertiserRequest = {
-      url: advUrl,
-      method: "GET",
+      url: advVerifyUrl,
       data: null,
-      headers: { "Content-Type": "application/json" },
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
     };
 
-    /* ---------- CALL ADVERTISER ---------- */
-    const advResp = await axios.get(advUrl);
+    /* ---------- CALL ADVERTISER (VERIFY) ---------- */
+    const advResp = await axios.get(advVerifyUrl);
     const advData = advResp.data;
 
     const advMapped = mapPinVerifyResponse(advData);
     const pubMapped = mapPublisherResponse(advMapped.body);
 
-    /* ---------- SAVE ---------- */
+    /* ---------- UPDATE SESSION ---------- */
     await pool.query(
       `
       UPDATE pin_sessions
@@ -200,7 +257,11 @@ router.all("/pin/verify", async (req, res) => {
         advertiser_request  = $1,
         advertiser_response = $2,
         publisher_response  = $3,
-        status = $4
+        status = $4,
+        verified_at = CASE
+          WHEN $4 = 'SUCCESS' THEN NOW()
+          ELSE verified_at
+        END
       WHERE session_token = $5
       `,
       [
@@ -214,8 +275,11 @@ router.all("/pin/verify", async (req, res) => {
 
     return res.status(advMapped.httpCode).json(pubMapped);
   } catch (err) {
-    console.error("PIN VERIFY ERROR:", err.message);
-    return res.status(500).json({ status: "FAILED" });
+    console.error("❌ PIN VERIFY ERROR:", err);
+    return res.status(500).json({
+      status: "FAILED",
+      message: "PIN verify failed",
+    });
   }
 });
 
