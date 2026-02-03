@@ -24,18 +24,6 @@ function exportCSV(rows) {
   link.click();
 }
 
-/* ================= EXCEL EXPORT ================= */
-function exportExcel(rows) {
-  if (!rows.length) return alert("No data to export");
-
-  import("xlsx").then(XLSX => {
-    const sheet = XLSX.utils.json_to_sheet(rows);
-    const book = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(book, sheet, "Dump");
-    XLSX.writeFile(book, `dump_${Date.now()}.xlsx`);
-  });
-}
-
 /* ================= JSON VIEW ================= */
 const renderJSON = data => (
   <pre style={{ maxHeight: 130, overflow: "auto" }}>
