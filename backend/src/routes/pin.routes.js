@@ -55,15 +55,14 @@ router.all("/pin/send/:offer_id", async (req, res) => {
   const sessionToken = uuidv4();
 
   /* 🔹 SAVE PUBLISHER REQUEST */
-  const publisherReq = {
-    url: buildUrl(
-      `${req.protocol}://${req.get("host")}${req.originalUrl}`,
-      incoming
-    ),
-    method: req.method,
-    headers: req.headers,
-    params: incoming,
-  };
+  const cleanPath = `${req.protocol}://${req.get("host")}${req.path}`;
+
+const publisherReq = {
+  url: buildUrl(cleanPath, incoming), // ✅ ONLY ONE ?
+  method: req.method,
+  headers: req.headers,
+  params: incoming,
+};
 
   await pool.query(
     `
