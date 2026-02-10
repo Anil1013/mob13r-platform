@@ -7,6 +7,9 @@ import { retryCall } from "./retryService.js";
 import { logMetrics } from "./metricsService.js";
 import { logSession } from "./loggerService.js";
 
+/* ⭐ AI ROUTER */
+import { chooseBestAdvertiser } from "./aiRouterService.js";
+
 import {
   mapPinSendResponse,
   mapPinVerifyResponse
@@ -14,6 +17,9 @@ import {
 
 import { mapPublisherResponse } from "./pubResponseMapper.js";
 
+/* ======================================================
+   🔥 PIN SEND (AI ROUTED)
+====================================================== */
 export async function handlePinSend(req) {
 
   const startTime = Date.now();
@@ -21,12 +27,10 @@ export async function handlePinSend(req) {
   const offerId = req.params.offer_id;
   const incoming = { ...req.query, ...req.body };
 
-  /* ================= FRAUD ================= */
-
+  /* ================= FRAUD CHECK ================= */
   await fraudCheck(incoming);
 
   /* ================= SESSION ================= */
-
   const sessionToken = uuidv4();
 
   const offerRes = await pool.query(
@@ -34,8 +38,19 @@ export async function handlePinSend(req) {
     [offerId]
   );
 
-  const offer = offerRes.rows[0];
+  if (!offerRes.rows.length) {
+    throw new Error("Offer not found");
+  }
 
+  let offer = offerRes.rows[0];
+
+  /* ⭐ AI SELECT BEST ADVERTISER */
+  const bestAdvertiser = await chooseBestAdvertiser(offer.id);
+  if (bestAdvertiser) {
+    offer.advertiser_id = bestAdvertiser.id;
+  }
+
+  /* ================= OFFER PARAMS ================= */
   const paramRes = await pool.query(
     `SELECT param_key,param_value FROM offer_parameters WHERE offer_id=$1`,
     [offer.id]
@@ -47,12 +62,11 @@ export async function handlePinSend(req) {
   });
 
   const finalParams = {
-    ...incoming,
-    ...staticParams
+    ...staticParams,
+    ...incoming
   };
 
   /* ================= LOG PUBLISHER REQUEST ================= */
-
   await logSession(sessionToken, {
     publisher_request: {
       url: req.originalUrl,
@@ -61,33 +75,49 @@ export async function handlePinSend(req) {
     }
   });
 
-  /* ================= ADVERTISER CALL ================= */
+  /* ================= LOG ADVERTISER REQUEST ================= */
+  await logSession(sessionToken, {
+    advertiser_request: {
+      url: staticParams.pin_send_url,
+      params: finalParams,
+      method: (staticParams.method || "GET").toUpperCase()
+    }
+  });
 
+  /* ================= CALL ADVERTISER ================= */
   const advResult = await retryCall(() =>
     advertiserCall(staticParams.pin_send_url, finalParams)
   );
 
+  /* ================= MAP RESPONSE ================= */
   const advMapped = mapPinSendResponse(advResult);
   const pubMapped = mapPublisherResponse(advMapped.body);
 
-  /* ================= SAVE SESSION ================= */
+  /* ⭐ SAFE SESSION KEY EXTRACTION */
+  const advSessionKey =
+    advResult?.sessionKey ||
+    advResult?.session_key ||
+    advResult?.sessionkey ||
+    null;
 
+  /* ================= SAVE SESSION ================= */
   await pool.query(
     `INSERT INTO pin_sessions
-     (offer_id,session_token,msisdn,status,advertiser_response,publisher_response)
-     VALUES ($1,$2,$3,$4,$5,$6)`,
+     (offer_id,session_token,msisdn,status,advertiser_response,publisher_response,adv_session_key,params)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
     [
       offer.id,
       sessionToken,
       incoming.msisdn,
       pubMapped.status,
       advMapped.body,
-      pubMapped
+      pubMapped,
+      advSessionKey,
+      finalParams
     ]
   );
 
   /* ================= METRICS ================= */
-
   await logMetrics({
     route: "SEND",
     latency: Date.now() - startTime,
@@ -104,18 +134,33 @@ export async function handlePinSend(req) {
   };
 }
 
-/* ================= VERIFY ================= */
-
+/* ======================================================
+   🔥 PIN VERIFY (AI ROUTED)
+====================================================== */
 export async function handlePinVerify(req) {
 
+  const startTime = Date.now();
+
   const input = { ...req.query, ...req.body };
+
+  if (!input.session_token) {
+    throw new Error("session_token required");
+  }
 
   const sessionRes = await pool.query(
     `SELECT * FROM pin_sessions WHERE session_token=$1`,
     [input.session_token]
   );
 
+  if (!sessionRes.rows.length) {
+    throw new Error("Invalid session");
+  }
+
   const session = sessionRes.rows[0];
+
+  if (!session.adv_session_key) {
+    throw new Error("Missing advertiser sessionKey");
+  }
 
   const offerRes = await pool.query(
     `SELECT * FROM offers WHERE id=$1`,
@@ -124,13 +169,19 @@ export async function handlePinVerify(req) {
 
   const offer = offerRes.rows[0];
 
+  /* ⭐ AI ADVERTISER SELECTION */
+  const bestAdvertiser = await chooseBestAdvertiser(offer.id);
+
+  /* ================= OFFER PARAMS ================= */
   const paramRes = await pool.query(
     `SELECT param_key,param_value FROM offer_parameters WHERE offer_id=$1`,
     [offer.id]
   );
 
   const staticParams = {};
-  paramRes.rows.forEach(p => staticParams[p.param_key] = p.param_value);
+  paramRes.rows.forEach(p => {
+    staticParams[p.param_key] = p.param_value;
+  });
 
   const payload = {
     ...session.params,
@@ -138,22 +189,44 @@ export async function handlePinVerify(req) {
     sessionKey: session.adv_session_key
   };
 
-  const advResp = await advertiserCall(
-    staticParams.verify_pin_url,
-    payload
+  /* ================= LOG ADVERTISER VERIFY REQUEST ================= */
+  await logSession(session.session_token, {
+    advertiser_request: {
+      url: staticParams.verify_pin_url,
+      params: payload,
+      method: (staticParams.method || "GET").toUpperCase()
+    }
+  });
+
+  /* ================= CALL ADVERTISER ================= */
+  const advResp = await retryCall(() =>
+    advertiserCall(staticParams.verify_pin_url, payload)
   );
 
   const advMapped = mapPinVerifyResponse(advResp);
   const pubMapped = mapPublisherResponse(advMapped.body);
 
+  /* ================= UPDATE SESSION ================= */
   await pool.query(
     `UPDATE pin_sessions
      SET status=$1,
          advertiser_response=$2,
-         publisher_response=$3
+         publisher_response=$3,
+         verified_at = CASE
+            WHEN $1='SUCCESS' THEN NOW()
+            ELSE verified_at
+         END
      WHERE session_token=$4`,
     [pubMapped.status, advMapped.body, pubMapped, input.session_token]
   );
+
+  /* ================= METRICS ================= */
+  await logMetrics({
+    route: "VERIFY",
+    latency: Date.now() - startTime,
+    advertiser: bestAdvertiser?.id || offer.advertiser_id,
+    status: pubMapped.status
+  });
 
   return {
     httpCode: advMapped.httpCode,
