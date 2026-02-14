@@ -2,29 +2,34 @@ import pool from "../db.js";
 
 export async function learnFromResult(advertiserId, success, latency) {
 
-  await pool.query(`
-    INSERT INTO advertiser_metrics
-      (advertiser_id, total_success, total_fail, avg_latency)
-    VALUES ($1,$2,$3,$4)
-    ON CONFLICT (advertiser_id)
-    DO UPDATE SET
-      total_success = advertiser_metrics.total_success + $2,
-      total_fail = advertiser_metrics.total_fail + $3,
+  if (!advertiserId) return;
+
+  await pool.query(
+    `
+    UPDATE advertiser_metrics
+    SET
+      total_success = total_success + $1,
+      total_fail = total_fail + $2,
       avg_latency =
-        (advertiser_metrics.avg_latency + $4) / 2,
+        CASE 
+          WHEN avg_latency = 0 THEN $3
+          ELSE (avg_latency + $3) / 2
+        END,
       success_rate =
         CASE
-          WHEN (advertiser_metrics.total_success + advertiser_metrics.total_fail + 1) = 0
-          THEN 0
-          ELSE
-            (advertiser_metrics.total_success + $2)::float /
-            (advertiser_metrics.total_success + advertiser_metrics.total_fail + 1)
-        END
-  `,
-  [
-    advertiserId,
-    success ? 1 : 0,
-    success ? 0 : 1,
-    latency || 0
-  ]);
+          WHEN (total_success + total_fail + 1) = 0 THEN 0
+          ELSE 
+            (total_success + $1)::float /
+            (total_success + total_fail + 1)
+        END,
+      last_updated = NOW()
+    WHERE advertiser_id = $4::uuid
+    `,
+    [
+      success ? 1 : 0,
+      success ? 0 : 1,
+      latency,
+      advertiserId
+    ]
+  );
 }
