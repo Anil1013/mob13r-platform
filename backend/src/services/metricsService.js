@@ -1,18 +1,7 @@
 import pool from "../db.js";
 
-/*
-  Compatible with advertiser_metrics table:
-
-  id
-  advertiser_id (uuid)
-  success_rate (double precision)
-  avg_latency (double precision)
-  total_success (integer)
-  total_fail (integer)
-  last_updated (timestamp)
-*/
-
 export async function logMetrics({ advertiser, status, latency }) {
+
   if (!advertiser) return;
 
   const isSuccess = status === "SUCCESS";
@@ -28,7 +17,7 @@ export async function logMetrics({ advertiser, status, latency }) {
       last_updated
     )
     VALUES (
-      $1,
+      $1::uuid,
       $2,
       $3,
       $4,
@@ -54,7 +43,7 @@ export async function logMetrics({ advertiser, status, latency }) {
       last_updated = NOW()
     `,
     [
-      advertiser,
+      advertiser,                // UUID
       isSuccess ? 1 : 0,
       isSuccess ? 0 : 1,
       isSuccess ? 1 : 0,
