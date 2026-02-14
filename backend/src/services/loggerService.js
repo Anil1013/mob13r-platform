@@ -9,7 +9,7 @@ export async function logSession(token, data) {
       await pool.query(
         `UPDATE pin_sessions
          SET publisher_request = $1
-         WHERE session_token = $2`,
+         WHERE session_token = $2::uuid`,
         [data.publisher_request, token]
       );
     }
@@ -19,7 +19,7 @@ export async function logSession(token, data) {
       await pool.query(
         `UPDATE pin_sessions
          SET advertiser_request = $1
-         WHERE session_token = $2`,
+         WHERE session_token = $2::uuid`,
         [data.advertiser_request, token]
       );
     }
