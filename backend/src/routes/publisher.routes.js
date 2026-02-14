@@ -168,7 +168,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       `
       SELECT *
       FROM pin_sessions
-      WHERE session_token = $1
+      WHERE session_token = $1::uuid
       FOR UPDATE
       `,
       [session_token]
@@ -280,7 +280,7 @@ router.get("/pin/status", publisherAuth, async (req, res) => {
       `
       SELECT status, verified_at, publisher_credited, credited_at
       FROM pin_sessions
-      WHERE session_token = $1
+      WHERE session_token = $1::uuid
       `,
       [session_token]
     );
@@ -313,7 +313,7 @@ router.get("/portal", publisherAuth, async (req, res) => {
       `
       SELECT portal_url
       FROM pin_sessions
-      WHERE session_token = $1
+      WHERE session_token = $1::uuid
       `,
       [session_token]
     );
