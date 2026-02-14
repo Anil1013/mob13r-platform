@@ -32,47 +32,40 @@ export async function handlePinSend(req) {
 
     const sessionToken = uuidv4();
 
-    /* ================= FETCH OFFER ================= */
-
     const offerRes = await pool.query(
       `SELECT * FROM offers WHERE id=$1`,
       [offerId]
     );
 
-    if (!offerRes.rows.length) {
+    if (!offerRes.rows.length)
       throw new Error("Offer not found");
-    }
 
     let offer = offerRes.rows[0];
 
-    /* ================= AI ROUTER ================= */
+    const bestAdvertiser =
+      await chooseBestAdvertiser(offer, incoming);
 
-    const bestAdvertiser = await chooseBestAdvertiser(offer, incoming);
-
-    if (bestAdvertiser) {
+    if (bestAdvertiser)
       offer.advertiser_id = bestAdvertiser.id;
-    }
-
-    /* ================= OFFER PARAMETERS ================= */
 
     const paramRes = await pool.query(
-      `SELECT param_key, param_value
+      `SELECT param_key,param_value
        FROM offer_parameters
        WHERE offer_id=$1`,
       [offer.id]
     );
 
     const staticParams = {};
-    paramRes.rows.forEach(p => {
-      staticParams[p.param_key] = p.param_value;
-    });
+    paramRes.rows.forEach(p =>
+      staticParams[p.param_key] = p.param_value
+    );
 
     const finalParams = {
       ...staticParams,
       ...incoming
     };
 
-    /* ================= CREATE SESSION FIRST ================= */
+    /* CREATE SESSION FIRST */
 
     await pool.query(
       `INSERT INTO pin_sessions
@@ -87,8 +80,6 @@ export async function handlePinSend(req) {
       ]
     );
 
-    /* ================= LOG PUBLISHER REQUEST ================= */
-
     await logSession(sessionToken, {
       publisher_request: {
         url: req.originalUrl,
@@ -97,8 +88,6 @@ export async function handlePinSend(req) {
       }
     });
 
-    /* ================= LOG ADVERTISER REQUEST ================= */
-
     await logSession(sessionToken, {
       advertiser_request: {
         url: staticParams.pin_send_url,
@@ -106,8 +95,6 @@ export async function handlePinSend(req) {
         method: (staticParams.method || "GET").toUpperCase()
       }
     });
-
-    /* ================= CALL ADVERTISER ================= */
 
     const advResult = await retryCall(() =>
       advertiserCall(staticParams.pin_send_url, finalParams)
@@ -119,10 +106,7 @@ export async function handlePinSend(req) {
     const advSessionKey =
       advResult?.sessionKey ||
       advResult?.session_key ||
-      advResult?.sessionkey ||
       null;
-
-    /* ================= UPDATE SESSION ================= */
 
     await pool.query(
       `UPDATE pin_sessions
@@ -139,8 +123,6 @@ export async function handlePinSend(req) {
         sessionToken
       ]
     );
-
-    /* ================= METRICS ================= */
 
     await logMetrics({
       advertiser: offer.advertiser_id,
@@ -168,7 +150,6 @@ export async function handlePinSend(req) {
   }
 }
 
-
 /* ============================================================
    🔥 PIN VERIFY
 ============================================================ */
@@ -179,39 +160,31 @@ export async function handlePinVerify(req) {
 
   try {
 
-    const input = {
-      session_token: String(req.query.session_token || ""),
-      otp: String(req.query.otp || ""),
-      ip: req.query.ip || null
-    };
+    const sessionToken =
+      String(req.query.session_token || "");
 
-    if (!uuidValidate(input.session_token)) {
+    const otp =
+      String(req.query.otp || "");
+
+    if (!uuidValidate(sessionToken))
       throw new Error("Invalid session_token");
-    }
 
-    if (!input.otp) {
+    if (!otp)
       throw new Error("OTP required");
-    }
-
-    /* ================= FETCH SESSION ================= */
 
     const sessionRes = await pool.query(
       `SELECT * FROM pin_sessions
        WHERE session_token=$1::uuid`,
-      [input.session_token]
+      [sessionToken]
     );
 
-    if (!sessionRes.rows.length) {
+    if (!sessionRes.rows.length)
       throw new Error("Session not found");
-    }
 
     const session = sessionRes.rows[0];
 
-    if (!session.adv_session_key) {
+    if (!session.adv_session_key)
       throw new Error("Missing advertiser sessionKey");
-    }
-
-    /* ================= FETCH OFFER ================= */
 
     const offerRes = await pool.query(
       `SELECT * FROM offers WHERE id=$1`,
@@ -219,13 +192,6 @@ export async function handlePinVerify(req) {
     );
 
     const offer = offerRes.rows[0];
-
-    /* ================= AI ROUTER ================= */
-
-    const bestAdvertiser =
-      await chooseBestAdvertiser(offer, session.params);
-
-    /* ================= OFFER PARAMS ================= */
 
     const paramRes = await pool.query(
       `SELECT param_key,param_value
@@ -235,29 +201,23 @@ export async function handlePinVerify(req) {
     );
 
     const staticParams = {};
-    paramRes.rows.forEach(p => {
-      staticParams[p.param_key] = p.param_value;
-    });
-
-    /* ================= BUILD PAYLOAD ================= */
+    paramRes.rows.forEach(p =>
+      staticParams[p.param_key] = p.param_value
+    );
 
     const payload = {
       ...session.params,
-      otp: input.otp,
+      otp,
       sessionKey: session.adv_session_key
     };
 
-    /* ================= LOG VERIFY REQUEST ================= */
-
-    await logSession(session.session_token, {
+    await logSession(sessionToken, {
       advertiser_request: {
         url: staticParams.verify_pin_url,
         params: payload,
         method: (staticParams.method || "GET").toUpperCase()
       }
     });
-
-    /* ================= CALL ADVERTISER ================= */
 
     const advResp = await retryCall(() =>
       advertiserCall(staticParams.verify_pin_url, payload)
@@ -266,33 +226,44 @@ export async function handlePinVerify(req) {
     const advMapped = mapPinVerifyResponse(advResp);
     const pubMapped = mapPublisherResponse(advMapped.body);
 
-    /* ================= UPDATE SESSION ================= */
+    /* IMPORTANT FIX: NO CASE, NO TYPE CONFUSION */
 
-    await pool.query(
-  `
-  UPDATE pin_sessions
-  SET status = $1::text,
-      advertiser_response = $2::jsonb,
-      publisher_response = $3::jsonb,
-      verified_at = CASE
-        WHEN $1::text = 'SUCCESS' THEN NOW()
-        ELSE verified_at
-      END
-  WHERE session_token = $4::uuid
-  `,
-  [
-    String(pubMapped.status),
-    JSON.stringify(advMapped.body),
-    JSON.stringify(pubMapped),
-    input.session_token
-  ]
-);
+    if (pubMapped.status === "SUCCESS") {
 
+      await pool.query(
+        `UPDATE pin_sessions
+         SET status=$1,
+             advertiser_response=$2,
+             publisher_response=$3,
+             verified_at=NOW()
+         WHERE session_token=$4::uuid`,
+        [
+          pubMapped.status,
+          advMapped.body,
+          pubMapped,
+          sessionToken
+        ]
+      );
 
-    /* ================= METRICS ================= */
+    } else {
+
+      await pool.query(
+        `UPDATE pin_sessions
+         SET status=$1,
+             advertiser_response=$2,
+             publisher_response=$3
+         WHERE session_token=$4::uuid`,
+        [
+          pubMapped.status,
+          advMapped.body,
+          pubMapped,
+          sessionToken
+        ]
+      );
+    }
 
     await logMetrics({
-      advertiser: bestAdvertiser?.id || offer.advertiser_id,
+      advertiser: offer.advertiser_id,
       status: pubMapped.status,
       latency: Date.now() - startTime
     });
