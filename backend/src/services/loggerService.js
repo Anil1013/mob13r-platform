@@ -2,29 +2,46 @@ import pool from "../db.js";
 
 export async function logSession(token, data) {
 
-  try {
+  if (!token) return;
 
-    if (data.publisher_request) {
+  const fields = [];
+  const values = [];
+  let index = 1;
 
-      await pool.query(
-        `UPDATE pin_sessions
-         SET publisher_request = $1
-         WHERE session_token = $2::uuid`,
-        [data.publisher_request, token]
-      );
-    }
-
-    if (data.advertiser_request) {
-
-      await pool.query(
-        `UPDATE pin_sessions
-         SET advertiser_request = $1
-         WHERE session_token = $2::uuid`,
-        [data.advertiser_request, token]
-      );
-    }
-
-  } catch (err) {
-    console.error("Log session error:", err.message);
+  if (data.publisher_request) {
+    fields.push(`publisher_request = $${index}::jsonb`);
+    values.push(JSON.stringify(data.publisher_request));
+    index++;
   }
+
+  if (data.advertiser_request) {
+    fields.push(`advertiser_request = $${index}::jsonb`);
+    values.push(JSON.stringify(data.advertiser_request));
+    index++;
+  }
+
+  if (data.publisher_response) {
+    fields.push(`publisher_response = $${index}::jsonb`);
+    values.push(JSON.stringify(data.publisher_response));
+    index++;
+  }
+
+  if (data.advertiser_response) {
+    fields.push(`advertiser_response = $${index}::jsonb`);
+    values.push(JSON.stringify(data.advertiser_response));
+    index++;
+  }
+
+  if (!fields.length) return;
+
+  values.push(token);
+
+  await pool.query(
+    `
+    UPDATE pin_sessions
+    SET ${fields.join(", ")}
+    WHERE session_token = $${index}::uuid
+    `,
+    values
+  );
 }
