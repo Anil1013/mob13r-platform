@@ -109,7 +109,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
         SET publisher_id = $1,
             publisher_offer_id = $2,
             publisher_cpa = $3
-        WHERE session_token = $4
+        WHERE session_token = $4::uuid
         `,
         [
           publisher.id,
