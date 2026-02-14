@@ -250,24 +250,26 @@ export async function handlePinVerify(req) {
     const pubMapped = mapPublisherResponse(advMapped.body);
 
     /* ================= UPDATE SESSION ================= */
-
+    
     await pool.query(
-      `UPDATE pin_sessions
-       SET status=$1,
-           advertiser_response=$2,
-           publisher_response=$3,
-           verified_at = CASE
-             WHEN $1='SUCCESS' THEN NOW()
-             ELSE verified_at
-           END
-       WHERE session_token = $4::uuid`,
-      [
-        pubMapped.status,
-        advMapped.body,
-        pubMapped,
-        input.session_token
-      ]
-    );
+  `
+  UPDATE pin_sessions
+  SET status = $1::text,
+      advertiser_response = $2::jsonb,
+      publisher_response = $3::jsonb,
+      verified_at = CASE
+        WHEN $1::text = 'SUCCESS' THEN NOW()
+        ELSE verified_at
+      END
+  WHERE session_token = $4::uuid
+  `,
+  [
+    String(pubMapped.status),
+    JSON.stringify(advMapped.body),
+    JSON.stringify(pubMapped),
+    input.session_token
+  ]
+);
 
     /* ================= METRICS ================= */
 
