@@ -1,9 +1,88 @@
 /* =====================================================
-   Advertiser Response Mapper
-   SINGLE SOURCE OF TRUTH
+   UNIVERSAL ADVERTISER RESPONSE MAPPER
+   Dynamic – No Hardcoding – Future Safe
 ===================================================== */
 
-/* ================= PIN SEND ================= */
+/* =====================================================
+   🔍 HELPER: Detect Success
+===================================================== */
+function detectSuccess(data) {
+  if (!data) return false;
+
+  // Boolean style
+  if (typeof data.status === "boolean") return data.status;
+
+  // String success
+  if (typeof data.status === "string") {
+    return ["success", "ok", "otp_sent", "verified"].includes(
+      data.status.toLowerCase()
+    );
+  }
+
+  // Mobifyn style
+  if (typeof data.response === "string") {
+    return data.response.toLowerCase() === "success";
+  }
+
+  // HTTP style code
+  if (data.code && Number(data.code) === 200) return true;
+
+  return false;
+}
+
+/* =====================================================
+   🔍 HELPER: Extract Message
+===================================================== */
+function extractMessage(data) {
+  return (
+    data?.message ||
+    data?.msg ||
+    data?.errorMessage ||
+    data?.error ||
+    data?.description ||
+    data?.err?.errorMessage ||
+    ""
+  );
+}
+
+/* =====================================================
+   🔍 HELPER: Extract Session Key
+===================================================== */
+function extractSessionKey(data) {
+  return (
+    data?.sessionKey ||
+    data?.session_key ||
+    data?.sessionkey ||
+    data?.txnId ||
+    data?.transaction_id ||
+    null
+  );
+}
+
+/* =====================================================
+   🔍 HELPER: Extract Portal URL
+===================================================== */
+function extractPortalUrl(data) {
+  return (
+    data?.portal_url ||
+    data?.redirect_url ||
+    data?.url ||
+    data?.landingUrl ||
+    null
+  );
+}
+
+/* =====================================================
+   🔍 HELPER: Extract Status
+===================================================== */
+function extractStatus(data, successStatus, failStatus) {
+  const success = detectSuccess(data);
+  return success ? successStatus : failStatus;
+}
+
+/* =====================================================
+   📤 PIN SEND MAPPER
+===================================================== */
 export function mapPinSendResponse(advData) {
   if (!advData) {
     return {
@@ -16,35 +95,25 @@ export function mapPinSendResponse(advData) {
     };
   }
 
-  /* ✅ SUCCESS */
-  if (advData.status === true) {
-    return {
-      httpCode: 200,
-      isSuccess: true,
-      body: {
-        status: "OTP_SENT",
-        adv_response: advData,
-      },
-    };
-  }
+  const isSuccess = detectSuccess(advData);
+  const message = extractMessage(advData);
+  const sessionKey = extractSessionKey(advData);
 
-  /* ❌ FAILURE (pass-through advertiser reason) */
   return {
-    httpCode: 400,
-    isSuccess: false,
+    httpCode: isSuccess ? 200 : 400,
+    isSuccess,
+    sessionKey,
     body: {
-      status: "OTP_FAILED",
-      message:
-        advData.errorMessage ||
-        advData.err?.errorMessage ||
-        advData.msg ||
-        "UNKNOWN_ADV_ERROR",
+      status: extractStatus(advData, "OTP_SENT", "OTP_FAILED"),
+      message,
       adv_response: advData,
     },
   };
 }
 
-/* ================= PIN VERIFY ================= */
+/* =====================================================
+   ✅ PIN VERIFY MAPPER
+===================================================== */
 export function mapPinVerifyResponse(advData) {
   if (!advData) {
     return {
@@ -57,28 +126,88 @@ export function mapPinVerifyResponse(advData) {
     };
   }
 
-  /* ✅ VERIFIED */
-  if (advData.status === true) {
+  const isSuccess = detectSuccess(advData);
+  const message = extractMessage(advData);
+
+  return {
+    httpCode: isSuccess ? 200 : 400,
+    isSuccess,
+    body: {
+      status: extractStatus(advData, "SUCCESS", "OTP_INVALID"),
+      message,
+      adv_response: advData,
+    },
+  };
+}
+
+/* =====================================================
+   🔎 STATUS CHECK MAPPER
+===================================================== */
+export function mapStatusCheckResponse(advData) {
+  if (!advData) {
     return {
-      httpCode: 200,
-      isSuccess: true,
+      httpCode: 502,
+      isSuccess: false,
       body: {
-        status: "SUCCESS",
+        status: "ADV_NO_RESPONSE",
+        message: "No response from advertiser",
+      },
+    };
+  }
+
+  const isSuccess = detectSuccess(advData);
+  const message = extractMessage(advData);
+
+  return {
+    httpCode: 200,
+    isSuccess,
+    body: {
+      status: extractStatus(
+        advData,
+        "SUBSCRIPTION_ACTIVE",
+        "SUBSCRIPTION_INACTIVE"
+      ),
+      message,
+      adv_response: advData,
+    },
+  };
+}
+
+/* =====================================================
+   🔗 PORTAL URL MAPPER
+===================================================== */
+export function mapPortalResponse(advData) {
+  if (!advData) {
+    return {
+      httpCode: 502,
+      isSuccess: false,
+      body: {
+        status: "ADV_NO_RESPONSE",
+        message: "No response from advertiser",
+      },
+    };
+  }
+
+  const portalUrl = extractPortalUrl(advData);
+
+  if (!portalUrl) {
+    return {
+      httpCode: 404,
+      isSuccess: false,
+      body: {
+        status: "PORTAL_NOT_FOUND",
+        message: "Portal URL missing",
         adv_response: advData,
       },
     };
   }
 
-  /* ❌ WRONG OTP / FAILED */
   return {
-    httpCode: 400,
-    isSuccess: false,
+    httpCode: 200,
+    isSuccess: true,
     body: {
-      status: "OTP_INVALID",
-      message:
-        advData.errorMessage ||
-        advData.err?.errorMessage ||
-        "OTP_VERIFICATION_FAILED",
+      status: "PORTAL_READY",
+      portal_url: portalUrl,
       adv_response: advData,
     },
   };
