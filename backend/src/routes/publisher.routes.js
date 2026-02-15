@@ -55,60 +55,56 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
   try {
     const publisher = req.publisher;
     const base = { ...req.query, ...req.body };
-    const { msisdn, geo, carrier } = base;
 
-    if (!msisdn || !geo || !carrier) {
+    const { msisdn, geo, carrier, offer_id } = base;
+
+    if (!msisdn || !geo || !carrier || !offer_id) {
       return res.status(400).json({
         status: "FAILED",
-        message: "msisdn, geo and carrier required",
+        message: "msisdn, geo, carrier and offer_id required",
       });
     }
 
-    const enriched = enrichParams(req, base);
+    const params = enrichParams(req, base);
 
-    const offersRes = await pool.query(
+    /* 🔎 Validate Offer Belongs to Publisher */
+    const offerRes = await pool.query(
       `
-      SELECT
+      SELECT 
         po.id AS publisher_offer_id,
         po.publisher_cpa,
-        po.pass_percent,
-        po.daily_cap,
-        po.weight,
         o.id AS offer_id
       FROM publisher_offers po
       JOIN offers o ON o.id = po.offer_id
       WHERE po.publisher_id = $1
+        AND po.offer_id = $2
         AND po.status = 'active'
         AND o.status = 'active'
-        AND o.geo = $2
-        AND o.carrier = $3
       `,
-      [publisher.id, geo, carrier]
+      [publisher.id, offer_id]
     );
 
-    if (!offersRes.rows.length) {
+    if (!offerRes.rows.length) {
       return res.status(404).json({
-        status: "NO_OFFER",
-        message: "No matching offers",
+        status: "FAILED",
+        message: "Offer not allowed for this publisher",
       });
     }
 
-    const picked = pickOfferByWeight(offersRes.rows);
+    const picked = offerRes.rows[0];
 
-    /* ✅ CLEAN PARAMS (NO offer_id DUPLICATION) */
-    const forwardParams = cleanForwardParams(enriched);
-
+    /* 🔥 Direct Internal Call */
     const internal = await axios({
       method: req.method,
-      url: `${INTERNAL_API_BASE}/api/pin/send/${picked.offer_id}`,
-      params: req.method === "GET" ? forwardParams : undefined,
-      data: req.method !== "GET" ? forwardParams : undefined,
+      url: `${INTERNAL_API_BASE}/api/pin/send/${offer_id}`,
+      params: req.method === "GET" ? params : undefined,
+      data: req.method !== "GET" ? params : undefined,
       validateStatus: () => true,
     });
 
     const data = internal.data;
 
-    /* Attach publisher info to session */
+    /* 🔄 Update session mapping */
     if (data?.session_token) {
       await pool.query(
         `
@@ -128,6 +124,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
     }
 
     return res.json(mapPublisherResponse(data));
+
   } catch (err) {
     console.error("PUBLISHER PIN SEND ERROR:", err);
     return res.status(500).json({
@@ -136,6 +133,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
     });
   }
 });
+
 
 /* =====================================================
    ✅ PUBLISHER PIN VERIFY
