@@ -11,63 +11,53 @@ const INTERNAL_API_BASE =
   process.env.INTERNAL_API_BASE || "https://backend.mob13r.com";
 
 /* ================= HELPERS ================= */
+
+/* 
+  IMPORTANT:
+  - Agar publisher ip/user_agent bhej raha hai → use same
+  - Agar nahi bhej raha → auto detect karo
+*/
 function enrichParams(req, params) {
   return {
     ...params,
-    ip: req.headers["x-forwarded-for"]?.split(",")[0] || req.ip,
-    user_agent: req.headers["user-agent"] || "",
+    ip:
+      params.ip ||
+      req.headers["x-forwarded-for"]?.split(",")[0] ||
+      req.ip,
+    user_agent:
+      params.user_agent ||
+      req.headers["user-agent"] ||
+      "",
   };
 }
 
-/* Remove unwanted keys before forwarding */
-function cleanForwardParams(params) {
-  const { offer_id, ...clean } = params;
-  return clean;
-}
-
-/* ================= DAILY RESET HELPER ================= */
 function todayClause() {
   return `credited_at::date = CURRENT_DATE`;
 }
 
-/* ================= WEIGHTED PICK ================= */
-function pickOfferByWeight(rows) {
-  const safe = rows.map((r) => ({
-    ...r,
-    weight: Number(r.weight) > 0 ? Number(r.weight) : 1,
-  }));
-
-  const total = safe.reduce((s, r) => s + r.weight, 0);
-  let rand = Math.random() * total;
-
-  for (const r of safe) {
-    if (rand < r.weight) return r;
-    rand -= r.weight;
-  }
-
-  return safe[0];
-}
-
 /* =====================================================
    📤 PUBLISHER PIN SEND
+   - offer_id REQUIRED
+   - EXACT same params forward
+   - dump me same URL aayega
 ===================================================== */
 router.all("/pin/send", publisherAuth, async (req, res) => {
   try {
     const publisher = req.publisher;
+
     const base = { ...req.query, ...req.body };
+    const { offer_id, msisdn, geo, carrier } = base;
 
-    const { msisdn, geo, carrier, offer_id } = base;
-
-    if (!msisdn || !geo || !carrier || !offer_id) {
+    if (!offer_id || !msisdn || !geo || !carrier) {
       return res.status(400).json({
         status: "FAILED",
-        message: "msisdn, geo, carrier and offer_id required",
+        message: "offer_id, msisdn, geo and carrier required",
       });
     }
 
     const params = enrichParams(req, base);
 
-    /* 🔎 Validate Offer Belongs to Publisher */
+    /* Validate publisher offer access */
     const offerRes = await pool.query(
       `
       SELECT 
@@ -85,7 +75,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
     );
 
     if (!offerRes.rows.length) {
-      return res.status(404).json({
+      return res.status(403).json({
         status: "FAILED",
         message: "Offer not allowed for this publisher",
       });
@@ -93,7 +83,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 
     const picked = offerRes.rows[0];
 
-    /* 🔥 Direct Internal Call */
+    /* 🔥 EXACT forward (offer_id included in query) */
     const internal = await axios({
       method: req.method,
       url: `${INTERNAL_API_BASE}/api/pin/send/${offer_id}`,
@@ -104,7 +94,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 
     const data = internal.data;
 
-    /* 🔄 Update session mapping */
+    /* Map session to publisher */
     if (data?.session_token) {
       await pool.query(
         `
@@ -124,7 +114,6 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
     }
 
     return res.json(mapPublisherResponse(data));
-
   } catch (err) {
     console.error("PUBLISHER PIN SEND ERROR:", err);
     return res.status(500).json({
@@ -134,18 +123,15 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
   }
 });
 
-
 /* =====================================================
    ✅ PUBLISHER PIN VERIFY
 ===================================================== */
 router.all("/pin/verify", publisherAuth, async (req, res) => {
   const client = await pool.connect();
-  try {
-    const enriched = enrichParams(req, {
-      ...req.query,
-      ...req.body,
-    });
 
+  try {
+    const base = { ...req.query, ...req.body };
+    const enriched = enrichParams(req, base);
     const { session_token } = enriched;
 
     if (!session_token) {
@@ -155,7 +141,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       });
     }
 
-    /* Advertiser verify first */
+    /* Advertiser verify */
     const advResp = await axios({
       method: req.method,
       url: `${INTERNAL_API_BASE}/api/pin/verify`,
