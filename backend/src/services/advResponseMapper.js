@@ -1,88 +1,73 @@
 /* =====================================================
-   UNIVERSAL ADVERTISER RESPONSE MAPPER
-   Dynamic – No Hardcoding – Future Safe
-===================================================== */
+   🔥 UNIVERSAL ADVERTISER RESPONSE MAPPER
+   Fully Dynamic – Works with ANY advertiser
+   ===================================================== */
 
-/* =====================================================
-   🔍 HELPER: Detect Success
-===================================================== */
-function detectSuccess(data) {
-  if (!data) return false;
+/* ================= JSON SAFE ACCESS ================= */
 
-  // Boolean style
-  if (typeof data.status === "boolean") return data.status;
+function get(obj, path) {
+  if (!obj || !path) return undefined;
+  return path.split(".").reduce((acc, part) => {
+    if (!acc) return undefined;
+    return acc[part];
+  }, obj);
+}
 
-  // String success
-  if (typeof data.status === "string") {
-    return ["success", "ok", "otp_sent", "verified"].includes(
-      data.status.toLowerCase()
-    );
-  }
+/* ================= SMART SUCCESS DETECTOR ================= */
 
-  // Mobifyn style
-  if (typeof data.response === "string") {
-    return data.response.toLowerCase() === "success";
-  }
+function detectSuccess(advData) {
+  if (!advData) return false;
 
-  // HTTP style code
-  if (data.code && Number(data.code) === 200) return true;
+  // Common patterns
+  if (advData.status === true) return true;
+  if (advData.status === "true") return true;
+  if (advData.success === true) return true;
+  if (advData.code === 200) return true;
+  if (advData.response === "Success") return true;
 
   return false;
 }
 
-/* =====================================================
-   🔍 HELPER: Extract Message
-===================================================== */
-function extractMessage(data) {
+/* ================= SMART MESSAGE EXTRACTOR ================= */
+
+function extractMessage(advData) {
   return (
-    data?.message ||
-    data?.msg ||
-    data?.errorMessage ||
-    data?.error ||
-    data?.description ||
-    data?.err?.errorMessage ||
+    advData?.message ||
+    advData?.msg ||
+    advData?.errorMessage ||
+    advData?.err?.errorMessage ||
+    advData?.err?.msg ||
     ""
   );
 }
 
-/* =====================================================
-   🔍 HELPER: Extract Session Key
-===================================================== */
-function extractSessionKey(data) {
+/* ================= SESSION KEY EXTRACTOR ================= */
+
+function extractSessionKey(advData) {
   return (
-    data?.sessionKey ||
-    data?.session_key ||
-    data?.sessionkey ||
-    data?.txnId ||
-    data?.transaction_id ||
+    advData?.sessionKey ||
+    advData?.session_key ||
+    advData?.txnId ||
+    advData?.transaction_id ||
     null
   );
 }
 
-/* =====================================================
-   🔍 HELPER: Extract Portal URL
-===================================================== */
-function extractPortalUrl(data) {
+/* ================= PORTAL URL EXTRACTOR ================= */
+
+function extractPortalUrl(advData) {
   return (
-    data?.portal_url ||
-    data?.redirect_url ||
-    data?.url ||
-    data?.landingUrl ||
+    advData?.portal_url ||
+    advData?.redirect_url ||
+    advData?.url ||
     null
   );
-}
-
-/* =====================================================
-   🔍 HELPER: Extract Status
-===================================================== */
-function extractStatus(data, successStatus, failStatus) {
-  const success = detectSuccess(data);
-  return success ? successStatus : failStatus;
 }
 
 /* =====================================================
    📤 PIN SEND MAPPER
 ===================================================== */
+
 export function mapPinSendResponse(advData) {
   if (!advData) {
     return {
@@ -91,7 +76,8 @@ export function mapPinSendResponse(advData) {
       body: {
         status: "ADV_NO_RESPONSE",
         message: "No response from advertiser",
-      },
+        adv_response: null
+      }
     };
   }
 
@@ -102,18 +88,19 @@ export function mapPinSendResponse(advData) {
   return {
     httpCode: isSuccess ? 200 : 400,
     isSuccess,
-    sessionKey,
     body: {
-      status: extractStatus(advData, "OTP_SENT", "OTP_FAILED"),
+      status: isSuccess ? "OTP_SENT" : "OTP_FAILED",
       message,
-      adv_response: advData,
-    },
+      session_key: sessionKey,
+      adv_response: advData
+    }
   };
 }
 
 /* =====================================================
-   ✅ PIN VERIFY MAPPER
+   🔐 PIN VERIFY MAPPER
 ===================================================== */
+
 export function mapPinVerifyResponse(advData) {
   if (!advData) {
     return {
@@ -122,36 +109,41 @@ export function mapPinVerifyResponse(advData) {
       body: {
         status: "ADV_NO_RESPONSE",
         message: "No response from advertiser",
-      },
+        adv_response: null
+      }
     };
   }
 
   const isSuccess = detectSuccess(advData);
   const message = extractMessage(advData);
+  const portalUrl = extractPortalUrl(advData);
 
   return {
     httpCode: isSuccess ? 200 : 400,
     isSuccess,
     body: {
-      status: extractStatus(advData, "SUCCESS", "OTP_INVALID"),
+      status: isSuccess ? "SUCCESS" : "OTP_INVALID",
       message,
-      adv_response: advData,
-    },
+      ...(portalUrl ? { portal_url: portalUrl } : {}),
+      adv_response: advData
+    }
   };
 }
 
 /* =====================================================
-   🔎 STATUS CHECK MAPPER
+   📊 STATUS CHECK MAPPER
 ===================================================== */
-export function mapStatusCheckResponse(advData) {
+
+export function mapStatusResponse(advData) {
   if (!advData) {
     return {
       httpCode: 502,
       isSuccess: false,
       body: {
-        status: "ADV_NO_RESPONSE",
+        status: "UNKNOWN",
         message: "No response from advertiser",
-      },
+        adv_response: null
+      }
     };
   }
 
@@ -162,53 +154,41 @@ export function mapStatusCheckResponse(advData) {
     httpCode: 200,
     isSuccess,
     body: {
-      status: extractStatus(
-        advData,
-        "SUBSCRIPTION_ACTIVE",
-        "SUBSCRIPTION_INACTIVE"
-      ),
+      status: isSuccess ? "ACTIVE" : "INACTIVE",
       message,
-      adv_response: advData,
-    },
+      adv_response: advData
+    }
   };
 }
 
 /* =====================================================
-   🔗 PORTAL URL MAPPER
+   🔗 PORTAL MAPPER
 ===================================================== */
+
 export function mapPortalResponse(advData) {
   if (!advData) {
     return {
       httpCode: 502,
       isSuccess: false,
       body: {
-        status: "ADV_NO_RESPONSE",
+        status: "FAILED",
         message: "No response from advertiser",
-      },
+        adv_response: null
+      }
     };
   }
 
   const portalUrl = extractPortalUrl(advData);
-
-  if (!portalUrl) {
-    return {
-      httpCode: 404,
-      isSuccess: false,
-      body: {
-        status: "PORTAL_NOT_FOUND",
-        message: "Portal URL missing",
-        adv_response: advData,
-      },
-    };
-  }
+  const message = extractMessage(advData);
 
   return {
-    httpCode: 200,
-    isSuccess: true,
+    httpCode: portalUrl ? 200 : 400,
+    isSuccess: !!portalUrl,
     body: {
-      status: "PORTAL_READY",
+      status: portalUrl ? "REDIRECT" : "FAILED",
+      message,
       portal_url: portalUrl,
-      adv_response: advData,
-    },
+      adv_response: advData
+    }
   };
 }
