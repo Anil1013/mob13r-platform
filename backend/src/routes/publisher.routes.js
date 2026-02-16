@@ -57,53 +57,72 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
   try {
     const publisher = req.publisher;
     const base = { ...req.query, ...req.body };
-    const { msisdn, geo, carrier } = base;
 
-    if (!msisdn || !geo || !carrier) {
+    const {
+      offer_id,
+      msisdn,
+      geo,
+      carrier
+    } = base;
+
+    if (!offer_id || !msisdn) {
       return res.status(400).json({
         status: "FAILED",
-        message: "msisdn, geo and carrier required",
+        message: "offer_id and msisdn required"
       });
     }
 
     const params = enrichParams(req, base);
 
-    const offersRes = await pool.query(
+    /* Validate that offer is assigned to this publisher */
+    const offerRes = await pool.query(
       `
-      SELECT
+      SELECT 
         po.id AS publisher_offer_id,
         po.publisher_cpa,
-        po.pass_percent,
-        po.daily_cap,
-        po.weight,
-        o.id AS offer_id
+        o.id AS offer_id,
+        o.geo,
+        o.carrier
       FROM publisher_offers po
       JOIN offers o ON o.id = po.offer_id
-      WHERE po.publisher_id = $1
+      WHERE o.id = $1
+        AND po.publisher_id = $2
         AND po.status = 'active'
         AND o.status = 'active'
-        AND o.geo = $2
-        AND o.carrier = $3
       `,
-      [publisher.id, geo, carrier]
+      [offer_id, publisher.id]
     );
 
-    if (!offersRes.rows.length) {
-      return res.status(404).json({
-        status: "NO_OFFER",
-        message: "No matching offers",
+    if (!offerRes.rows.length) {
+      return res.status(403).json({
+        status: "INVALID_OFFER",
+        message: "Offer not assigned to this publisher"
       });
     }
 
-    const picked = pickOfferByWeight(offersRes.rows);
+    const picked = offerRes.rows[0];
 
+    /* Optional: geo/carrier validation */
+    if (geo && picked.geo !== geo) {
+      return res.status(400).json({
+        status: "GEO_MISMATCH"
+      });
+    }
+
+    if (carrier && picked.carrier !== carrier) {
+      return res.status(400).json({
+        status: "CARRIER_MISMATCH"
+      });
+    }
+
+    /* Call internal advertiser API */
     const internal = await axios({
       method: req.method,
       url: `${INTERNAL_API_BASE}/api/pin/send/${picked.offer_id}`,
-      timeout: AXIOS_TIMEOUT,
+      timeout: 8000,
       params: req.method === "GET" ? params : undefined,
       data: req.method !== "GET" ? params : undefined,
-      validateStatus: () => true,
+      validateStatus: () => true
     });
 
     const data = internal.data;
@@ -121,20 +140,24 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
           publisher.id,
           picked.publisher_offer_id,
           picked.publisher_cpa,
-          data.session_token,
+          data.session_token
         ]
       );
     }
 
-    return res.json(mapPublisherResponse(data));
+    return res.json({
+      ...mapPublisherResponse(data),
+      offer_id: picked.offer_id
+    });
+
   } catch (err) {
     console.error("PUBLISHER PIN SEND ERROR:", err);
     return res.status(500).json({
-      status: "FAILED",
-      message: "Publisher pin send failed",
+      status: "FAILED"
     });
   }
 });
+
 
 /* =====================================================
    ✅ PUBLISHER PIN VERIFY
