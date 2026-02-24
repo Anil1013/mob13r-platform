@@ -1,27 +1,33 @@
 /**
- * Publisher Response Mapper
+ * =====================================================
+ * ✅ UNIVERSAL PUBLISHER RESPONSE MAPPER
+ * Stable Session Workflow Version
+ * =====================================================
  *
- * RULES:
- * 1. PIN SEND
- *    → Advertiser response 그대로 forward
+ * FLOW:
+ * PIN SEND
+ *   → session_token ALWAYS returned
  *
- * 2. PIN VERIFY
- *    - ADV FAILED      → same response
- *    - ADV SUCCESS + HOLD
- *         → 30% INVALID_PIN
- *         → 70% ALREADY_SUBSCRIBED
- *    - ADV SUCCESS + PASS
- *         → same response
+ * PIN VERIFY
+ *   ADV FAIL → forward
+ *   HOLD     → smart response
+ *   SUCCESS  → forward
+ *
+ * Publisher never loses session_token
  */
 
-export function mapPublisherResponse(internalData, options = {}) {
+export function mapPublisherResponse(
+  internalData,
+  options = {}
+) {
   const { isHold = false } = options;
 
   /* ================= SAFETY ================= */
+
   if (!internalData || typeof internalData !== "object") {
     return {
       status: "FAILED",
-      message: "Invalid response from system",
+      message: "Invalid system response",
     };
   }
 
@@ -34,11 +40,15 @@ export function mapPublisherResponse(internalData, options = {}) {
     ...rest
   } = internalData;
 
-  /* ================= HOLD CASE (PIN VERIFY ONLY) ================= */
+  /* =====================================================
+     🔐 HOLD LOGIC (VERIFY ONLY)
+  ===================================================== */
+
   if (isHold === true) {
+
     const rand = Math.random() * 100;
 
-    // 🔴 30% INVALID PIN
+    /* 30% INVALID PIN */
     if (rand < 30) {
       return {
         status: "INVALID_PIN",
@@ -47,7 +57,7 @@ export function mapPublisherResponse(internalData, options = {}) {
       };
     }
 
-    // 🟡 70% ALREADY SUBSCRIBED
+    /* 70% ALREADY SUBSCRIBED */
     return {
       status: "ALREADY_SUBSCRIBED",
       message: "User already subscribed",
@@ -55,13 +65,27 @@ export function mapPublisherResponse(internalData, options = {}) {
     };
   }
 
-  /* ================= NORMAL FLOW ================= */
-  // 👉 Advertiser response 그대로 publisher ko
-  return {
-    status,
+  /* =====================================================
+     ✅ NORMAL FLOW
+  ===================================================== */
+
+  const response = {
+    status: status || "FAILED",
     message: message || "",
-    ...(session_token ? { session_token } : {}),
-    ...(portal_url ? { portal_url } : {}),
-    ...rest,
   };
+
+  /* ✅ ALWAYS RETURN SESSION TOKEN */
+  if (session_token) {
+    response.session_token = session_token;
+  }
+
+  /* ✅ PORTAL AUTO PASS */
+  if (portal_url) {
+    response.portal_url = portal_url;
+  }
+
+  /* ✅ PASS EXTRA SAFE DATA */
+  Object.assign(response, rest);
+
+  return response;
 }
