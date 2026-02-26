@@ -52,7 +52,7 @@ async function isMsisdnLimitReached(msisdn) {
 }
 
 /* =====================================================
-   PIN SEND (✅ FALLBACK ENABLED)
+   PIN SEND (FINAL FALLBACK ENGINE)
 ===================================================== */
 
 router.all("/pin/send/:offer_id", async (req, res) => {
@@ -68,8 +68,6 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     if (await isMsisdnLimitReached(msisdn))
       return res.status(429).json({ status: "BLOCKED" });
 
-    /* ---------- OFFER ---------- */
-
     const offerRes = await pool.query(
       `SELECT * FROM offers
        WHERE id=$1 AND status='active'`,
@@ -81,7 +79,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const offer = offerRes.rows[0];
 
-    /* ---------- CREATE SESSION ---------- */
+    /* SESSION CREATE */
 
     const sessionToken = uuidv4();
 
@@ -103,7 +101,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       ]
     );
 
-    /* ---------- LOAD ROUTES ---------- */
+    /* LOAD ROUTES */
 
     const routesRes = await pool.query(
       `SELECT id
@@ -120,16 +118,27 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     let advSessionKey = null;
     let usedRouteId = null;
 
-    /* ---------- FALLBACK LOOP ---------- */
+    /* ================= FALLBACK LOOP ================= */
 
     for (const route of routesRes.rows) {
 
-      const paramRes = await pool.query(
+      /* ROUTE PARAMS */
+      let paramRes = await pool.query(
         `SELECT param_key,param_value
          FROM offer_route_parameters
          WHERE route_id=$1`,
         [route.id]
       );
+
+      /* AUTO FALLBACK */
+      if (!paramRes.rows.length) {
+        paramRes = await pool.query(
+          `SELECT param_key,param_value
+           FROM offer_parameters
+           WHERE offer_id=$1`,
+          [offer.id]
+        );
+      }
 
       const params = {};
       paramRes.rows.forEach(
@@ -137,6 +146,15 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       );
 
       const advUrl = params.pin_send_url;
+
+      if (!advUrl) {
+        console.log(
+          "Missing pin_send_url for route:",
+          route.id
+        );
+        continue;
+      }
+
       const method =
         (params.method || "GET").toUpperCase();
 
@@ -167,10 +185,13 @@ router.all("/pin/send/:offer_id", async (req, res) => {
                 finalParams,
                 { timeout: AXIOS_TIMEOUT }
               )
-            : await axios.get(advUrl, {
-                params: finalParams,
-                timeout: AXIOS_TIMEOUT,
-              });
+            : await axios.get(
+                advUrl,
+                {
+                  params: finalParams,
+                  timeout: AXIOS_TIMEOUT,
+                }
+              );
 
         advertiserResponse =
           resp.data || {};
@@ -247,7 +268,6 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 ===================================================== */
 
 router.all("/pin/verify", async (req, res) => {
-
   try {
 
     const { session_token, otp } = {
@@ -289,14 +309,23 @@ router.all("/pin/verify", async (req, res) => {
       [session_token]
     );
 
-    /* LOCKED ROUTE */
+    /* ROUTE LOCK */
 
-    const paramRes = await pool.query(
+    let paramRes = await pool.query(
       `SELECT param_key,param_value
        FROM offer_route_parameters
        WHERE route_id=$1`,
       [session.route_id]
     );
+
+    if (!paramRes.rows.length) {
+      paramRes = await pool.query(
+        `SELECT param_key,param_value
+         FROM offer_parameters
+         WHERE offer_id=$1`,
+        [session.offer_id]
+      );
+    }
 
     const params = {};
     paramRes.rows.forEach(
@@ -307,8 +336,8 @@ router.all("/pin/verify", async (req, res) => {
       params.verify_pin_url;
 
     const method =
-      (params.verify_method ||
-        "GET").toUpperCase();
+      (params.verify_method || "GET")
+        .toUpperCase();
 
     const payload = {
       ...session.params,
@@ -322,7 +351,6 @@ router.all("/pin/verify", async (req, res) => {
     let resp;
 
     try {
-
       resp =
         method === "POST"
           ? await axios.post(
@@ -337,7 +365,6 @@ router.all("/pin/verify", async (req, res) => {
                 timeout: AXIOS_TIMEOUT,
               }
             );
-
     } catch (e) {
       resp = {
         data:
@@ -377,9 +404,7 @@ router.all("/pin/verify", async (req, res) => {
       ]
     );
 
-    return res.json(
-      publisherResponse
-    );
+    return res.json(publisherResponse);
 
   } catch (err) {
     console.error("PIN VERIFY ERROR:", err);
