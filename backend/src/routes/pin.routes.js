@@ -336,28 +336,52 @@ router.all("/pin/verify", async (req, res) => {
         session_token
       });
 
-    await pool.query(
-      `UPDATE pin_sessions
-       SET advertiser_request=$1,
-           advertiser_response=$2,
-           publisher_response=$3,
-           status=$4,
-           verified_at=NOW()
-       WHERE session_token=$5`,
-      [
-        {
-          url: verifyUrl,
-          method,
-          payload
-        },
-        advResp.data,
-        publisherResponse,
-        advMapped.isSuccess
-          ? "VERIFIED"
-          : "OTP_FAILED",
-        session_token
-      ]
-    );
+   await pool.query(
+`
+INSERT INTO pin_sessions
+(
+  offer_id,
+  msisdn,
+  session_token,
+  params,
+  route_id,
+  advertiser_request,
+  advertiser_response,
+  publisher_response,
+  adv_session_key,
+  status,
+  publisher_request,
+  verified_at
+)
+VALUES
+($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
+`,
+[
+  session.offer_id,
+  session.msisdn,
+  session.session_token,   // SAME TOKEN
+  session.params,
+  session.route_id,
+
+  {
+    url: verifyUrl,
+    method,
+    payload
+  },
+
+  advResp.data,
+  publisherResponse,
+  session.adv_session_key,
+
+  advMapped.isSuccess
+    ? "VERIFIED"
+    : "OTP_FAILED",
+
+  {
+    type: "PIN_VERIFY"
+  }
+]
+);
 
     return res.json(
       publisherResponse
