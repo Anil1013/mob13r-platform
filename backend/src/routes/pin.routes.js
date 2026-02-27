@@ -275,131 +275,115 @@ router.all("/pin/verify", async (req, res) => {
       ...req.body,
     };
 
-    if (!session_token || !otp)
-      return res.status(400).json({
+    if (!session_token || !otp) {
+      return res.json({
         status: "FAILED",
+        message: "Missing params"
       });
+    }
 
     const sRes = await pool.query(
-      `SELECT * FROM pin_sessions
-       WHERE session_token=$1`,
+      `SELECT * FROM pin_sessions WHERE session_token=$1`,
       [session_token]
     );
 
-    if (!sRes.rows.length)
+    if (!sRes.rows.length) {
       return res.json({
-        status: "INVALID_SESSION",
+        status: "INVALID_SESSION"
       });
+    }
 
     const session = sRes.rows[0];
 
-    if (
-      session.otp_attempts >=
-      MAX_OTP_ATTEMPTS
-    )
-      return res.status(429).json({
-        status: "BLOCKED",
-      });
+    /* ================= LOAD VERIFY PARAMS ================= */
 
-    await pool.query(
-      `UPDATE pin_sessions
-       SET otp_attempts=
-       COALESCE(otp_attempts,0)+1
-       WHERE session_token=$1`,
-      [session_token]
-    );
-
-    /* ROUTE LOCK */
-
-    let paramRes = await pool.query(
+    const paramRes = await pool.query(
       `SELECT param_key,param_value
-       FROM offer_route_parameters
-       WHERE route_id=$1`,
-      [session.route_id]
+       FROM offer_parameters
+       WHERE offer_id=$1`,
+      [session.offer_id]
     );
-
-    if (!paramRes.rows.length) {
-      paramRes = await pool.query(
-        `SELECT param_key,param_value
-         FROM offer_parameters
-         WHERE offer_id=$1`,
-        [session.offer_id]
-      );
-    }
 
     const params = {};
     paramRes.rows.forEach(
       p => params[p.param_key] = p.param_value
     );
 
-    const verifyUrl =
-      params.verify_pin_url;
-
-    const method =
-      (params.verify_method || "GET")
-        .toUpperCase();
+    const verifyUrl = params.verify_pin_url;
+    const verifyMethod =
+      (params.verify_method || "GET").toUpperCase();
 
     const payload = {
       ...session.params,
-      otp,
+      otp
     };
 
     if (session.adv_session_key)
-      payload.sessionKey =
-        session.adv_session_key;
+      payload.sessionKey = session.adv_session_key;
 
-    let resp;
+    /* ================= ADVERTISER CALL ================= */
+
+    let advResp;
 
     try {
-      resp =
-        method === "POST"
-          ? await axios.post(
-              verifyUrl,
-              payload,
-              { timeout: AXIOS_TIMEOUT }
-            )
-          : await axios.get(
-              verifyUrl,
-              {
-                params: payload,
-                timeout: AXIOS_TIMEOUT,
-              }
-            );
+      advResp =
+        verifyMethod === "POST"
+          ? await axios.post(verifyUrl, payload)
+          : await axios.get(verifyUrl, {
+              params: payload
+            });
     } catch (e) {
-      resp = {
-        data:
-          e?.response?.data ||
-          null,
+      advResp = {
+        data: e?.response?.data || null
       };
     }
 
+    const advData = advResp?.data || {};
+
     const advMapped =
-      mapPinVerifyResponse(
-        resp.data || {}
-      );
+      mapPinVerifyResponse(advData);
 
     const publisherResponse =
       mapPublisherResponse({
         ...advMapped.body,
-        session_token,
+        session_token
       });
+
+    const verifyStatus =
+      advMapped.isSuccess
+        ? "VERIFIED"
+        : "OTP_FAILED";
+
+    /* ================= ✅ IMPORTANT FIX ================= */
+    /* ALWAYS SAVE VERIFY DUMP */
 
     await pool.query(
       `UPDATE pin_sessions
-       SET advertiser_response=$1,
-           publisher_response=$2,
-           status=$3,
-           verified_at=
-           CASE WHEN $3='VERIFIED'
-           THEN NOW()
-           ELSE verified_at END
-       WHERE session_token=$4`,
+       SET advertiser_request=$1,
+           advertiser_response=$2,
+           publisher_response=$3,
+           status=$4,
+           verified_at =
+             CASE WHEN $4='VERIFIED'
+             THEN NOW()
+             ELSE verified_at END
+       WHERE session_token=$5`,
       [
-        advMapped.body,
+        {
+          url: verifyUrl,
+          method: verifyMethod,
+          params:
+            verifyMethod === "GET"
+              ? payload
+              : null,
+          body:
+            verifyMethod === "POST"
+              ? payload
+              : null,
+        },
+        advData,
         publisherResponse,
-        advMapped.isSuccess
-          ? "VERIFIED"
-          : "OTP_FAILED",
+        verifyStatus,
         session_token,
       ]
     );
@@ -407,9 +391,10 @@ router.all("/pin/verify", async (req, res) => {
     return res.json(publisherResponse);
 
   } catch (err) {
-    console.error("PIN VERIFY ERROR:", err);
-    return res.status(500).json({
-      status: "FAILED",
+    console.error("VERIFY ERROR:", err);
+
+    return res.json({
+      status: "FAILED"
     });
   }
 });
