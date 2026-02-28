@@ -348,47 +348,47 @@ router.all("/pin/verify", async (req, res) => {
     if (!publisher)
       return res
         .status(401)
-        .json({
-          status: "INVALID_KEY",
-        });
+        .json({ status: "INVALID_KEY" });
 
-    const {
-      session_token,
-      otp,
-    } = {
+    const { session_token, otp } = {
       ...req.query,
       ...req.body,
     };
 
-    const sRes =
-      await pool.query(
-        `SELECT * FROM pin_sessions
-         WHERE session_token=$1`,
-        [session_token]
-      );
+    if (!session_token || !otp)
+      return res.json({ status: "FAILED" });
+
+    /* ===============================
+       ORIGINAL SESSION
+    =============================== */
+
+    const sRes = await pool.query(
+      `SELECT * FROM pin_sessions
+       WHERE session_token=$1`,
+      [session_token]
+    );
 
     if (!sRes.rows.length)
       return res.json({
-        status:
-          "INVALID_SESSION",
+        status: "INVALID_SESSION",
       });
 
-    const session =
-      sRes.rows[0];
+    const session = sRes.rows[0];
 
-    const paramRes =
-      await pool.query(
-        `SELECT param_key,param_value
-         FROM offer_parameters
-         WHERE offer_id=$1`,
-        [session.offer_id]
-      );
+    /* ===============================
+       OFFER PARAMS
+    =============================== */
+
+    const paramRes = await pool.query(
+      `SELECT param_key,param_value
+       FROM offer_parameters
+       WHERE offer_id=$1`,
+      [session.offer_id]
+    );
 
     const params = {};
     paramRes.rows.forEach(
-      p =>
-        (params[p.param_key] =
-          p.param_value)
+      p => (params[p.param_key] = p.param_value)
     );
 
     const verifyUrl =
@@ -409,6 +409,48 @@ router.all("/pin/verify", async (req, res) => {
       sessionKey:
         session.adv_session_key,
     };
+
+    /* ===============================
+       ✅ NEW VERIFY SESSION TOKEN
+    =============================== */
+
+    const verifySessionToken =
+      uuidv4();
+
+    /* ===============================
+       INSERT VERIFY ROW FIRST
+    =============================== */
+
+    await pool.query(
+      `INSERT INTO pin_sessions
+       (offer_id,
+        msisdn,
+        session_token,
+        parent_session_token,
+        params,
+        publisher_request,
+        status)
+       VALUES ($1,$2,$3,$4,$5,$6,
+       'VERIFY_REQUESTED')`,
+      [
+        session.offer_id,
+        session.msisdn,
+        verifySessionToken,
+        session_token,
+        payload,
+        {
+          url: req.originalUrl,
+          method: req.method,
+          headers:
+            captureHeaders(req),
+          params: payload,
+        },
+      ]
+    );
+
+    /* ===============================
+       ADVERTISER CALL
+    =============================== */
 
     const advCall =
       await callAdvertiser(
@@ -431,19 +473,20 @@ router.all("/pin/verify", async (req, res) => {
     } catch {
       advMapped = {
         isSuccess: false,
-        body: {
-          status: "FAILED",
-        },
+        body: { status: "FAILED" },
       };
     }
 
     const publisherResponse =
       mapPublisherResponse({
         ...advMapped.body,
-        session_token,
+        session_token:
+          verifySessionToken,
       });
 
-    /* ✅ VERIFY DUMP RESTORED */
+    /* ===============================
+       UPDATE VERIFY ROW ONLY
+    =============================== */
 
     await pool.query(
       `UPDATE pin_sessions
@@ -468,7 +511,7 @@ router.all("/pin/verify", async (req, res) => {
         advMapped.isSuccess
           ? "VERIFIED"
           : "OTP_FAILED",
-        session_token,
+        verifySessionToken,
       ]
     );
 
@@ -481,6 +524,7 @@ router.all("/pin/verify", async (req, res) => {
       "PIN VERIFY ERROR:",
       err
     );
+
     return res
       .status(500)
       .json({
@@ -488,5 +532,4 @@ router.all("/pin/verify", async (req, res) => {
       });
   }
 });
-
 export default router;
