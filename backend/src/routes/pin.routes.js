@@ -330,10 +330,25 @@ params:payload
 ]
 );
 
-/* ✅ SAFE VERIFY EXECUTION */
+/* ✅ SAVE REQUEST IMMEDIATELY */
 
-let advertiserRequestDump={};
-let advertiserResponseDump={};
+await pool.query(
+`UPDATE pin_sessions
+SET advertiser_request=$1
+WHERE session_token=$2`,
+[
+{
+url:params.verify_pin_url,
+method:params.verify_method||"GET",
+payload
+},
+verifySessionToken
+]
+);
+
+/* CALL ADVERTISER */
+
+let advData={};
 let advMapped={isSuccess:false,body:{status:"FAILED"}};
 
 try{
@@ -345,72 +360,37 @@ params.verify_fallback_url,
 payload
 );
 
-const advData=
-advCall?.response?.data||{};
-
-advertiserRequestDump={
-url:advCall.used,
-method:advCall.method,
-payload
-};
-
-advertiserResponseDump=advData;
+advData=advCall?.response?.data||{};
 
 try{
-advMapped=
-mapPinVerifyResponse(advData);
+advMapped=mapPinVerifyResponse(advData);
+}catch{}
+
 }catch(e){
-console.log("VERIFY MAP ERROR:",e.message);
+console.log("VERIFY ADV FAIL:",e.message);
 }
 
-}catch(err){
-
-advertiserRequestDump={
-url:params.verify_pin_url,
-method:params.verify_method||"GET",
-payload,
-error:err.message
-};
-
-advertiserResponseDump={
-error:"Advertiser failed"
-};
-}
-
-const publisherResponse=
-mapPublisherResponse({
-...advMapped.body,
-session_token:verifySessionToken
-});
-
-/* ✅ UPDATE ALWAYS EXECUTES */
+/* FINAL UPDATE */
 
 await pool.query(
 `UPDATE pin_sessions
-SET advertiser_request=$1,
-advertiser_response=$2,
-publisher_response=$3,
-status=$4,
+SET advertiser_response=$1,
+publisher_response=$2,
+status=$3,
 verified_at=
-CASE WHEN $4='VERIFIED'
+CASE WHEN $3='VERIFIED'
 THEN NOW()
 ELSE verified_at END
-WHERE session_token=$5`,
+WHERE session_token=$4`,
 [
-advertiserRequestDump,
-advertiserResponseDump,
-publisherResponse,
+advData,
+mapPublisherResponse({
+...advMapped.body,
+session_token:verifySessionToken
+}),
 advMapped.isSuccess?"VERIFIED":"OTP_FAILED",
 verifySessionToken
 ]
 );
-
-return res.json(publisherResponse);
-
-}catch(err){
-console.error("PIN VERIFY ERROR:",err);
-return res.status(500).json({status:"FAILED"});
-}
-});
-
+  
 export default router;
