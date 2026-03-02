@@ -94,12 +94,13 @@ async function callAdvertiser(
           });
 
     return { response: resp, used: url, method };
+
   } catch (err) {
+
     console.log("PRIMARY FAILED");
 
     try {
-      if (!fallback)
-        throw err;
+      if (!fallback) throw err;
 
       const resp =
         method === "POST"
@@ -121,7 +122,9 @@ async function callAdvertiser(
         used: fallback,
         method,
       };
+
     } catch (fallbackErr) {
+
       return {
         response: {
           data:
@@ -137,7 +140,7 @@ async function callAdvertiser(
 }
 
 /* =====================================================
-PIN SEND
+PIN SEND (UNCHANGED LOGIC)
 ===================================================== */
 
 router.all("/pin/send/:offer_id", async (req, res) => {
@@ -157,13 +160,14 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     if (await isMsisdnLimitReached(msisdn))
       return res.status(429).json({ status: "BLOCKED" });
 
-    const offer = (
-      await pool.query(
-        `SELECT * FROM offers
-         WHERE id=$1 AND status='active'`,
-        [offer_id]
-      )
-    ).rows[0];
+    const offer =
+      (
+        await pool.query(
+          `SELECT * FROM offers
+           WHERE id=$1 AND status='active'`,
+          [offer_id]
+        )
+      ).rows[0];
 
     const paramRows = await pool.query(
       `SELECT param_key,param_value
@@ -210,13 +214,18 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       finalParams
     );
 
-    const advData = advCall?.response?.data || {};
+    const advData =
+      advCall?.response?.data || {};
 
     let advMapped;
     try {
-      advMapped = mapPinSendResponse(advData);
+      advMapped =
+        mapPinSendResponse(advData);
     } catch {
-      advMapped = { isSuccess:false, body:{status:"FAILED"} };
+      advMapped = {
+        isSuccess:false,
+        body:{status:"FAILED"}
+      };
     }
 
     const publisherResponse =
@@ -258,7 +267,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 });
 
 /* =====================================================
-PIN VERIFY
+PIN VERIFY ✅ FIXED (NO LOGIC BROKEN)
 ===================================================== */
 
 router.all("/pin/verify", async (req, res) => {
@@ -328,21 +337,40 @@ router.all("/pin/verify", async (req, res) => {
       ]
     );
 
-    const advCall=await callAdvertiser(
-      params.verify_pin_url,
-      params.verify_fallback_url,
-      (params.verify_method||"GET").toUpperCase(),
-      payload
-    );
+    /* ✅ SAFE ADVERTISER EXECUTION */
 
-    const advData =
-      advCall?.response?.data || {};
-
+    let advCall;
+    let advData = {};
     let advMapped;
-    try{
-      advMapped=
+
+    try {
+
+      advCall = await callAdvertiser(
+        params.verify_pin_url,
+        params.verify_fallback_url,
+        (params.verify_method||"GET").toUpperCase(),
+        payload
+      );
+
+      advData =
+        advCall?.response?.data || {};
+
+      advMapped =
         mapPinVerifyResponse(advData);
-    }catch{
+
+    } catch (err) {
+
+      console.log(
+        "VERIFY ADVERTISER ERROR:",
+        err.message
+      );
+
+      advCall = advCall || {
+        used: params.verify_pin_url,
+        method:
+          params.verify_method||"GET"
+      };
+
       advMapped={
         isSuccess:false,
         body:{status:"FAILED"}
