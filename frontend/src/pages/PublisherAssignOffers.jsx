@@ -27,6 +27,23 @@ export default function PublisherAssignOffers() {
   const [editingId, setEditingId] = useState(null);
   const [editRow, setEditRow] = useState({});
 
+  const parseNumber = (value, { allowEmpty = false } = {}) => {
+    if (value === "" || value === null || value === undefined) {
+      return allowEmpty ? null : NaN;
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : NaN;
+  };
+
+  const getResponseData = async (res) => {
+    try {
+      return await res.json();
+    } catch {
+      return {};
+    }
+  };
+
   /* ================= TOAST ================= */
   const showToast = (msg) => {
     setToast(msg);
@@ -64,12 +81,15 @@ export default function PublisherAssignOffers() {
         }),
       ]);
 
-      const pData = await pRes.json();
-      const oData = await oRes.json();
+      const pData = await getResponseData(pRes);
+      const oData = await getResponseData(oRes);
 
-      if (pData.status === "SUCCESS") setPublishers(pData.data || []);
-      if (Array.isArray(oData)) setOffers(oData);
-      else if (oData.status === "SUCCESS") setOffers(oData.data || []);
+      if (pRes.ok && pData.status === "SUCCESS") setPublishers(pData.data || []);
+      else setPublishers([]);
+
+      if (oRes.ok && Array.isArray(oData)) setOffers(oData);
+      else if (oRes.ok && oData.status === "SUCCESS") setOffers(oData.data || []);
+      else setOffers([]);
     } catch {
       showToast("Failed to load base data");
     }
@@ -86,8 +106,13 @@ export default function PublisherAssignOffers() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const data = await res.json();
-      setAssigned(data.status === "SUCCESS" ? data.data : []);
+      const data = await getResponseData(res);
+      if (res.ok && data.status === "SUCCESS") {
+        setAssigned(data.data || []);
+      } else {
+        setAssigned([]);
+        showToast(data.message || "Failed to load assigned offers");
+      }
     } catch {
       showToast("Failed to load assigned offers");
     }
@@ -100,81 +125,148 @@ export default function PublisherAssignOffers() {
       return;
     }
 
-    const res = await fetch(
-      `${API_BASE}/api/publishers/${publisherId}/offers`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          offer_id: Number(form.offer_id),
-          publisher_cpa: Number(form.publisher_cpa),
-          daily_cap: form.daily_cap ? Number(form.daily_cap) : null,
-          pass_percent: Number(form.pass_percent),
-          weight: Number(form.weight),
-        }),
-      }
-    );
+    const payload = {
+      offer_id: parseNumber(form.offer_id),
+      publisher_cpa: parseNumber(form.publisher_cpa),
+      daily_cap: parseNumber(form.daily_cap, { allowEmpty: true }),
+      pass_percent: parseNumber(form.pass_percent),
+      weight: parseNumber(form.weight),
+    };
 
-    const data = await res.json();
-    if (data.status === "SUCCESS") {
-      showToast("Offer assigned");
-      setForm({
-        offer_id: "",
-        publisher_cpa: "",
-        daily_cap: "",
-        pass_percent: 100,
-        weight: 100,
-      });
-      loadAssigned(publisherId);
-    } else {
-      showToast(data.message || "Assign failed");
+    if (
+      Number.isNaN(payload.offer_id) ||
+      Number.isNaN(payload.publisher_cpa) ||
+      Number.isNaN(payload.pass_percent) ||
+      Number.isNaN(payload.weight)
+    ) {
+      showToast("Please enter valid numeric values");
+      return;
+    }
+
+    if (payload.pass_percent < 0 || payload.pass_percent > 100) {
+      showToast("Pass % must be between 0 and 100");
+      return;
+    }
+
+    if (payload.weight < 1) {
+      showToast("Weight must be at least 1");
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/publishers/${publisherId}/offers`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await getResponseData(res);
+      if (res.ok && data.status === "SUCCESS") {
+        showToast("Offer assigned");
+        setForm({
+          offer_id: "",
+          publisher_cpa: "",
+          daily_cap: "",
+          pass_percent: 100,
+          weight: 100,
+        });
+        loadAssigned(publisherId);
+      } else {
+        showToast(data.message || "Assign failed");
+      }
+    } catch {
+      showToast("Assign failed");
     }
   };
 
   /* ================= SAVE EDIT ================= */
   const saveEdit = async (row) => {
-    await fetch(
-      `${API_BASE}/api/publishers/${row.publisher_id}/offers/${row.id}`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          publisher_cpa: Number(editRow.publisher_cpa),
-          daily_cap: editRow.daily_cap ? Number(editRow.daily_cap) : null,
-          pass_percent: Number(editRow.pass_percent),
-          weight: Number(editRow.weight),
-        }),
-      }
-    );
+    const payload = {
+      publisher_cpa: parseNumber(editRow.publisher_cpa),
+      daily_cap: parseNumber(editRow.daily_cap, { allowEmpty: true }),
+      pass_percent: parseNumber(editRow.pass_percent),
+      weight: parseNumber(editRow.weight),
+    };
 
-    setEditingId(null);
-    loadAssigned(publisherId || null);
-    showToast("Updated");
+    if (
+      Number.isNaN(payload.publisher_cpa) ||
+      Number.isNaN(payload.pass_percent) ||
+      Number.isNaN(payload.weight)
+    ) {
+      showToast("Please enter valid numeric values");
+      return;
+    }
+
+    if (payload.pass_percent < 0 || payload.pass_percent > 100) {
+      showToast("Pass % must be between 0 and 100");
+      return;
+    }
+
+    if (payload.weight < 1) {
+      showToast("Weight must be at least 1");
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/publishers/${row.publisher_id}/offers/${row.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await getResponseData(res);
+      if (!res.ok || data.status !== "SUCCESS") {
+        showToast(data.message || "Update failed");
+        return;
+      }
+
+      setEditingId(null);
+      loadAssigned(publisherId || null);
+      showToast("Updated");
+    } catch {
+      showToast("Update failed");
+    }
   };
 
   /* ================= TOGGLE STATUS ================= */
   const toggleStatus = async (row) => {
-    await fetch(
-      `${API_BASE}/api/publishers/${row.publisher_id}/offers/${row.id}`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          status: row.status === "active" ? "paused" : "active",
-        }),
-      }
-    );
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/publishers/${row.publisher_id}/offers/${row.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: row.status === "active" ? "paused" : "active",
+          }),
+        }
+      );
 
-    loadAssigned(publisherId || null);
+      const data = await getResponseData(res);
+      if (!res.ok || data.status !== "SUCCESS") {
+        showToast(data.message || "Status update failed");
+        return;
+      }
+
+      loadAssigned(publisherId || null);
+    } catch {
+      showToast("Status update failed");
+    }
   };
 
   return (
@@ -220,6 +312,9 @@ export default function PublisherAssignOffers() {
               </select>
 
               <input
+                type="number"
+                step="0.01"
+                min="0"
                 placeholder="CPA"
                 value={form.publisher_cpa}
                 onChange={(e) =>
@@ -227,6 +322,8 @@ export default function PublisherAssignOffers() {
                 }
               />
               <input
+                type="number"
+                min="0"
                 placeholder="Cap"
                 value={form.daily_cap}
                 onChange={(e) =>
@@ -234,6 +331,9 @@ export default function PublisherAssignOffers() {
                 }
               />
               <input
+                type="number"
+                min="0"
+                max="100"
                 placeholder="Pass %"
                 value={form.pass_percent}
                 onChange={(e) =>
@@ -241,6 +341,8 @@ export default function PublisherAssignOffers() {
                 }
               />
               <input
+                type="number"
+                min="1"
                 placeholder="Weight"
                 value={form.weight}
                 onChange={(e) =>
@@ -285,6 +387,9 @@ export default function PublisherAssignOffers() {
                   <>
                     <td style={td}>
                       <input
+                        type="number"
+                        step="0.01"
+                        min="0"
                         value={editRow.publisher_cpa}
                         onChange={(e) =>
                           setEditRow({
@@ -296,6 +401,8 @@ export default function PublisherAssignOffers() {
                     </td>
                     <td style={td}>
                       <input
+                        type="number"
+                        min="0"
                         value={editRow.daily_cap || ""}
                         onChange={(e) =>
                           setEditRow({
@@ -307,6 +414,9 @@ export default function PublisherAssignOffers() {
                     </td>
                     <td style={td}>
                       <input
+                        type="number"
+                        min="0"
+                        max="100"
                         value={editRow.pass_percent}
                         onChange={(e) =>
                           setEditRow({
@@ -318,6 +428,8 @@ export default function PublisherAssignOffers() {
                     </td>
                     <td style={td}>
                       <input
+                        type="number"
+                        min="1"
                         value={editRow.weight}
                         onChange={(e) =>
                           setEditRow({
