@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 
 import {
   mapPinSendResponse,
-  mapPinVerifyResponse,
+  mapPinVerifyResponse
 } from "../services/advResponseMapper.js";
 
 import { mapPublisherResponse } from "../services/pubResponseMapper.js";
@@ -22,13 +22,16 @@ function captureHeaders(req) {
     "x-forwarded-for":
       req.headers["x-forwarded-for"] ||
       req.socket.remoteAddress ||
-      "",
+      ""
   };
 }
 
-/* ===================================================== */
+/* =====================================================
+Publisher validation
+===================================================== */
 
 async function validatePublisher(req) {
+
   const apiKey =
     req.headers["x-api-key"] ||
     req.query["x-api-key"];
@@ -46,7 +49,9 @@ async function validatePublisher(req) {
   return r.rows[0] || null;
 }
 
-/* ===================================================== */
+/* =====================================================
+Advertiser call
+===================================================== */
 
 async function callAdvertiser(url, fallback, method, payload) {
 
@@ -67,7 +72,7 @@ async function callAdvertiser(url, fallback, method, payload) {
       return {
         response: { data: e?.response?.data || { error: "primary failed" } },
         used: url,
-        method,
+        method
       };
     }
 
@@ -87,10 +92,28 @@ async function callAdvertiser(url, fallback, method, payload) {
       return {
         response: { data: e2?.response?.data || { error: "fallback failed" } },
         used: fallback,
-        method,
+        method
       };
     }
   }
+}
+
+/* =====================================================
+Dynamic advertiser payload builder
+===================================================== */
+
+function buildAdvertiserPayload(publisherParams, paramMapping) {
+
+  const payload = {};
+
+  for (const key in publisherParams) {
+
+    const advKey = paramMapping[key] || key;
+
+    payload[advKey] = publisherParams[key];
+  }
+
+  return payload;
 }
 
 /* =====================================================
@@ -128,7 +151,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const offer = offerRes.rows[0];
 
-    /* PARAMETERS */
+    /* PARAMETER MAPPING */
 
     const paramRes = await pool.query(
       `SELECT param_key,param_value
@@ -137,13 +160,13 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       [offer.id]
     );
 
-    const params = {};
-    paramRes.rows.forEach((p) => (params[p.param_key] = p.param_value));
+    const paramMapping = {};
+    paramRes.rows.forEach(p => {
+      paramMapping[p.param_key] = p.param_value;
+    });
 
-    const finalParams = {
-      ...params,
-      ...incoming,
-    };
+    const advertiserPayload =
+      buildAdvertiserPayload(incoming, paramMapping);
 
     const sessionToken = uuidv4();
 
@@ -159,29 +182,29 @@ router.all("/pin/send/:offer_id", async (req, res) => {
         offer.id,
         msisdn,
         sessionToken,
-        finalParams,
+        incoming,
         {
           url: req.originalUrl,
           method: req.method,
           headers: captureHeaders(req),
-          params: incoming,
+          params: incoming
         },
-        publisher.id,
+        publisher.id
       ]
     );
 
     /* CALL ADVERTISER */
 
     const advCall = await callAdvertiser(
-      params.pin_send_url,
-      params.pin_send_fallback_url,
-      (params.method || "GET").toUpperCase(),
-      finalParams
+      offer.pin_send_url,
+      offer.pin_send_fallback_url,
+      offer.method || "GET",
+      advertiserPayload
     );
 
     const advertiserResponse = advCall?.response?.data || {};
 
-    /* MAP */
+    /* MAP RESPONSE */
 
     let advMapped;
 
@@ -193,7 +216,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const publisherResponse = mapPublisherResponse({
       ...advMapped.body,
-      session_token: sessionToken,
+      session_token: sessionToken
     });
 
     /* UPDATE SESSION */
@@ -209,12 +232,12 @@ router.all("/pin/send/:offer_id", async (req, res) => {
         {
           url: advCall.used,
           method: advCall.method,
-          payload: finalParams,
+          payload: advertiserPayload
         },
         advertiserResponse,
         publisherResponse,
         advMapped.isSuccess ? "OTP_SENT" : "OTP_FAILED",
-        sessionToken,
+        sessionToken
       ]
     );
 
@@ -241,13 +264,14 @@ router.all("/pin/verify", async (req, res) => {
     if (!publisher)
       return res.status(401).json({ status: "INVALID_KEY" });
 
-    const { session_token, otp } = {
-      ...req.query,
-      ...req.body,
-    };
+    const incoming = { ...req.query, ...req.body };
+
+    const { session_token, otp } = incoming;
 
     if (!session_token || !otp)
       return res.json({ status: "FAILED" });
+
+    /* ORIGINAL SESSION */
 
     const sRes = await pool.query(
       `SELECT * FROM pin_sessions
@@ -260,6 +284,8 @@ router.all("/pin/verify", async (req, res) => {
 
     const session = sRes.rows[0];
 
+    /* PARAM MAPPING */
+
     const paramRes = await pool.query(
       `SELECT param_key,param_value
        FROM offer_parameters
@@ -267,24 +293,26 @@ router.all("/pin/verify", async (req, res) => {
       [session.offer_id]
     );
 
-    const params = {};
-    paramRes.rows.forEach((p) => (params[p.param_key] = p.param_value));
+    const paramMapping = {};
+    paramRes.rows.forEach(p => {
+      paramMapping[p.param_key] = p.param_value;
+    });
 
-    /* =====================================================
-       VERIFY PAYLOAD
-       SEND response auto merge
-    ===================================================== */
+    /* MERGE SEND RESPONSE */
 
     const advData = session.advertiser_response || {};
 
     delete advData.response;
     delete advData.errorMessage;
 
-    const payload = {
+    const mergedParams = {
       ...session.params,
-      otp,
-      ...advData,
+      ...incoming,
+      ...advData
     };
+
+    const advertiserPayload =
+      buildAdvertiserPayload(mergedParams, paramMapping);
 
     const verifySessionToken = uuidv4();
 
@@ -302,24 +330,24 @@ router.all("/pin/verify", async (req, res) => {
         session.msisdn,
         verifySessionToken,
         session_token,
-        payload,
+        advertiserPayload,
         {
           url: req.originalUrl,
           method: req.method,
           headers: captureHeaders(req),
-          params: payload,
+          params: advertiserPayload
         },
-        session.publisher_id,
+        session.publisher_id
       ]
     );
 
     /* CALL ADVERTISER */
 
     const advCall = await callAdvertiser(
-      params.verify_pin_url,
-      params.verify_fallback_url,
-      (params.verify_method || "GET").toUpperCase(),
-      payload
+      session.verify_pin_url,
+      session.verify_fallback_url,
+      session.verify_method || "GET",
+      advertiserPayload
     );
 
     const advertiserResponse = advCall?.response?.data || {};
@@ -334,7 +362,7 @@ router.all("/pin/verify", async (req, res) => {
 
     const publisherResponse = mapPublisherResponse({
       ...advMapped.body,
-      session_token: verifySessionToken,
+      session_token: verifySessionToken
     });
 
     /* UPDATE VERIFY */
@@ -348,14 +376,14 @@ router.all("/pin/verify", async (req, res) => {
        WHERE session_token=$5`,
       [
         {
-          url: params.verify_pin_url,
-          method: params.verify_method || "GET",
-          payload,
+          url: session.verify_pin_url,
+          method: session.verify_method || "GET",
+          payload: advertiserPayload
         },
         advertiserResponse,
         publisherResponse,
         advMapped.isSuccess ? "VERIFIED" : "OTP_FAILED",
-        verifySessionToken,
+        verifySessionToken
       ]
     );
 
