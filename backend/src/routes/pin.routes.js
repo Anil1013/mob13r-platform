@@ -11,6 +11,7 @@ import {
 import { mapPublisherResponse } from "../services/pubResponseMapper.js";
 
 const router = express.Router();
+
 const AXIOS_TIMEOUT = 30000;
 
 /* ===================================================== */
@@ -48,6 +49,7 @@ async function validatePublisher(req) {
 /* ===================================================== */
 
 async function callAdvertiser(url, fallback, method, payload) {
+
   try {
 
     const resp =
@@ -88,41 +90,46 @@ async function callAdvertiser(url, fallback, method, payload) {
 }
 
 /* =====================================================
-Payload Builder
+PAYLOAD BUILDER
 ===================================================== */
 
-function buildAdvertiserPayload(publisherParams, offerParams, advResponse = {}) {
+function buildPayload(params, advResponse = {}, extra = {}) {
 
   const payload = {};
 
-  /* 1️⃣ publisher params */
-  for (const key in publisherParams) {
-    payload[key] = publisherParams[key];
-  }
+  /* static offer params */
 
-  /* 2️⃣ offer static params */
-  for (const key in offerParams) {
+  for (const key in params) {
 
     if (
       !key.includes("url") &&
       key !== "method" &&
       !key.includes("fallback")
     ) {
-      payload[key] = offerParams[key];
+      payload[key] = params[key];
     }
+
   }
 
-  /* 3️⃣ advertiser send response */
+  /* verify params */
+
+  for (const key in extra) {
+    payload[key] = extra[key];
+  }
+
+  /* advertiser send response */
+
   for (const key in advResponse) {
     payload[key] = advResponse[key];
   }
 
-  /* 4️⃣ mapping apply */
-  for (const key in offerParams) {
+  /* mapping */
 
-    const mapped = offerParams[key];
+  for (const key in params) {
 
-    if (payload[key] !== undefined && mapped && mapped !== key) {
+    const mapped = params[key];
+
+    if (payload[key] !== undefined && mapped !== key) {
 
       payload[mapped] = payload[key];
       delete payload[key];
@@ -154,8 +161,6 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     if (!incoming.msisdn)
       return res.status(400).json({ status: "FAILED" });
 
-    /* OFFER */
-
     const offerRes = await pool.query(
       `SELECT * FROM offers
        WHERE id=$1 AND status='active'`,
@@ -167,8 +172,6 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const offer = offerRes.rows[0];
 
-    /* OFFER PARAMETERS */
-
     const paramRes = await pool.query(
       `SELECT param_key,param_value
        FROM offer_parameters
@@ -179,14 +182,10 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     const params = {};
     paramRes.rows.forEach((p) => (params[p.param_key] = p.param_value));
 
-    /* BUILD PAYLOAD */
-
     const advertiserPayload =
-      buildAdvertiserPayload(incoming, params);
+      buildPayload(params, {}, { msisdn: incoming.msisdn });
 
     const sessionToken = uuidv4();
-
-    /* INSERT SESSION */
 
     await pool.query(
       `INSERT INTO pin_sessions
@@ -198,7 +197,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
         offer.id,
         incoming.msisdn,
         sessionToken,
-        incoming,
+        advertiserPayload,
         {
           url: req.originalUrl,
           method: req.method,
@@ -208,8 +207,6 @@ router.all("/pin/send/:offer_id", async (req, res) => {
         publisher.id,
       ]
     );
-
-    /* CALL ADVERTISER */
 
     const advCall = await callAdvertiser(
       params.pin_send_url,
@@ -302,13 +299,11 @@ router.all("/pin/verify", async (req, res) => {
     const params = {};
     paramRes.rows.forEach((p) => (params[p.param_key] = p.param_value));
 
-    /* BUILD VERIFY PAYLOAD */
-
     const advertiserPayload =
-      buildAdvertiserPayload(
-        { ...session.params, ...incoming },
+      buildPayload(
         params,
-        session.advertiser_response
+        session.advertiser_response,
+        { otp: incoming.otp }
       );
 
     const verifySessionToken = uuidv4();
