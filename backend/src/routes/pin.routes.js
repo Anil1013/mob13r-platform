@@ -46,9 +46,7 @@ async function validatePublisher(req) {
   return r.rows[0] || null;
 }
 
-/* =====================================================
-Advertiser call
-===================================================== */
+/* ===================================================== */
 
 async function callAdvertiser(url, fallback, method, payload) {
 
@@ -96,18 +94,18 @@ async function callAdvertiser(url, fallback, method, payload) {
 }
 
 /* =====================================================
-Payload builder with mapping
+PARAM MAPPING ENGINE
 ===================================================== */
 
-function buildPayload(baseParams, mapping) {
+function buildAdvertiserPayload(allParams, mapping) {
 
   const payload = {};
 
-  for (const key in baseParams) {
+  for (const key in allParams) {
 
     const advKey = mapping[key] || key;
 
-    payload[advKey] = baseParams[key];
+    payload[advKey] = allParams[key];
   }
 
   return payload;
@@ -130,9 +128,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const incoming = { ...req.query, ...req.body };
 
-    const { msisdn } = incoming;
-
-    if (!msisdn)
+    if (!incoming.msisdn)
       return res.status(400).json({ status: "FAILED" });
 
     /* OFFER */
@@ -148,7 +144,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const offer = offerRes.rows[0];
 
-    /* PARAMETERS */
+    /* OFFER PARAMETERS */
 
     const paramRes = await pool.query(
       `SELECT param_key,param_value
@@ -160,9 +156,17 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     const params = {};
     paramRes.rows.forEach((p) => (params[p.param_key] = p.param_value));
 
-    /* Build advertiser payload */
+    /* MERGE ALL PARAMS */
 
-    const advertiserPayload = buildPayload(incoming, params);
+    const mergedParams = {
+      ...params,
+      ...incoming
+    };
+
+    const advertiserPayload = buildAdvertiserPayload(
+      mergedParams,
+      params
+    );
 
     const sessionToken = uuidv4();
 
@@ -176,9 +180,9 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       VALUES ($1,$2,$3,$4,$5,$6,'OTP_REQUESTED')`,
       [
         offer.id,
-        msisdn,
+        incoming.msisdn,
         sessionToken,
-        incoming,
+        mergedParams,
         {
           url: req.originalUrl,
           method: req.method,
@@ -260,21 +264,21 @@ router.all("/pin/verify", async (req, res) => {
 
     const incoming = { ...req.query, ...req.body };
 
-    const { session_token, otp } = incoming;
-
-    if (!session_token || !otp)
+    if (!incoming.session_token || !incoming.otp)
       return res.json({ status: "FAILED" });
 
     const sRes = await pool.query(
       `SELECT * FROM pin_sessions
        WHERE session_token=$1`,
-      [session_token]
+      [incoming.session_token]
     );
 
     if (!sRes.rows.length)
       return res.json({ status: "INVALID_SESSION" });
 
     const session = sRes.rows[0];
+
+    /* OFFER PARAMETERS */
 
     const paramRes = await pool.query(
       `SELECT param_key,param_value
@@ -286,19 +290,18 @@ router.all("/pin/verify", async (req, res) => {
     const params = {};
     paramRes.rows.forEach((p) => (params[p.param_key] = p.param_value));
 
-    /* Merge SEND response */
-
-    const advData = session.advertiser_response || {};
+    /* MERGE ALL PARAMS */
 
     const mergedParams = {
       ...session.params,
       ...incoming,
-      ...advData,
+      ...(session.advertiser_response || {})
     };
 
-    /* Build advertiser payload */
-
-    const advertiserPayload = buildPayload(mergedParams, params);
+    const advertiserPayload = buildAdvertiserPayload(
+      mergedParams,
+      params
+    );
 
     const verifySessionToken = uuidv4();
 
@@ -315,7 +318,7 @@ router.all("/pin/verify", async (req, res) => {
         session.offer_id,
         session.msisdn,
         verifySessionToken,
-        session_token,
+        incoming.session_token,
         advertiserPayload,
         {
           url: req.originalUrl,
@@ -350,8 +353,6 @@ router.all("/pin/verify", async (req, res) => {
       ...advMapped.body,
       session_token: verifySessionToken,
     });
-
-    /* UPDATE VERIFY */
 
     await pool.query(
       `UPDATE pin_sessions
