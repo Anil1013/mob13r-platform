@@ -5,137 +5,154 @@ import { v4 as uuidv4 } from "uuid";
 
 import {
   mapPinSendResponse,
-  mapPinVerifyResponse
+  mapPinVerifyResponse,
 } from "../services/advResponseMapper.js";
 
 import { mapPublisherResponse } from "../services/pubResponseMapper.js";
 
 const router = express.Router();
+
 const AXIOS_TIMEOUT = 30000;
 
 /* ===================================================== */
 
-function captureHeaders(req){
-return{
-"user-agent":req.headers["user-agent"]||"",
-"x-forwarded-for":
-req.headers["x-forwarded-for"]||
-req.socket.remoteAddress||
-""
-};
+function captureHeaders(req) {
+  return {
+    "user-agent": req.headers["user-agent"] || "",
+    "x-forwarded-for":
+      req.headers["x-forwarded-for"] ||
+      req.socket.remoteAddress ||
+      "",
+  };
 }
 
 /* ===================================================== */
 
-async function validatePublisher(req){
+function resolveValue(value, source) {
 
-const apiKey=
-req.headers["x-api-key"]||
-req.query["x-api-key"];
+  if (!value) return value;
 
-if(!apiKey) return null;
+  if (typeof value !== "string") return value;
 
-const r=await pool.query(
-`SELECT * FROM publishers
-WHERE api_key=$1
-AND status='active'
-LIMIT 1`,
-[apiKey]
-);
+  if (!value.includes("{")) return value;
 
-return r.rows[0]||null;
-}
-
-/* =====================================================
-Advertiser HTTP call
-===================================================== */
-
-async function callAdvertiser(url,fallback,method,payload){
-
-try{
-
-const resp=
-method==="POST"
-? await axios.post(url,payload,{timeout:AXIOS_TIMEOUT})
-: await axios.get(url,{params:payload,timeout:AXIOS_TIMEOUT});
-
-return{response:resp,used:url,method};
-
-}catch(e){
-
-if(!fallback){
-
-return{
-response:{data:e?.response?.data||{}},
-used:url,
-method
-};
+  return value.replace(/\{(.*?)\}/g, (_, key) => {
+    return source[key] || "";
+  });
 
 }
 
-try{
+/* ===================================================== */
 
-const resp=
-method==="POST"
-? await axios.post(fallback,payload,{timeout:AXIOS_TIMEOUT})
-: await axios.get(fallback,{params:payload,timeout:AXIOS_TIMEOUT});
+function buildPayload(params, incoming, session = null) {
 
-return{response:resp,used:fallback,method};
+  const payload = {};
 
-}catch(e2){
+  const runtime = {
+    ...incoming,
+    otp: incoming.otp,
+    msisdn: incoming.msisdn,
+    ip: incoming.ip || incoming["x-forwarded-for"],
+    user_agent: incoming.user_agent,
+    geo: incoming.geo,
+    carrier: incoming.carrier,
+    click_id: incoming.click_id,
+    transaction_id: incoming.transaction_id,
+    publisher_id: incoming.publisher_id,
+    offer_id: incoming.offer_id
+  };
 
-return{
-response:{data:e2?.response?.data||{}},
-used:fallback,
-method
-};
+  Object.entries(params).forEach(([key, val]) => {
+
+    if (
+      key.includes("url") ||
+      key.includes("method")
+    ) return;
+
+    payload[key] = resolveValue(val, runtime);
+
+  });
+
+  if (session?.advertiser_response) {
+
+    Object.entries(session.advertiser_response).forEach(([k, v]) => {
+
+      if (!payload[k]) payload[k] = v;
+
+    });
+
+  }
+
+  return payload;
+}
+
+/* ===================================================== */
+
+async function validatePublisher(req) {
+
+  const apiKey =
+    req.headers["x-api-key"] ||
+    req.query["x-api-key"];
+
+  if (!apiKey) return null;
+
+  const r = await pool.query(
+    `SELECT * FROM publishers
+     WHERE api_key=$1
+     AND status='active'
+     LIMIT 1`,
+    [apiKey]
+  );
+
+  return r.rows[0] || null;
 
 }
 
-}
+/* ===================================================== */
 
-}
+async function callAdvertiser(url, fallback, method, payload) {
 
-/* =====================================================
-PARAM MAPPING ENGINE
-===================================================== */
+  try {
 
-function buildAdvertiserPayload(baseParams,mapping){
+    const resp =
+      method === "POST"
+        ? await axios.post(url, payload, { timeout: AXIOS_TIMEOUT })
+        : await axios.get(url, { params: payload, timeout: AXIOS_TIMEOUT });
 
-const payload={};
+    return { response: resp, used: url, method };
 
-for(const key in baseParams){
+  } catch (e) {
 
-const advKey=mapping[key]||key;
+    if (!fallback) {
 
-payload[advKey]=baseParams[key];
+      return {
+        response: { data: e?.response?.data || {} },
+        used: url,
+        method,
+      };
 
-}
+    }
 
-return payload;
+    try {
 
-}
+      const resp =
+        method === "POST"
+          ? await axios.post(fallback, payload, { timeout: AXIOS_TIMEOUT })
+          : await axios.get(fallback, { params: payload, timeout: AXIOS_TIMEOUT });
 
-/* =====================================================
-LOAD OFFER PARAMETERS
-===================================================== */
+      return { response: resp, used: fallback, method };
 
-async function loadOfferParams(offer_id){
+    } catch (e2) {
 
-const r=await pool.query(
-`SELECT param_key,param_value
-FROM offer_parameters
-WHERE offer_id=$1`,
-[offer_id]
-);
+      return {
+        response: { data: e2?.response?.data || {} },
+        used: fallback,
+        method,
+      };
 
-const params={};
+    }
 
-r.rows.forEach(p=>{
-params[p.param_key]=p.param_value;
-});
-
-return params;
+  }
 
 }
 
@@ -143,153 +160,121 @@ return params;
 PIN SEND
 ===================================================== */
 
-router.all("/pin/send/:offer_id",async(req,res)=>{
+router.all("/pin/send/:offer_id", async (req, res) => {
 
-try{
+  try {
 
-const publisher=await validatePublisher(req);
+    const publisher = await validatePublisher(req);
 
-if(!publisher)
-return res.status(401).json({status:"INVALID_KEY"});
+    if (!publisher)
+      return res.status(401).json({ status: "INVALID_KEY" });
 
-const {offer_id}=req.params;
+    const { offer_id } = req.params;
 
-const incoming={...req.query,...req.body};
+    const incoming = { ...req.query, ...req.body };
 
-if(!incoming.msisdn)
-return res.status(400).json({status:"FAILED"});
+    const { msisdn } = incoming;
 
-/* OFFER */
+    if (!msisdn)
+      return res.status(400).json({ status: "FAILED" });
 
-const offerRes=await pool.query(
-`SELECT * FROM offers
-WHERE id=$1 AND status='active'`,
-[offer_id]
-);
+    const offerRes = await pool.query(
+      `SELECT * FROM offers WHERE id=$1 AND status='active'`,
+      [offer_id]
+    );
 
-if(!offerRes.rows.length)
-return res.status(404).json({status:"FAILED"});
+    if (!offerRes.rows.length)
+      return res.status(404).json({ status: "FAILED" });
 
-const offer=offerRes.rows[0];
+    const offer = offerRes.rows[0];
 
-/* LOAD PARAMS */
+    const paramRes = await pool.query(
+      `SELECT param_key,param_value
+       FROM offer_parameters
+       WHERE offer_id=$1`,
+      [offer.id]
+    );
 
-const params=await loadOfferParams(offer.id);
+    const params = {};
 
-/* BASE PARAMS */
+    paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
 
-const baseParams={
-msisdn:incoming.msisdn,
-click_id:incoming.click_id||incoming.transaction_id||null,
-transaction_id:incoming.transaction_id||incoming.click_id||null
-};
+    const payload = buildPayload(params, incoming);
 
-/* ADD STATIC OFFER PARAMS */
+    const sessionToken = uuidv4();
 
-for(const key in params){
+    await pool.query(
+      `INSERT INTO pin_sessions
+      (offer_id,msisdn,session_token,
+       params,publisher_request,
+       publisher_id,status)
+      VALUES ($1,$2,$3,$4,$5,$6,'OTP_REQUESTED')`,
+      [
+        offer.id,
+        msisdn,
+        sessionToken,
+        payload,
+        {
+          url: req.originalUrl,
+          method: req.method,
+          headers: captureHeaders(req),
+          params: incoming
+        },
+        publisher.id
+      ]
+    );
 
-if(
-!key.includes("url") &&
-!key.includes("method") &&
-!key.includes("fallback")
-){
+    const advCall = await callAdvertiser(
+      params.pin_send_url,
+      params.pin_send_fallback_url,
+      (params.method || "GET").toUpperCase(),
+      payload
+    );
 
-baseParams[key]=params[key];
+    const advertiserResponse = advCall?.response?.data || {};
 
-}
+    let advMapped;
 
-}
+    try {
+      advMapped = mapPinSendResponse(advertiserResponse);
+    } catch {
+      advMapped = { isSuccess: false, body: { status: "FAILED" } };
+    }
 
-/* BUILD PAYLOAD */
+    const publisherResponse = mapPublisherResponse({
+      ...advMapped.body,
+      session_token: sessionToken
+    });
 
-const advertiserPayload=
-buildAdvertiserPayload(baseParams,params);
+    await pool.query(
+      `UPDATE pin_sessions
+       SET advertiser_request=$1,
+           advertiser_response=$2,
+           publisher_response=$3,
+           status=$4
+       WHERE session_token=$5`,
+      [
+        {
+          url: advCall.used,
+          method: advCall.method,
+          payload
+        },
+        advertiserResponse,
+        publisherResponse,
+        advMapped.isSuccess ? "OTP_SENT" : "OTP_FAILED",
+        sessionToken
+      ]
+    );
 
-const sessionToken=uuidv4();
+    return res.json(publisherResponse);
 
-/* INSERT SESSION */
+  } catch (err) {
 
-await pool.query(
-`INSERT INTO pin_sessions
-(offer_id,msisdn,session_token,
-params,publisher_request,
-publisher_id,status)
-VALUES ($1,$2,$3,$4,$5,$6,'OTP_REQUESTED')`,
-[
-offer.id,
-incoming.msisdn,
-sessionToken,
-baseParams,
-{
-url:req.originalUrl,
-method:req.method,
-headers:captureHeaders(req),
-params:incoming
-},
-publisher.id
-]
-);
+    console.error("PIN SEND ERROR:", err);
 
-/* CALL ADVERTISER */
+    return res.status(500).json({ status: "FAILED" });
 
-const advCall=await callAdvertiser(
-params.pin_send_url,
-params.pin_send_fallback_url,
-(params.method||"GET").toUpperCase(),
-advertiserPayload
-);
-
-const advertiserResponse=advCall?.response?.data||{};
-
-/* MAP RESPONSE */
-
-let advMapped;
-
-try{
-advMapped=mapPinSendResponse(advertiserResponse);
-}catch{
-advMapped={isSuccess:false,body:{status:"FAILED"}};
-}
-
-const publisherResponse=
-mapPublisherResponse({
-...advMapped.body,
-session_token:sessionToken
-});
-
-/* UPDATE SESSION */
-
-await pool.query(
-`UPDATE pin_sessions
-SET advertiser_request=$1,
-advertiser_response=$2,
-publisher_response=$3,
-status=$4
-WHERE session_token=$5`,
-[
-{
-url:advCall.used,
-method:advCall.method,
-payload:advertiserPayload
-},
-advertiserResponse,
-publisherResponse,
-advMapped.isSuccess
-? "OTP_SENT"
-: "OTP_FAILED",
-sessionToken
-]
-);
-
-return res.json(publisherResponse);
-
-}catch(err){
-
-console.error("PIN SEND ERROR:",err);
-
-return res.status(500).json({status:"FAILED"});
-
-}
+  }
 
 });
 
@@ -297,139 +282,123 @@ return res.status(500).json({status:"FAILED"});
 PIN VERIFY
 ===================================================== */
 
-router.all("/pin/verify",async(req,res)=>{
+router.all("/pin/verify", async (req, res) => {
 
-try{
+  try {
 
-const publisher=await validatePublisher(req);
+    const publisher = await validatePublisher(req);
 
-if(!publisher)
-return res.status(401).json({status:"INVALID_KEY"});
+    if (!publisher)
+      return res.status(401).json({ status: "INVALID_KEY" });
 
-const incoming={...req.query,...req.body};
+    const { session_token, otp } = {
+      ...req.query,
+      ...req.body
+    };
 
-if(!incoming.session_token||!incoming.otp)
-return res.json({status:"FAILED"});
+    if (!session_token || !otp)
+      return res.json({ status: "FAILED" });
 
-/* ORIGINAL SESSION */
+    const sRes = await pool.query(
+      `SELECT * FROM pin_sessions
+       WHERE session_token=$1`,
+      [session_token]
+    );
 
-const sRes=await pool.query(
-`SELECT * FROM pin_sessions
-WHERE session_token=$1`,
-[incoming.session_token]
-);
+    if (!sRes.rows.length)
+      return res.json({ status: "INVALID_SESSION" });
 
-if(!sRes.rows.length)
-return res.json({status:"INVALID_SESSION"});
+    const session = sRes.rows[0];
 
-const session=sRes.rows[0];
+    const paramRes = await pool.query(
+      `SELECT param_key,param_value
+       FROM offer_parameters
+       WHERE offer_id=$1`,
+      [session.offer_id]
+    );
 
-/* LOAD PARAMS */
+    const params = {};
 
-const params=await loadOfferParams(session.offer_id);
+    paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
 
-/* BASE PARAMS */
+    const payload = buildPayload(params, { otp }, session);
 
-const baseParams={
-...session.params,
-otp:incoming.otp,
-click_id:incoming.click_id||session.params.click_id||null,
-transaction_id:
-incoming.transaction_id||
-session.params.transaction_id||
-null
-};
+    const verifySessionToken = uuidv4();
 
-/* MERGE SEND RESPONSE */
+    await pool.query(
+      `INSERT INTO pin_sessions
+       (offer_id,msisdn,session_token,
+        parent_session_token,params,
+        publisher_request,publisher_id,
+        status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'VERIFY_REQUESTED')`,
+      [
+        session.offer_id,
+        session.msisdn,
+        verifySessionToken,
+        session_token,
+        payload,
+        {
+          url: req.originalUrl,
+          method: req.method,
+          headers: captureHeaders(req),
+          params: payload
+        },
+        session.publisher_id
+      ]
+    );
 
-const advertiserPayload=
-buildAdvertiserPayload(baseParams,params);
+    const advCall = await callAdvertiser(
+      params.verify_pin_url,
+      params.verify_pin_fallback_url,
+      (params.verify_method || "GET").toUpperCase(),
+      payload
+    );
 
-const verifySessionToken=uuidv4();
+    const advertiserResponse = advCall?.response?.data || {};
 
-/* INSERT VERIFY ROW */
+    let advMapped;
 
-await pool.query(
-`INSERT INTO pin_sessions
-(offer_id,msisdn,session_token,
-parent_session_token,params,
-publisher_request,publisher_id,
-status)
-VALUES ($1,$2,$3,$4,$5,$6,$7,'VERIFY_REQUESTED')`,
-[
-session.offer_id,
-session.msisdn,
-verifySessionToken,
-incoming.session_token,
-advertiserPayload,
-{
-url:req.originalUrl,
-method:req.method,
-headers:captureHeaders(req),
-params:advertiserPayload
-},
-session.publisher_id
-]
-);
+    try {
+      advMapped = mapPinVerifyResponse(advertiserResponse);
+    } catch {
+      advMapped = { isSuccess: false, body: { status: "FAILED" } };
+    }
 
-/* CALL ADVERTISER */
+    const publisherResponse = mapPublisherResponse({
+      ...advMapped.body,
+      session_token: verifySessionToken
+    });
 
-const advCall=await callAdvertiser(
-params.verify_pin_url,
-params.verify_pin_fallback_url,
-(params.verify_method||"GET").toUpperCase(),
-advertiserPayload
-);
+    await pool.query(
+      `UPDATE pin_sessions
+       SET advertiser_request=$1,
+           advertiser_response=$2,
+           publisher_response=$3,
+           status=$4
+       WHERE session_token=$5`,
+      [
+        {
+          url: params.verify_pin_url,
+          method: params.verify_method || "GET",
+          payload
+        },
+        advertiserResponse,
+        publisherResponse,
+        advMapped.isSuccess ? "VERIFIED" : "OTP_FAILED",
+        verifySessionToken
+      ]
+    );
 
-const advertiserResponse=advCall?.response?.data||{};
+    return res.json(publisherResponse);
 
-let advMapped;
+  } catch (err) {
 
-try{
-advMapped=mapPinVerifyResponse(advertiserResponse);
-}catch{
-advMapped={isSuccess:false,body:{status:"FAILED"}};
-}
+    console.error("PIN VERIFY ERROR:", err);
 
-const publisherResponse=
-mapPublisherResponse({
-...advMapped.body,
-session_token:verifySessionToken
-});
+    return res.status(500).json({ status: "FAILED" });
 
-/* UPDATE VERIFY */
-
-await pool.query(
-`UPDATE pin_sessions
-SET advertiser_request=$1,
-advertiser_response=$2,
-publisher_response=$3,
-status=$4
-WHERE session_token=$5`,
-[
-{
-url:params.verify_pin_url,
-method:params.verify_method||"GET",
-payload:advertiserPayload
-},
-advertiserResponse,
-publisherResponse,
-advMapped.isSuccess
-? "VERIFIED"
-: "OTP_FAILED",
-verifySessionToken
-]
-);
-
-return res.json(publisherResponse);
-
-}catch(err){
-
-console.error("PIN VERIFY ERROR:",err);
-
-return res.status(500).json({status:"FAILED"});
-
-}
+  }
 
 });
 
