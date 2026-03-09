@@ -3,11 +3,65 @@ import pool from "../db.js";
 
 const router = express.Router();
 
-/* =========================
-   GET OFFERS (ALL / by advertiser)
-========================= */
+/* =====================================================
+DEFAULT UNIVERSAL PARAMETERS
+===================================================== */
+
+const DEFAULT_PARAMS = [
+  ["pin_send_url", ""],
+  ["verify_pin_url", ""],
+  ["check_status_url", ""],
+  ["portal_url", ""],
+
+  ["method", "GET"],
+
+  ["promoId", ""],
+  ["pubId", ""],
+
+  ["msisdn", "{msisdn}"],
+  ["ip", "{ip}"],
+  ["userAgent", "{user_agent}"],
+  ["pin", "{otp}"],
+
+  ["geo", "{geo}"],
+  ["carrier", "{carrier}"],
+
+  ["click_id", "{click_id}"],
+  ["transaction_id", "{transaction_id}"],
+
+  ["sub1", "{click_id}"],
+  ["sub2", "{publisher_id}"],
+  ["sub3", "{offer_id}"]
+];
+
+/* =====================================================
+INSERT DEFAULT PARAMETERS WHEN OFFER CREATED
+===================================================== */
+
+async function insertDefaultParams(offerId) {
+
+  for (const [key, value] of DEFAULT_PARAMS) {
+
+    await pool.query(
+      `
+      INSERT INTO offer_parameters (offer_id, param_key, param_value)
+      VALUES ($1,$2,$3)
+      `,
+      [offerId, key, value]
+    );
+
+  }
+
+}
+
+/* =====================================================
+GET OFFERS
+===================================================== */
+
 router.get("/", async (req, res) => {
+
   try {
+
     const { advertiser_id } = req.query;
 
     let query = `
@@ -30,17 +84,25 @@ router.get("/", async (req, res) => {
     const result = await pool.query(query, params);
 
     return res.json(result.rows);
+
   } catch (err) {
+
     console.error("GET OFFERS ERROR:", err.message);
+
     return res.status(500).json({ message: "Failed to fetch offers" });
+
   }
+
 });
 
-/* =========================
-   CREATE OFFER
-========================= */
+/* =====================================================
+CREATE OFFER
+===================================================== */
+
 router.post("/", async (req, res) => {
+
   try {
+
     const {
       advertiser_id,
       service_name,
@@ -48,11 +110,15 @@ router.post("/", async (req, res) => {
       daily_cap,
       geo,
       carrier,
-      service_type,
+      service_type
     } = req.body;
 
     if (!advertiser_id || !service_name) {
-      return res.status(400).json({ message: "Missing required fields" });
+
+      return res.status(400).json({
+        message: "Missing required fields"
+      });
+
     }
 
     const result = await pool.query(
@@ -81,30 +147,51 @@ router.post("/", async (req, res) => {
         daily_cap || null,
         geo,
         carrier,
-        service_type || "NORMAL",
+        service_type || "NORMAL"
       ]
     );
 
-    return res.json(result.rows[0]);
+    const offer = result.rows[0];
+
+    /* insert universal params */
+
+    await insertDefaultParams(offer.id);
+
+    return res.json(offer);
+
   } catch (err) {
+
     console.error("CREATE OFFER ERROR:", err.message);
-    return res.status(500).json({ message: "Failed to create offer" });
+
+    return res.status(500).json({
+      message: "Failed to create offer"
+    });
+
   }
+
 });
 
-/* =========================
-   GET OFFER PARAMETERS
-========================= */
+/* =====================================================
+GET OFFER PARAMETERS
+===================================================== */
+
 router.get("/:offerId/parameters", async (req, res) => {
+
   try {
+
     const offerId = Number(req.params.offerId);
+
     if (isNaN(offerId)) {
-      return res.status(400).json({ message: "Invalid offerId" });
+
+      return res.status(400).json({
+        message: "Invalid offerId"
+      });
+
     }
 
     const result = await pool.query(
       `
-      SELECT id, param_key, param_value
+      SELECT id,param_key,param_value
       FROM offer_parameters
       WHERE offer_id = $1
       ORDER BY id ASC
@@ -113,102 +200,205 @@ router.get("/:offerId/parameters", async (req, res) => {
     );
 
     return res.json(result.rows);
+
   } catch (err) {
+
     console.error("GET PARAMETERS ERROR:", err.message);
-    return res.status(500).json({ message: "Failed to fetch parameters" });
+
+    return res.status(500).json({
+      message: "Failed to fetch parameters"
+    });
+
   }
+
 });
 
-/* =========================
-   ADD OFFER PARAMETER
-========================= */
-router.post("/:offerId/parameters", async (req, res) => {
+/* =====================================================
+UPDATE PARAM VALUE
+===================================================== */
+
+router.patch("/parameters/:id", async (req, res) => {
+
   try {
+
+    const id = Number(req.params.id);
+    const { param_value } = req.body;
+
+    if (isNaN(id)) {
+
+      return res.status(400).json({
+        message: "Invalid parameter id"
+      });
+
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE offer_parameters
+      SET param_value = $1
+      WHERE id = $2
+      RETURNING *
+      `,
+      [param_value, id]
+    );
+
+    return res.json(result.rows[0]);
+
+  } catch (err) {
+
+    console.error("UPDATE PARAM ERROR:", err.message);
+
+    return res.status(500).json({
+      message: "Failed to update parameter"
+    });
+
+  }
+
+});
+
+/* =====================================================
+ADD CUSTOM PARAMETER
+===================================================== */
+
+router.post("/:offerId/parameters", async (req, res) => {
+
+  try {
+
     const offerId = Number(req.params.offerId);
     const { param_key, param_value } = req.body;
 
     if (isNaN(offerId)) {
-      return res.status(400).json({ message: "Invalid offerId" });
-    }
 
-    if (!param_key || !param_value) {
       return res.status(400).json({
-        message: "param_key and param_value required",
+        message: "Invalid offerId"
       });
+
     }
 
-    /* prevent duplicate param */
+    if (!param_key) {
+
+      return res.status(400).json({
+        message: "param_key required"
+      });
+
+    }
+
     const exists = await pool.query(
       `
       SELECT id
       FROM offer_parameters
-      WHERE offer_id = $1 AND param_key = $2
+      WHERE offer_id=$1
+      AND param_key=$2
       `,
       [offerId, param_key]
     );
 
     if (exists.rows.length) {
+
       return res.status(400).json({
-        message: "param_key already exists for this offer",
+        message: "param_key already exists"
       });
+
     }
 
     const result = await pool.query(
       `
       INSERT INTO offer_parameters
-      (offer_id, param_key, param_value)
-      VALUES ($1, $2, $3)
+      (offer_id,param_key,param_value)
+      VALUES ($1,$2,$3)
       RETURNING *
       `,
-      [offerId, param_key, param_value]
+      [offerId, param_key, param_value || ""]
     );
 
     return res.json(result.rows[0]);
+
   } catch (err) {
-    console.error("ADD PARAMETER ERROR:", err.message);
-    return res.status(500).json({ message: "Failed to add parameter" });
+
+    console.error("ADD PARAM ERROR:", err.message);
+
+    return res.status(500).json({
+      message: "Failed to add parameter"
+    });
+
   }
+
 });
 
-/* =========================
-   DELETE OFFER PARAMETER
-========================= */
+/* =====================================================
+DELETE CUSTOM PARAMETER (default protected)
+===================================================== */
+
 router.delete("/parameters/:id", async (req, res) => {
+
   try {
+
     const id = Number(req.params.id);
+
     if (isNaN(id)) {
-      return res.status(400).json({ message: "Invalid parameter id" });
+
+      return res.status(400).json({
+        message: "Invalid parameter id"
+      });
+
     }
 
-    await pool.query(
+    const result = await pool.query(
       `
       DELETE FROM offer_parameters
       WHERE id = $1
+      RETURNING *
       `,
       [id]
     );
 
+    if (!result.rows.length) {
+
+      return res.status(404).json({
+        message: "Parameter not found"
+      });
+
+    }
+
     return res.json({ success: true });
+
   } catch (err) {
+
     console.error("DELETE PARAM ERROR:", err.message);
-    return res.status(500).json({ message: "Failed to delete parameter" });
+
+    return res.status(500).json({
+      message: "Failed to delete parameter"
+    });
+
   }
+
 });
 
-/* =========================
-   CHANGE SERVICE TYPE (PRIMARY / FALLBACK)
-========================= */
+/* =====================================================
+CHANGE SERVICE TYPE
+===================================================== */
+
 router.patch("/:offerId/service-type", async (req, res) => {
+
   try {
+
     const offerId = Number(req.params.offerId);
     const { service_type } = req.body;
 
     if (isNaN(offerId)) {
-      return res.status(400).json({ message: "Invalid offerId" });
+
+      return res.status(400).json({
+        message: "Invalid offerId"
+      });
+
     }
 
-    if (!["NORMAL", "FALLBACK"].includes(service_type)) {
-      return res.status(400).json({ message: "Invalid service_type" });
+    if (!["NORMAL","FALLBACK"].includes(service_type)) {
+
+      return res.status(400).json({
+        message: "Invalid service_type"
+      });
+
     }
 
     const result = await pool.query(
@@ -221,22 +411,28 @@ router.patch("/:offerId/service-type", async (req, res) => {
       [service_type, offerId]
     );
 
-    if (!result.rows.length) {
-      return res.status(404).json({ message: "Offer not found" });
-    }
-
     return res.json(result.rows[0]);
+
   } catch (err) {
+
     console.error("CHANGE SERVICE TYPE ERROR:", err.message);
-    return res.status(500).json({ message: "Failed to change service type" });
+
+    return res.status(500).json({
+      message: "Failed to change service type"
+    });
+
   }
+
 });
 
-/* =========================
-   UPDATE OFFER (Editable Fields)
-========================= */
+/* =====================================================
+UPDATE OFFER
+===================================================== */
+
 router.patch("/:id", async (req, res) => {
+
   try {
+
     const offerId = Number(req.params.id);
 
     const {
@@ -247,20 +443,16 @@ router.patch("/:id", async (req, res) => {
       carrier
     } = req.body;
 
-    if (isNaN(offerId)) {
-      return res.status(400).json({ message: "Invalid offer id" });
-    }
-
     const result = await pool.query(
       `
       UPDATE offers
       SET
-        service_name = COALESCE($1, service_name),
-        cpa = COALESCE($2, cpa),
-        daily_cap = COALESCE($3, daily_cap),
-        geo = COALESCE($4, geo),
-        carrier = COALESCE($5, carrier)
-      WHERE id = $6
+        service_name = COALESCE($1,service_name),
+        cpa = COALESCE($2,cpa),
+        daily_cap = COALESCE($3,daily_cap),
+        geo = COALESCE($4,geo),
+        carrier = COALESCE($5,carrier)
+      WHERE id=$6
       RETURNING *
       `,
       [
@@ -273,16 +465,18 @@ router.patch("/:id", async (req, res) => {
       ]
     );
 
-    if (!result.rows.length) {
-      return res.status(404).json({ message: "Offer not found" });
-    }
-
     return res.json(result.rows[0]);
-  } catch (err) {
-    console.error("UPDATE OFFER ERROR:", err.message);
-    return res.status(500).json({ message: "Failed to update offer" });
-  }
-});
 
+  } catch (err) {
+
+    console.error("UPDATE OFFER ERROR:", err.message);
+
+    return res.status(500).json({
+      message: "Failed to update offer"
+    });
+
+  }
+
+});
 
 export default router;
