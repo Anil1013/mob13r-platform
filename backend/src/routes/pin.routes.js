@@ -11,12 +11,14 @@ import {
 import { mapPublisherResponse } from "../services/pubResponseMapper.js";
 
 const router = express.Router();
+
 const AXIOS_TIMEOUT = 30000;
 
-/* ===================================================== */
+/* =====================================================
+HELPERS
+===================================================== */
 
 function captureHeaders(req) {
-
   return {
     "user-agent": req.headers["user-agent"] || "",
     "x-forwarded-for":
@@ -24,46 +26,11 @@ function captureHeaders(req) {
       req.socket.remoteAddress ||
       ""
   };
-
 }
 
-/* ===================================================== */
-
-function resolveTemplate(value, source) {
-
-  if (!value) return value;
-
-  if (typeof value !== "string") return value;
-
-  return value.replace(/\{(.*?)\}/g, (_, key) => {
-    return source[key] ?? "";
-  });
-
-}
-
-/* ===================================================== */
-
-function buildPayload(params, runtime) {
-
-  const payload = {};
-
-  Object.entries(params).forEach(([key, value]) => {
-
-    if (
-      key.includes("url") ||
-      key === "method" ||
-      key.includes("fallback")
-    ) return;
-
-    payload[key] = resolveTemplate(value, runtime);
-
-  });
-
-  return payload;
-
-}
-
-/* ===================================================== */
+/* =====================================================
+Publisher Validation
+===================================================== */
 
 async function validatePublisher(req) {
 
@@ -82,10 +49,51 @@ async function validatePublisher(req) {
   );
 
   return r.rows[0] || null;
+}
+
+/* =====================================================
+Template Resolver
+===================================================== */
+
+function resolveTemplate(value, runtime) {
+
+  if (!value) return value;
+
+  if (typeof value !== "string") return value;
+
+  return value.replace(/\{(.*?)\}/g, (_, key) => {
+    return runtime[key] ?? "";
+  });
 
 }
 
-/* ===================================================== */
+/* =====================================================
+Build Advertiser Payload
+===================================================== */
+
+function buildPayload(params, runtime) {
+
+  const payload = {};
+
+  Object.entries(params).forEach(([key, value]) => {
+
+    if (
+      key.includes("url") ||
+      key.includes("method") ||
+      key.includes("fallback")
+    ) return;
+
+    payload[key] = resolveTemplate(value, runtime);
+
+  });
+
+  return payload;
+
+}
+
+/* =====================================================
+Advertiser Call
+===================================================== */
 
 async function callAdvertiser(url, fallback, method, payload) {
 
@@ -99,6 +107,8 @@ async function callAdvertiser(url, fallback, method, payload) {
     return { response: resp, used: url, method };
 
   } catch (err) {
+
+    console.log("PRIMARY ADV ERROR:", err.message);
 
     if (!fallback) {
 
@@ -120,6 +130,8 @@ async function callAdvertiser(url, fallback, method, payload) {
       return { response: resp, used: fallback, method };
 
     } catch (err2) {
+
+      console.log("FALLBACK ADV ERROR:", err2.message);
 
       return {
         response: { data: err2?.response?.data || {} },
@@ -153,6 +165,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     if (!incoming.msisdn)
       return res.status(400).json({ status: "FAILED" });
 
+    /* FETCH OFFER */
+
     const offerRes = await pool.query(
       `SELECT * FROM offers
        WHERE id=$1 AND status='active'`,
@@ -164,6 +178,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const offer = offerRes.rows[0];
 
+    /* FETCH PARAMETERS */
+
     const paramRes = await pool.query(
       `SELECT param_key,param_value
        FROM offer_parameters
@@ -173,6 +189,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const params = {};
     paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
+
+    /* RUNTIME DATA */
 
     const runtime = {
       ...incoming,
@@ -185,6 +203,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     const payload = buildPayload(params, runtime);
 
     const sessionToken = uuidv4();
+
+    /* SAVE SESSION */
 
     await pool.query(
       `INSERT INTO pin_sessions
@@ -207,6 +227,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       ]
     );
 
+    /* CALL ADVERTISER */
+
     const advCall = await callAdvertiser(
       params.pin_send_url,
       params.pin_send_fallback_url,
@@ -215,6 +237,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     );
 
     const advertiserResponse = advCall?.response?.data || {};
+
+    /* MAP RESPONSE */
 
     let advMapped;
 
@@ -228,6 +252,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       ...advMapped.body,
       session_token: sessionToken
     });
+
+    /* UPDATE SESSION */
 
     await pool.query(
       `UPDATE pin_sessions
@@ -293,6 +319,8 @@ router.all("/pin/verify", async (req, res) => {
 
     const session = sRes.rows[0];
 
+    /* FETCH OFFER PARAMETERS */
+
     const paramRes = await pool.query(
       `SELECT param_key,param_value
        FROM offer_parameters
@@ -303,8 +331,19 @@ router.all("/pin/verify", async (req, res) => {
     const params = {};
     paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
 
+    /* ADVERTISER RESPONSE VALUES */
+
+    const advData = session.advertiser_response || {};
+
+    delete advData.status;
+    delete advData.msg;
+    delete advData.errorMessage;
+
+    /* VERIFY RUNTIME */
+
     const runtime = {
       ...session.params,
+      ...advData,
       msisdn: session.msisdn,
       otp
     };
@@ -312,6 +351,8 @@ router.all("/pin/verify", async (req, res) => {
     const payload = buildPayload(params, runtime);
 
     const verifyRowToken = uuidv4();
+
+    /* INSERT VERIFY ROW */
 
     await pool.query(
       `INSERT INTO pin_sessions
@@ -336,6 +377,8 @@ router.all("/pin/verify", async (req, res) => {
       ]
     );
 
+    /* CALL ADVERTISER VERIFY */
+
     const advCall = await callAdvertiser(
       params.verify_pin_url,
       params.verify_pin_fallback_url,
@@ -357,6 +400,8 @@ router.all("/pin/verify", async (req, res) => {
       ...advMapped.body,
       session_token
     });
+
+    /* UPDATE VERIFY ROW */
 
     await pool.query(
       `UPDATE pin_sessions
