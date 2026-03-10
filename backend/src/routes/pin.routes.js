@@ -5,85 +5,62 @@ import { v4 as uuidv4 } from "uuid";
 
 import {
   mapPinSendResponse,
-  mapPinVerifyResponse,
+  mapPinVerifyResponse
 } from "../services/advResponseMapper.js";
 
 import { mapPublisherResponse } from "../services/pubResponseMapper.js";
 
 const router = express.Router();
-
 const AXIOS_TIMEOUT = 30000;
 
 /* ===================================================== */
 
 function captureHeaders(req) {
+
   return {
     "user-agent": req.headers["user-agent"] || "",
     "x-forwarded-for":
       req.headers["x-forwarded-for"] ||
       req.socket.remoteAddress ||
-      "",
+      ""
   };
+
 }
 
 /* ===================================================== */
 
-function resolveValue(value, source) {
+function resolveTemplate(value, source) {
 
   if (!value) return value;
 
   if (typeof value !== "string") return value;
 
-  if (!value.includes("{")) return value;
-
   return value.replace(/\{(.*?)\}/g, (_, key) => {
-    return source[key] || "";
+    return source[key] ?? "";
   });
 
 }
 
 /* ===================================================== */
 
-function buildPayload(params, incoming, session = null) {
+function buildPayload(params, runtime) {
 
   const payload = {};
 
-  const runtime = {
-    ...incoming,
-    otp: incoming.otp,
-    msisdn: incoming.msisdn,
-    ip: incoming.ip || incoming["x-forwarded-for"],
-    user_agent: incoming.user_agent,
-    geo: incoming.geo,
-    carrier: incoming.carrier,
-    click_id: incoming.click_id,
-    transaction_id: incoming.transaction_id,
-    publisher_id: incoming.publisher_id,
-    offer_id: incoming.offer_id
-  };
-
-  Object.entries(params).forEach(([key, val]) => {
+  Object.entries(params).forEach(([key, value]) => {
 
     if (
       key.includes("url") ||
-      key.includes("method")
+      key === "method" ||
+      key.includes("fallback")
     ) return;
 
-    payload[key] = resolveValue(val, runtime);
+    payload[key] = resolveTemplate(value, runtime);
 
   });
 
-  if (session?.advertiser_response) {
-
-    Object.entries(session.advertiser_response).forEach(([k, v]) => {
-
-      if (!payload[k]) payload[k] = v;
-
-    });
-
-  }
-
   return payload;
+
 }
 
 /* ===================================================== */
@@ -121,14 +98,14 @@ async function callAdvertiser(url, fallback, method, payload) {
 
     return { response: resp, used: url, method };
 
-  } catch (e) {
+  } catch (err) {
 
     if (!fallback) {
 
       return {
-        response: { data: e?.response?.data || {} },
+        response: { data: err?.response?.data || {} },
         used: url,
-        method,
+        method
       };
 
     }
@@ -142,12 +119,12 @@ async function callAdvertiser(url, fallback, method, payload) {
 
       return { response: resp, used: fallback, method };
 
-    } catch (e2) {
+    } catch (err2) {
 
       return {
-        response: { data: e2?.response?.data || {} },
+        response: { data: err2?.response?.data || {} },
         used: fallback,
-        method,
+        method
       };
 
     }
@@ -173,13 +150,12 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const incoming = { ...req.query, ...req.body };
 
-    const { msisdn } = incoming;
-
-    if (!msisdn)
+    if (!incoming.msisdn)
       return res.status(400).json({ status: "FAILED" });
 
     const offerRes = await pool.query(
-      `SELECT * FROM offers WHERE id=$1 AND status='active'`,
+      `SELECT * FROM offers
+       WHERE id=$1 AND status='active'`,
       [offer_id]
     );
 
@@ -196,10 +172,17 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     );
 
     const params = {};
-
     paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
 
-    const payload = buildPayload(params, incoming);
+    const runtime = {
+      ...incoming,
+      ip: incoming.ip || req.ip,
+      user_agent: incoming.user_agent || req.headers["user-agent"],
+      publisher_id: publisher.id,
+      offer_id: offer.id
+    };
+
+    const payload = buildPayload(params, runtime);
 
     const sessionToken = uuidv4();
 
@@ -211,7 +194,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       VALUES ($1,$2,$3,$4,$5,$6,'OTP_REQUESTED')`,
       [
         offer.id,
-        msisdn,
+        incoming.msisdn,
         sessionToken,
         payload,
         {
@@ -318,12 +301,17 @@ router.all("/pin/verify", async (req, res) => {
     );
 
     const params = {};
-
     paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
 
-    const payload = buildPayload(params, { otp }, session);
+    const runtime = {
+      ...session.params,
+      msisdn: session.msisdn,
+      otp
+    };
 
-    const verifySessionToken = uuidv4();
+    const payload = buildPayload(params, runtime);
+
+    const verifyRowToken = uuidv4();
 
     await pool.query(
       `INSERT INTO pin_sessions
@@ -335,7 +323,7 @@ router.all("/pin/verify", async (req, res) => {
       [
         session.offer_id,
         session.msisdn,
-        verifySessionToken,
+        verifyRowToken,
         session_token,
         payload,
         {
@@ -367,7 +355,7 @@ router.all("/pin/verify", async (req, res) => {
 
     const publisherResponse = mapPublisherResponse({
       ...advMapped.body,
-      session_token: verifySessionToken
+      session_token
     });
 
     await pool.query(
@@ -386,7 +374,7 @@ router.all("/pin/verify", async (req, res) => {
         advertiserResponse,
         publisherResponse,
         advMapped.isSuccess ? "VERIFIED" : "OTP_FAILED",
-        verifySessionToken
+        verifyRowToken
       ]
     );
 
