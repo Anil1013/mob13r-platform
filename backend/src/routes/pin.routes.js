@@ -11,9 +11,12 @@ import {
 import { mapPublisherResponse } from "../services/pubResponseMapper.js";
 
 const router = express.Router();
+
 const AXIOS_TIMEOUT = 30000;
 
-/* ===================================================== */
+/* =====================================================
+HELPERS
+===================================================== */
 
 function captureHeaders(req) {
   return {
@@ -25,7 +28,9 @@ function captureHeaders(req) {
   };
 }
 
-/* ===================================================== */
+/* =====================================================
+Publisher Validation
+===================================================== */
 
 async function validatePublisher(req) {
 
@@ -44,21 +49,26 @@ async function validatePublisher(req) {
   );
 
   return r.rows[0] || null;
-
 }
 
-/* ===================================================== */
+/* =====================================================
+Template Resolver
+===================================================== */
 
 function resolveTemplate(value, runtime) {
 
   if (!value) return value;
   if (typeof value !== "string") return value;
 
-  return value.replace(/\{(.*?)\}/g, (_, key) => runtime[key] ?? "");
+  return value.replace(/\{(.*?)\}/g, (_, key) => {
+    return runtime[key] ?? "";
+  });
 
 }
 
-/* ===================================================== */
+/* =====================================================
+Build Advertiser Payload
+===================================================== */
 
 function buildPayload(params, runtime) {
 
@@ -80,7 +90,9 @@ function buildPayload(params, runtime) {
 
 }
 
-/* ===================================================== */
+/* =====================================================
+Advertiser Call
+===================================================== */
 
 async function callAdvertiser(url, fallback, method, payload) {
 
@@ -94,6 +106,8 @@ async function callAdvertiser(url, fallback, method, payload) {
     return { response: resp, used: url, method };
 
   } catch (err) {
+
+    console.log("PRIMARY ADV ERROR:", err.message);
 
     if (!fallback) {
 
@@ -115,6 +129,8 @@ async function callAdvertiser(url, fallback, method, payload) {
       return { response: resp, used: fallback, method };
 
     } catch (err2) {
+
+      console.log("FALLBACK ADV ERROR:", err2.message);
 
       return {
         response: { data: err2?.response?.data || {} },
@@ -169,10 +185,22 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     const params = {};
     paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
 
+    /* USER AGENT NORMALIZATION */
+
+    const ua =
+      incoming.user_agent ||
+      req.headers["user-agent"] ||
+      "";
+
     const runtime = {
       ...incoming,
+
       ip: incoming.ip || req.ip,
-      user_agent: incoming.user_agent || req.headers["user-agent"],
+
+      user_agent: ua,
+      ua: ua,
+      userAgent: ua,
+
       publisher_id: publisher.id,
       offer_id: offer.id
     };
@@ -191,7 +219,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
         offer.id,
         incoming.msisdn,
         sessionToken,
-        payload,
+        runtime,
         {
           url: req.originalUrl,
           method: req.method,
@@ -249,6 +277,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
   } catch (err) {
 
     console.error("PIN SEND ERROR:", err);
+
     return res.status(500).json({ status: "FAILED" });
 
   }
@@ -268,7 +297,10 @@ router.all("/pin/verify", async (req, res) => {
     if (!publisher)
       return res.status(401).json({ status: "INVALID_KEY" });
 
-    const { session_token, otp } = { ...req.query, ...req.body };
+    const { session_token, otp } = {
+      ...req.query,
+      ...req.body
+    };
 
     if (!session_token || !otp)
       return res.json({ status: "FAILED" });
@@ -294,46 +326,37 @@ router.all("/pin/verify", async (req, res) => {
     const params = {};
     paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
 
-    const advData = { ...(session.advertiser_response || {}) };
+    const advData = session.advertiser_response || {};
 
-    delete advData.status;
-    delete advData.msg;
-    delete advData.errorMessage;
+    const ua =
+      session.params?.user_agent ||
+      session.params?.ua ||
+      session.params?.userAgent ||
+      req.query.user_agent ||
+      req.headers["user-agent"] ||
+      "";
+
+    const ip =
+      session.params?.ip ||
+      req.query.ip ||
+      req.headers["x-forwarded-for"] ||
+      "";
 
     const runtime = {
+
       ...session.params,
       ...advData,
 
       msisdn: session.msisdn,
       otp,
 
-      ip:
-        session.params?.ip ||
-        req.query.ip ||
-        req.headers["x-forwarded-for"] ||
-        "",
+      ip: ip,
+      user_ip: ip,
 
-      user_ip:
-        session.params?.user_ip ||
-        session.params?.ip ||
-        req.query.ip ||
-        req.headers["x-forwarded-for"] ||
-        "",
+      user_agent: ua,
+      ua: ua,
+      userAgent: ua
 
-      ua:
-        session.params?.ua ||
-        session.params?.userAgent ||
-        session.params?.user_agent ||
-        req.query.user_agent ||
-        req.headers["user-agent"] ||
-        "",
-
-      userAgent:
-        session.params?.userAgent ||
-        session.params?.user_agent ||
-        req.query.user_agent ||
-        req.headers["user-agent"] ||
-        ""
     };
 
     const payload = buildPayload(params, runtime);
@@ -352,7 +375,7 @@ router.all("/pin/verify", async (req, res) => {
         session.msisdn,
         verifyRowToken,
         session_token,
-        payload,
+        runtime,
         {
           url: req.originalUrl,
           method: req.method,
@@ -410,6 +433,7 @@ router.all("/pin/verify", async (req, res) => {
   } catch (err) {
 
     console.error("PIN VERIFY ERROR:", err);
+
     return res.status(500).json({ status: "FAILED" });
 
   }
