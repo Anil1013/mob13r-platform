@@ -342,11 +342,39 @@ router.all("/pin/verify", async (req, res) => {
     /* VERIFY RUNTIME */
 
     const runtime = {
-      ...session.params,
-      ...advData,
-      msisdn: session.msisdn,
-      otp
-    };
+  ...session.params,
+  ...advData,
+
+  msisdn: session.msisdn,
+  otp,
+
+  ip:
+    session.params?.ip ||
+    req.query.ip ||
+    req.headers["x-forwarded-for"] ||
+    "",
+
+  user_ip:
+    session.params?.user_ip ||
+    session.params?.ip ||
+    req.query.ip ||
+    req.headers["x-forwarded-for"] ||
+    "",
+
+  ua:
+    session.params?.ua ||
+    session.params?.user_agent ||
+    req.query.user_agent ||
+    req.headers["user-agent"] ||
+    "",
+
+  userAgent:
+    session.params?.userAgent ||
+    session.params?.user_agent ||
+    req.query.user_agent ||
+    req.headers["user-agent"] ||
+    ""
+};
 
     const payload = buildPayload(params, runtime);
 
