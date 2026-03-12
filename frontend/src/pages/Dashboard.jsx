@@ -77,28 +77,28 @@ export default function Dashboard() {
 
       <div style={styles.container}>
 
-        {/* STATS */}
+        {/* SMALL COLORED STATS */}
 
         <div style={styles.stats}>
 
-          <div style={styles.card}>
-            <span>Requests</span>
-            <h3>{stats.total_requests || 0}</h3>
+          <div style={{...styles.card,background:"#e8f1ff"}}>
+            Requests
+            <strong>{stats.total_requests || 0}</strong>
           </div>
 
-          <div style={styles.card}>
-            <span>OTP Sent</span>
-            <h3>{stats.otp_sent || 0}</h3>
+          <div style={{...styles.card,background:"#e6fff3"}}>
+            OTP Sent
+            <strong>{stats.otp_sent || 0}</strong>
           </div>
 
-          <div style={styles.card}>
-            <span>Conversions</span>
-            <h3>{stats.conversions || 0}</h3>
+          <div style={{...styles.card,background:"#fff5e6"}}>
+            Conversions
+            <strong>{stats.conversions || 0}</strong>
           </div>
 
-          <div style={styles.card}>
-            <span>Last Hour</span>
-            <h3>{stats.last_hour_requests || 0}</h3>
+          <div style={{...styles.card,background:"#f3e8ff"}}>
+            Last Hour
+            <strong>{stats.last_hour_requests || 0}</strong>
           </div>
 
         </div>
@@ -107,49 +107,20 @@ export default function Dashboard() {
 
         <div style={styles.filters}>
 
-          <input
-          type="date"
-          value={from}
-          onChange={(e)=>setFrom(e.target.value)}
-          style={styles.input}
-          />
+          <input type="date" value={from} onChange={(e)=>setFrom(e.target.value)} />
+          <input type="date" value={to} onChange={(e)=>setTo(e.target.value)} />
 
-          <input
-          type="date"
-          value={to}
-          onChange={(e)=>setTo(e.target.value)}
-          style={styles.input}
-          />
+          <input placeholder="Operator" value={operator} onChange={(e)=>setOperator(e.target.value)} />
+          <input placeholder="Offer ID" value={offer} onChange={(e)=>setOffer(e.target.value)} />
 
-          <input
-          placeholder="Operator"
-          value={operator}
-          onChange={(e)=>setOperator(e.target.value)}
-          style={styles.input}
-          />
+          <button onClick={loadReport}>Apply</button>
 
-          <input
-          placeholder="Offer ID"
-          value={offer}
-          onChange={(e)=>setOffer(e.target.value)}
-          style={styles.input}
-          />
-
-          <button style={styles.button} onClick={loadReport}>
-            Filter
-          </button>
-
-          <button style={styles.buttonSecondary} onClick={exportCSV}>
-            CSV
-          </button>
-
-          <button style={styles.buttonSecondary} onClick={exportExcel}>
-            Excel
-          </button>
+          <button onClick={exportCSV}>Export CSV</button>
+          <button onClick={exportExcel}>Export Excel</button>
 
         </div>
 
-        {/* TABLE */}
+        {/* EXCEL STYLE TABLE */}
 
         <div style={styles.tableWrapper}>
 
@@ -167,15 +138,20 @@ export default function Dashboard() {
               <th>Carrier</th>
               <th>CPA</th>
               <th>Cap</th>
+
               <th>Pin Req</th>
               <th>Unique Req</th>
+
               <th>Pin Sent</th>
               <th>Unique Sent</th>
+
               <th>Verify Req</th>
               <th>Unique Verify</th>
+
               <th>Verified</th>
-              <th>CR %</th>
+              <th>%</th>
               <th>Revenue</th>
+
               <th>Last Pin Gen</th>
               <th>Last Pin Gen Success</th>
               <th>Last Verification</th>
@@ -188,6 +164,7 @@ export default function Dashboard() {
           <tbody>
 
             {data.map((row,i)=>(
+
               <tr key={i}>
 
                 <td>{row.date}</td>
@@ -198,21 +175,27 @@ export default function Dashboard() {
                 <td>{row.carrier}</td>
                 <td>{row.cpa}</td>
                 <td>{row.cap}</td>
+
                 <td>{row.pin_req}</td>
                 <td>{row.unique_req}</td>
+
                 <td>{row.pin_sent}</td>
                 <td>{row.unique_sent}</td>
+
                 <td>{row.verify_req}</td>
                 <td>{row.unique_verify}</td>
+
                 <td>{row.verified}</td>
                 <td>{row.cr_percent}</td>
                 <td>{row.revenue}</td>
+
                 <td>{row.last_pin_gen}</td>
                 <td>{row.last_pin_gen_success}</td>
                 <td>{row.last_verification}</td>
                 <td>{row.last_success_verification}</td>
 
               </tr>
+
             ))}
 
           </tbody>
@@ -229,68 +212,40 @@ export default function Dashboard() {
 const styles = {
 
   container:{
-    padding:"40px 30px",
-    fontFamily:"Inter, system-ui, Arial",
-    background:"#fafafa",
-    minHeight:"100vh"
+    padding:"25px",
+    fontFamily:"Arial"
   },
 
   stats:{
     display:"flex",
-    gap:"15px",
-    marginBottom:"15px"
+    gap:"10px",
+    marginBottom:"10px"
   },
 
   card:{
-    background:"#ffffff",
-    padding:"10px 16px",
-    borderRadius:"8px",
-    boxShadow:"0 1px 4px rgba(0,0,0,0.05)",
-    minWidth:"130px"
+    padding:"8px 14px",
+    borderRadius:"6px",
+    fontSize:"13px",
+    display:"flex",
+    flexDirection:"column"
   },
 
   filters:{
-    marginBottom:"15px",
     display:"flex",
-    gap:"10px",
+    gap:"8px",
+    marginBottom:"10px",
     flexWrap:"wrap"
-  },
-
-  input:{
-    padding:"6px 8px",
-    border:"1px solid #d1d5db",
-    borderRadius:"6px"
-  },
-
-  button:{
-    padding:"6px 14px",
-    background:"#2563eb",
-    color:"#fff",
-    border:"none",
-    borderRadius:"6px",
-    cursor:"pointer"
-  },
-
-  buttonSecondary:{
-    padding:"6px 12px",
-    background:"#e5e7eb",
-    border:"none",
-    borderRadius:"6px",
-    cursor:"pointer"
   },
 
   tableWrapper:{
     overflowX:"auto",
-    background:"#fff",
-    borderRadius:"8px",
-    border:"1px solid #e5e7eb"
+    border:"1px solid #999"
   },
 
   table:{
-    width:"100%",
     borderCollapse:"collapse",
-    minWidth:"1700px",
-    fontSize:"13px"
+    width:"100%",
+    fontSize:"12px"
   }
 
 };
