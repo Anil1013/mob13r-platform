@@ -4,8 +4,6 @@ import * as XLSX from "xlsx";
 
 export default function Dashboard() {
 
-  const user = JSON.parse(localStorage.getItem("user"));
-
   const [data,setData] = useState([]);
   const [stats,setStats] = useState({});
 
@@ -79,31 +77,28 @@ export default function Dashboard() {
 
       <div style={styles.container}>
 
-        <h1 style={{marginBottom:"5px"}}>Mob13r Dashboard</h1>
-        <p style={{color:"#6b7280"}}>Welcome <b>{user?.email}</b> 👋</p>
-
-        {/* REALTIME STATS */}
+        {/* STATS */}
 
         <div style={styles.stats}>
 
           <div style={styles.card}>
             <span>Requests</span>
-            <h2>{stats.total_requests || 0}</h2>
+            <h3>{stats.total_requests || 0}</h3>
           </div>
 
           <div style={styles.card}>
             <span>OTP Sent</span>
-            <h2>{stats.otp_sent || 0}</h2>
+            <h3>{stats.otp_sent || 0}</h3>
           </div>
 
           <div style={styles.card}>
             <span>Conversions</span>
-            <h2>{stats.conversions || 0}</h2>
+            <h3>{stats.conversions || 0}</h3>
           </div>
 
           <div style={styles.card}>
             <span>Last Hour</span>
-            <h2>{stats.last_hour_requests || 0}</h2>
+            <h3>{stats.last_hour_requests || 0}</h3>
           </div>
 
         </div>
@@ -154,7 +149,7 @@ export default function Dashboard() {
 
         </div>
 
-        {/* REPORT TABLE */}
+        {/* TABLE */}
 
         <div style={styles.tableWrapper}>
 
@@ -234,7 +229,7 @@ export default function Dashboard() {
 const styles = {
 
   container:{
-    padding:"80px 40px",
+    padding:"40px 30px",
     fontFamily:"Inter, system-ui, Arial",
     background:"#fafafa",
     minHeight:"100vh"
@@ -242,33 +237,33 @@ const styles = {
 
   stats:{
     display:"flex",
-    gap:"20px",
-    marginBottom:"25px"
+    gap:"15px",
+    marginBottom:"15px"
   },
 
   card:{
     background:"#ffffff",
-    padding:"18px 25px",
-    borderRadius:"10px",
-    boxShadow:"0 2px 6px rgba(0,0,0,0.05)",
-    minWidth:"160px"
+    padding:"10px 16px",
+    borderRadius:"8px",
+    boxShadow:"0 1px 4px rgba(0,0,0,0.05)",
+    minWidth:"130px"
   },
 
   filters:{
-    marginBottom:"20px",
+    marginBottom:"15px",
     display:"flex",
     gap:"10px",
     flexWrap:"wrap"
   },
 
   input:{
-    padding:"8px 10px",
+    padding:"6px 8px",
     border:"1px solid #d1d5db",
     borderRadius:"6px"
   },
 
   button:{
-    padding:"8px 16px",
+    padding:"6px 14px",
     background:"#2563eb",
     color:"#fff",
     border:"none",
@@ -277,7 +272,7 @@ const styles = {
   },
 
   buttonSecondary:{
-    padding:"8px 14px",
+    padding:"6px 12px",
     background:"#e5e7eb",
     border:"none",
     borderRadius:"6px",
@@ -287,14 +282,15 @@ const styles = {
   tableWrapper:{
     overflowX:"auto",
     background:"#fff",
-    borderRadius:"10px",
-    boxShadow:"0 2px 8px rgba(0,0,0,0.05)"
+    borderRadius:"8px",
+    border:"1px solid #e5e7eb"
   },
 
   table:{
     width:"100%",
     borderCollapse:"collapse",
-    minWidth:"1500px"
+    minWidth:"1700px",
+    fontSize:"13px"
   }
 
 };
