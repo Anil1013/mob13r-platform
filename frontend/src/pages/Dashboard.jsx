@@ -7,24 +7,12 @@ export default function Dashboard() {
   const user = JSON.parse(localStorage.getItem("user"));
 
   const [data,setData] = useState([]);
-  const [filtered,setFiltered] = useState([]);
-
   const [stats,setStats] = useState({});
 
   const [from,setFrom] = useState("");
   const [to,setTo] = useState("");
   const [operator,setOperator] = useState("");
   const [offer,setOffer] = useState("");
-
-  const [search,setSearch] = useState("");
-
-  const [page,setPage] = useState(1);
-  const rowsPerPage = 10;
-
-  const [sortField,setSortField] = useState("");
-  const [sortAsc,setSortAsc] = useState(true);
-
-  /* LOAD REPORT */
 
   const loadReport = async () => {
 
@@ -39,10 +27,7 @@ export default function Dashboard() {
     const json = await res.json();
 
     setData(json.data || []);
-    setFiltered(json.data || []);
   };
-
-  /* REALTIME */
 
   const loadRealtime = async () => {
 
@@ -63,76 +48,29 @@ export default function Dashboard() {
 
   },[]);
 
-  /* SEARCH */
+  const exportExcel = () => {
 
-  useEffect(()=>{
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
 
-    const result = data.filter(row =>
-      Object.values(row).join(" ").toLowerCase().includes(search.toLowerCase())
-    );
+    XLSX.utils.book_append_sheet(workbook,worksheet,"Report");
 
-    setFiltered(result);
-    setPage(1);
-
-  },[search,data]);
-
-  /* SORT */
-
-  const sortColumn = (field) => {
-
-    const asc = field === sortField ? !sortAsc : true;
-
-    const sorted = [...filtered].sort((a,b)=>{
-
-      if(a[field] > b[field]) return asc ? 1 : -1;
-      if(a[field] < b[field]) return asc ? -1 : 1;
-      return 0;
-
-    });
-
-    setFiltered(sorted);
-    setSortField(field);
-    setSortAsc(asc);
+    XLSX.writeFile(workbook,"traffic_report.xlsx");
   };
-
-  /* PAGINATION */
-
-  const start = (page-1)*rowsPerPage;
-  const currentRows = filtered.slice(start,start+rowsPerPage);
-  const totalPages = Math.ceil(filtered.length / rowsPerPage);
-
-  /* EXPORT CSV */
 
   const exportCSV = () => {
 
-    if(!data.length) return;
-
-    const header = Object.keys(data[0]).join(",");
-    const rows = data.map(row => Object.values(row).join(",")).join("\n");
-
-    const csv = header + "\n" + rows;
+    const rows = data.map(row => Object.values(row).join(","));
+    const csv = [Object.keys(data[0] || {}).join(","),...rows].join("\n");
 
     const blob = new Blob([csv],{type:"text/csv"});
-
-    const url = URL.createObjectURL(blob);
+    const url = window.URL.createObjectURL(blob);
 
     const a = document.createElement("a");
 
     a.href = url;
-    a.download = "report.csv";
+    a.download = "traffic_report.csv";
     a.click();
-  };
-
-  /* EXPORT EXCEL */
-
-  const exportExcel = () => {
-
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-
-    XLSX.utils.book_append_sheet(wb,ws,"Report");
-
-    XLSX.writeFile(wb,"report.xlsx");
   };
 
   return (
@@ -141,31 +79,31 @@ export default function Dashboard() {
 
       <div style={styles.container}>
 
-        <h2>Dashboard</h2>
-        <p>Welcome <b>{user?.email}</b></p>
+        <h1 style={{marginBottom:"5px"}}>Mob13r Dashboard</h1>
+        <p style={{color:"#6b7280"}}>Welcome <b>{user?.email}</b> 👋</p>
 
-        {/* STATS */}
+        {/* REALTIME STATS */}
 
-        <div style={styles.cards}>
+        <div style={styles.stats}>
 
           <div style={styles.card}>
-            Requests
-            <h3>{stats.total_requests || 0}</h3>
+            <span>Requests</span>
+            <h2>{stats.total_requests || 0}</h2>
           </div>
 
           <div style={styles.card}>
-            OTP Sent
-            <h3>{stats.otp_sent || 0}</h3>
+            <span>OTP Sent</span>
+            <h2>{stats.otp_sent || 0}</h2>
           </div>
 
           <div style={styles.card}>
-            Conversions
-            <h3>{stats.conversions || 0}</h3>
+            <span>Conversions</span>
+            <h2>{stats.conversions || 0}</h2>
           </div>
 
           <div style={styles.card}>
-            Last Hour
-            <h3>{stats.last_hour_requests || 0}</h3>
+            <span>Last Hour</span>
+            <h2>{stats.last_hour_requests || 0}</h2>
           </div>
 
         </div>
@@ -174,41 +112,51 @@ export default function Dashboard() {
 
         <div style={styles.filters}>
 
-          <input type="date" value={from} onChange={e=>setFrom(e.target.value)} />
-          <input type="date" value={to} onChange={e=>setTo(e.target.value)} />
+          <input
+          type="date"
+          value={from}
+          onChange={(e)=>setFrom(e.target.value)}
+          style={styles.input}
+          />
+
+          <input
+          type="date"
+          value={to}
+          onChange={(e)=>setTo(e.target.value)}
+          style={styles.input}
+          />
 
           <input
           placeholder="Operator"
           value={operator}
-          onChange={e=>setOperator(e.target.value)}
+          onChange={(e)=>setOperator(e.target.value)}
+          style={styles.input}
           />
 
           <input
           placeholder="Offer ID"
           value={offer}
-          onChange={e=>setOffer(e.target.value)}
+          onChange={(e)=>setOffer(e.target.value)}
+          style={styles.input}
           />
 
-          <button onClick={loadReport}>Filter</button>
+          <button style={styles.button} onClick={loadReport}>
+            Filter
+          </button>
 
-          <button onClick={exportCSV}>CSV</button>
+          <button style={styles.buttonSecondary} onClick={exportCSV}>
+            CSV
+          </button>
 
-          <button onClick={exportExcel}>Excel</button>
+          <button style={styles.buttonSecondary} onClick={exportExcel}>
+            Excel
+          </button>
 
         </div>
 
-        {/* SEARCH */}
+        {/* REPORT TABLE */}
 
-        <input
-        placeholder="Search..."
-        style={styles.search}
-        value={search}
-        onChange={(e)=>setSearch(e.target.value)}
-        />
-
-        {/* TABLE */}
-
-        <div style={styles.tableWrap}>
+        <div style={styles.tableWrapper}>
 
         <table style={styles.table}>
 
@@ -216,16 +164,27 @@ export default function Dashboard() {
 
             <tr>
 
-              {data[0] && Object.keys(data[0]).map(col => (
-
-                <th key={col}
-                onClick={()=>sortColumn(col)}
-                style={{cursor:"pointer"}}
-                >
-                  {col}
-                </th>
-
-              ))}
+              <th>Date</th>
+              <th>Advertiser</th>
+              <th>Offer</th>
+              <th>Publisher</th>
+              <th>Geo</th>
+              <th>Carrier</th>
+              <th>CPA</th>
+              <th>Cap</th>
+              <th>Pin Req</th>
+              <th>Unique Req</th>
+              <th>Pin Sent</th>
+              <th>Unique Sent</th>
+              <th>Verify Req</th>
+              <th>Unique Verify</th>
+              <th>Verified</th>
+              <th>CR %</th>
+              <th>Revenue</th>
+              <th>Last Pin Gen</th>
+              <th>Last Pin Gen Success</th>
+              <th>Last Verification</th>
+              <th>Last Success Verification</th>
 
             </tr>
 
@@ -233,39 +192,37 @@ export default function Dashboard() {
 
           <tbody>
 
-            {currentRows.map((row,i)=>(
+            {data.map((row,i)=>(
               <tr key={i}>
-                {Object.values(row).map((v,j)=>(
-                  <td key={j}>{v}</td>
-                ))}
+
+                <td>{row.date}</td>
+                <td>{row.advertiser_name}</td>
+                <td>{row.offer_name}</td>
+                <td>{row.publisher_name}</td>
+                <td>{row.geo}</td>
+                <td>{row.carrier}</td>
+                <td>{row.cpa}</td>
+                <td>{row.cap}</td>
+                <td>{row.pin_req}</td>
+                <td>{row.unique_req}</td>
+                <td>{row.pin_sent}</td>
+                <td>{row.unique_sent}</td>
+                <td>{row.verify_req}</td>
+                <td>{row.unique_verify}</td>
+                <td>{row.verified}</td>
+                <td>{row.cr_percent}</td>
+                <td>{row.revenue}</td>
+                <td>{row.last_pin_gen}</td>
+                <td>{row.last_pin_gen_success}</td>
+                <td>{row.last_verification}</td>
+                <td>{row.last_success_verification}</td>
+
               </tr>
             ))}
 
           </tbody>
 
         </table>
-
-        </div>
-
-        {/* PAGINATION */}
-
-        <div style={styles.pagination}>
-
-          <button
-          disabled={page===1}
-          onClick={()=>setPage(page-1)}
-          >
-            Prev
-          </button>
-
-          <span>Page {page} / {totalPages}</span>
-
-          <button
-          disabled={page===totalPages}
-          onClick={()=>setPage(page+1)}
-          >
-            Next
-          </button>
 
         </div>
 
@@ -278,49 +235,66 @@ const styles = {
 
   container:{
     padding:"80px 40px",
-    fontFamily:"Inter, Arial"
+    fontFamily:"Inter, system-ui, Arial",
+    background:"#fafafa",
+    minHeight:"100vh"
   },
 
-  cards:{
+  stats:{
     display:"flex",
     gap:"20px",
-    marginBottom:"30px"
+    marginBottom:"25px"
   },
 
   card:{
-    background:"#f4f6f8",
-    padding:"20px",
+    background:"#ffffff",
+    padding:"18px 25px",
     borderRadius:"10px",
-    minWidth:"150px"
+    boxShadow:"0 2px 6px rgba(0,0,0,0.05)",
+    minWidth:"160px"
   },
 
   filters:{
+    marginBottom:"20px",
     display:"flex",
     gap:"10px",
-    marginBottom:"20px",
     flexWrap:"wrap"
   },
 
-  search:{
-    padding:"8px",
-    marginBottom:"15px",
-    width:"250px"
+  input:{
+    padding:"8px 10px",
+    border:"1px solid #d1d5db",
+    borderRadius:"6px"
   },
 
-  tableWrap:{
-    overflowX:"auto"
+  button:{
+    padding:"8px 16px",
+    background:"#2563eb",
+    color:"#fff",
+    border:"none",
+    borderRadius:"6px",
+    cursor:"pointer"
+  },
+
+  buttonSecondary:{
+    padding:"8px 14px",
+    background:"#e5e7eb",
+    border:"none",
+    borderRadius:"6px",
+    cursor:"pointer"
+  },
+
+  tableWrapper:{
+    overflowX:"auto",
+    background:"#fff",
+    borderRadius:"10px",
+    boxShadow:"0 2px 8px rgba(0,0,0,0.05)"
   },
 
   table:{
     width:"100%",
-    borderCollapse:"collapse"
-  },
-
-  pagination:{
-    marginTop:"20px",
-    display:"flex",
-    gap:"20px",
-    alignItems:"center"
+    borderCollapse:"collapse",
+    minWidth:"1500px"
   }
 
 };
