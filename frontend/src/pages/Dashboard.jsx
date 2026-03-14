@@ -213,7 +213,7 @@ const styles = {
 
   container:{
     padding:"25px",
-    fontFamily:"Arial"
+    fontFamily:"Lora"
   },
 
   stats:{
@@ -244,6 +244,9 @@ const styles = {
 
   table:{
     borderCollapse:"collapse",
+    border="1"
+    cellPadding="8"
+    style={{ textAlign: "center" }}
     width:"100%",
     fontSize:"12px"
   }
