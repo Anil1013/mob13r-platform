@@ -12,6 +12,8 @@ export default function Dashboard() {
   const [operator,setOperator] = useState("");
   const [offer,setOffer] = useState("");
 
+  /* LOAD REPORT */
+
   const loadReport = async () => {
 
     let url = "/api/dashboard/report?";
@@ -26,6 +28,8 @@ export default function Dashboard() {
 
     setData(json.data || []);
   };
+
+  /* REALTIME */
 
   const loadRealtime = async () => {
 
@@ -46,6 +50,8 @@ export default function Dashboard() {
 
   },[]);
 
+  /* EXPORT EXCEL */
+
   const exportExcel = () => {
 
     const worksheet = XLSX.utils.json_to_sheet(data);
@@ -56,10 +62,14 @@ export default function Dashboard() {
     XLSX.writeFile(workbook,"traffic_report.xlsx");
   };
 
+  /* EXPORT CSV */
+
   const exportCSV = () => {
 
+    if(!data.length) return;
+
     const rows = data.map(row => Object.values(row).join(","));
-    const csv = [Object.keys(data[0] || {}).join(","),...rows].join("\n");
+    const csv = [Object.keys(data[0]).join(","),...rows].join("\n");
 
     const blob = new Blob([csv],{type:"text/csv"});
     const url = window.URL.createObjectURL(blob);
@@ -86,12 +96,12 @@ export default function Dashboard() {
             <strong>{stats.total_requests || 0}</strong>
           </div>
 
-          <div style={{...styles.card,background:"#e6fff3"}}>
+          <div style={{...styles.card,background:"#e7fff3"}}>
             OTP Sent
             <strong>{stats.otp_sent || 0}</strong>
           </div>
 
-          <div style={{...styles.card,background:"#fff5e6"}}>
+          <div style={{...styles.card,background:"#fff3e8"}}>
             Conversions
             <strong>{stats.conversions || 0}</strong>
           </div>
@@ -107,20 +117,45 @@ export default function Dashboard() {
 
         <div style={styles.filters}>
 
-          <input type="date" value={from} onChange={(e)=>setFrom(e.target.value)} />
-          <input type="date" value={to} onChange={(e)=>setTo(e.target.value)} />
+          <input
+          type="date"
+          value={from}
+          onChange={(e)=>setFrom(e.target.value)}
+          />
 
-          <input placeholder="Operator" value={operator} onChange={(e)=>setOperator(e.target.value)} />
-          <input placeholder="Offer ID" value={offer} onChange={(e)=>setOffer(e.target.value)} />
+          <input
+          type="date"
+          value={to}
+          onChange={(e)=>setTo(e.target.value)}
+          />
 
-          <button onClick={loadReport}>Apply</button>
+          <input
+          placeholder="Operator"
+          value={operator}
+          onChange={(e)=>setOperator(e.target.value)}
+          />
 
-          <button onClick={exportCSV}>Export CSV</button>
-          <button onClick={exportExcel}>Export Excel</button>
+          <input
+          placeholder="Offer ID"
+          value={offer}
+          onChange={(e)=>setOffer(e.target.value)}
+          />
+
+          <button onClick={loadReport}>
+            Apply
+          </button>
+
+          <button onClick={exportCSV}>
+            Export CSV
+          </button>
+
+          <button onClick={exportExcel}>
+            Export Excel
+          </button>
 
         </div>
 
-        {/* EXCEL STYLE TABLE */}
+        {/* REPORT TABLE */}
 
         <div style={styles.tableWrapper}>
 
@@ -130,32 +165,20 @@ export default function Dashboard() {
 
             <tr>
 
-              <th>Date</th>
-              <th>Advertiser</th>
-              <th>Offer</th>
-              <th>Publisher</th>
-              <th>Geo</th>
-              <th>Carrier</th>
-              <th>CPA</th>
-              <th>Cap</th>
-
-              <th>Pin Req</th>
-              <th>Unique Req</th>
-
-              <th>Pin Sent</th>
-              <th>Unique Sent</th>
-
-              <th>Verify Req</th>
-              <th>Unique Verify</th>
-
-              <th>Verified</th>
-              <th>%</th>
-              <th>Revenue</th>
-
-              <th>Last Pin Gen</th>
-              <th>Last Pin Gen Success</th>
-              <th>Last Verification</th>
-              <th>Last Success Verification</th>
+              {[
+                "Date","Advertiser","Offer","Publisher","Geo","Carrier",
+                "CPA","Cap","Pin Req","Unique Req",
+                "Pin Sent","Unique Sent",
+                "Verify Req","Unique Verify",
+                "Verified","CR %",
+                "Revenue",
+                "Last Pin Gen",
+                "Last Pin Gen Success",
+                "Last Verification",
+                "Last Success Verification"
+              ].map(col=>(
+                <th key={col} style={styles.th}>{col}</th>
+              ))}
 
             </tr>
 
@@ -167,32 +190,32 @@ export default function Dashboard() {
 
               <tr key={i}>
 
-                <td>{row.date}</td>
-                <td>{row.advertiser_name}</td>
-                <td>{row.offer_name}</td>
-                <td>{row.publisher_name}</td>
-                <td>{row.geo}</td>
-                <td>{row.carrier}</td>
-                <td>{row.cpa}</td>
-                <td>{row.cap}</td>
+                <td style={styles.td}>{row.date}</td>
+                <td style={styles.td}>{row.advertiser_name}</td>
+                <td style={styles.td}>{row.offer_name}</td>
+                <td style={styles.td}>{row.publisher_name}</td>
+                <td style={styles.td}>{row.geo}</td>
+                <td style={styles.td}>{row.carrier}</td>
+                <td style={styles.td}>{row.cpa}</td>
+                <td style={styles.td}>{row.cap}</td>
 
-                <td>{row.pin_req}</td>
-                <td>{row.unique_req}</td>
+                <td style={styles.td}>{row.pin_req}</td>
+                <td style={styles.td}>{row.unique_req}</td>
 
-                <td>{row.pin_sent}</td>
-                <td>{row.unique_sent}</td>
+                <td style={styles.td}>{row.pin_sent}</td>
+                <td style={styles.td}>{row.unique_sent}</td>
 
-                <td>{row.verify_req}</td>
-                <td>{row.unique_verify}</td>
+                <td style={styles.td}>{row.verify_req}</td>
+                <td style={styles.td}>{row.unique_verify}</td>
 
-                <td>{row.verified}</td>
-                <td>{row.cr_percent}</td>
-                <td>{row.revenue}</td>
+                <td style={styles.td}>{row.verified}</td>
+                <td style={styles.td}>{row.cr_percent}</td>
+                <td style={styles.td}>{row.revenue}</td>
 
-                <td>{row.last_pin_gen}</td>
-                <td>{row.last_pin_gen_success}</td>
-                <td>{row.last_verification}</td>
-                <td>{row.last_success_verification}</td>
+                <td style={styles.td}>{row.last_pin_gen}</td>
+                <td style={styles.td}>{row.last_pin_gen_success}</td>
+                <td style={styles.td}>{row.last_verification}</td>
+                <td style={styles.td}>{row.last_success_verification}</td>
 
               </tr>
 
@@ -211,44 +234,61 @@ export default function Dashboard() {
 
 const styles = {
 
-  container:{
-    padding:"25px",
-    fontFamily:"Lora"
-  },
+container:{
+  padding:"20px 25px",
+  fontFamily:"Arial, Helvetica, sans-serif",
+  background:"#f7f7f7",
+  minHeight:"100vh"
+},
 
-  stats:{
-    display:"flex",
-    gap:"10px",
-    marginBottom:"10px"
-  },
+stats:{
+  display:"flex",
+  gap:"8px",
+  marginBottom:"12px"
+},
 
-  card:{
-    padding:"8px 14px",
-    borderRadius:"6px",
-    fontSize:"13px",
-    display:"flex",
-    flexDirection:"column"
-  },
+card:{
+  padding:"6px 12px",
+  borderRadius:"4px",
+  fontSize:"12px",
+  fontWeight:"600",
+  display:"flex",
+  flexDirection:"column",
+  border:"1px solid #ccc"
+},
 
-  filters:{
-    display:"flex",
-    gap:"8px",
-    marginBottom:"10px",
-    flexWrap:"wrap"
-  },
+filters:{
+  display:"flex",
+  gap:"6px",
+  marginBottom:"10px",
+  flexWrap:"wrap"
+},
 
-  tableWrapper:{
-    overflowX:"auto",
-    border:"1px solid #999"
-  },
+tableWrapper:{
+  overflowX:"auto",
+  background:"#fff",
+  border:"1px solid #999"
+},
 
-  table:{
-    borderCollapse:"collapse",
-    border="1"
-    cellPadding="8"
-    style={{ textAlign: "center" }}
-    width:"100%",
-    fontSize:"12px"
-  }
+table:{
+  borderCollapse:"collapse",
+  width:"100%",
+  minWidth:"1700px",
+  fontSize:"12px"
+},
+
+th:{
+  border:"1px solid #999",
+  padding:"6px 8px",
+  background:"#efefef",
+  whiteSpace:"nowrap",
+  fontWeight:"600"
+},
+
+td:{
+  border:"1px solid #ccc",
+  padding:"6px 8px",
+  whiteSpace:"nowrap"
+}
 
 };
