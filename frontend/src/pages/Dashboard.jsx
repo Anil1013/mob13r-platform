@@ -4,11 +4,14 @@ import * as XLSX from "xlsx";
 
 export default function Dashboard() {
 
+  const today = new Date().toISOString().slice(0,10);
+
   const [data,setData] = useState([]);
   const [stats,setStats] = useState({});
 
-  const [from,setFrom] = useState("");
-  const [to,setTo] = useState("");
+  const [from,setFrom] = useState(today);
+  const [to,setTo] = useState(today);
+
   const [operator,setOperator] = useState("");
   const [offer,setOffer] = useState("");
 
@@ -16,12 +19,10 @@ export default function Dashboard() {
 
   const loadReport = async () => {
 
-    let url = "/api/dashboard/report?";
+    let url = `/api/dashboard/report?from=${from}&to=${to}`;
 
-    if(from) url += `from=${from}&`;
-    if(to) url += `to=${to}&`;
-    if(operator) url += `operator=${operator}&`;
-    if(offer) url += `offer_id=${offer}&`;
+    if(operator) url += `&operator=${operator}`;
+    if(offer) url += `&offer_id=${offer}`;
 
     const res = await fetch(url);
     const json = await res.json();
@@ -44,13 +45,9 @@ export default function Dashboard() {
     loadReport();
     loadRealtime();
 
-    const interval = setInterval(loadRealtime,5000);
-
-    return () => clearInterval(interval);
-
   },[]);
 
-  /* EXPORT EXCEL */
+  /* EXPORT */
 
   const exportExcel = () => {
 
@@ -61,8 +58,6 @@ export default function Dashboard() {
 
     XLSX.writeFile(workbook,"traffic_report.xlsx");
   };
-
-  /* EXPORT CSV */
 
   const exportCSV = () => {
 
@@ -81,13 +76,42 @@ export default function Dashboard() {
     a.click();
   };
 
+  /* TOTAL CALCULATION */
+
+  const total = data.reduce((acc,row)=>{
+
+    acc.pin_req += Number(row.pin_req||0);
+    acc.unique_req += Number(row.unique_req||0);
+
+    acc.pin_sent += Number(row.pin_sent||0);
+    acc.unique_sent += Number(row.unique_sent||0);
+
+    acc.verify_req += Number(row.verify_req||0);
+    acc.unique_verify += Number(row.unique_verify||0);
+
+    acc.verified += Number(row.verified||0);
+    acc.revenue += Number(row.revenue||0);
+
+    return acc;
+
+  },{
+    pin_req:0,
+    unique_req:0,
+    pin_sent:0,
+    unique_sent:0,
+    verify_req:0,
+    unique_verify:0,
+    verified:0,
+    revenue:0
+  });
+
   return (
     <>
       <Navbar />
 
       <div style={styles.container}>
 
-        {/* SMALL COLORED STATS */}
+        {/* STATS */}
 
         <div style={styles.stats}>
 
@@ -117,71 +141,54 @@ export default function Dashboard() {
 
         <div style={styles.filters}>
 
-          <input
-          type="date"
-          value={from}
-          onChange={(e)=>setFrom(e.target.value)}
-          />
+          <input type="date" value={from} onChange={(e)=>setFrom(e.target.value)} />
+          <input type="date" value={to} onChange={(e)=>setTo(e.target.value)} />
 
-          <input
-          type="date"
-          value={to}
-          onChange={(e)=>setTo(e.target.value)}
-          />
+          <input placeholder="Operator" value={operator} onChange={(e)=>setOperator(e.target.value)} />
+          <input placeholder="Offer ID" value={offer} onChange={(e)=>setOffer(e.target.value)} />
 
-          <input
-          placeholder="Operator"
-          value={operator}
-          onChange={(e)=>setOperator(e.target.value)}
-          />
+          <button onClick={loadReport}>Apply</button>
 
-          <input
-          placeholder="Offer ID"
-          value={offer}
-          onChange={(e)=>setOffer(e.target.value)}
-          />
-
-          <button onClick={loadReport}>
-            Apply
-          </button>
-
-          <button onClick={exportCSV}>
-            Export CSV
-          </button>
-
-          <button onClick={exportExcel}>
-            Export Excel
-          </button>
+          <button onClick={exportCSV}>Export CSV</button>
+          <button onClick={exportExcel}>Export Excel</button>
 
         </div>
 
-        {/* REPORT TABLE */}
+        {/* TABLE */}
 
         <div style={styles.tableWrapper}>
 
         <table style={styles.table}>
 
           <thead>
-
             <tr>
+              <th>Date</th>
+              <th>Advertiser</th>
+              <th>Offer</th>
+              <th>Publisher</th>
+              <th>Geo</th>
+              <th>Carrier</th>
+              <th>CPA</th>
+              <th>Cap</th>
 
-              {[
-                "Date","Advertiser","Offer","Publisher","Geo","Carrier",
-                "CPA","Cap","Pin Req","Unique Req",
-                "Pin Sent","Unique Sent",
-                "Verify Req","Unique Verify",
-                "Verified","CR %",
-                "Revenue",
-                "Last Pin Gen",
-                "Last Pin Gen Success",
-                "Last Verification",
-                "Last Success Verification"
-              ].map(col=>(
-                <th key={col} style={styles.th}>{col}</th>
-              ))}
+              <th>Pin Req</th>
+              <th>Unique Req</th>
 
+              <th>Pin Sent</th>
+              <th>Unique Sent</th>
+
+              <th>Verify Req</th>
+              <th>Unique Verify</th>
+
+              <th>Verified</th>
+              <th>CR %</th>
+              <th>Revenue</th>
+
+              <th>Last Pin Gen</th>
+              <th>Last Pin Gen Success</th>
+              <th>Last Verification</th>
+              <th>Last Success Verification</th>
             </tr>
-
           </thead>
 
           <tbody>
@@ -190,36 +197,60 @@ export default function Dashboard() {
 
               <tr key={i}>
 
-                <td style={styles.td}>{row.date}</td>
-                <td style={styles.td}>{row.advertiser_name}</td>
-                <td style={styles.td}>{row.offer_name}</td>
-                <td style={styles.td}>{row.publisher_name}</td>
-                <td style={styles.td}>{row.geo}</td>
-                <td style={styles.td}>{row.carrier}</td>
-                <td style={styles.td}>{row.cpa}</td>
-                <td style={styles.td}>{row.cap}</td>
+                <td>{row.date}</td>
+                <td>{row.advertiser_name}</td>
+                <td>{row.offer_name}</td>
+                <td>{row.publisher_name}</td>
+                <td>{row.geo}</td>
+                <td>{row.carrier}</td>
+                <td>{row.cpa}</td>
+                <td>{row.cap}</td>
 
-                <td style={styles.td}>{row.pin_req}</td>
-                <td style={styles.td}>{row.unique_req}</td>
+                <td>{row.pin_req}</td>
+                <td>{row.unique_req}</td>
 
-                <td style={styles.td}>{row.pin_sent}</td>
-                <td style={styles.td}>{row.unique_sent}</td>
+                <td>{row.pin_sent}</td>
+                <td>{row.unique_sent}</td>
 
-                <td style={styles.td}>{row.verify_req}</td>
-                <td style={styles.td}>{row.unique_verify}</td>
+                <td>{row.verify_req}</td>
+                <td>{row.unique_verify}</td>
 
-                <td style={styles.td}>{row.verified}</td>
-                <td style={styles.td}>{row.cr_percent}</td>
-                <td style={styles.td}>{row.revenue}</td>
+                <td>{row.verified}</td>
+                <td>{row.cr_percent}</td>
+                <td>{row.revenue}</td>
 
-                <td style={styles.td}>{row.last_pin_gen}</td>
-                <td style={styles.td}>{row.last_pin_gen_success}</td>
-                <td style={styles.td}>{row.last_verification}</td>
-                <td style={styles.td}>{row.last_success_verification}</td>
+                <td>{row.last_pin_gen}</td>
+                <td>{row.last_pin_gen_success}</td>
+                <td>{row.last_verification}</td>
+                <td>{row.last_success_verification}</td>
 
               </tr>
 
             ))}
+
+            {/* TOTAL ROW */}
+
+            <tr style={styles.totalRow}>
+
+              <td colSpan="8">TOTAL</td>
+
+              <td>{total.pin_req}</td>
+              <td>{total.unique_req}</td>
+
+              <td>{total.pin_sent}</td>
+              <td>{total.unique_sent}</td>
+
+              <td>{total.verify_req}</td>
+              <td>{total.unique_verify}</td>
+
+              <td>{total.verified}</td>
+              <td>-</td>
+
+              <td>${total.revenue.toFixed(2)}</td>
+
+              <td colSpan="4"></td>
+
+            </tr>
 
           </tbody>
 
@@ -236,9 +267,8 @@ const styles = {
 
 container:{
   padding:"20px 25px",
-  fontFamily:"Arial, Helvetica, sans-serif",
-  background:"#f7f7f7",
-  minHeight:"100vh"
+  fontFamily:"Lora, serif",
+  background:"#f7f7f7"
 },
 
 stats:{
@@ -251,9 +281,6 @@ card:{
   padding:"6px 12px",
   borderRadius:"4px",
   fontSize:"12px",
-  fontWeight:"600",
-  display:"flex",
-  flexDirection:"column",
   border:"1px solid #ccc"
 },
 
@@ -277,18 +304,9 @@ table:{
   fontSize:"12px"
 },
 
-th:{
-  border:"1px solid #999",
-  padding:"6px 8px",
+totalRow:{
   background:"#efefef",
-  whiteSpace:"nowrap",
-  fontWeight:"600"
-},
-
-td:{
-  border:"1px solid #ccc",
-  padding:"6px 8px",
-  whiteSpace:"nowrap"
+  fontWeight:"bold"
 }
 
 };
