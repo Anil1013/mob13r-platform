@@ -4,13 +4,13 @@ import pool from "../db.js";
 const router = express.Router();
 
 /*
-====================================================
+==================================================
 DASHBOARD REPORT
-GET /api/dashboard/report
-====================================================
+==================================================
 */
 
 router.get("/dashboard/report", async (req, res) => {
+
   try {
 
     const { from, to, publisher, offer, geo, carrier } = req.query;
@@ -18,8 +18,6 @@ router.get("/dashboard/report", async (req, res) => {
     let filters = [];
     let values = [];
     let i = 1;
-
-    /* DATE FILTER */
 
     if (from) {
       filters.push(`ps.created_at >= $${i++}`);
@@ -31,28 +29,20 @@ router.get("/dashboard/report", async (req, res) => {
       values.push(to + " 23:59:59");
     }
 
-    /* PUBLISHER */
-
     if (publisher) {
       filters.push(`ps.publisher_id = $${i++}`);
       values.push(publisher);
     }
-
-    /* OFFER */
 
     if (offer) {
       filters.push(`ps.offer_id = $${i++}`);
       values.push(offer);
     }
 
-    /* GEO */
-
     if (geo) {
       filters.push(`o.geo = $${i++}`);
       values.push(geo);
     }
-
-    /* CARRIER */
 
     if (carrier) {
       filters.push(`o.carrier = $${i++}`);
@@ -63,98 +53,86 @@ router.get("/dashboard/report", async (req, res) => {
 
     const query = `
 
-      SELECT
+    SELECT
 
-        DATE(ps.created_at) as date,
+      DATE(ps.created_at) as date,
 
-        COALESCE(o.service_name, 'Offer #' || ps.offer_id) as offer_name,
-        COALESCE(pub.name, 'Unknown Publisher') as publisher_name,
+      CASE
+        WHEN o.service_name IS NULL OR o.service_name = ''
+        THEN 'Offer #' || ps.offer_id
+        ELSE o.service_name
+      END as offer_name,
 
-        o.geo,
-        o.carrier,
+      COALESCE(pub.name,'Unknown Publisher') as publisher_name,
 
-        o.cpa,
-        o.daily_cap as cap,
+      o.geo,
+      o.carrier,
 
-        /* PIN REQUEST */
+      o.cpa,
+      o.daily_cap as cap,
 
-        COUNT(ps.session_id) as pin_req,
-        COUNT(DISTINCT ps.msisdn) as unique_req,
+      COUNT(*) as pin_req,
 
-        /* OTP SENT */
+      COUNT(DISTINCT ps.msisdn) as unique_req,
 
-        COUNT(ps.session_id)
-        FILTER (WHERE ps.status='OTP_SENT') as pin_sent,
+      COUNT(*) FILTER (WHERE ps.status='OTP_SENT') as pin_sent,
 
-        COUNT(DISTINCT ps.msisdn)
-        FILTER (WHERE ps.status='OTP_SENT') as unique_sent,
+      COUNT(DISTINCT ps.msisdn)
+      FILTER (WHERE ps.status='OTP_SENT') as unique_sent,
 
-        /* VERIFY REQUEST */
+      COUNT(*) FILTER (WHERE ps.status='VERIFY_REQUESTED') as verify_req,
 
-        COUNT(ps.session_id)
-        FILTER (WHERE ps.status='OTP_VERIFY') as verify_req,
+      COUNT(DISTINCT ps.msisdn)
+      FILTER (WHERE ps.status='VERIFY_REQUESTED') as unique_verify,
 
-        COUNT(DISTINCT ps.msisdn)
-        FILTER (WHERE ps.status='OTP_VERIFY') as unique_verify,
+      COUNT(*) FILTER (WHERE ps.verified_at IS NOT NULL) as verified,
 
-        /* VERIFIED */
+      ROUND(
+        COUNT(*) FILTER (WHERE ps.verified_at IS NOT NULL)::numeric
+        /
+        NULLIF(COUNT(*) FILTER (WHERE ps.status='OTP_SENT'),0)
+        *100
+      ,2) as cr_percent,
 
-        COUNT(ps.session_id)
-        FILTER (WHERE ps.verified_at IS NOT NULL) as verified,
+      COALESCE(
+        SUM(ps.publisher_cpa)
+        FILTER (WHERE ps.publisher_credited = true)
+      ,0) as revenue,
 
-        /* CR */
+      MAX(ps.created_at) as last_pin_gen,
 
-        ROUND(
-          COUNT(ps.session_id)
-          FILTER (WHERE ps.verified_at IS NOT NULL)::numeric
-          /
-          NULLIF(COUNT(ps.session_id),0)
-          * 100
-        ,2) as cr_percent,
+      MAX(ps.created_at)
+      FILTER (WHERE ps.status='OTP_SENT')
+      as last_pin_gen_success,
 
-        /* REVENUE */
+      MAX(ps.created_at)
+      FILTER (WHERE ps.status='VERIFY_REQUESTED')
+      as last_verification,
 
-        COALESCE(
-          SUM(ps.publisher_cpa)
-          FILTER (WHERE ps.publisher_credited=true)
-        ,0) as revenue,
+      MAX(ps.verified_at)
+      as last_success_verification
 
-        /* LAST EVENTS */
+    FROM pin_sessions ps
 
-        MAX(ps.created_at) as last_pin_gen,
+    LEFT JOIN offers o
+    ON ps.offer_id = o.id
 
-        MAX(ps.created_at)
-        FILTER (WHERE ps.status='OTP_SENT')
-        as last_pin_gen_success,
+    LEFT JOIN publishers pub
+    ON ps.publisher_id = pub.id
 
-        MAX(ps.created_at)
-        FILTER (WHERE ps.status='OTP_VERIFY')
-        as last_verification,
+    ${where}
 
-        MAX(ps.verified_at)
-        as last_success_verification
+    GROUP BY
+      DATE(ps.created_at),
+      ps.offer_id,
+      o.service_name,
+      pub.name,
+      o.geo,
+      o.carrier,
+      o.cpa,
+      o.daily_cap
 
-      FROM pin_sessions ps
-
-      LEFT JOIN offers o
-      ON ps.offer_id = o.id
-
-      LEFT JOIN publishers pub
-      ON ps.publisher_id = pub.id
-
-      ${where}
-
-      GROUP BY
-        DATE(ps.created_at),
-        ps.offer_id,
-        o.service_name,
-        pub.name,
-        o.geo,
-        o.carrier,
-        o.cpa,
-        o.daily_cap
-
-      ORDER BY date DESC
+    ORDER BY date DESC
 
     `;
 
@@ -165,9 +143,11 @@ router.get("/dashboard/report", async (req, res) => {
       data: result.rows
     });
 
-  } catch (err) {
+  }
 
-    console.error("Dashboard Report Error:", err);
+  catch (err) {
+
+    console.error("Dashboard Error:", err);
 
     res.status(500).json({
       status: "FAILED",
@@ -175,6 +155,7 @@ router.get("/dashboard/report", async (req, res) => {
     });
 
   }
+
 });
 
 export default router;
