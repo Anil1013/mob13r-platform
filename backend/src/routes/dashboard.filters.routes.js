@@ -3,12 +3,6 @@ import pool from "../db.js";
 
 const router = express.Router();
 
-/*
-=====================================================
-DASHBOARD FILTER LIST
-=====================================================
-*/
-
 router.get("/dashboard/filters", async (req, res) => {
 
  try {
@@ -16,7 +10,7 @@ router.get("/dashboard/filters", async (req, res) => {
   /* ADVERTISERS */
 
   const advertisers = await pool.query(`
-  SELECT DISTINCT advertiser_name
+  SELECT id, advertiser_name
   FROM advertisers
   ORDER BY advertiser_name
   `);
@@ -24,7 +18,7 @@ router.get("/dashboard/filters", async (req, res) => {
   /* PUBLISHERS */
 
   const publishers = await pool.query(`
-  SELECT DISTINCT name
+  SELECT id, name
   FROM publishers
   ORDER BY name
   `);
@@ -38,7 +32,7 @@ router.get("/dashboard/filters", async (req, res) => {
   ORDER BY geo
   `);
 
-  /* CARRIERS */
+  /* CARRIER */
 
   const carriers = await pool.query(`
   SELECT DISTINCT carrier
@@ -58,13 +52,19 @@ router.get("/dashboard/filters", async (req, res) => {
 
   res.json({
 
-   advertisers: advertisers.rows.map(r => r.advertiser_name),
+   advertisers: advertisers.rows.map(a => ({
+     id: a.id,
+     name: a.advertiser_name
+   })),
 
-   publishers: publishers.rows.map(r => r.name),
+   publishers: publishers.rows.map(p => ({
+     id: p.id,
+     name: p.name
+   })),
 
-   geos: geos.rows.map(r => r.geo),
+   geos: geos.rows.map(g => g.geo),
 
-   carriers: carriers.rows.map(r => r.carrier),
+   carriers: carriers.rows.map(c => c.carrier),
 
    offers: offers.rows.map(o => ({
      id: o.id,
@@ -77,9 +77,7 @@ router.get("/dashboard/filters", async (req, res) => {
 
   console.error("FILTER API ERROR:", err);
 
-  res.status(500).json({
-   status: "FAILED"
-  });
+  res.status(500).json({ status: "FAILED" });
 
  }
 
