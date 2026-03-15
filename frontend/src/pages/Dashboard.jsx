@@ -4,309 +4,331 @@ import * as XLSX from "xlsx";
 
 export default function Dashboard() {
 
-  const today = new Date().toISOString().slice(0,10);
+ const today = new Date().toISOString().slice(0,10);
 
-  const [data,setData] = useState([]);
-  const [stats,setStats] = useState({});
+ const [data,setData] = useState([]);
+ const [stats,setStats] = useState({});
 
-  const [from,setFrom] = useState(today);
-  const [to,setTo] = useState(today);
+ const [from,setFrom] = useState(today);
+ const [to,setTo] = useState(today);
 
-  const [operator,setOperator] = useState("");
-  const [offer,setOffer] = useState("");
+ const [advertiser,setAdvertiser] = useState("");
+ const [publisher,setPublisher] = useState("");
+ const [geo,setGeo] = useState("");
+ const [carrier,setCarrier] = useState("");
+ const [offer,setOffer] = useState("");
 
-  /* LOAD REPORT */
+ /* LOAD REPORT */
 
-  const loadReport = async () => {
+ const loadReport = async () => {
 
-    let url = `/api/dashboard/report?from=${from}&to=${to}`;
+  const params = new URLSearchParams();
 
-    if(operator) url += `&operator=${operator}`;
-    if(offer) url += `&offer_id=${offer}`;
+  params.append("from",from);
+  params.append("to",to);
 
-    const res = await fetch(url);
-    const json = await res.json();
+  if(advertiser) params.append("advertiser",advertiser);
+  if(publisher) params.append("publisher",publisher);
+  if(geo) params.append("geo",geo);
+  if(carrier) params.append("operator",carrier);
+  if(offer) params.append("offer_id",offer);
 
-    setData(json.data || []);
-  };
+  const res = await fetch(`/api/dashboard/report?${params.toString()}`);
+  const json = await res.json();
 
-  /* REALTIME */
+  setData(json.data || []);
+ };
 
-  const loadRealtime = async () => {
+ /* REALTIME */
 
-    const res = await fetch("/api/dashboard/realtime");
-    const json = await res.json();
+ const loadRealtime = async () => {
 
-    setStats(json.data || {});
-  };
+  const res = await fetch("/api/dashboard/realtime");
+  const json = await res.json();
 
-  useEffect(()=>{
+  setStats(json.data || {});
+ };
 
-    loadReport();
-    loadRealtime();
+ useEffect(()=>{
+  loadReport();
+  loadRealtime();
+ },[]);
 
-  },[]);
+ /* EXPORT */
 
-  /* EXPORT */
+ const exportExcel = () => {
 
-  const exportExcel = () => {
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook,worksheet,"Report");
 
-    XLSX.utils.book_append_sheet(workbook,worksheet,"Report");
+  XLSX.writeFile(workbook,"traffic_report.xlsx");
+ };
 
-    XLSX.writeFile(workbook,"traffic_report.xlsx");
-  };
+ const exportCSV = () => {
 
-  const exportCSV = () => {
+  if(!data.length) return;
 
-    if(!data.length) return;
+  const rows = data.map(row => Object.values(row).join(","));
+  const csv = [Object.keys(data[0]).join(","),...rows].join("\n");
 
-    const rows = data.map(row => Object.values(row).join(","));
-    const csv = [Object.keys(data[0]).join(","),...rows].join("\n");
+  const blob = new Blob([csv],{type:"text/csv"});
+  const url = window.URL.createObjectURL(blob);
 
-    const blob = new Blob([csv],{type:"text/csv"});
-    const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
 
-    const a = document.createElement("a");
+  a.href = url;
+  a.download = "traffic_report.csv";
+  a.click();
+ };
 
-    a.href = url;
-    a.download = "traffic_report.csv";
-    a.click();
-  };
+ /* TOTAL CALCULATION */
 
-  /* TOTAL CALCULATION */
+ const total = data.reduce((acc,row)=>{
 
-  const total = data.reduce((acc,row)=>{
+  acc.pin_req += Number(row.pin_req||0);
+  acc.unique_req += Number(row.unique_req||0);
+  acc.pin_sent += Number(row.pin_sent||0);
+  acc.unique_sent += Number(row.unique_sent||0);
+  acc.verify_req += Number(row.verify_req||0);
+  acc.unique_verify += Number(row.unique_verify||0);
+  acc.verified += Number(row.verified||0);
+  acc.revenue += Number(row.revenue||0);
 
-    acc.pin_req += Number(row.pin_req||0);
-    acc.unique_req += Number(row.unique_req||0);
+  return acc;
 
-    acc.pin_sent += Number(row.pin_sent||0);
-    acc.unique_sent += Number(row.unique_sent||0);
+ },{
+  pin_req:0,
+  unique_req:0,
+  pin_sent:0,
+  unique_sent:0,
+  verify_req:0,
+  unique_verify:0,
+  verified:0,
+  revenue:0
+ });
 
-    acc.verify_req += Number(row.verify_req||0);
-    acc.unique_verify += Number(row.unique_verify||0);
+ return (
+ <>
+ <Navbar />
 
-    acc.verified += Number(row.verified||0);
-    acc.revenue += Number(row.revenue||0);
+ <div style={styles.container}>
 
-    return acc;
+ {/* STATS */}
 
-  },{
-    pin_req:0,
-    unique_req:0,
-    pin_sent:0,
-    unique_sent:0,
-    verify_req:0,
-    unique_verify:0,
-    verified:0,
-    revenue:0
-  });
+ <div style={styles.stats}>
 
-  return (
-    <>
-      <Navbar />
+ <div style={{...styles.card,background:"#e8f1ff"}}>
+ Requests
+ <strong>{stats.total_requests || 0}</strong>
+ </div>
 
-      <div style={styles.container}>
+ <div style={{...styles.card,background:"#e7fff3"}}>
+ OTP Sent
+ <strong>{stats.otp_sent || 0}</strong>
+ </div>
 
-        {/* STATS */}
+ <div style={{...styles.card,background:"#fff3e8"}}>
+ Conversions
+ <strong>{stats.conversions || 0}</strong>
+ </div>
 
-        <div style={styles.stats}>
+ <div style={{...styles.card,background:"#f3e8ff"}}>
+ Last Hour
+ <strong>{stats.last_hour_requests || 0}</strong>
+ </div>
 
-          <div style={{...styles.card,background:"#e8f1ff"}}>
-            Requests
-            <strong>{stats.total_requests || 0}</strong>
-          </div>
+ </div>
 
-          <div style={{...styles.card,background:"#e7fff3"}}>
-            OTP Sent
-            <strong>{stats.otp_sent || 0}</strong>
-          </div>
+ {/* FILTERS */}
 
-          <div style={{...styles.card,background:"#fff3e8"}}>
-            Conversions
-            <strong>{stats.conversions || 0}</strong>
-          </div>
+ <div style={styles.filters}>
 
-          <div style={{...styles.card,background:"#f3e8ff"}}>
-            Last Hour
-            <strong>{stats.last_hour_requests || 0}</strong>
-          </div>
+ <input type="date" value={from} onChange={(e)=>setFrom(e.target.value)} />
+ <input type="date" value={to} onChange={(e)=>setTo(e.target.value)} />
 
-        </div>
+ <input placeholder="Advertiser" value={advertiser} onChange={(e)=>setAdvertiser(e.target.value)} />
 
-        {/* FILTERS */}
+ <input placeholder="Publisher" value={publisher} onChange={(e)=>setPublisher(e.target.value)} />
 
-        <div style={styles.filters}>
+ <input placeholder="Geo" value={geo} onChange={(e)=>setGeo(e.target.value)} />
 
-          <input type="date" value={from} onChange={(e)=>setFrom(e.target.value)} />
-          <input type="date" value={to} onChange={(e)=>setTo(e.target.value)} />
+ <input placeholder="Carrier" value={carrier} onChange={(e)=>setCarrier(e.target.value)} />
 
-          <input placeholder="Operator" value={operator} onChange={(e)=>setOperator(e.target.value)} />
-          <input placeholder="Offer ID" value={offer} onChange={(e)=>setOffer(e.target.value)} />
+ <input placeholder="Offer ID" value={offer} onChange={(e)=>setOffer(e.target.value)} />
 
-          <button onClick={loadReport}>Apply</button>
+ <button onClick={loadReport}>Apply</button>
 
-          <button onClick={exportCSV}>Export CSV</button>
-          <button onClick={exportExcel}>Export Excel</button>
+ <button onClick={exportCSV}>Export CSV</button>
 
-        </div>
+ <button onClick={exportExcel}>Export Excel</button>
 
-        {/* TABLE */}
+ </div>
 
-        <div style={styles.tableWrapper}>
+ {/* TABLE */}
 
-        <table style={styles.table}>
+ <div style={styles.tableWrapper}>
 
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Advertiser</th>
-              <th>Offer</th>
-              <th>Publisher</th>
-              <th>Geo</th>
-              <th>Carrier</th>
-              <th>CPA</th>
-              <th>Cap</th>
+ <table style={styles.table}>
 
-              <th>Pin Req</th>
-              <th>Unique Req</th>
+ <thead>
 
-              <th>Pin Sent</th>
-              <th>Unique Sent</th>
+ <tr>
 
-              <th>Verify Req</th>
-              <th>Unique Verify</th>
+ <th>Date</th>
+ <th>Advertiser</th>
+ <th>Offer</th>
+ <th>Publisher</th>
+ <th>Geo</th>
+ <th>Carrier</th>
+ <th>CPA</th>
+ <th>Cap</th>
 
-              <th>Verified</th>
-              <th>CR %</th>
-              <th>Revenue</th>
+ <th>Pin Req</th>
+ <th>Unique Req</th>
 
-              <th>Last Pin Gen</th>
-              <th>Last Pin Gen Success</th>
-              <th>Last Verification</th>
-              <th>Last Success Verification</th>
-            </tr>
-          </thead>
+ <th>Pin Sent</th>
+ <th>Unique Sent</th>
 
-          <tbody>
+ <th>Verify Req</th>
+ <th>Unique Verify</th>
 
-            {data.map((row,i)=>(
+ <th>Verified</th>
+ <th>CR %</th>
+ <th>Revenue</th>
 
-              <tr key={i}>
+ <th>Last Pin Gen</th>
+ <th>Last Pin Gen Success</th>
+ <th>Last Verification</th>
+ <th>Last Success Verification</th>
 
-                <td>{row.date}</td>
-                <td>{row.advertiser_name}</td>
-                <td>{row.offer_name}</td>
-                <td>{row.publisher_name}</td>
-                <td>{row.geo}</td>
-                <td>{row.carrier}</td>
-                <td>{row.cpa}</td>
-                <td>{row.cap}</td>
+ </tr>
 
-                <td>{row.pin_req}</td>
-                <td>{row.unique_req}</td>
+ </thead>
 
-                <td>{row.pin_sent}</td>
-                <td>{row.unique_sent}</td>
+ <tbody>
 
-                <td>{row.verify_req}</td>
-                <td>{row.unique_verify}</td>
+ {data.map((row,i)=>(
 
-                <td>{row.verified}</td>
-                <td>{row.cr_percent}</td>
-                <td>{row.revenue}</td>
+ <tr key={i}>
 
-                <td>{row.last_pin_gen}</td>
-                <td>{row.last_pin_gen_success}</td>
-                <td>{row.last_verification}</td>
-                <td>{row.last_success_verification}</td>
+ <td>{row.date}</td>
+ <td>{row.advertiser_name}</td>
+ <td>{row.offer_name}</td>
+ <td>{row.publisher_name}</td>
+ <td>{row.geo}</td>
+ <td>{row.carrier}</td>
+ <td>{row.cpa}</td>
+ <td>{row.cap}</td>
 
-              </tr>
+ <td>{row.pin_req}</td>
+ <td>{row.unique_req}</td>
 
-            ))}
+ <td>{row.pin_sent}</td>
+ <td>{row.unique_sent}</td>
 
-            {/* TOTAL ROW */}
+ <td>{row.verify_req}</td>
+ <td>{row.unique_verify}</td>
 
-            <tr style={styles.totalRow}>
+ <td>{row.verified}</td>
+ <td>{row.cr_percent}</td>
+ <td>{row.revenue}</td>
 
-              <td colSpan="8">TOTAL</td>
+ <td>{row.last_pin_gen}</td>
+ <td>{row.last_pin_gen_success}</td>
+ <td>{row.last_verification}</td>
+ <td>{row.last_success_verification}</td>
 
-              <td>{total.pin_req}</td>
-              <td>{total.unique_req}</td>
+ </tr>
 
-              <td>{total.pin_sent}</td>
-              <td>{total.unique_sent}</td>
+ ))}
 
-              <td>{total.verify_req}</td>
-              <td>{total.unique_verify}</td>
+ {/* TOTAL */}
 
-              <td>{total.verified}</td>
-              <td>-</td>
+ <tr style={styles.totalRow}>
 
-              <td>${total.revenue.toFixed(2)}</td>
+ <td colSpan="8">TOTAL</td>
 
-              <td colSpan="4"></td>
+ <td>{total.pin_req}</td>
+ <td>{total.unique_req}</td>
 
-            </tr>
+ <td>{total.pin_sent}</td>
+ <td>{total.unique_sent}</td>
 
-          </tbody>
+ <td>{total.verify_req}</td>
+ <td>{total.unique_verify}</td>
 
-        </table>
+ <td>{total.verified}</td>
 
-        </div>
+ <td>-</td>
 
-      </div>
-    </>
-  );
+ <td>${total.revenue.toFixed(2)}</td>
+
+ <td colSpan="4"></td>
+
+ </tr>
+
+ </tbody>
+
+ </table>
+
+ </div>
+
+ </div>
+
+ </>
+ );
 }
 
 const styles = {
 
 container:{
-  padding:"20px 25px",
-  fontFamily:"Lora, serif",
-  background:"#f7f7f7"
+ padding:"20px 25px",
+ fontFamily:"Lora, serif",
+ background:"#f7f7f7",
+ textAlign:"center"
 },
 
 stats:{
-  display:"flex",
-  gap:"8px",
-  marginBottom:"12px"
+ display:"flex",
+ justifyContent:"center",
+ gap:"10px",
+ marginBottom:"12px"
 },
 
 card:{
-  padding:"6px 12px",
-  borderRadius:"4px",
-  fontSize:"12px",
-  border:"1px solid #ccc"
+ padding:"6px 12px",
+ borderRadius:"4px",
+ fontSize:"12px",
+ border:"1px solid #ccc"
 },
 
 filters:{
-  display:"flex",
-  gap:"6px",
-  marginBottom:"10px",
-  flexWrap:"wrap"
+ display:"flex",
+ justifyContent:"center",
+ gap:"6px",
+ marginBottom:"10px",
+ flexWrap:"wrap"
 },
 
 tableWrapper:{
-  overflowX:"auto",
-  background:"#fff",
-  border:"1px solid #999"
+ overflowX:"auto",
+ background:"#fff",
+ border:"1px solid #999"
 },
 
 table:{
-  borderCollapse:"collapse",
-  width:"100%",
-  minWidth:"1700px",
-  fontSize:"12px"
+ borderCollapse:"collapse",
+ width:"100%",
+ minWidth:"1700px",
+ fontSize:"12px",
+ textAlign:"center"
 },
 
 totalRow:{
-  background:"#efefef",
-  fontWeight:"bold"
+ background:"#efefef",
+ fontWeight:"bold"
 }
 
 };
