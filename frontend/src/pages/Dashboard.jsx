@@ -28,7 +28,7 @@ const [geo,setGeo] = useState("");
 const [carrier,setCarrier] = useState("");
 const [offer,setOffer] = useState("");
 
-/* ---------------- REPORT ---------------- */
+/* ---------------- LOAD REPORT ---------------- */
 
 const loadReport = async () => {
 
@@ -64,7 +64,7 @@ const loadReport = async () => {
 };
 
 
-/* ---------------- FILTERS ---------------- */
+/* ---------------- LOAD FILTERS ---------------- */
 
 const loadFilters = async () => {
 
@@ -82,13 +82,13 @@ const loadFilters = async () => {
  });
 
  }catch(err){
-  console.log("Filter Error",err);
+  console.log("Filter Error:",err);
  }
 
 };
 
 
-/* ---------------- REALTIME ---------------- */
+/* ---------------- REALTIME STATS ---------------- */
 
 const loadRealtime = async () => {
 
@@ -100,7 +100,7 @@ const loadRealtime = async () => {
  setStats(json.data || {});
 
  }catch(err){
-  console.log("Realtime Error",err);
+  console.log("Realtime Error:",err);
  }
 
 };
@@ -128,7 +128,6 @@ const exportExcel = () => {
 
 };
 
-
 const exportCSV = () => {
 
  if(!data.length) return;
@@ -148,16 +147,19 @@ const exportCSV = () => {
 };
 
 
-/* ---------------- TOTAL ---------------- */
+/* ---------------- TOTAL CALCULATION ---------------- */
 
 const total = data.reduce((acc,row)=>{
 
  acc.pin_req += Number(row.pin_req||0);
  acc.unique_req += Number(row.unique_req||0);
+
  acc.pin_sent += Number(row.pin_sent||0);
  acc.unique_sent += Number(row.unique_sent||0);
+
  acc.verify_req += Number(row.verify_req||0);
  acc.unique_verify += Number(row.unique_verify||0);
+
  acc.verified += Number(row.verified||0);
  acc.revenue += Number(row.revenue||0);
 
@@ -182,7 +184,8 @@ return(
 
 <div style={styles.container}>
 
-{/* ---------------- STATS ---------------- */}
+
+{/* -------- STATS -------- */}
 
 <div style={styles.stats}>
 
@@ -209,7 +212,7 @@ Last Hour
 </div>
 
 
-{/* ---------------- FILTERS ---------------- */}
+{/* -------- FILTERS -------- */}
 
 <div style={styles.filters}>
 
@@ -259,7 +262,7 @@ Last Hour
 </div>
 
 
-{/* ---------------- TABLE ---------------- */}
+{/* -------- TABLE -------- */}
 
 <div style={styles.tableWrapper}>
 
@@ -324,7 +327,7 @@ Last Hour
 
 <td>{row.verified}</td>
 <td>{row.cr_percent}</td>
-<td>{row.revenue}</td>
+<td>${row.revenue}</td>
 
 <td>{row.last_pin_gen}</td>
 <td>{row.last_pin_gen_success}</td>
