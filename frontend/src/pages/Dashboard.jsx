@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import * as XLSX from "xlsx";
 
-const API = "https://backend.mob13r.com";
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 
-export default function Dashboard(){
+export default function Dashboard() {
 
 const today = new Date().toISOString().slice(0,10);
 
@@ -44,14 +45,16 @@ const loadReport = async () => {
  if(carrier) params.append("carrier",carrier);
  if(offer) params.append("offer",offer);
 
- const res = await fetch(`${API}/api/dashboard/report?${params.toString()}`);
+ const res = await fetch(
+   `${API_BASE}/api/dashboard/report?${params.toString()}`
+ );
 
  const json = await res.json();
 
  if(json.status === "SUCCESS"){
-  setData(json.data || []);
+   setData(json.data || []);
  }else{
-  setData([]);
+   setData([]);
  }
 
  }catch(err){
@@ -67,7 +70,7 @@ const loadFilters = async () => {
 
  try{
 
- const res = await fetch(`${API}/api/dashboard/filters`);
+ const res = await fetch(`${API_BASE}/api/dashboard/filters`);
  const json = await res.json();
 
  setFilters({
@@ -79,7 +82,7 @@ const loadFilters = async () => {
  });
 
  }catch(err){
-  console.log("Filter error",err);
+  console.log("Filter Error",err);
  }
 
 };
@@ -91,13 +94,13 @@ const loadRealtime = async () => {
 
  try{
 
- const res = await fetch(`${API}/api/dashboard/realtime`);
+ const res = await fetch(`${API_BASE}/api/dashboard/realtime`);
  const json = await res.json();
 
  setStats(json.data || {});
 
  }catch(err){
-  console.log("Realtime error",err);
+  console.log("Realtime Error",err);
  }
 
 };
@@ -122,6 +125,7 @@ const exportExcel = () => {
  XLSX.utils.book_append_sheet(workbook,worksheet,"Report");
 
  XLSX.writeFile(workbook,"traffic_report.xlsx");
+
 };
 
 
@@ -178,8 +182,7 @@ return(
 
 <div style={styles.container}>
 
-
-{/* -------- STATS -------- */}
+{/* ---------------- STATS ---------------- */}
 
 <div style={styles.stats}>
 
@@ -206,7 +209,7 @@ Last Hour
 </div>
 
 
-{/* -------- FILTERS -------- */}
+{/* ---------------- FILTERS ---------------- */}
 
 <div style={styles.filters}>
 
@@ -256,13 +259,14 @@ Last Hour
 </div>
 
 
-{/* -------- TABLE -------- */}
+{/* ---------------- TABLE ---------------- */}
 
 <div style={styles.tableWrapper}>
 
 <table style={styles.table}>
 
 <thead>
+
 <tr>
 
 <th>Date</th>
@@ -275,6 +279,7 @@ Last Hour
 
 <th>Pin Req</th>
 <th>Unique Req</th>
+
 <th>Pin Sent</th>
 <th>Unique Sent</th>
 
@@ -291,11 +296,13 @@ Last Hour
 <th>Last Success Verification</th>
 
 </tr>
+
 </thead>
 
 <tbody>
 
 {data.map((row,i)=>(
+
 <tr key={i}>
 
 <td>{row.date?.slice(0,10)}</td>
@@ -325,6 +332,7 @@ Last Hour
 <td>{row.last_success_verification}</td>
 
 </tr>
+
 ))}
 
 <tr style={styles.totalRow}>
@@ -356,6 +364,7 @@ Last Hour
 </div>
 
 </div>
+
 </>
 
 );
