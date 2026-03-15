@@ -4,17 +4,83 @@ import pool from "../db.js";
 const router = express.Router();
 
 /*
-  Dashboard Report
+  =========================================================
+  Dashboard Report API
+  GET /api/dashboard/report
+  =========================================================
 */
 
 router.get("/dashboard/report", async (req, res) => {
-
   try {
 
-    const { from, to } = req.query;
+    const {
+      from,
+      to,
+      advertiser,
+      publisher,
+      offer,
+      geo,
+      carrier
+    } = req.query;
+
+    let filters = [];
+    let values = [];
+    let i = 1;
+
+    /* DATE FILTER */
+
+    if (from) {
+      filters.push(`ps.created_at >= $${i++}`);
+      values.push(from + " 00:00:00");
+    }
+
+    if (to) {
+      filters.push(`ps.created_at <= $${i++}`);
+      values.push(to + " 23:59:59");
+    }
+
+    /* ADVERTISER */
+
+    if (advertiser) {
+      filters.push(`ps.advertiser_id = $${i++}`);
+      values.push(advertiser);
+    }
+
+    /* PUBLISHER */
+
+    if (publisher) {
+      filters.push(`ps.publisher_id = $${i++}`);
+      values.push(publisher);
+    }
+
+    /* OFFER */
+
+    if (offer) {
+      filters.push(`ps.offer_id = $${i++}`);
+      values.push(offer);
+    }
+
+    /* GEO */
+
+    if (geo) {
+      filters.push(`o.geo = $${i++}`);
+      values.push(geo);
+    }
+
+    /* CARRIER */
+
+    if (carrier) {
+      filters.push(`o.carrier = $${i++}`);
+      values.push(carrier);
+    }
+
+    const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+
+    /* MAIN QUERY */
 
     const query = `
       SELECT
+
         DATE(ps.created_at) as date,
 
         o.service_name as offer_name,
@@ -23,31 +89,67 @@ router.get("/dashboard/report", async (req, res) => {
         o.geo,
         o.carrier,
 
-        o.cpa as cpa,
+        o.cpa,
         o.daily_cap as cap,
+
+        /* PIN REQUEST */
 
         COUNT(ps.session_id) as pin_req,
 
         COUNT(DISTINCT ps.msisdn) as unique_req,
 
-        COUNT(ps.session_id) FILTER (WHERE ps.status='OTP_SENT') as pin_sent,
+        /* OTP SENT */
 
-        COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.status='OTP_SENT') as unique_sent,
+        COUNT(ps.session_id)
+        FILTER (WHERE ps.status = 'OTP_SENT') as pin_sent,
 
-        COUNT(ps.session_id) FILTER (WHERE ps.verified_at IS NOT NULL) as verified,
+        COUNT(DISTINCT ps.msisdn)
+        FILTER (WHERE ps.status = 'OTP_SENT') as unique_sent,
+
+        /* VERIFY REQUEST */
+
+        COUNT(ps.session_id)
+        FILTER (WHERE ps.status = 'OTP_VERIFY') as verify_req,
+
+        COUNT(DISTINCT ps.msisdn)
+        FILTER (WHERE ps.status = 'OTP_VERIFY') as unique_verify,
+
+        /* VERIFIED */
+
+        COUNT(ps.session_id)
+        FILTER (WHERE ps.verified_at IS NOT NULL) as verified,
+
+        /* CR */
 
         ROUND(
-          COUNT(ps.session_id) FILTER (WHERE ps.verified_at IS NOT NULL)::numeric
+          COUNT(ps.session_id)
+          FILTER (WHERE ps.verified_at IS NOT NULL)::numeric
           /
           NULLIF(COUNT(ps.session_id),0)
           * 100
         ,2) as cr_percent,
 
-        SUM(ps.publisher_cpa) FILTER (WHERE ps.publisher_credited=true) as revenue,
+        /* REVENUE */
+
+        COALESCE(
+          SUM(ps.publisher_cpa)
+          FILTER (WHERE ps.publisher_credited = true)
+        ,0) as revenue,
+
+        /* LAST EVENTS */
 
         MAX(ps.created_at) as last_pin_gen,
 
-        MAX(ps.verified_at) as last_success_verification
+        MAX(ps.created_at)
+        FILTER (WHERE ps.status='OTP_SENT')
+        as last_pin_gen_success,
+
+        MAX(ps.created_at)
+        FILTER (WHERE ps.status='OTP_VERIFY')
+        as last_verification,
+
+        MAX(ps.verified_at)
+        as last_success_verification
 
       FROM pin_sessions ps
 
@@ -57,7 +159,7 @@ router.get("/dashboard/report", async (req, res) => {
       LEFT JOIN publishers pub
       ON ps.publisher_id = pub.id
 
-      WHERE ps.created_at BETWEEN $1 AND $2
+      ${where}
 
       GROUP BY
         DATE(ps.created_at),
@@ -71,10 +173,7 @@ router.get("/dashboard/report", async (req, res) => {
       ORDER BY date DESC
     `;
 
-    const result = await pool.query(query, [
-      from + " 00:00:00",
-      to + " 23:59:59"
-    ]);
+    const result = await pool.query(query, values);
 
     res.json({
       status: "SUCCESS",
@@ -85,12 +184,12 @@ router.get("/dashboard/report", async (req, res) => {
 
     console.error("Dashboard Report Error:", err);
 
-    res.json({
-      status: "FAILED"
+    res.status(500).json({
+      status: "FAILED",
+      error: err.message
     });
 
   }
-
 });
 
 export default router;
