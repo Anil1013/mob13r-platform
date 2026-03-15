@@ -24,9 +24,9 @@ router.get("/dashboard/filters", async (req, res) => {
   /* PUBLISHERS */
 
   const publishers = await pool.query(`
-  SELECT DISTINCT publisher_name
+  SELECT DISTINCT name
   FROM publishers
-  ORDER BY publisher_name
+  ORDER BY name
   `);
 
   /* GEO */
@@ -50,23 +50,26 @@ router.get("/dashboard/filters", async (req, res) => {
   /* OFFERS */
 
   const offers = await pool.query(`
-  SELECT id, offer_name
+  SELECT id, service_name
   FROM offers
   WHERE status='active'
-  ORDER BY offer_name
+  ORDER BY service_name
   `);
 
   res.json({
 
    advertisers: advertisers.rows.map(r => r.advertiser_name),
 
-   publishers: publishers.rows.map(r => r.publisher_name),
+   publishers: publishers.rows.map(r => r.name),
 
    geos: geos.rows.map(r => r.geo),
 
    carriers: carriers.rows.map(r => r.carrier),
 
-   offers: offers.rows
+   offers: offers.rows.map(o => ({
+     id: o.id,
+     offer_name: o.service_name
+   }))
 
   });
 
