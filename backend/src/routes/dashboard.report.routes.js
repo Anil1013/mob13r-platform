@@ -4,14 +4,13 @@ import pool from "../db.js";
 const router = express.Router();
 
 /*
-=========================================================
+====================================================
 DASHBOARD REPORT
 GET /api/dashboard/report
-=========================================================
+====================================================
 */
 
 router.get("/dashboard/report", async (req, res) => {
-
   try {
 
     const { from, to, publisher, offer, geo, carrier } = req.query;
@@ -20,7 +19,7 @@ router.get("/dashboard/report", async (req, res) => {
     let values = [];
     let i = 1;
 
-    /* DATE */
+    /* DATE FILTER */
 
     if (from) {
       filters.push(`ps.created_at >= $${i++}`);
@@ -68,8 +67,8 @@ router.get("/dashboard/report", async (req, res) => {
 
         DATE(ps.created_at) as date,
 
-        COALESCE(o.service_name,'Unknown Offer') as offer_name,
-        COALESCE(pub.name,'Unknown Publisher') as publisher_name,
+        COALESCE(o.service_name, 'Offer #' || ps.offer_id) as offer_name,
+        COALESCE(pub.name, 'Unknown Publisher') as publisher_name,
 
         o.geo,
         o.carrier,
@@ -77,7 +76,7 @@ router.get("/dashboard/report", async (req, res) => {
         o.cpa,
         o.daily_cap as cap,
 
-        /* REQUESTS */
+        /* PIN REQUEST */
 
         COUNT(ps.session_id) as pin_req,
         COUNT(DISTINCT ps.msisdn) as unique_req,
@@ -147,6 +146,7 @@ router.get("/dashboard/report", async (req, res) => {
 
       GROUP BY
         DATE(ps.created_at),
+        ps.offer_id,
         o.service_name,
         pub.name,
         o.geo,
@@ -155,6 +155,7 @@ router.get("/dashboard/report", async (req, res) => {
         o.daily_cap
 
       ORDER BY date DESC
+
     `;
 
     const result = await pool.query(query, values);
@@ -174,7 +175,6 @@ router.get("/dashboard/report", async (req, res) => {
     });
 
   }
-
 });
 
 export default router;
