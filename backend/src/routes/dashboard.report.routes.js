@@ -5,128 +5,76 @@ const router = express.Router();
 
 /*
   Dashboard Report
-  /api/dashboard/report
 */
 
 router.get("/dashboard/report", async (req, res) => {
 
   try {
 
-    const {
-      from,
-      to,
-      advertiser,
-      publisher,
-      offer,
-      geo,
-      carrier
-    } = req.query;
-
-    let filters = [];
-    let values = [];
-    let i = 1;
-
-    if(from){
-      filters.push(`ps.created_at >= $${i++}`);
-      values.push(from + " 00:00:00");
-    }
-
-    if(to){
-      filters.push(`ps.created_at <= $${i++}`);
-      values.push(to + " 23:59:59");
-    }
-
-    if(advertiser){
-      filters.push(`o.advertiser_id = $${i++}`);
-      values.push(advertiser);
-    }
-
-    if(publisher){
-      filters.push(`ps.publisher_id = $${i++}`);
-      values.push(publisher);
-    }
-
-    if(offer){
-      filters.push(`ps.offer_id = $${i++}`);
-      values.push(offer);
-    }
-
-    if(geo){
-      filters.push(`ps.geo = $${i++}`);
-      values.push(geo);
-    }
-
-    if(carrier){
-      filters.push(`ps.carrier = $${i++}`);
-      values.push(carrier);
-    }
-
-    const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+    const { from, to } = req.query;
 
     const query = `
       SELECT
         DATE(ps.created_at) as date,
 
-        a.name as advertiser_name,
-        o.name as offer_name,
-        p.name as publisher_name,
+        o.service_name as offer_name,
+        pub.name as publisher_name,
 
-        ps.geo,
-        ps.carrier,
+        o.geo,
+        o.carrier,
 
-        o.cpa,
-        o.cap,
+        o.cpa as cpa,
+        o.daily_cap as cap,
 
-        COUNT(*) FILTER (WHERE ps.event='pin_request') as pin_req,
-        COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.event='pin_request') as unique_req,
+        COUNT(ps.session_id) as pin_req,
 
-        COUNT(*) FILTER (WHERE ps.event='pin_sent') as pin_sent,
-        COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.event='pin_sent') as unique_sent,
+        COUNT(DISTINCT ps.msisdn) as unique_req,
 
-        COUNT(*) FILTER (WHERE ps.event='verify_request') as verify_req,
-        COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.event='verify_request') as unique_verify,
+        COUNT(ps.session_id) FILTER (WHERE ps.status='OTP_SENT') as pin_sent,
 
-        COUNT(*) FILTER (WHERE ps.event='verified') as verified,
+        COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.status='OTP_SENT') as unique_sent,
+
+        COUNT(ps.session_id) FILTER (WHERE ps.verified_at IS NOT NULL) as verified,
 
         ROUND(
-          COUNT(*) FILTER (WHERE ps.event='verified')::numeric /
-          NULLIF(COUNT(*) FILTER (WHERE ps.event='pin_request'),0) * 100
+          COUNT(ps.session_id) FILTER (WHERE ps.verified_at IS NOT NULL)::numeric
+          /
+          NULLIF(COUNT(ps.session_id),0)
+          * 100
         ,2) as cr_percent,
 
-        COUNT(*) FILTER (WHERE ps.event='verified') * o.cpa as revenue,
+        SUM(ps.publisher_cpa) FILTER (WHERE ps.publisher_credited=true) as revenue,
 
-        MAX(ps.created_at) FILTER (WHERE ps.event='pin_request') as last_pin_gen,
-        MAX(ps.created_at) FILTER (WHERE ps.event='pin_sent') as last_pin_gen_success,
-        MAX(ps.created_at) FILTER (WHERE ps.event='verify_request') as last_verification,
-        MAX(ps.created_at) FILTER (WHERE ps.event='verified') as last_success_verification
+        MAX(ps.created_at) as last_pin_gen,
+
+        MAX(ps.verified_at) as last_success_verification
 
       FROM pin_sessions ps
 
       LEFT JOIN offers o
       ON ps.offer_id = o.id
 
-      LEFT JOIN advertisers a
-      ON o.advertiser_id = a.id
+      LEFT JOIN publishers pub
+      ON ps.publisher_id = pub.id
 
-      LEFT JOIN publishers p
-      ON ps.publisher_id = p.id
-
-      ${where}
+      WHERE ps.created_at BETWEEN $1 AND $2
 
       GROUP BY
         DATE(ps.created_at),
-        a.name,
-        o.name,
-        p.name,
-        ps.geo,
-        ps.carrier,
+        o.service_name,
+        pub.name,
+        o.geo,
+        o.carrier,
         o.cpa,
-        o.cap
+        o.daily_cap
 
       ORDER BY date DESC
     `;
 
-    const result = await pool.query(query, values);
+    const result = await pool.query(query, [
+      from + " 00:00:00",
+      to + " 23:59:59"
+    ]);
 
     res.json({
       status: "SUCCESS",
