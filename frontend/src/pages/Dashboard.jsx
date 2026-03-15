@@ -2,333 +2,379 @@ import { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import * as XLSX from "xlsx";
 
-export default function Dashboard() {
+export default function Dashboard(){
 
- const today = new Date().toISOString().slice(0,10);
+const today = new Date().toISOString().slice(0,10);
 
- const [data,setData] = useState([]);
- const [stats,setStats] = useState({});
+const [data,setData] = useState([]);
+const [stats,setStats] = useState({});
+const [filters,setFilters] = useState({
+ advertisers:[],
+ publishers:[],
+ geos:[],
+ carriers:[],
+ offers:[]
+});
 
- const [from,setFrom] = useState(today);
- const [to,setTo] = useState(today);
+const [from,setFrom] = useState(today);
+const [to,setTo] = useState(today);
 
- const [advertiser,setAdvertiser] = useState("");
- const [publisher,setPublisher] = useState("");
- const [geo,setGeo] = useState("");
- const [carrier,setCarrier] = useState("");
- const [offer,setOffer] = useState("");
+const [advertiser,setAdvertiser] = useState("");
+const [publisher,setPublisher] = useState("");
+const [geo,setGeo] = useState("");
+const [carrier,setCarrier] = useState("");
+const [offer,setOffer] = useState("");
 
- /* LOAD REPORT */
+/* LOAD REPORT */
 
- const loadReport = async () => {
+const loadReport = async () => {
 
-  const params = new URLSearchParams();
+ const params = new URLSearchParams();
 
-  params.append("from",from);
-  params.append("to",to);
+ params.append("from",from);
+ params.append("to",to);
 
-  if(advertiser) params.append("advertiser",advertiser);
-  if(publisher) params.append("publisher",publisher);
-  if(geo) params.append("geo",geo);
-  if(carrier) params.append("operator",carrier);
-  if(offer) params.append("offer_id",offer);
+ if(advertiser) params.append("advertiser",advertiser);
+ if(publisher) params.append("publisher",publisher);
+ if(geo) params.append("geo",geo);
+ if(carrier) params.append("operator",carrier);
+ if(offer) params.append("offer_id",offer);
 
-  const res = await fetch(`/api/dashboard/report?${params.toString()}`);
-  const json = await res.json();
+ const res = await fetch(`/api/dashboard/report?${params.toString()}`);
+ const json = await res.json();
 
-  setData(json.data || []);
- };
+ setData(json.data || []);
+};
 
- /* REALTIME */
+/* LOAD FILTER LIST */
 
- const loadRealtime = async () => {
+const loadFilters = async () => {
 
-  const res = await fetch("/api/dashboard/realtime");
-  const json = await res.json();
+ const res = await fetch("/api/dashboard/filters");
+ const json = await res.json();
 
-  setStats(json.data || {});
- };
+ setFilters(json || {});
+};
 
- useEffect(()=>{
-  loadReport();
-  loadRealtime();
- },[]);
+/* REALTIME */
 
- /* EXPORT */
+const loadRealtime = async () => {
 
- const exportExcel = () => {
+ const res = await fetch("/api/dashboard/realtime");
+ const json = await res.json();
 
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
+ setStats(json.data || {});
+};
 
-  XLSX.utils.book_append_sheet(workbook,worksheet,"Report");
+useEffect(()=>{
 
-  XLSX.writeFile(workbook,"traffic_report.xlsx");
- };
+ loadReport();
+ loadRealtime();
+ loadFilters();
 
- const exportCSV = () => {
+},[]);
 
-  if(!data.length) return;
 
-  const rows = data.map(row => Object.values(row).join(","));
-  const csv = [Object.keys(data[0]).join(","),...rows].join("\n");
+/* EXPORT */
 
-  const blob = new Blob([csv],{type:"text/csv"});
-  const url = window.URL.createObjectURL(blob);
+const exportExcel = () => {
 
-  const a = document.createElement("a");
+ const worksheet = XLSX.utils.json_to_sheet(data);
+ const workbook = XLSX.utils.book_new();
 
-  a.href = url;
-  a.download = "traffic_report.csv";
-  a.click();
- };
+ XLSX.utils.book_append_sheet(workbook,worksheet,"Report");
 
- /* TOTAL CALCULATION */
+ XLSX.writeFile(workbook,"traffic_report.xlsx");
+};
 
- const total = data.reduce((acc,row)=>{
+const exportCSV = () => {
 
-  acc.pin_req += Number(row.pin_req||0);
-  acc.unique_req += Number(row.unique_req||0);
-  acc.pin_sent += Number(row.pin_sent||0);
-  acc.unique_sent += Number(row.unique_sent||0);
-  acc.verify_req += Number(row.verify_req||0);
-  acc.unique_verify += Number(row.unique_verify||0);
-  acc.verified += Number(row.verified||0);
-  acc.revenue += Number(row.revenue||0);
+ if(!data.length) return;
 
-  return acc;
+ const rows = data.map(row => Object.values(row).join(","));
+ const csv = [Object.keys(data[0]).join(","),...rows].join("\n");
 
- },{
-  pin_req:0,
-  unique_req:0,
-  pin_sent:0,
-  unique_sent:0,
-  verify_req:0,
-  unique_verify:0,
-  verified:0,
-  revenue:0
- });
+ const blob = new Blob([csv],{type:"text/csv"});
+ const url = window.URL.createObjectURL(blob);
 
- return (
- <>
- <Navbar />
+ const a = document.createElement("a");
 
- <div style={styles.container}>
+ a.href = url;
+ a.download = "traffic_report.csv";
+ a.click();
+};
+
+/* TOTAL */
+
+const total = data.reduce((acc,row)=>{
+
+ acc.pin_req += Number(row.pin_req||0);
+ acc.unique_req += Number(row.unique_req||0);
+ acc.pin_sent += Number(row.pin_sent||0);
+ acc.unique_sent += Number(row.unique_sent||0);
+ acc.verify_req += Number(row.verify_req||0);
+ acc.unique_verify += Number(row.unique_verify||0);
+ acc.verified += Number(row.verified||0);
+ acc.revenue += Number(row.revenue||0);
 
- {/* STATS */}
+ return acc;
 
- <div style={styles.stats}>
+},{
+ pin_req:0,
+ unique_req:0,
+ pin_sent:0,
+ unique_sent:0,
+ verify_req:0,
+ unique_verify:0,
+ verified:0,
+ revenue:0
+});
 
- <div style={{...styles.card,background:"#e8f1ff"}}>
- Requests
- <strong>{stats.total_requests || 0}</strong>
- </div>
 
- <div style={{...styles.card,background:"#e7fff3"}}>
- OTP Sent
- <strong>{stats.otp_sent || 0}</strong>
- </div>
+return(
 
- <div style={{...styles.card,background:"#fff3e8"}}>
- Conversions
- <strong>{stats.conversions || 0}</strong>
- </div>
+<>
+<Navbar/>
 
- <div style={{...styles.card,background:"#f3e8ff"}}>
- Last Hour
- <strong>{stats.last_hour_requests || 0}</strong>
- </div>
+<div style={styles.container}>
 
- </div>
+{/* STATS */}
 
- {/* FILTERS */}
+<div style={styles.stats}>
 
- <div style={styles.filters}>
+<div style={{...styles.card,background:"#e8f1ff"}}>
+Requests
+<strong>{stats.total_requests || 0}</strong>
+</div>
 
- <input type="date" value={from} onChange={(e)=>setFrom(e.target.value)} />
- <input type="date" value={to} onChange={(e)=>setTo(e.target.value)} />
+<div style={{...styles.card,background:"#e7fff3"}}>
+OTP Sent
+<strong>{stats.otp_sent || 0}</strong>
+</div>
 
- <input placeholder="Advertiser" value={advertiser} onChange={(e)=>setAdvertiser(e.target.value)} />
+<div style={{...styles.card,background:"#fff3e8"}}>
+Conversions
+<strong>{stats.conversions || 0}</strong>
+</div>
 
- <input placeholder="Publisher" value={publisher} onChange={(e)=>setPublisher(e.target.value)} />
+<div style={{...styles.card,background:"#f3e8ff"}}>
+Last Hour
+<strong>{stats.last_hour_requests || 0}</strong>
+</div>
 
- <input placeholder="Geo" value={geo} onChange={(e)=>setGeo(e.target.value)} />
+</div>
 
- <input placeholder="Carrier" value={carrier} onChange={(e)=>setCarrier(e.target.value)} />
+{/* FILTERS */}
 
- <input placeholder="Offer ID" value={offer} onChange={(e)=>setOffer(e.target.value)} />
+<div style={styles.filters}>
 
- <button onClick={loadReport}>Apply</button>
+<input type="date" value={from} onChange={(e)=>setFrom(e.target.value)} />
+<input type="date" value={to} onChange={(e)=>setTo(e.target.value)} />
 
- <button onClick={exportCSV}>Export CSV</button>
+<select value={advertiser} onChange={(e)=>setAdvertiser(e.target.value)}>
+<option value="">All Advertisers</option>
+{filters.advertisers.map(a=>(
+<option key={a}>{a}</option>
+))}
+</select>
 
- <button onClick={exportExcel}>Export Excel</button>
+<select value={publisher} onChange={(e)=>setPublisher(e.target.value)}>
+<option value="">All Publishers</option>
+{filters.publishers.map(p=>(
+<option key={p}>{p}</option>
+))}
+</select>
 
- </div>
+<select value={geo} onChange={(e)=>setGeo(e.target.value)}>
+<option value="">All Geo</option>
+{filters.geos.map(g=>(
+<option key={g}>{g}</option>
+))}
+</select>
 
- {/* TABLE */}
+<select value={carrier} onChange={(e)=>setCarrier(e.target.value)}>
+<option value="">All Carrier</option>
+{filters.carriers.map(c=>(
+<option key={c}>{c}</option>
+))}
+</select>
 
- <div style={styles.tableWrapper}>
+<select value={offer} onChange={(e)=>setOffer(e.target.value)}>
+<option value="">All Offers</option>
+{filters.offers.map(o=>(
+<option key={o.id} value={o.id}>{o.offer_name}</option>
+))}
+</select>
 
- <table style={styles.table}>
+<button onClick={loadReport}>Apply</button>
 
- <thead>
+<button onClick={exportCSV}>Export CSV</button>
 
- <tr>
+<button onClick={exportExcel}>Export Excel</button>
 
- <th>Date</th>
- <th>Advertiser</th>
- <th>Offer</th>
- <th>Publisher</th>
- <th>Geo</th>
- <th>Carrier</th>
- <th>CPA</th>
- <th>Cap</th>
+</div>
 
- <th>Pin Req</th>
- <th>Unique Req</th>
+{/* TABLE */}
 
- <th>Pin Sent</th>
- <th>Unique Sent</th>
+<div style={styles.tableWrapper}>
 
- <th>Verify Req</th>
- <th>Unique Verify</th>
+<table style={styles.table}>
 
- <th>Verified</th>
- <th>CR %</th>
- <th>Revenue</th>
+<thead>
 
- <th>Last Pin Gen</th>
- <th>Last Pin Gen Success</th>
- <th>Last Verification</th>
- <th>Last Success Verification</th>
+<tr>
 
- </tr>
+<th>Date</th>
+<th>Advertiser</th>
+<th>Offer</th>
+<th>Publisher</th>
+<th>Geo</th>
+<th>Carrier</th>
+<th>CPA</th>
+<th>Cap</th>
 
- </thead>
+<th>Pin Req</th>
+<th>Unique Req</th>
 
- <tbody>
+<th>Pin Sent</th>
+<th>Unique Sent</th>
 
- {data.map((row,i)=>(
+<th>Verify Req</th>
+<th>Unique Verify</th>
 
- <tr key={i}>
+<th>Verified</th>
+<th>CR %</th>
+<th>Revenue</th>
 
- <td>{row.date}</td>
- <td>{row.advertiser_name}</td>
- <td>{row.offer_name}</td>
- <td>{row.publisher_name}</td>
- <td>{row.geo}</td>
- <td>{row.carrier}</td>
- <td>{row.cpa}</td>
- <td>{row.cap}</td>
+<th>Last Pin Gen</th>
+<th>Last Pin Gen Success</th>
+<th>Last Verification</th>
+<th>Last Success Verification</th>
 
- <td>{row.pin_req}</td>
- <td>{row.unique_req}</td>
+</tr>
 
- <td>{row.pin_sent}</td>
- <td>{row.unique_sent}</td>
+</thead>
 
- <td>{row.verify_req}</td>
- <td>{row.unique_verify}</td>
+<tbody>
 
- <td>{row.verified}</td>
- <td>{row.cr_percent}</td>
- <td>{row.revenue}</td>
+{data.map((row,i)=>(
 
- <td>{row.last_pin_gen}</td>
- <td>{row.last_pin_gen_success}</td>
- <td>{row.last_verification}</td>
- <td>{row.last_success_verification}</td>
+<tr key={i}>
 
- </tr>
+<td>{row.date}</td>
+<td>{row.advertiser_name}</td>
+<td>{row.offer_name}</td>
+<td>{row.publisher_name}</td>
+<td>{row.geo}</td>
+<td>{row.carrier}</td>
+<td>{row.cpa}</td>
+<td>{row.cap}</td>
 
- ))}
+<td>{row.pin_req}</td>
+<td>{row.unique_req}</td>
 
- {/* TOTAL */}
+<td>{row.pin_sent}</td>
+<td>{row.unique_sent}</td>
 
- <tr style={styles.totalRow}>
+<td>{row.verify_req}</td>
+<td>{row.unique_verify}</td>
 
- <td colSpan="8">TOTAL</td>
+<td>{row.verified}</td>
+<td>{row.cr_percent}</td>
+<td>{row.revenue}</td>
 
- <td>{total.pin_req}</td>
- <td>{total.unique_req}</td>
+<td>{row.last_pin_gen}</td>
+<td>{row.last_pin_gen_success}</td>
+<td>{row.last_verification}</td>
+<td>{row.last_success_verification}</td>
 
- <td>{total.pin_sent}</td>
- <td>{total.unique_sent}</td>
+</tr>
 
- <td>{total.verify_req}</td>
- <td>{total.unique_verify}</td>
+))}
 
- <td>{total.verified}</td>
+<tr style={styles.totalRow}>
 
- <td>-</td>
+<td colSpan="8">TOTAL</td>
 
- <td>${total.revenue.toFixed(2)}</td>
+<td>{total.pin_req}</td>
+<td>{total.unique_req}</td>
 
- <td colSpan="4"></td>
+<td>{total.pin_sent}</td>
+<td>{total.unique_sent}</td>
 
- </tr>
+<td>{total.verify_req}</td>
+<td>{total.unique_verify}</td>
 
- </tbody>
+<td>{total.verified}</td>
+<td>-</td>
 
- </table>
+<td>${total.revenue.toFixed(2)}</td>
 
- </div>
+<td colSpan="4"></td>
 
- </div>
+</tr>
 
- </>
- );
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+</>
+
+);
+
 }
 
 const styles = {
 
 container:{
- padding:"20px 25px",
- fontFamily:"Lora, serif",
- background:"#f7f7f7",
- textAlign:"center"
+padding:"20px",
+fontFamily:"Lora, serif",
+background:"#f7f7f7",
+textAlign:"center"
 },
 
 stats:{
- display:"flex",
- justifyContent:"center",
- gap:"10px",
- marginBottom:"12px"
+display:"flex",
+justifyContent:"center",
+gap:"10px",
+marginBottom:"12px"
 },
 
 card:{
- padding:"6px 12px",
- borderRadius:"4px",
- fontSize:"12px",
- border:"1px solid #ccc"
+padding:"6px 12px",
+borderRadius:"4px",
+fontSize:"12px",
+border:"1px solid #ccc"
 },
 
 filters:{
- display:"flex",
- justifyContent:"center",
- gap:"6px",
- marginBottom:"10px",
- flexWrap:"wrap"
+display:"flex",
+justifyContent:"center",
+gap:"6px",
+marginBottom:"10px",
+flexWrap:"wrap"
 },
 
 tableWrapper:{
- overflowX:"auto",
- background:"#fff",
- border:"1px solid #999"
+overflowX:"auto",
+background:"#fff",
+border:"1px solid #999"
 },
 
 table:{
- borderCollapse:"collapse",
- width:"100%",
- minWidth:"1700px",
- fontSize:"12px",
- textAlign:"center"
+borderCollapse:"collapse",
+width:"100%",
+minWidth:"1700px",
+fontSize:"12px",
+textAlign:"center"
 },
 
 totalRow:{
- background:"#efefef",
- fontWeight:"bold"
+background:"#efefef",
+fontWeight:"bold"
 }
 
 };
