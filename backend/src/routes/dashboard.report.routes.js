@@ -1,6 +1,5 @@
 import express from "express";
 import pool from "../db.js";
-import { Parser } from "json2csv";
 
 const router = express.Router();
 
@@ -222,44 +221,6 @@ FROM pin_sessions
  } catch (err) {
 
   console.error("REALTIME ERROR:", err);
-
-  res.status(500).json({
-   status: "FAILED"
-  });
-
- }
-
-});
-
-
-/*
-=====================================================
-EXPORT CSV REPORT
-=====================================================
-*/
-
-router.get("/dashboard/export/csv", async (req, res) => {
-
- try {
-
-  const result = await pool.query(`
-  SELECT * FROM pin_sessions
-  ORDER BY created_at DESC
-  LIMIT 50000
-  `);
-
-  const parser = new Parser();
-
-  const csv = parser.parse(result.rows);
-
-  res.header("Content-Type", "text/csv");
-  res.attachment("traffic_report.csv");
-
-  res.send(csv);
-
- } catch (err) {
-
-  console.error("CSV EXPORT ERROR:", err);
 
   res.status(500).json({
    status: "FAILED"
