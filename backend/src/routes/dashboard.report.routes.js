@@ -4,30 +4,23 @@ import pool from "../db.js";
 const router = express.Router();
 
 /*
-  =========================================================
-  Dashboard Report API
-  GET /api/dashboard/report
-  =========================================================
+=========================================================
+DASHBOARD REPORT
+GET /api/dashboard/report
+=========================================================
 */
 
 router.get("/dashboard/report", async (req, res) => {
+
   try {
 
-    const {
-      from,
-      to,
-      advertiser,
-      publisher,
-      offer,
-      geo,
-      carrier
-    } = req.query;
+    const { from, to, publisher, offer, geo, carrier } = req.query;
 
     let filters = [];
     let values = [];
     let i = 1;
 
-    /* DATE FILTER */
+    /* DATE */
 
     if (from) {
       filters.push(`ps.created_at >= $${i++}`);
@@ -37,13 +30,6 @@ router.get("/dashboard/report", async (req, res) => {
     if (to) {
       filters.push(`ps.created_at <= $${i++}`);
       values.push(to + " 23:59:59");
-    }
-
-    /* ADVERTISER */
-
-    if (advertiser) {
-      filters.push(`ps.advertiser_id = $${i++}`);
-      values.push(advertiser);
     }
 
     /* PUBLISHER */
@@ -76,15 +62,14 @@ router.get("/dashboard/report", async (req, res) => {
 
     const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
 
-    /* MAIN QUERY */
-
     const query = `
+
       SELECT
 
         DATE(ps.created_at) as date,
 
-        o.service_name as offer_name,
-        pub.name as publisher_name,
+        COALESCE(o.service_name,'Unknown Offer') as offer_name,
+        COALESCE(pub.name,'Unknown Publisher') as publisher_name,
 
         o.geo,
         o.carrier,
@@ -92,27 +77,26 @@ router.get("/dashboard/report", async (req, res) => {
         o.cpa,
         o.daily_cap as cap,
 
-        /* PIN REQUEST */
+        /* REQUESTS */
 
         COUNT(ps.session_id) as pin_req,
-
         COUNT(DISTINCT ps.msisdn) as unique_req,
 
         /* OTP SENT */
 
         COUNT(ps.session_id)
-        FILTER (WHERE ps.status = 'OTP_SENT') as pin_sent,
+        FILTER (WHERE ps.status='OTP_SENT') as pin_sent,
 
         COUNT(DISTINCT ps.msisdn)
-        FILTER (WHERE ps.status = 'OTP_SENT') as unique_sent,
+        FILTER (WHERE ps.status='OTP_SENT') as unique_sent,
 
         /* VERIFY REQUEST */
 
         COUNT(ps.session_id)
-        FILTER (WHERE ps.status = 'OTP_VERIFY') as verify_req,
+        FILTER (WHERE ps.status='OTP_VERIFY') as verify_req,
 
         COUNT(DISTINCT ps.msisdn)
-        FILTER (WHERE ps.status = 'OTP_VERIFY') as unique_verify,
+        FILTER (WHERE ps.status='OTP_VERIFY') as unique_verify,
 
         /* VERIFIED */
 
@@ -133,7 +117,7 @@ router.get("/dashboard/report", async (req, res) => {
 
         COALESCE(
           SUM(ps.publisher_cpa)
-          FILTER (WHERE ps.publisher_credited = true)
+          FILTER (WHERE ps.publisher_credited=true)
         ,0) as revenue,
 
         /* LAST EVENTS */
@@ -190,6 +174,7 @@ router.get("/dashboard/report", async (req, res) => {
     });
 
   }
+
 });
 
 export default router;
