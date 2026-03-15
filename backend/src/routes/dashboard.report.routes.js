@@ -19,20 +19,26 @@ router.get("/dashboard/report", async (req, res) => {
   let conditions = [];
   let values = [];
 
+  /* DATE FILTER */
+
   if (from) {
    values.push(from);
-   conditions.push(`ps.created_at >= $${values.length}`);
+   conditions.push(`DATE(ps.created_at) >= $${values.length}`);
   }
 
   if (to) {
    values.push(to);
-   conditions.push(`ps.created_at <= $${values.length}`);
+   conditions.push(`DATE(ps.created_at) <= $${values.length}`);
   }
+
+  /* OPERATOR FILTER */
 
   if (operator) {
    values.push(operator);
    conditions.push(`ps.carrier = $${values.length}`);
   }
+
+  /* OFFER FILTER */
 
   if (offer_id) {
    values.push(offer_id);
@@ -60,43 +66,72 @@ ps.carrier,
 o.payout as cpa,
 o.cap,
 
-COUNT(*) FILTER (WHERE ps.status='OTP_REQUESTED') as pin_req,
+/* PIN REQUEST */
 
-COUNT(DISTINCT ps.msisdn)
-FILTER (WHERE ps.status='OTP_REQUESTED') as unique_req,
+COUNT(*) FILTER (
+WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+) as pin_req,
+
+COUNT(DISTINCT ps.msisdn) FILTER (
+WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+) as unique_req,
+
+/* PIN SENT */
 
 COUNT(*) FILTER (WHERE ps.status='OTP_SENT') as pin_sent,
 
-COUNT(DISTINCT ps.msisdn)
-FILTER (WHERE ps.status='OTP_SENT') as unique_sent,
+COUNT(DISTINCT ps.msisdn) FILTER (
+WHERE ps.status='OTP_SENT'
+) as unique_sent,
 
-COUNT(*) FILTER (WHERE ps.status='VERIFY_REQUESTED') as verify_req,
+/* VERIFY */
 
-COUNT(DISTINCT ps.msisdn)
-FILTER (WHERE ps.status='VERIFY_REQUESTED') as unique_verify,
+COUNT(*) FILTER (
+WHERE ps.status='VERIFY_REQUESTED'
+) as verify_req,
 
-COUNT(*) FILTER (WHERE ps.status='VERIFIED') as verified,
+COUNT(DISTINCT ps.msisdn) FILTER (
+WHERE ps.status='VERIFY_REQUESTED'
+) as unique_verify,
+
+/* VERIFIED */
+
+COUNT(*) FILTER (
+WHERE ps.status='VERIFIED'
+) as verified,
+
+/* CR */
 
 ROUND(
 COUNT(*) FILTER (WHERE ps.status='VERIFIED')::numeric /
 NULLIF(
 COUNT(*) FILTER (WHERE ps.status='OTP_SENT'),0
-)*100,2
-) as cr_percent,
+) * 100
+,2) as cr_percent,
 
-COUNT(*) FILTER (WHERE ps.status='VERIFIED') * o.payout as revenue,
+/* REVENUE */
 
-MAX(ps.created_at)
-FILTER (WHERE ps.status='OTP_REQUESTED') as last_pin_gen,
+ROUND(
+COUNT(*) FILTER (WHERE ps.status='VERIFIED') * o.payout
+,2) as revenue,
 
-MAX(ps.created_at)
-FILTER (WHERE ps.status='OTP_SENT') as last_pin_gen_success,
+/* LAST EVENTS */
 
-MAX(ps.created_at)
-FILTER (WHERE ps.status='VERIFY_REQUESTED') as last_verification,
+MAX(ps.created_at) FILTER (
+WHERE ps.status='OTP_SENT'
+) as last_pin_gen,
 
-MAX(ps.created_at)
-FILTER (WHERE ps.status='VERIFIED') as last_success_verification
+MAX(ps.created_at) FILTER (
+WHERE ps.status='OTP_SENT'
+) as last_pin_gen_success,
+
+MAX(ps.created_at) FILTER (
+WHERE ps.status='VERIFY_REQUESTED'
+) as last_verification,
+
+MAX(ps.created_at) FILTER (
+WHERE ps.status='VERIFIED'
+) as last_success_verification
 
 FROM pin_sessions ps
 
@@ -134,7 +169,7 @@ ORDER BY date DESC
 
  } catch (err) {
 
-  console.error(err);
+  console.error("DASHBOARD REPORT ERROR:", err);
 
   res.status(500).json({
    status: "FAILED"
@@ -159,14 +194,17 @@ router.get("/dashboard/realtime", async (req, res) => {
 
 SELECT
 
-COUNT(*) FILTER (WHERE status='OTP_REQUESTED')
-as total_requests,
+COUNT(*) FILTER (
+WHERE status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+) as total_requests,
 
-COUNT(*) FILTER (WHERE status='OTP_SENT')
-as otp_sent,
+COUNT(*) FILTER (
+WHERE status='OTP_SENT'
+) as otp_sent,
 
-COUNT(*) FILTER (WHERE status='VERIFIED')
-as conversions,
+COUNT(*) FILTER (
+WHERE status='VERIFIED'
+) as conversions,
 
 COUNT(*) FILTER (
 WHERE created_at >= NOW() - INTERVAL '1 hour'
@@ -183,7 +221,7 @@ FROM pin_sessions
 
  } catch (err) {
 
-  console.error(err);
+  console.error("REALTIME ERROR:", err);
 
   res.status(500).json({
    status: "FAILED"
@@ -205,22 +243,23 @@ router.get("/dashboard/export/csv", async (req, res) => {
  try {
 
   const result = await pool.query(`
-SELECT * FROM pin_sessions
-`);
+  SELECT * FROM pin_sessions
+  ORDER BY created_at DESC
+  LIMIT 50000
+  `);
 
   const parser = new Parser();
 
   const csv = parser.parse(result.rows);
 
   res.header("Content-Type", "text/csv");
-
   res.attachment("traffic_report.csv");
 
   res.send(csv);
 
  } catch (err) {
 
-  console.error(err);
+  console.error("CSV EXPORT ERROR:", err);
 
   res.status(500).json({
    status: "FAILED"
