@@ -5,25 +5,25 @@ import * as XLSX from "xlsx";
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 
+/* DATE FORMAT */
+
 const formatDateTime = (date) => {
+  if (!date) return "";
 
- if(!date) return "";
+  const d = new Date(date);
 
- const d = new Date(date);
-
- return d.toLocaleString("en-GB",{
-  day:"2-digit",
-  month:"2-digit",
-  year:"numeric",
-  hour:"2-digit",
-  minute:"2-digit",
-  second:"2-digit",
-  hour12:true
- });
-
+  return d.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true
+  });
 };
 
-export default function Dashboard(){
+export default function Dashboard() {
 
 const today = new Date().toISOString().slice(0,10);
 
@@ -46,7 +46,7 @@ const [geo,setGeo] = useState("");
 const [carrier,setCarrier] = useState("");
 const [offer,setOffer] = useState("");
 
-/* REPORT */
+/* LOAD REPORT */
 
 const loadReport = async () => {
 
@@ -75,24 +75,15 @@ const loadReport = async () => {
 
 };
 
-
-/* FILTER LIST */
+/* LOAD FILTERS */
 
 const loadFilters = async () => {
 
  const res = await fetch(`${API_BASE}/api/dashboard/filters`);
  const json = await res.json();
 
- setFilters({
-  advertisers: json.advertisers || [],
-  publishers: json.publishers || [],
-  geos: json.geos || [],
-  carriers: json.carriers || [],
-  offers: json.offers || []
- });
-
+ setFilters(json);
 };
-
 
 /* REALTIME */
 
@@ -149,10 +140,13 @@ const total = data.reduce((acc,row)=>{
 
  acc.pin_req += Number(row.pin_req||0);
  acc.unique_req += Number(row.unique_req||0);
+
  acc.pin_sent += Number(row.pin_sent||0);
  acc.unique_sent += Number(row.unique_sent||0);
+
  acc.verify_req += Number(row.verify_req||0);
  acc.unique_verify += Number(row.unique_verify||0);
+
  acc.verified += Number(row.verified||0);
  acc.revenue += Number(row.revenue||0);
 
@@ -209,35 +203,35 @@ Last Hour <strong>{stats.last_hour_requests || 0}</strong>
 
 <select value={advertiser} onChange={(e)=>setAdvertiser(e.target.value)}>
 <option value="">All Advertisers</option>
-{filters.advertisers.map(a=>(
-<option key={a.id} value={a.id}>{a.name}</option>
+{filters.advertisers?.map(a=>(
+<option key={a}>{a}</option>
 ))}
 </select>
 
 <select value={publisher} onChange={(e)=>setPublisher(e.target.value)}>
 <option value="">All Publishers</option>
-{filters.publishers.map(p=>(
-<option key={p.id} value={p.id}>{p.name}</option>
+{filters.publishers?.map(p=>(
+<option key={p}>{p}</option>
 ))}
 </select>
 
 <select value={geo} onChange={(e)=>setGeo(e.target.value)}>
 <option value="">All Geo</option>
-{filters.geos.map(g=>(
+{filters.geos?.map(g=>(
 <option key={g}>{g}</option>
 ))}
 </select>
 
 <select value={carrier} onChange={(e)=>setCarrier(e.target.value)}>
 <option value="">All Carrier</option>
-{filters.carriers.map(c=>(
+{filters.carriers?.map(c=>(
 <option key={c}>{c}</option>
 ))}
 </select>
 
 <select value={offer} onChange={(e)=>setOffer(e.target.value)}>
 <option value="">All Offers</option>
-{filters.offers.map(o=>(
+{filters.offers?.map(o=>(
 <option key={o.id} value={o.id}>{o.offer_name}</option>
 ))}
 </select>
@@ -257,11 +251,11 @@ Last Hour <strong>{stats.last_hour_requests || 0}</strong>
 <table style={styles.table}>
 
 <thead>
+
 <tr>
 
 <th>Date</th>
 <th>Offer</th>
-<th>Publisher</th>
 <th>Geo</th>
 <th>Carrier</th>
 <th>CPA</th>
@@ -286,6 +280,7 @@ Last Hour <strong>{stats.last_hour_requests || 0}</strong>
 <th>Last Success Verification</th>
 
 </tr>
+
 </thead>
 
 <tbody>
@@ -296,7 +291,6 @@ Last Hour <strong>{stats.last_hour_requests || 0}</strong>
 
 <td>{formatDateTime(row.date)}</td>
 <td>{row.offer_name}</td>
-<td>{row.publisher_name}</td>
 <td>{row.geo}</td>
 <td>{row.carrier}</td>
 <td>{row.cpa}</td>
@@ -326,7 +320,7 @@ Last Hour <strong>{stats.last_hour_requests || 0}</strong>
 
 <tr style={styles.totalRow}>
 
-<td colSpan="7">TOTAL</td>
+<td colSpan="6">TOTAL</td>
 
 <td>{total.pin_req}</td>
 <td>{total.unique_req}</td>
@@ -399,7 +393,7 @@ border:"1px solid #999"
 table:{
 borderCollapse:"collapse",
 width:"100%",
-minWidth:"1900px",
+minWidth:"1800px",
 fontSize:"12px",
 textAlign:"center"
 },
