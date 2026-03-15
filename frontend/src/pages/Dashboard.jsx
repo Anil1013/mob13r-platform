@@ -5,13 +5,9 @@ import * as XLSX from "xlsx";
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 
-/* DATE FORMAT */
-
-const formatDateTime = (date) => {
+const formatDate = (date) => {
   if (!date) return "";
-
   const d = new Date(date);
-
   return d.toLocaleString("en-GB", {
     day: "2-digit",
     month: "2-digit",
@@ -46,7 +42,7 @@ const [geo,setGeo] = useState("");
 const [carrier,setCarrier] = useState("");
 const [offer,setOffer] = useState("");
 
-/* LOAD REPORT */
+/* REPORT */
 
 const loadReport = async () => {
 
@@ -75,7 +71,7 @@ const loadReport = async () => {
 
 };
 
-/* LOAD FILTERS */
+/* FILTERS */
 
 const loadFilters = async () => {
 
@@ -83,6 +79,7 @@ const loadFilters = async () => {
  const json = await res.json();
 
  setFilters(json);
+
 };
 
 /* REALTIME */
@@ -133,7 +130,6 @@ const exportCSV = () => {
  a.click();
 };
 
-
 /* TOTAL */
 
 const total = data.reduce((acc,row)=>{
@@ -163,73 +159,71 @@ const total = data.reduce((acc,row)=>{
  revenue:0
 });
 
-
 return(
 
 <>
 <Navbar/>
 
-<div style={styles.container}>
+<div style={{padding:"20px",fontFamily:"Lora, serif"}}>
 
 {/* STATS */}
 
-<div style={styles.stats}>
+<div style={{display:"flex",gap:"10px",marginBottom:"15px"}}>
 
-<div style={{...styles.card,background:"#e8f1ff"}}>
-Requests <strong>{stats.total_requests || 0}</strong>
+<div style={{background:"#e8f1ff",padding:"8px"}}>
+Requests <b>{stats.total_requests || 0}</b>
 </div>
 
-<div style={{...styles.card,background:"#e7fff3"}}>
-OTP Sent <strong>{stats.otp_sent || 0}</strong>
+<div style={{background:"#e7fff3",padding:"8px"}}>
+OTP Sent <b>{stats.otp_sent || 0}</b>
 </div>
 
-<div style={{...styles.card,background:"#fff3e8"}}>
-Conversions <strong>{stats.conversions || 0}</strong>
+<div style={{background:"#fff3e8",padding:"8px"}}>
+Conversions <b>{stats.conversions || 0}</b>
 </div>
 
-<div style={{...styles.card,background:"#f3e8ff"}}>
-Last Hour <strong>{stats.last_hour_requests || 0}</strong>
+<div style={{background:"#f3e8ff",padding:"8px"}}>
+Last Hour <b>{stats.last_hour_requests || 0}</b>
 </div>
 
 </div>
-
 
 {/* FILTERS */}
 
-<div style={styles.filters}>
+<div style={{marginBottom:"15px"}}>
 
 <input type="date" value={from} onChange={(e)=>setFrom(e.target.value)} />
 <input type="date" value={to} onChange={(e)=>setTo(e.target.value)} />
 
-<select value={advertiser} onChange={(e)=>setAdvertiser(e.target.value)}>
+<select onChange={(e)=>setAdvertiser(e.target.value)}>
 <option value="">All Advertisers</option>
 {filters.advertisers?.map(a=>(
 <option key={a}>{a}</option>
 ))}
 </select>
 
-<select value={publisher} onChange={(e)=>setPublisher(e.target.value)}>
+<select onChange={(e)=>setPublisher(e.target.value)}>
 <option value="">All Publishers</option>
 {filters.publishers?.map(p=>(
 <option key={p}>{p}</option>
 ))}
 </select>
 
-<select value={geo} onChange={(e)=>setGeo(e.target.value)}>
+<select onChange={(e)=>setGeo(e.target.value)}>
 <option value="">All Geo</option>
 {filters.geos?.map(g=>(
 <option key={g}>{g}</option>
 ))}
 </select>
 
-<select value={carrier} onChange={(e)=>setCarrier(e.target.value)}>
+<select onChange={(e)=>setCarrier(e.target.value)}>
 <option value="">All Carrier</option>
 {filters.carriers?.map(c=>(
 <option key={c}>{c}</option>
 ))}
 </select>
 
-<select value={offer} onChange={(e)=>setOffer(e.target.value)}>
+<select onChange={(e)=>setOffer(e.target.value)}>
 <option value="">All Offers</option>
 {filters.offers?.map(o=>(
 <option key={o.id} value={o.id}>{o.offer_name}</option>
@@ -243,12 +237,11 @@ Last Hour <strong>{stats.last_hour_requests || 0}</strong>
 
 </div>
 
-
 {/* TABLE */}
 
-<div style={styles.tableWrapper}>
+<div style={{overflowX:"auto"}}>
 
-<table style={styles.table}>
+<table border="1" cellPadding="8" width="100%" style={{ textAlign:"center" }}>
 
 <thead>
 
@@ -289,7 +282,7 @@ Last Hour <strong>{stats.last_hour_requests || 0}</strong>
 
 <tr key={i}>
 
-<td>{formatDateTime(row.date)}</td>
+<td>{formatDate(row.date)}</td>
 <td>{row.offer_name}</td>
 <td>{row.geo}</td>
 <td>{row.carrier}</td>
@@ -309,18 +302,18 @@ Last Hour <strong>{stats.last_hour_requests || 0}</strong>
 <td>{row.cr_percent}</td>
 <td>${row.revenue}</td>
 
-<td>{formatDateTime(row.last_pin_gen)}</td>
-<td>{formatDateTime(row.last_pin_gen_success)}</td>
-<td>{formatDateTime(row.last_verification)}</td>
-<td>{formatDateTime(row.last_success_verification)}</td>
+<td>{formatDate(row.last_pin_gen)}</td>
+<td>{formatDate(row.last_pin_gen_success)}</td>
+<td>{formatDate(row.last_verification)}</td>
+<td>{formatDate(row.last_success_verification)}</td>
 
 </tr>
 
 ))}
 
-<tr style={styles.totalRow}>
+<tr>
 
-<td colSpan="6">TOTAL</td>
+<td colSpan="6"><b>TOTAL</b></td>
 
 <td>{total.pin_req}</td>
 <td>{total.unique_req}</td>
@@ -353,54 +346,3 @@ Last Hour <strong>{stats.last_hour_requests || 0}</strong>
 );
 
 }
-
-const styles = {
-
-container:{
-padding:"20px",
-fontFamily:"Lora, serif",
-background:"#f7f7f7"
-},
-
-stats:{
-display:"flex",
-justifyContent:"center",
-gap:"10px",
-marginBottom:"12px"
-},
-
-card:{
-padding:"6px 12px",
-borderRadius:"4px",
-fontSize:"12px",
-border:"1px solid #ccc"
-},
-
-filters:{
-display:"flex",
-justifyContent:"center",
-gap:"6px",
-marginBottom:"10px",
-flexWrap:"wrap"
-},
-
-tableWrapper:{
-overflowX:"auto",
-background:"#fff",
-border:"1px solid #999"
-},
-
-table:{
-borderCollapse:"collapse",
-width:"100%",
-minWidth:"1800px",
-fontSize:"12px",
-textAlign:"center"
-},
-
-totalRow:{
-background:"#efefef",
-fontWeight:"bold"
-}
-
-};
