@@ -5,25 +5,25 @@ import * as XLSX from "xlsx";
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 
-/* ---------- DATE FORMATTER ---------- */
-
 const formatDateTime = (date) => {
-  if (!date) return "";
 
-  const d = new Date(date);
+ if(!date) return "";
 
-  return d.toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true
-  });
+ const d = new Date(date);
+
+ return d.toLocaleString("en-GB",{
+  day:"2-digit",
+  month:"2-digit",
+  year:"numeric",
+  hour:"2-digit",
+  minute:"2-digit",
+  second:"2-digit",
+  hour12:true
+ });
+
 };
 
-export default function Dashboard() {
+export default function Dashboard(){
 
 const today = new Date().toISOString().slice(0,10);
 
@@ -46,11 +46,9 @@ const [geo,setGeo] = useState("");
 const [carrier,setCarrier] = useState("");
 const [offer,setOffer] = useState("");
 
-/* ---------- REPORT ---------- */
+/* REPORT */
 
 const loadReport = async () => {
-
- try{
 
  const params = new URLSearchParams();
 
@@ -61,31 +59,26 @@ const loadReport = async () => {
  if(publisher) params.append("publisher",publisher);
  if(geo) params.append("geo",geo);
  if(carrier) params.append("carrier",carrier);
- if(offer) params.append("offer",offer);
+ if(offer) params.append("offer_id",offer);
 
  const res = await fetch(
-   `${API_BASE}/api/dashboard/report?${params.toString()}`
+ `${API_BASE}/api/dashboard/report?${params.toString()}`
  );
 
  const json = await res.json();
 
  if(json.status === "SUCCESS"){
-   setData(json.data || []);
+  setData(json.data);
  }else{
-   setData([]);
- }
-
- }catch(err){
-  console.log(err);
+  setData([]);
  }
 
 };
 
-/* ---------- FILTER LIST ---------- */
+
+/* FILTER LIST */
 
 const loadFilters = async () => {
-
- try{
 
  const res = await fetch(`${API_BASE}/api/dashboard/filters`);
  const json = await res.json();
@@ -98,38 +91,29 @@ const loadFilters = async () => {
   offers: json.offers || []
  });
 
- }catch(err){
-  console.log(err);
- }
-
 };
 
-/* ---------- REALTIME ---------- */
+
+/* REALTIME */
 
 const loadRealtime = async () => {
-
- try{
 
  const res = await fetch(`${API_BASE}/api/dashboard/realtime`);
  const json = await res.json();
 
  setStats(json.data || {});
-
- }catch(err){
-  console.log(err);
- }
-
 };
 
 useEffect(()=>{
 
  loadReport();
- loadRealtime();
  loadFilters();
+ loadRealtime();
 
 },[]);
 
-/* ---------- EXPORT ---------- */
+
+/* EXPORT */
 
 const exportExcel = () => {
 
@@ -158,7 +142,8 @@ const exportCSV = () => {
  a.click();
 };
 
-/* ---------- TOTAL ---------- */
+
+/* TOTAL */
 
 const total = data.reduce((acc,row)=>{
 
@@ -192,34 +177,30 @@ return(
 
 <div style={styles.container}>
 
-{/* ---------- STATS ---------- */}
+{/* STATS */}
 
 <div style={styles.stats}>
 
 <div style={{...styles.card,background:"#e8f1ff"}}>
-Requests
-<strong>{stats.total_requests || 0}</strong>
+Requests <strong>{stats.total_requests || 0}</strong>
 </div>
 
 <div style={{...styles.card,background:"#e7fff3"}}>
-OTP Sent
-<strong>{stats.otp_sent || 0}</strong>
+OTP Sent <strong>{stats.otp_sent || 0}</strong>
 </div>
 
 <div style={{...styles.card,background:"#fff3e8"}}>
-Conversions
-<strong>{stats.conversions || 0}</strong>
+Conversions <strong>{stats.conversions || 0}</strong>
 </div>
 
 <div style={{...styles.card,background:"#f3e8ff"}}>
-Last Hour
-<strong>{stats.last_hour_requests || 0}</strong>
+Last Hour <strong>{stats.last_hour_requests || 0}</strong>
 </div>
 
 </div>
 
 
-{/* ---------- FILTERS ---------- */}
+{/* FILTERS */}
 
 <div style={styles.filters}>
 
@@ -269,14 +250,13 @@ Last Hour
 </div>
 
 
-{/* ---------- TABLE ---------- */}
+{/* TABLE */}
 
 <div style={styles.tableWrapper}>
 
 <table style={styles.table}>
 
 <thead>
-
 <tr>
 
 <th>Date</th>
@@ -306,16 +286,9 @@ Last Hour
 <th>Last Success Verification</th>
 
 </tr>
-
 </thead>
 
 <tbody>
-
-{data.length === 0 && (
-<tr>
-<td colSpan="20">No Data</td>
-</tr>
-)}
 
 {data.map((row,i)=>(
 
@@ -387,14 +360,12 @@ Last Hour
 
 }
 
-
 const styles = {
 
 container:{
 padding:"20px",
 fontFamily:"Lora, serif",
-background:"#f7f7f7",
-textAlign:"center"
+background:"#f7f7f7"
 },
 
 stats:{
@@ -431,19 +402,6 @@ width:"100%",
 minWidth:"1900px",
 fontSize:"12px",
 textAlign:"center"
-},
-
-th:{
-border:"1px solid #ccc",
-padding:"6px",
-background:"#f3f3f3",
-position:"sticky",
-top:0
-},
-
-td:{
-border:"1px solid #ddd",
-padding:"6px"
 },
 
 totalRow:{
