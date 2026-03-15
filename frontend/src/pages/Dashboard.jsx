@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import * as XLSX from "xlsx";
 
+const API = "https://backend.mob13r.com";
+
 export default function Dashboard(){
 
 const today = new Date().toISOString().slice(0,10);
@@ -25,9 +27,11 @@ const [geo,setGeo] = useState("");
 const [carrier,setCarrier] = useState("");
 const [offer,setOffer] = useState("");
 
-/* LOAD REPORT */
+/* ---------------- REPORT ---------------- */
 
 const loadReport = async () => {
+
+ try{
 
  const params = new URLSearchParams();
 
@@ -37,34 +41,67 @@ const loadReport = async () => {
  if(advertiser) params.append("advertiser",advertiser);
  if(publisher) params.append("publisher",publisher);
  if(geo) params.append("geo",geo);
- if(carrier) params.append("operator",carrier);
- if(offer) params.append("offer_id",offer);
+ if(carrier) params.append("carrier",carrier);
+ if(offer) params.append("offer",offer);
 
- const res = await fetch(`/api/dashboard/report?${params.toString()}`);
+ const res = await fetch(`${API}/api/dashboard/report?${params.toString()}`);
+
  const json = await res.json();
 
- setData(json.data || []);
+ if(json.status === "SUCCESS"){
+  setData(json.data || []);
+ }else{
+  setData([]);
+ }
+
+ }catch(err){
+  console.log("Report Error:",err);
+ }
+
 };
 
-/* LOAD FILTER LIST */
+
+/* ---------------- FILTERS ---------------- */
 
 const loadFilters = async () => {
 
- const res = await fetch("/api/dashboard/filters");
+ try{
+
+ const res = await fetch(`${API}/api/dashboard/filters`);
  const json = await res.json();
 
- setFilters(json || {});
+ setFilters({
+  advertisers: json.advertisers || [],
+  publishers: json.publishers || [],
+  geos: json.geos || [],
+  carriers: json.carriers || [],
+  offers: json.offers || []
+ });
+
+ }catch(err){
+  console.log("Filter error",err);
+ }
+
 };
 
-/* REALTIME */
+
+/* ---------------- REALTIME ---------------- */
 
 const loadRealtime = async () => {
 
- const res = await fetch("/api/dashboard/realtime");
+ try{
+
+ const res = await fetch(`${API}/api/dashboard/realtime`);
  const json = await res.json();
 
  setStats(json.data || {});
+
+ }catch(err){
+  console.log("Realtime error",err);
+ }
+
 };
+
 
 useEffect(()=>{
 
@@ -75,7 +112,7 @@ useEffect(()=>{
 },[]);
 
 
-/* EXPORT */
+/* ---------------- EXPORT ---------------- */
 
 const exportExcel = () => {
 
@@ -86,6 +123,7 @@ const exportExcel = () => {
 
  XLSX.writeFile(workbook,"traffic_report.xlsx");
 };
+
 
 const exportCSV = () => {
 
@@ -102,9 +140,11 @@ const exportCSV = () => {
  a.href = url;
  a.download = "traffic_report.csv";
  a.click();
+
 };
 
-/* TOTAL */
+
+/* ---------------- TOTAL ---------------- */
 
 const total = data.reduce((acc,row)=>{
 
@@ -138,7 +178,8 @@ return(
 
 <div style={styles.container}>
 
-{/* STATS */}
+
+{/* -------- STATS -------- */}
 
 <div style={styles.stats}>
 
@@ -164,7 +205,8 @@ Last Hour
 
 </div>
 
-{/* FILTERS */}
+
+{/* -------- FILTERS -------- */}
 
 <div style={styles.filters}>
 
@@ -174,14 +216,14 @@ Last Hour
 <select value={advertiser} onChange={(e)=>setAdvertiser(e.target.value)}>
 <option value="">All Advertisers</option>
 {filters.advertisers.map(a=>(
-<option key={a}>{a}</option>
+<option key={a.id} value={a.id}>{a.name}</option>
 ))}
 </select>
 
 <select value={publisher} onChange={(e)=>setPublisher(e.target.value)}>
 <option value="">All Publishers</option>
 {filters.publishers.map(p=>(
-<option key={p}>{p}</option>
+<option key={p.id} value={p.id}>{p.name}</option>
 ))}
 </select>
 
@@ -209,23 +251,21 @@ Last Hour
 <button onClick={loadReport}>Apply</button>
 
 <button onClick={exportCSV}>Export CSV</button>
-
 <button onClick={exportExcel}>Export Excel</button>
 
 </div>
 
-{/* TABLE */}
+
+{/* -------- TABLE -------- */}
 
 <div style={styles.tableWrapper}>
 
 <table style={styles.table}>
 
 <thead>
-
 <tr>
 
 <th>Date</th>
-<th>Advertiser</th>
 <th>Offer</th>
 <th>Publisher</th>
 <th>Geo</th>
@@ -235,7 +275,6 @@ Last Hour
 
 <th>Pin Req</th>
 <th>Unique Req</th>
-
 <th>Pin Sent</th>
 <th>Unique Sent</th>
 
@@ -252,17 +291,14 @@ Last Hour
 <th>Last Success Verification</th>
 
 </tr>
-
 </thead>
 
 <tbody>
 
 {data.map((row,i)=>(
-
 <tr key={i}>
 
-<td>{row.date}</td>
-<td>{row.advertiser_name}</td>
+<td>{row.date?.slice(0,10)}</td>
 <td>{row.offer_name}</td>
 <td>{row.publisher_name}</td>
 <td>{row.geo}</td>
@@ -289,12 +325,11 @@ Last Hour
 <td>{row.last_success_verification}</td>
 
 </tr>
-
 ))}
 
 <tr style={styles.totalRow}>
 
-<td colSpan="8">TOTAL</td>
+<td colSpan="7">TOTAL</td>
 
 <td>{total.pin_req}</td>
 <td>{total.unique_req}</td>
@@ -326,6 +361,7 @@ Last Hour
 );
 
 }
+
 
 const styles = {
 
