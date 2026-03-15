@@ -5,6 +5,24 @@ import * as XLSX from "xlsx";
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 
+/* ---------- DATE FORMATTER ---------- */
+
+const formatDateTime = (date) => {
+  if (!date) return "";
+
+  const d = new Date(date);
+
+  return d.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true
+  });
+};
+
 export default function Dashboard() {
 
 const today = new Date().toISOString().slice(0,10);
@@ -28,7 +46,7 @@ const [geo,setGeo] = useState("");
 const [carrier,setCarrier] = useState("");
 const [offer,setOffer] = useState("");
 
-/* ---------------- LOAD REPORT ---------------- */
+/* ---------- REPORT ---------- */
 
 const loadReport = async () => {
 
@@ -58,13 +76,12 @@ const loadReport = async () => {
  }
 
  }catch(err){
-  console.log("Report Error:",err);
+  console.log(err);
  }
 
 };
 
-
-/* ---------------- LOAD FILTERS ---------------- */
+/* ---------- FILTER LIST ---------- */
 
 const loadFilters = async () => {
 
@@ -82,13 +99,12 @@ const loadFilters = async () => {
  });
 
  }catch(err){
-  console.log("Filter Error:",err);
+  console.log(err);
  }
 
 };
 
-
-/* ---------------- REALTIME STATS ---------------- */
+/* ---------- REALTIME ---------- */
 
 const loadRealtime = async () => {
 
@@ -100,11 +116,10 @@ const loadRealtime = async () => {
  setStats(json.data || {});
 
  }catch(err){
-  console.log("Realtime Error:",err);
+  console.log(err);
  }
 
 };
-
 
 useEffect(()=>{
 
@@ -114,8 +129,7 @@ useEffect(()=>{
 
 },[]);
 
-
-/* ---------------- EXPORT ---------------- */
+/* ---------- EXPORT ---------- */
 
 const exportExcel = () => {
 
@@ -125,7 +139,6 @@ const exportExcel = () => {
  XLSX.utils.book_append_sheet(workbook,worksheet,"Report");
 
  XLSX.writeFile(workbook,"traffic_report.xlsx");
-
 };
 
 const exportCSV = () => {
@@ -143,23 +156,18 @@ const exportCSV = () => {
  a.href = url;
  a.download = "traffic_report.csv";
  a.click();
-
 };
 
-
-/* ---------------- TOTAL CALCULATION ---------------- */
+/* ---------- TOTAL ---------- */
 
 const total = data.reduce((acc,row)=>{
 
  acc.pin_req += Number(row.pin_req||0);
  acc.unique_req += Number(row.unique_req||0);
-
  acc.pin_sent += Number(row.pin_sent||0);
  acc.unique_sent += Number(row.unique_sent||0);
-
  acc.verify_req += Number(row.verify_req||0);
  acc.unique_verify += Number(row.unique_verify||0);
-
  acc.verified += Number(row.verified||0);
  acc.revenue += Number(row.revenue||0);
 
@@ -184,8 +192,7 @@ return(
 
 <div style={styles.container}>
 
-
-{/* -------- STATS -------- */}
+{/* ---------- STATS ---------- */}
 
 <div style={styles.stats}>
 
@@ -212,7 +219,7 @@ Last Hour
 </div>
 
 
-{/* -------- FILTERS -------- */}
+{/* ---------- FILTERS ---------- */}
 
 <div style={styles.filters}>
 
@@ -262,7 +269,7 @@ Last Hour
 </div>
 
 
-{/* -------- TABLE -------- */}
+{/* ---------- TABLE ---------- */}
 
 <div style={styles.tableWrapper}>
 
@@ -304,11 +311,17 @@ Last Hour
 
 <tbody>
 
+{data.length === 0 && (
+<tr>
+<td colSpan="20">No Data</td>
+</tr>
+)}
+
 {data.map((row,i)=>(
 
 <tr key={i}>
 
-<td>{row.date?.slice(0,10)}</td>
+<td>{formatDateTime(row.date)}</td>
 <td>{row.offer_name}</td>
 <td>{row.publisher_name}</td>
 <td>{row.geo}</td>
@@ -329,10 +342,10 @@ Last Hour
 <td>{row.cr_percent}</td>
 <td>${row.revenue}</td>
 
-<td>{row.last_pin_gen}</td>
-<td>{row.last_pin_gen_success}</td>
-<td>{row.last_verification}</td>
-<td>{row.last_success_verification}</td>
+<td>{formatDateTime(row.last_pin_gen)}</td>
+<td>{formatDateTime(row.last_pin_gen_success)}</td>
+<td>{formatDateTime(row.last_verification)}</td>
+<td>{formatDateTime(row.last_success_verification)}</td>
 
 </tr>
 
@@ -415,9 +428,22 @@ border:"1px solid #999"
 table:{
 borderCollapse:"collapse",
 width:"100%",
-minWidth:"1700px",
+minWidth:"1900px",
 fontSize:"12px",
 textAlign:"center"
+},
+
+th:{
+border:"1px solid #ccc",
+padding:"6px",
+background:"#f3f3f3",
+position:"sticky",
+top:0
+},
+
+td:{
+border:"1px solid #ddd",
+padding:"6px"
 },
 
 totalRow:{
