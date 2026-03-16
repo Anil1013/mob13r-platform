@@ -3,56 +3,62 @@ import pool from "../db.js";
 
 const router = express.Router();
 
-router.get("/dashboard/report", async (req,res)=>{
+/*
+=====================================================
+DASHBOARD REPORT
+=====================================================
+*/
 
- try{
+router.get("/dashboard/report", async (req, res) => {
 
- const {from,to,geo,carrier,publisher,offer_id,advertiser} = req.query;
+ try {
 
- let conditions = [];
- let values = [];
+  const { from, to, geo, carrier, publisher, offer_id, advertiser } = req.query;
 
- if(from){
-  values.push(from);
-  conditions.push(`ps.created_at >= $${values.length}`);
- }
+  let conditions = [];
+  let values = [];
 
- if(to){
-  values.push(to);
-  conditions.push(`ps.created_at <= $${values.length}`);
- }
+  if (from) {
+   values.push(from);
+   conditions.push(`ps.created_at >= $${values.length}`);
+  }
 
- if(geo){
-  values.push(geo);
-  conditions.push(`ps.params->>'geo' = $${values.length}`);
- }
+  if (to) {
+   values.push(to);
+   conditions.push(`ps.created_at <= $${values.length}`);
+  }
 
- if(carrier){
-  values.push(carrier);
-  conditions.push(`ps.params->>'carrier' = $${values.length}`);
- }
+  if (geo) {
+   values.push(geo);
+   conditions.push(`ps.params->>'geo' = $${values.length}`);
+  }
 
- if(publisher){
-  values.push(publisher);
-  conditions.push(`ps.publisher_id = $${values.length}`);
- }
+  if (carrier) {
+   values.push(carrier);
+   conditions.push(`ps.params->>'carrier' = $${values.length}`);
+  }
 
- if(offer_id){
-  values.push(offer_id);
-  conditions.push(`ps.offer_id = $${values.length}`);
- }
+  if (publisher) {
+   values.push(publisher);
+   conditions.push(`ps.publisher_id = $${values.length}`);
+  }
 
- if(advertiser){
-  values.push(advertiser);
-  conditions.push(`o.advertiser_id = $${values.length}`);
- }
+  if (offer_id) {
+   values.push(offer_id);
+   conditions.push(`ps.offer_id = $${values.length}`);
+  }
 
- const where =
-  conditions.length>0
-  ? "WHERE " + conditions.join(" AND ")
-  : "";
+  if (advertiser) {
+   values.push(advertiser);
+   conditions.push(`o.advertiser_id = $${values.length}`);
+  }
 
- const query = `
+  const where =
+   conditions.length > 0
+    ? "WHERE " + conditions.join(" AND ")
+    : "";
+
+  const query = `
 
 SELECT
 
@@ -144,23 +150,149 @@ ORDER BY date DESC
 
 `;
 
- const result = await pool.query(query,values);
+  const result = await pool.query(query, values);
 
- res.json({
-  status:"SUCCESS",
-  data:result.rows
- });
+  res.json({
+   status: "SUCCESS",
+   data: result.rows
+  });
 
- }catch(err){
+ } catch (err) {
 
- console.error(err);
+  console.error("DASHBOARD REPORT ERROR:", err);
 
- res.status(500).json({
-  status:"FAILED"
- });
+  res.status(500).json({
+   status: "FAILED"
+  });
 
  }
 
 });
+
+
+/*
+=====================================================
+DASHBOARD FILTER LIST
+=====================================================
+*/
+
+router.get("/dashboard/filters", async (req, res) => {
+
+ try {
+
+  const advertisers = await pool.query(`
+  SELECT id,name
+  FROM advertisers
+  ORDER BY name
+  `);
+
+  const publishers = await pool.query(`
+  SELECT id,name
+  FROM publishers
+  ORDER BY name
+  `);
+
+  const offers = await pool.query(`
+  SELECT id,service_name
+  FROM offers
+  WHERE status='active'
+  ORDER BY service_name
+  `);
+
+  const geos = await pool.query(`
+  SELECT DISTINCT params->>'geo' AS geo
+  FROM pin_sessions
+  WHERE params->>'geo' IS NOT NULL
+  ORDER BY geo
+  `);
+
+  const carriers = await pool.query(`
+  SELECT DISTINCT params->>'carrier' AS carrier
+  FROM pin_sessions
+  WHERE params->>'carrier' IS NOT NULL
+  ORDER BY carrier
+  `);
+
+  res.json({
+
+   advertisers: advertisers.rows,
+
+   publishers: publishers.rows,
+
+   offers: offers.rows.map(o => ({
+    id: o.id,
+    offer_name: o.service_name
+   })),
+
+   geos: geos.rows.map(g => g.geo),
+
+   carriers: carriers.rows.map(c => c.carrier)
+
+  });
+
+ } catch (err) {
+
+  console.error("FILTER API ERROR:", err);
+
+  res.status(500).json({
+   status: "FAILED"
+  });
+
+ }
+
+});
+
+
+/*
+=====================================================
+REALTIME DASHBOARD STATS
+=====================================================
+*/
+
+router.get("/dashboard/realtime", async (req, res) => {
+
+ try {
+
+  const stats = await pool.query(`
+
+SELECT
+
+COUNT(*) FILTER (
+WHERE status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+) AS total_requests,
+
+COUNT(*) FILTER (
+WHERE status='OTP_SENT'
+) AS otp_sent,
+
+COUNT(*) FILTER (
+WHERE status='VERIFIED'
+) AS conversions,
+
+COUNT(*) FILTER (
+WHERE created_at >= NOW() - INTERVAL '1 hour'
+) AS last_hour_requests
+
+FROM pin_sessions
+
+`);
+
+  res.json({
+   status: "SUCCESS",
+   data: stats.rows[0]
+  });
+
+ } catch (err) {
+
+  console.error("REALTIME DASHBOARD ERROR:", err);
+
+  res.status(500).json({
+   status: "FAILED"
+  });
+
+ }
+
+});
+
 
 export default router;
