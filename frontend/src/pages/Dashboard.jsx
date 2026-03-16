@@ -25,6 +25,7 @@ const today = new Date().toISOString().slice(0,10);
 
 const [data,setData] = useState([]);
 const [stats,setStats] = useState({});
+
 const [filters,setFilters] = useState({
  advertisers:[],
  publishers:[],
@@ -42,7 +43,11 @@ const [geo,setGeo] = useState("");
 const [carrier,setCarrier] = useState("");
 const [offer,setOffer] = useState("");
 
-/* REPORT */
+/*
+============================
+LOAD REPORT
+============================
+*/
 
 const loadReport = async () => {
 
@@ -71,7 +76,11 @@ const loadReport = async () => {
 
 };
 
-/* FILTERS */
+/*
+============================
+LOAD FILTERS
+============================
+*/
 
 const loadFilters = async () => {
 
@@ -82,7 +91,11 @@ const loadFilters = async () => {
 
 };
 
-/* REALTIME */
+/*
+============================
+REALTIME STATS
+============================
+*/
 
 const loadRealtime = async () => {
 
@@ -101,7 +114,11 @@ useEffect(()=>{
 },[]);
 
 
-/* EXPORT */
+/*
+============================
+EXPORT
+============================
+*/
 
 const exportExcel = () => {
 
@@ -130,7 +147,11 @@ const exportCSV = () => {
  a.click();
 };
 
-/* TOTAL */
+/*
+============================
+TOTALS
+============================
+*/
 
 const total = data.reduce((acc,row)=>{
 
@@ -195,35 +216,35 @@ Last Hour <b>{stats.last_hour_requests || 0}</b>
 <input type="date" value={from} onChange={(e)=>setFrom(e.target.value)} />
 <input type="date" value={to} onChange={(e)=>setTo(e.target.value)} />
 
-<select onChange={(e)=>setAdvertiser(e.target.value)}>
+<select value={advertiser} onChange={(e)=>setAdvertiser(e.target.value)}>
 <option value="">All Advertisers</option>
 {filters.advertisers?.map(a=>(
-<option key={a}>{a}</option>
+<option key={a.id} value={a.id}>{a.name}</option>
 ))}
 </select>
 
-<select onChange={(e)=>setPublisher(e.target.value)}>
+<select value={publisher} onChange={(e)=>setPublisher(e.target.value)}>
 <option value="">All Publishers</option>
 {filters.publishers?.map(p=>(
-<option key={p}>{p}</option>
+<option key={p.id} value={p.id}>{p.name}</option>
 ))}
 </select>
 
-<select onChange={(e)=>setGeo(e.target.value)}>
+<select value={geo} onChange={(e)=>setGeo(e.target.value)}>
 <option value="">All Geo</option>
 {filters.geos?.map(g=>(
 <option key={g}>{g}</option>
 ))}
 </select>
 
-<select onChange={(e)=>setCarrier(e.target.value)}>
+<select value={carrier} onChange={(e)=>setCarrier(e.target.value)}>
 <option value="">All Carrier</option>
 {filters.carriers?.map(c=>(
 <option key={c}>{c}</option>
 ))}
 </select>
 
-<select onChange={(e)=>setOffer(e.target.value)}>
+<select value={offer} onChange={(e)=>setOffer(e.target.value)}>
 <option value="">All Offers</option>
 {filters.offers?.map(o=>(
 <option key={o.id} value={o.id}>{o.offer_name}</option>
@@ -248,7 +269,9 @@ Last Hour <b>{stats.last_hour_requests || 0}</b>
 <tr>
 
 <th>Date</th>
+<th>Advertiser</th>
 <th>Offer</th>
+<th>Publisher</th>
 <th>Geo</th>
 <th>Carrier</th>
 <th>CPA</th>
@@ -268,7 +291,6 @@ Last Hour <b>{stats.last_hour_requests || 0}</b>
 <th>Revenue</th>
 
 <th>Last Pin Gen</th>
-<th>Last Pin Gen Success</th>
 <th>Last Verification</th>
 <th>Last Success Verification</th>
 
@@ -283,7 +305,9 @@ Last Hour <b>{stats.last_hour_requests || 0}</b>
 <tr key={i}>
 
 <td>{formatDate(row.date)}</td>
+<td>{row.advertiser_name}</td>
 <td>{row.offer_name}</td>
+<td>{row.publisher_name}</td>
 <td>{row.geo}</td>
 <td>{row.carrier}</td>
 <td>{row.cpa}</td>
@@ -303,7 +327,6 @@ Last Hour <b>{stats.last_hour_requests || 0}</b>
 <td>${row.revenue}</td>
 
 <td>{formatDate(row.last_pin_gen)}</td>
-<td>{formatDate(row.last_pin_gen_success)}</td>
 <td>{formatDate(row.last_verification)}</td>
 <td>{formatDate(row.last_success_verification)}</td>
 
@@ -313,7 +336,7 @@ Last Hour <b>{stats.last_hour_requests || 0}</b>
 
 <tr>
 
-<td colSpan="6"><b>TOTAL</b></td>
+<td colSpan="8"><b>TOTAL</b></td>
 
 <td>{total.pin_req}</td>
 <td>{total.unique_req}</td>
@@ -329,7 +352,7 @@ Last Hour <b>{stats.last_hour_requests || 0}</b>
 
 <td>${total.revenue.toFixed(2)}</td>
 
-<td colSpan="4"></td>
+<td colSpan="3"></td>
 
 </tr>
 
