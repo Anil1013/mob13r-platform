@@ -15,7 +15,6 @@ import publishersRoutes from "./routes/publishers.routes.js";
 
 /* 👉 DASHBOARD ROUTES */
 import dashboardReportRoutes from "./routes/dashboard.report.routes.js";
-import dashboardFiltersRoutes from "./routes/dashboard.filters.routes.js";
 
 const app = express();
 
@@ -51,13 +50,6 @@ app.use("/api", dumpRoutes);
  */
 
 app.use("/api", dashboardReportRoutes);
-
-/**
- * Dropdown filters
- * → /api/dashboard/filters
- */
-
-app.use("/api", dashboardFiltersRoutes);
 
 /* -------- PUBLISHER APIs -------- */
 
