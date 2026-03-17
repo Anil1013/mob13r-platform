@@ -86,6 +86,7 @@ router.get("/dashboard/report", async (req, res) => {
     const values = [];
     let whereClause = buildFilters(query, values);
 
+    // 👉 DEFAULT: TODAY DATA
     if (!whereClause) {
       whereClause = `
         WHERE (ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date = CURRENT_DATE
@@ -97,17 +98,11 @@ router.get("/dashboard/report", async (req, res) => {
         ps.id,
         ps.offer_id,
 
-        -- ✅ FIXED HERE
         COALESCE(o.service_name, '') AS offer_name,
-
         COALESCE(p.name, '') AS publisher_name,
-
-        COALESCE((
-          SELECT name FROM advertisers WHERE id = o.advertiser_id LIMIT 1
-        ), '') AS advertiser_name,
+        COALESCE(a.name, '') AS advertiser_name,
 
         ps.msisdn,
-
         ps.params->>'geo' AS geo,
         ps.params->>'carrier' AS carrier,
 
@@ -123,6 +118,7 @@ router.get("/dashboard/report", async (req, res) => {
       FROM pin_sessions ps
       LEFT JOIN offers o ON ps.offer_id = o.id
       LEFT JOIN publishers p ON ps.publisher_id = p.id
+      LEFT JOIN advertisers a ON a.id = o.advertiser_id
 
       ${whereClause}
 
@@ -134,21 +130,47 @@ router.get("/dashboard/report", async (req, res) => {
       SELECT COUNT(*) 
       FROM pin_sessions ps
       LEFT JOIN offers o ON ps.offer_id = o.id
+      LEFT JOIN advertisers a ON a.id = o.advertiser_id
       ${whereClause};
     `;
 
+    // ✅ SAFE EXECUTION (NO $1 ERROR)
     const dataRes = values.length
-  ? await pool.query(dataQuery, values)
-  : await pool.query(dataQuery);
+      ? await pool.query(dataQuery, values)
+      : await pool.query(dataQuery);
 
-const countRes = values.length
-  ? await pool.query(countQuery, values)
-  : await pool.query(countQuery);
+    const countRes = values.length
+      ? await pool.query(countQuery, values)
+      : await pool.query(countQuery);
+
+    const rows = dataRes.rows;
+
+    /* =====================================================
+    SUMMARY CALCULATION (🔥 IMPORTANT)
+    ===================================================== */
+
+    let summary = {
+      requests: 0,
+      otp_sent: 0,
+      verified: 0,
+      failed: 0
+    };
+
+    rows.forEach(r => {
+
+      summary.requests++;
+
+      if (r.status === "OTP_SENT") summary.otp_sent++;
+      if (r.status === "VERIFIED") summary.verified++;
+      if (r.status === "OTP_FAILED") summary.failed++;
+
+    });
 
     return res.json({
       success: true,
       total: parseInt(countRes.rows[0].count),
-      data: dataRes.rows
+      summary,
+      data: rows
     });
 
   } catch (err) {
@@ -170,7 +192,6 @@ router.get("/dashboard/filters", async (req, res) => {
 
     const [offers, publishers, advertisers, geos, carriers] = await Promise.all([
 
-      // ✅ FIX HERE ALSO
       pool.query(`SELECT id, service_name AS name FROM offers ORDER BY service_name`),
 
       pool.query(`SELECT id, name FROM publishers ORDER BY name`),
@@ -204,6 +225,7 @@ router.get("/dashboard/filters", async (req, res) => {
 
   } catch (err) {
     console.error("FILTER ERROR:", err);
+
     return res.status(500).json({
       success: false,
       error: err.message
