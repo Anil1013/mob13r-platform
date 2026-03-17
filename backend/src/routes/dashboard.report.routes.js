@@ -140,7 +140,6 @@ router.get("/dashboard/report", async (req, res) => {
 
       ${whereClause}
 
-      GROUP BY
      GROUP BY
 DATE(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'),
      a.name,
