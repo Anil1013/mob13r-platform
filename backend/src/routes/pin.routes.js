@@ -13,14 +13,10 @@ import { mapPublisherResponse } from "../services/pubResponseMapper.js";
 const router = express.Router();
 
 const AXIOS_TIMEOUT = 30000;
-
-// 🔥 TEST MODE
 const TEST_MODE = true;
 const TEST_OTP = "1234";
 
-/* =====================================================
-HELPERS
-===================================================== */
+/* ================= HELPERS ================= */
 
 function captureHeaders(req) {
   return {
@@ -33,17 +29,12 @@ function captureHeaders(req) {
 }
 
 async function validatePublisher(req) {
-  const apiKey =
-    req.headers["x-api-key"] ||
-    req.query["x-api-key"];
+  const apiKey = req.headers["x-api-key"] || req.query["x-api-key"];
 
   if (!apiKey) return null;
 
   const r = await pool.query(
-    `SELECT * FROM publishers
-     WHERE api_key=$1
-     AND status='active'
-     LIMIT 1`,
+    `SELECT * FROM publishers WHERE api_key=$1 AND status='active' LIMIT 1`,
     [apiKey]
   );
 
@@ -53,71 +44,24 @@ async function validatePublisher(req) {
 function resolveTemplate(value, runtime) {
   if (!value || typeof value !== "string") return value;
 
-  return value.replace(/\{(.*?)\}/g, (_, key) => {
-    return runtime[key] ?? "";
-  });
+  return value.replace(/\{(.*?)\}/g, (_, key) => runtime[key] ?? "");
 }
 
 function buildPayload(params, runtime) {
   const payload = {};
 
   Object.entries(params).forEach(([key, value]) => {
-    if (
-      key.includes("url") ||
-      key.includes("method") ||
-      key.includes("fallback")
-    ) return;
-
+    if (key.includes("url") || key.includes("method")) return;
     payload[key] = resolveTemplate(value, runtime);
   });
 
   return payload;
 }
 
-async function callAdvertiser(url, fallback, method, payload) {
-  try {
-    const resp =
-      method === "POST"
-        ? await axios.post(url, payload, { timeout: AXIOS_TIMEOUT })
-        : await axios.get(url, { params: payload, timeout: AXIOS_TIMEOUT });
-
-    return { response: resp, used: url, method };
-
-  } catch (err) {
-
-    if (!fallback) {
-      return {
-        response: { data: err?.response?.data || {} },
-        used: url,
-        method
-      };
-    }
-
-    try {
-      const resp =
-        method === "POST"
-          ? await axios.post(fallback, payload, { timeout: AXIOS_TIMEOUT })
-          : await axios.get(fallback, { params: payload, timeout: AXIOS_TIMEOUT });
-
-      return { response: resp, used: fallback, method };
-
-    } catch (err2) {
-      return {
-        response: { data: err2?.response?.data || {} },
-        used: fallback,
-        method
-      };
-    }
-  }
-}
-
-/* =====================================================
-PIN SEND
-===================================================== */
+/* ================= PIN SEND ================= */
 
 router.all("/pin/send/:offer_id", async (req, res) => {
   try {
-
     const publisher = await validatePublisher(req);
     if (!publisher)
       return res.status(401).json({ status: "INVALID_KEY" });
@@ -125,16 +69,10 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     const { offer_id } = req.params;
     const incoming = { ...req.query, ...req.body };
 
-    if (!incoming.msisdn)
-      return res.status(400).json({ status: "FAILED" });
-
     const offerRes = await pool.query(
-      `SELECT * FROM offers WHERE id=$1 AND status='active'`,
+      `SELECT * FROM offers WHERE id=$1`,
       [offer_id]
     );
-
-    if (!offerRes.rows.length)
-      return res.status(404).json({ status: "FAILED" });
 
     const offer = offerRes.rows[0];
 
@@ -144,81 +82,89 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     );
 
     const params = {};
-    paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
+    paramRes.rows.forEach(p => (params[p.param_key] = p.param_value));
 
-    const ua = incoming.user_agent || req.headers["user-agent"] || "";
-
-    const runtime = {
-      ...incoming,
-      ip: incoming.ip || req.ip,
-      user_agent: ua,
-      publisher_id: publisher.id,
-      offer_id: offer.id
-    };
+    const runtime = { ...incoming, publisher_id: publisher.id };
 
     const payload = buildPayload(params, runtime);
+
     const sessionToken = uuidv4();
 
-    // ✅ INSERT SEND ROW
+    // 👉 publisher request
+    const publisherRequest = {
+      url: req.originalUrl,
+      method: req.method,
+      headers: captureHeaders(req),
+      params: incoming
+    };
+
+    let advertiserRequest = null;
+    let advertiserResponse = null;
+    let status = "OTP_SENT";
+
+    if (!TEST_MODE) {
+      const advCall = await axios.get(params.pin_send_url, {
+        params: payload,
+        timeout: AXIOS_TIMEOUT
+      });
+
+      advertiserRequest = {
+        url: params.pin_send_url,
+        method: "GET",
+        payload
+      };
+
+      advertiserResponse = advCall.data;
+
+      const mapped = mapPinSendResponse(advertiserResponse);
+      status = mapped.isSuccess ? "OTP_SENT" : "OTP_FAILED";
+    } else {
+      advertiserRequest = {
+        url: params.pin_send_url,
+        method: "GET",
+        payload
+      };
+
+      advertiserResponse = { response: "SUCCESS", message: "TEST MODE" };
+    }
+
+    const publisherResponse = mapPublisherResponse({
+      status,
+      session_token: sessionToken
+    });
+
     await pool.query(
       `INSERT INTO pin_sessions
-      (offer_id, msisdn, session_token, params,
-       publisher_request, publisher_id, status)
-      VALUES ($1,$2,$3,$4,$5,$6,'OTP_SENT')`,
+      (offer_id, msisdn, session_token,
+       publisher_request, publisher_response,
+       advertiser_request, advertiser_response,
+       publisher_id, status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [
         offer.id,
         incoming.msisdn,
         sessionToken,
-        runtime,
-        {
-          url: req.originalUrl,
-          method: req.method,
-          headers: captureHeaders(req),
-          params: incoming
-        },
-        publisher.id
+        publisherRequest,
+        publisherResponse,
+        advertiserRequest,
+        advertiserResponse,
+        publisher.id,
+        status
       ]
     );
 
-    let advMapped = { isSuccess: true, body: { status: "OTP_SENT" } };
-
-    if (!TEST_MODE) {
-      const advCall = await callAdvertiser(
-        params.pin_send_url,
-        params.pin_send_fallback_url,
-        (params.method || "GET").toUpperCase(),
-        payload
-      );
-
-      const advertiserResponse = advCall?.response?.data || {};
-
-      try {
-        advMapped = mapPinSendResponse(advertiserResponse);
-      } catch {
-        advMapped = { isSuccess: false };
-      }
-    }
-
-    return res.json(
-      mapPublisherResponse({
-        status: advMapped.isSuccess ? "OTP_SENT" : "OTP_FAILED",
-        session_token: sessionToken
-      })
-    );
+    return res.json(publisherResponse);
 
   } catch (err) {
-    console.error("PIN SEND ERROR:", err);
+    console.error(err);
     res.status(500).json({ status: "FAILED" });
   }
 });
 
-/* =====================================================
-PIN VERIFY
-===================================================== */
+/* ================= PIN VERIFY ================= */
 
 router.all("/pin/verify", async (req, res) => {
   try {
-
     const publisher = await validatePublisher(req);
     if (!publisher)
       return res.status(401).json({ status: "INVALID_KEY" });
@@ -228,53 +174,74 @@ router.all("/pin/verify", async (req, res) => {
       ...req.body
     };
 
-    if (!session_token || !otp)
-      return res.json({ status: "FAILED" });
-
-    const sRes = await pool.query(
+    const sessionRes = await pool.query(
       `SELECT * FROM pin_sessions WHERE session_token=$1`,
       [session_token]
     );
 
-    if (!sRes.rows.length)
-      return res.json({ status: "INVALID_SESSION" });
+    const session = sessionRes.rows[0];
 
-    const session = sRes.rows[0];
+    const publisherRequest = {
+      url: req.originalUrl,
+      method: req.method,
+      headers: captureHeaders(req),
+      params: req.query
+    };
 
+    let advertiserRequest = null;
+    let advertiserResponse = null;
     let status;
 
-    // ✅ TEST MODE
     if (TEST_MODE) {
       status = otp === TEST_OTP ? "VERIFIED" : "OTP_FAILED";
+
+      advertiserRequest = { test: true };
+      advertiserResponse = { response: status };
+
     } else {
-      // 👉 Real advertiser verify call (optional)
-      status = "OTP_FAILED"; // fallback
+      // 👉 real call
+      const advCall = await axios.get("VERIFY_URL", {
+        params: { otp }
+      });
+
+      advertiserRequest = { url: "VERIFY_URL" };
+      advertiserResponse = advCall.data;
+
+      const mapped = mapPinVerifyResponse(advertiserResponse);
+      status = mapped.isSuccess ? "VERIFIED" : "OTP_FAILED";
     }
 
-    const verifyToken = uuidv4();
+    const publisherResponse = mapPublisherResponse({
+      status,
+      session_token
+    });
 
-    // ✅ INSERT VERIFY ROW (SEPARATE)
     await pool.query(
       `INSERT INTO pin_sessions
       (offer_id, msisdn, session_token,
-       parent_session_token, publisher_id, status)
-      VALUES ($1,$2,$3,$4,$5,$6)`,
+       parent_session_token,
+       publisher_request, publisher_response,
+       advertiser_request, advertiser_response,
+       publisher_id, status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [
         session.offer_id,
         session.msisdn,
-        verifyToken,
+        uuidv4(),
         session_token,
+        publisherRequest,
+        publisherResponse,
+        advertiserRequest,
+        advertiserResponse,
         session.publisher_id,
         status
       ]
     );
 
-    return res.json({
-      status: status === "VERIFIED" ? "SUCCESS" : "FAILED"
-    });
+    return res.json(publisherResponse);
 
   } catch (err) {
-    console.error("PIN VERIFY ERROR:", err);
+    console.error(err);
     res.status(500).json({ status: "FAILED" });
   }
 });
