@@ -3,263 +3,177 @@ import pool from "../db.js";
 
 const router = express.Router();
 
-/*
-========================================
-REPORT API (FIXED WITHOUT BREAKING)
-========================================
-*/
+/* =====================================================
+HELPERS
+===================================================== */
 
-router.get("/report", async (req, res) => {
+function buildFilters(query, values) {
+  let where = [];
+
+  if (query.offer_id) {
+    values.push(query.offer_id);
+    where.push(`ps.offer_id = $${values.length}`);
+  }
+
+  if (query.publisher_id) {
+    values.push(query.publisher_id);
+    where.push(`ps.publisher_id = $${values.length}`);
+  }
+
+  if (query.geo) {
+    values.push(query.geo);
+    where.push(`ps.params->>'geo' = $${values.length}`);
+  }
+
+  if (query.carrier) {
+    values.push(query.carrier);
+    where.push(`ps.params->>'carrier' = $${values.length}`);
+  }
+
+  if (query.msisdn) {
+    values.push(`%${query.msisdn}%`);
+    where.push(`ps.msisdn ILIKE $${values.length}`);
+  }
+
+  if (query.status) {
+    values.push(query.status);
+    where.push(`ps.status = $${values.length}`);
+  }
+
+  if (query.from_date) {
+    values.push(query.from_date);
+    where.push(`ps.created_at >= $${values.length}`);
+  }
+
+  if (query.to_date) {
+    values.push(query.to_date + " 23:59:59");
+    where.push(`ps.created_at <= $${values.length}`);
+  }
+
+  return where.length ? `WHERE ${where.join(" AND ")}` : "";
+}
+
+/* =====================================================
+MAIN REPORT API
+===================================================== */
+
+router.get("/dashboard/report", async (req, res) => {
   try {
-    const {
-      from,
-      to,
-      advertiser,
-      publisher,
-      geo,
-      carrier,
-      offer_id
-    } = req.query;
 
-    let conditions = [];
-    let values = [];
-    let i = 1;
+    const values = [];
+    const whereClause = buildFilters(req.query, values);
 
-    // ✅ DATE FILTER (IST FIX)
-    if (from && to) {
-      conditions.push(`
-        (ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') >= $${i++}::date
-        AND (ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') < ($${i++}::date + INTERVAL '1 day')
-      `);
-      values.push(from, to);
-    }
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = parseInt(req.query.offset) || 0;
 
-    if (advertiser) {
-      conditions.push(`o.advertiser_id = $${i++}`);
-      values.push(advertiser);
-    }
+    values.push(limit);
+    values.push(offset);
 
-    if (publisher) {
-      conditions.push(`p.id = $${i++}`);
-      values.push(publisher);
-    }
-
-    if (geo) {
-      conditions.push(`COALESCE(ps.params->>'geo','') = $${i++}`);
-      values.push(geo);
-    }
-
-    if (carrier) {
-      conditions.push(`COALESCE(ps.params->>'carrier','') = $${i++}`);
-      values.push(carrier);
-    }
-
-    if (offer_id) {
-      conditions.push(`ps.offer_id = $${i++}`);
-      values.push(offer_id);
-    }
-
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-
-    const query = `
+    const dataQuery = `
       SELECT
-        DATE(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') AS date,
-
-        o.service_name AS offer_name,
-        o.cpa,
-        o.capping AS cap,
-
-        adv.name AS advertiser_name,
+        ps.id,
+        ps.offer_id,
+        o.name AS offer_name,
         p.name AS publisher_name,
+        adv.name AS advertiser_name,
 
-        COALESCE(ps.params->>'geo','NA') AS geo,
-        COALESCE(ps.params->>'carrier','NA') AS carrier,
+        ps.msisdn,
 
-        /* PIN REQUEST */
-        COUNT(*) FILTER (
-          WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
-        ) AS pin_req,
+        ps.params->>'geo' AS geo,
+        ps.params->>'carrier' AS carrier,
 
-        COUNT(DISTINCT ps.msisdn) FILTER (
-          WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
-        ) AS unique_req,
+        ps.publisher_request,
+        ps.publisher_response,
+        ps.advertiser_request,
+        ps.advertiser_response,
 
-        /* PIN SENT */
-        COUNT(*) FILTER (
-          WHERE ps.status = 'OTP_SENT'
-        ) AS pin_sent,
+        ps.status,
 
-        COUNT(DISTINCT ps.msisdn) FILTER (
-          WHERE ps.status = 'OTP_SENT'
-        ) AS unique_sent,
-
-        /* VERIFY REQUEST (FIXED) */
-        COUNT(*) FILTER (
-          WHERE ps.status IN ('VERIFY_REQUESTED','VERIFIED')
-        ) AS verify_req,
-
-        COUNT(DISTINCT ps.msisdn) FILTER (
-          WHERE ps.status IN ('VERIFY_REQUESTED','VERIFIED')
-        ) AS unique_verify,
-
-        /* VERIFIED (FIXED) */
-        COUNT(*) FILTER (
-          WHERE ps.status = 'VERIFIED'
-        ) AS verified,
-
-        /* CR (FIXED) */
-        ROUND(
-          CASE 
-            WHEN COUNT(*) FILTER (
-              WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
-            ) = 0 THEN 0
-            ELSE (
-              COUNT(*) FILTER (WHERE ps.status = 'VERIFIED')::decimal
-              /
-              COUNT(*) FILTER (
-                WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
-              )
-            ) * 100
-          END, 2
-        ) AS cr_percent,
-
-        /* REVENUE (FIXED) */
-        SUM(
-          CASE WHEN ps.status = 'VERIFIED' THEN o.cpa ELSE 0 END
-        ) AS revenue,
-
-        /* LAST EVENTS */
-        MAX(ps.created_at) FILTER (
-          WHERE ps.status IN ('OTP_SENT','OTP_FAILED')
-        ) AS last_pin_gen,
-
-        MAX(ps.created_at) FILTER (
-          WHERE ps.status IN ('VERIFIED','VERIFY_REQUESTED')
-        ) AS last_verification,
-
-        MAX(ps.created_at) FILTER (
-          WHERE ps.status = 'VERIFIED'
-        ) AS last_success_verification
+        (ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') AS created_at_ist
 
       FROM pin_sessions ps
-
       LEFT JOIN offers o ON ps.offer_id = o.id
-      LEFT JOIN advertisers adv ON o.advertiser_id = adv.id
       LEFT JOIN publishers p ON ps.publisher_id = p.id
+      LEFT JOIN advertisers adv ON o.advertiser_id = adv.id
 
-      ${where}
+      ${whereClause}
 
-      GROUP BY
-        DATE(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'),
-        o.service_name,
-        o.cpa,
-        o.capping,
-        adv.name,
-        p.name,
-        ps.params->>'geo',
-        ps.params->>'carrier'
-
-      ORDER BY date DESC
+      ORDER BY ps.created_at DESC
+      LIMIT $${values.length - 1}
+      OFFSET $${values.length};
     `;
 
-    const { rows } = await pool.query(query, values);
+    const countQuery = `
+      SELECT COUNT(*) FROM pin_sessions ps
+      LEFT JOIN offers o ON ps.offer_id = o.id
+      ${whereClause};
+    `;
 
-    res.json({
-      status: "SUCCESS",
-      data: rows
+    const [dataRes, countRes] = await Promise.all([
+      pool.query(dataQuery, values),
+      pool.query(countQuery, values.slice(0, values.length - 2))
+    ]);
+
+    return res.json({
+      success: true,
+      total: parseInt(countRes.rows[0].count),
+      data: dataRes.rows
     });
 
   } catch (err) {
     console.error("REPORT ERROR:", err);
-    res.status(500).json({ status: "ERROR" });
+    res.status(500).json({ success: false });
   }
 });
 
+/* =====================================================
+DROPDOWN FILTER DATA
+===================================================== */
 
-/*
-========================================
-FILTERS API (RESTORED ✅)
-========================================
-*/
-
-router.get("/filters", async (req, res) => {
+router.get("/dashboard/filters", async (req, res) => {
   try {
-    const advertisers = await pool.query(
-      `SELECT id, name FROM advertisers ORDER BY name`
-    );
 
-    const publishers = await pool.query(
-      `SELECT id, name FROM publishers ORDER BY name`
-    );
+    const [offers, publishers, advertisers, geos, carriers] = await Promise.all([
 
-    const geos = await pool.query(`
-      SELECT DISTINCT ps.params->>'geo' AS geo
-      FROM pin_sessions ps
-      WHERE ps.params->>'geo' IS NOT NULL
-    `);
+      pool.query(`SELECT id, name FROM offers ORDER BY name`),
 
-    const carriers = await pool.query(`
-      SELECT DISTINCT ps.params->>'carrier' AS carrier
-      FROM pin_sessions ps
-      WHERE ps.params->>'carrier' IS NOT NULL
-    `);
+      pool.query(`SELECT id, name FROM publishers ORDER BY name`),
 
-    const offers = await pool.query(`
-      SELECT id, service_name AS offer_name FROM offers
-    `);
+      pool.query(`
+        SELECT DISTINCT a.id, a.name
+        FROM advertisers a
+        JOIN offers o ON o.advertiser_id = a.id
+        ORDER BY a.name
+      `),
 
-    res.json({
-      advertisers: advertisers.rows,
-      publishers: publishers.rows,
-      geos: geos.rows.map(g => g.geo),
-      carriers: carriers.rows.map(c => c.carrier),
-      offers: offers.rows
+      pool.query(`
+        SELECT DISTINCT params->>'geo' AS geo
+        FROM pin_sessions
+        WHERE params->>'geo' IS NOT NULL
+      `),
+
+      pool.query(`
+        SELECT DISTINCT params->>'carrier' AS carrier
+        FROM pin_sessions
+        WHERE params->>'carrier' IS NOT NULL
+      `)
+
+    ]);
+
+    return res.json({
+      success: true,
+      filters: {
+        offers: offers.rows,
+        publishers: publishers.rows,
+        advertisers: advertisers.rows,
+        geos: geos.rows.map(r => r.geo),
+        carriers: carriers.rows.map(r => r.carrier)
+      }
     });
 
   } catch (err) {
     console.error("FILTER ERROR:", err);
-    res.status(500).json({ status: "ERROR" });
-  }
-});
-
-
-/*
-========================================
-REALTIME API (UNCHANGED)
-========================================
-*/
-
-router.get("/realtime", async (req, res) => {
-  try {
-
-    const stats = await pool.query(`
-      SELECT
-
-        COUNT(*) AS total_requests,
-
-        COUNT(*) FILTER (
-          WHERE status = 'OTP_SENT'
-        ) AS otp_sent,
-
-        COUNT(*) FILTER (
-          WHERE status = 'VERIFIED'
-        ) AS conversions,
-
-        COUNT(*) FILTER (
-          WHERE created_at >= NOW() - INTERVAL '1 hour'
-        ) AS last_hour_requests
-
-      FROM pin_sessions
-    `);
-
-    res.json({
-      status: "SUCCESS",
-      data: stats.rows[0]
-    });
-
-  } catch (err) {
-    console.error("REALTIME ERROR:", err);
-    res.status(500).json({ status: "ERROR" });
+    res.status(500).json({ success: false });
   }
 });
 
