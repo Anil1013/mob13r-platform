@@ -4,49 +4,59 @@ import pool from "../db.js";
 const router = express.Router();
 
 /* =====================================================
-HELPERS
+NORMALIZE QUERY
+===================================================== */
+
+function normalizeQuery(query) {
+  return {
+    offer_id: query.offer_id || query.offer,
+    publisher_id: query.publisher_id || query.publisher,
+    from_date: query.from_date || query.from,
+    to_date: query.to_date || query.to,
+    geo: query.geo,
+    carrier: query.carrier,
+    status: query.status,
+    msisdn: query.msisdn
+  };
+}
+
+/* =====================================================
+BUILD FILTERS
 ===================================================== */
 
 function buildFilters(query, values) {
   let where = [];
 
-  // ✅ OFFER
   if (query.offer_id) {
     values.push(query.offer_id);
     where.push(`ps.offer_id = $${values.length}`);
   }
 
-  // ✅ PUBLISHER
   if (query.publisher_id) {
     values.push(query.publisher_id);
     where.push(`ps.publisher_id = $${values.length}`);
   }
 
-  // ✅ GEO
   if (query.geo) {
     values.push(query.geo);
     where.push(`ps.params->>'geo' = $${values.length}`);
   }
 
-  // ✅ CARRIER
   if (query.carrier) {
     values.push(query.carrier);
     where.push(`ps.params->>'carrier' = $${values.length}`);
   }
 
-  // ✅ MSISDN SEARCH
   if (query.msisdn) {
     values.push(`%${query.msisdn}%`);
     where.push(`ps.msisdn ILIKE $${values.length}`);
   }
 
-  // ✅ STATUS
   if (query.status) {
     values.push(query.status);
     where.push(`ps.status = $${values.length}`);
   }
 
-  // 🔥 IMPORTANT: DATE FILTER (IST FIX)
   if (query.from_date) {
     values.push(query.from_date);
     where.push(`
@@ -65,39 +75,36 @@ function buildFilters(query, values) {
 }
 
 /* =====================================================
-MAIN REPORT API
+REPORT API
 ===================================================== */
 
 router.get("/dashboard/report", async (req, res) => {
   try {
 
+    const query = normalizeQuery(req.query);
+
     const values = [];
-    const whereClause = buildFilters(req.query, values);
+    let whereClause = buildFilters(query, values);
 
-    const limit = parseInt(req.query.limit) || 50;
-    const offset = parseInt(req.query.offset) || 0;
-
-    // 🔥 DEFAULT: TODAY DATA (IMPORTANT FIX)
-    let dateFilter = "";
-
-    if (!req.query.from_date && !req.query.to_date) {
-      dateFilter = `
+    // ✅ DEFAULT TODAY DATA
+    if (!whereClause) {
+      whereClause = `
         WHERE (ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date = CURRENT_DATE
       `;
     }
-
-    const finalWhere =
-      whereClause
-        ? whereClause
-        : dateFilter;
 
     const dataQuery = `
       SELECT
         ps.id,
         ps.offer_id,
-        o.name AS offer_name,
-        p.name AS publisher_name,
-        adv.name AS advertiser_name,
+
+        COALESCE(o.name, '') AS offer_name,
+        COALESCE(p.name, '') AS publisher_name,
+
+        -- 🔥 SAFE advertiser
+        COALESCE((
+          SELECT name FROM advertisers WHERE id = o.advertiser_id LIMIT 1
+        ), '') AS advertiser_name,
 
         ps.msisdn,
 
@@ -116,26 +123,22 @@ router.get("/dashboard/report", async (req, res) => {
       FROM pin_sessions ps
       LEFT JOIN offers o ON ps.offer_id = o.id
       LEFT JOIN publishers p ON ps.publisher_id = p.id
-      LEFT JOIN advertisers adv ON o.advertiser_id = adv.id
 
-      ${finalWhere}
+      ${whereClause}
 
       ORDER BY ps.created_at DESC
-      LIMIT ${limit}
-      OFFSET ${offset};
+      LIMIT 100;
     `;
 
     const countQuery = `
       SELECT COUNT(*) 
       FROM pin_sessions ps
       LEFT JOIN offers o ON ps.offer_id = o.id
-      ${finalWhere};
+      ${whereClause};
     `;
 
-    const [dataRes, countRes] = await Promise.all([
-      pool.query(dataQuery),
-      pool.query(countQuery)
-    ]);
+    const dataRes = await pool.query(dataQuery);
+    const countRes = await pool.query(countQuery);
 
     return res.json({
       success: true,
@@ -144,13 +147,19 @@ router.get("/dashboard/report", async (req, res) => {
     });
 
   } catch (err) {
+
     console.error("REPORT ERROR:", err);
-    res.status(500).json({ success: false });
+
+    // 🔥 SHOW REAL ERROR
+    return res.status(500).json({
+      success: false,
+      error: err.message
+    });
   }
 });
 
 /* =====================================================
-FILTER DROPDOWNS
+FILTERS API
 ===================================================== */
 
 router.get("/dashboard/filters", async (req, res) => {
@@ -162,11 +171,7 @@ router.get("/dashboard/filters", async (req, res) => {
 
       pool.query(`SELECT id, name FROM publishers ORDER BY name`),
 
-      pool.query(`
-        SELECT DISTINCT a.id, a.name
-        FROM advertisers a
-        JOIN offers o ON o.advertiser_id = a.id
-      `),
+      pool.query(`SELECT id, name FROM advertisers ORDER BY name`),
 
       pool.query(`
         SELECT DISTINCT params->>'geo' AS geo
@@ -195,7 +200,10 @@ router.get("/dashboard/filters", async (req, res) => {
 
   } catch (err) {
     console.error("FILTER ERROR:", err);
-    res.status(500).json({ success: false });
+    return res.status(500).json({
+      success: false,
+      error: err.message
+    });
   }
 });
 
