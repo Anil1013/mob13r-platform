@@ -14,9 +14,7 @@ function normalizeQuery(query) {
     from_date: query.from_date || query.from,
     to_date: query.to_date || query.to,
     geo: query.geo,
-    carrier: query.carrier,
-    status: query.status,
-    msisdn: query.msisdn
+    carrier: query.carrier
   };
 }
 
@@ -47,16 +45,6 @@ function buildFilters(query, values) {
     where.push(`ps.params->>'carrier' = $${values.length}`);
   }
 
-  if (query.msisdn) {
-    values.push(`%${query.msisdn}%`);
-    where.push(`ps.msisdn ILIKE $${values.length}`);
-  }
-
-  if (query.status) {
-    values.push(query.status);
-    where.push(`ps.status = $${values.length}`);
-  }
-
   if (query.from_date) {
     values.push(query.from_date);
     where.push(`
@@ -75,7 +63,7 @@ function buildFilters(query, values) {
 }
 
 /* =====================================================
-REPORT API
+REPORT API (🔥 AGGREGATED)
 ===================================================== */
 
 router.get("/dashboard/report", async (req, res) => {
@@ -86,55 +74,97 @@ router.get("/dashboard/report", async (req, res) => {
     const values = [];
     let whereClause = buildFilters(query, values);
 
-    // 👉 DEFAULT: TODAY DATA
+    // 👉 DEFAULT TODAY
     if (!whereClause) {
       whereClause = `
         WHERE (ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date = CURRENT_DATE
       `;
     }
 
+    /* =====================================================
+    MAIN AGGREGATED QUERY
+    ===================================================== */
+
     const dataQuery = `
       SELECT
-        ps.id,
-        ps.offer_id,
 
-        COALESCE(o.service_name, '') AS offer_name,
-        COALESCE(p.name, '') AS publisher_name,
-        COALESCE(a.name, '') AS advertiser_name,
+      DATE(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') as date,
 
-        ps.msisdn,
-        ps.params->>'geo' AS geo,
-        ps.params->>'carrier' AS carrier,
+      COALESCE(a.name,'') as advertiser_name,
+      COALESCE(o.service_name,'') as offer_name,
+      COALESCE(p.name,'') as publisher_name,
 
-        ps.publisher_request,
-        ps.publisher_response,
-        ps.advertiser_request,
-        ps.advertiser_response,
+      ps.params->>'geo' as geo,
+      ps.params->>'carrier' as carrier,
 
-        ps.status,
+      -- PIN REQUEST
+      COUNT(*) FILTER (WHERE ps.status IN ('OTP_REQUESTED','OTP_SENT')) as pin_req,
+      COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.status IN ('OTP_REQUESTED','OTP_SENT')) as unique_req,
 
-        (ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') AS created_at_ist
+      -- PIN SENT
+      COUNT(*) FILTER (WHERE ps.status='OTP_SENT') as pin_sent,
+      COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.status='OTP_SENT') as unique_sent,
+
+      -- VERIFY
+      COUNT(*) FILTER (WHERE ps.status IN ('VERIFY_REQUESTED','VERIFIED')) as verify_req,
+      COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.status IN ('VERIFY_REQUESTED','VERIFIED')) as unique_verify,
+
+      -- VERIFIED
+      COUNT(*) FILTER (WHERE ps.status='VERIFIED') as verified,
+
+      -- CR %
+      ROUND(
+        CASE 
+          WHEN COUNT(*) FILTER (WHERE ps.status='OTP_SENT') = 0 THEN 0
+          ELSE 
+            (COUNT(*) FILTER (WHERE ps.status='VERIFIED')::decimal /
+             COUNT(*) FILTER (WHERE ps.status='OTP_SENT')) * 100
+        END
+      ,2) as cr_percent,
+
+      -- REVENUE (CPA based)
+      ROUND(
+        COUNT(*) FILTER (WHERE ps.status='VERIFIED') * COALESCE(o.cpa,0)
+      ,2) as revenue,
+
+      -- LAST TIMES
+      MAX(ps.created_at) FILTER (WHERE ps.status='OTP_SENT') as last_pin_gen,
+      MAX(ps.created_at) FILTER (WHERE ps.status IN ('VERIFY_REQUESTED','VERIFIED')) as last_verification,
+      MAX(ps.created_at) FILTER (WHERE ps.status='VERIFIED') as last_success_verification
 
       FROM pin_sessions ps
+
       LEFT JOIN offers o ON ps.offer_id = o.id
       LEFT JOIN publishers p ON ps.publisher_id = p.id
       LEFT JOIN advertisers a ON a.id = o.advertiser_id
 
       ${whereClause}
 
-      ORDER BY ps.created_at DESC
-      LIMIT 100;
+      GROUP BY
+      date,
+      advertiser_name,
+      offer_name,
+      publisher_name,
+      geo,
+      carrier
+
+      ORDER BY date DESC;
     `;
+
+    /* =====================================================
+    COUNT QUERY (GROUP COUNT)
+    ===================================================== */
 
     const countQuery = `
-      SELECT COUNT(*) 
-      FROM pin_sessions ps
-      LEFT JOIN offers o ON ps.offer_id = o.id
-      LEFT JOIN advertisers a ON a.id = o.advertiser_id
-      ${whereClause};
+      SELECT COUNT(*) FROM (
+        SELECT 1
+        FROM pin_sessions ps
+        LEFT JOIN offers o ON ps.offer_id = o.id
+        ${whereClause}
+        GROUP BY DATE(ps.created_at)
+      ) t;
     `;
 
-    // ✅ SAFE EXECUTION (NO $1 ERROR)
     const dataRes = values.length
       ? await pool.query(dataQuery, values)
       : await pool.query(dataQuery);
@@ -143,34 +173,27 @@ router.get("/dashboard/report", async (req, res) => {
       ? await pool.query(countQuery, values)
       : await pool.query(countQuery);
 
-    const rows = dataRes.rows;
-
     /* =====================================================
-    SUMMARY CALCULATION (🔥 IMPORTANT)
+    SUMMARY (TOP CARDS)
     ===================================================== */
 
     let summary = {
       requests: 0,
       otp_sent: 0,
-      verified: 0,
-      failed: 0
+      verified: 0
     };
 
-    rows.forEach(r => {
-
-      summary.requests++;
-
-      if (r.status === "OTP_SENT") summary.otp_sent++;
-      if (r.status === "VERIFIED") summary.verified++;
-      if (r.status === "OTP_FAILED") summary.failed++;
-
+    dataRes.rows.forEach(r => {
+      summary.requests += Number(r.pin_req || 0);
+      summary.otp_sent += Number(r.pin_sent || 0);
+      summary.verified += Number(r.verified || 0);
     });
 
     return res.json({
       success: true,
       total: parseInt(countRes.rows[0].count),
       summary,
-      data: rows
+      data: dataRes.rows
     });
 
   } catch (err) {
