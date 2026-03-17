@@ -11,7 +11,6 @@ import {
 import { mapPublisherResponse } from "../services/pubResponseMapper.js";
 
 const router = express.Router();
-
 const AXIOS_TIMEOUT = 30000;
 
 // 🔥 TEST MODE
@@ -48,6 +47,10 @@ async function validatePublisher(req) {
   return r.rows[0] || null;
 }
 
+/* =====================================================
+DYNAMIC TEMPLATE ENGINE
+===================================================== */
+
 function resolveTemplate(value, runtime) {
   if (!value || typeof value !== "string") return value;
 
@@ -71,6 +74,10 @@ function buildPayload(params, runtime) {
 
   return payload;
 }
+
+/* =====================================================
+ADVERTISER CALL
+===================================================== */
 
 async function callAdvertiser(url, fallback, method, payload) {
   try {
@@ -163,7 +170,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     const payload = buildPayload(params, runtime);
     const sessionToken = uuidv4();
 
-    // 🔥 INSERT SEND ROW
+    // INSERT INITIAL ROW
     await pool.query(
       `INSERT INTO pin_sessions
       (offer_id,msisdn,session_token,params,publisher_request,publisher_id,status)
@@ -197,6 +204,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       };
 
       advertiserResponse = {
+        sessionKey: "TEST123",
+        token: "ABC999",
         message: "TEST MODE",
         response: "SUCCESS"
       };
@@ -288,7 +297,7 @@ router.all("/pin/verify", async (req, res) => {
     const params = {};
     paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
 
-    // 🔥 FIXED RUNTIME
+    // 🔥 UNIVERSAL RUNTIME (CORE FEATURE)
     const ua =
       session.params?.user_agent ||
       req.headers["user-agent"] ||
@@ -302,9 +311,12 @@ router.all("/pin/verify", async (req, res) => {
 
     const advData = session.advertiser_response || {};
 
+    // 🔥 FLATTEN ADV RESPONSE (important)
+    const flatAdvData = Object.assign({}, advData);
+
     const runtime = {
       ...session.params,
-      ...advData, // 🔥 ADV CHAINING
+      ...flatAdvData, // 🔥 AUTO PASS ALL ADV DATA
 
       msisdn: session.msisdn,
       otp,
@@ -320,7 +332,7 @@ router.all("/pin/verify", async (req, res) => {
     const payload = buildPayload(params, runtime);
     const verifyToken = uuidv4();
 
-    // 🔥 INSERT VERIFY ROW
+    // INSERT VERIFY ROW
     await pool.query(
       `INSERT INTO pin_sessions
        (offer_id,msisdn,session_token,parent_session_token,params,publisher_request,publisher_id,status)
@@ -346,6 +358,7 @@ router.all("/pin/verify", async (req, res) => {
     let status;
 
     if (TEST_MODE) {
+
       status = otp === TEST_OTP ? "VERIFIED" : "OTP_FAILED";
 
       advertiserRequest = {
@@ -356,10 +369,7 @@ router.all("/pin/verify", async (req, res) => {
 
       advertiserResponse = {
         response: status === "VERIFIED" ? "SUCCESS" : "FAIL",
-        errorMessage:
-          status === "VERIFIED"
-            ? "TEST SUCCESS"
-            : "TEST OTP INVALID"
+        message: "TEST MODE"
       };
 
     } else {
