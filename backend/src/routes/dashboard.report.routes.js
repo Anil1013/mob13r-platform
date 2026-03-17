@@ -141,13 +141,15 @@ router.get("/dashboard/report", async (req, res) => {
       ${whereClause}
 
       GROUP BY
-     DATE(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'),
-      a.name,
-       o.service_name,
-        p.name,
-        ps.params->>'geo',
-        ps.params->>'carrier'
-
+     GROUP BY
+DATE(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'),
+     a.name,
+     o.service_name,
+      p.name,
+      ps.params->>'geo',
+      ps.params->>'carrier',
+      o.cpa
+        
       ORDER BY date DESC;
     `;
 
