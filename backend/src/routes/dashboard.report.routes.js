@@ -86,7 +86,6 @@ router.get("/dashboard/report", async (req, res) => {
     const values = [];
     let whereClause = buildFilters(query, values);
 
-    // ✅ DEFAULT TODAY DATA
     if (!whereClause) {
       whereClause = `
         WHERE (ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date = CURRENT_DATE
@@ -98,10 +97,11 @@ router.get("/dashboard/report", async (req, res) => {
         ps.id,
         ps.offer_id,
 
-        COALESCE(o.name, '') AS offer_name,
+        -- ✅ FIXED HERE
+        COALESCE(o.service_name, '') AS offer_name,
+
         COALESCE(p.name, '') AS publisher_name,
 
-        -- 🔥 SAFE advertiser
         COALESCE((
           SELECT name FROM advertisers WHERE id = o.advertiser_id LIMIT 1
         ), '') AS advertiser_name,
@@ -147,10 +147,8 @@ router.get("/dashboard/report", async (req, res) => {
     });
 
   } catch (err) {
-
     console.error("REPORT ERROR:", err);
 
-    // 🔥 SHOW REAL ERROR
     return res.status(500).json({
       success: false,
       error: err.message
@@ -167,7 +165,8 @@ router.get("/dashboard/filters", async (req, res) => {
 
     const [offers, publishers, advertisers, geos, carriers] = await Promise.all([
 
-      pool.query(`SELECT id, name FROM offers ORDER BY name`),
+      // ✅ FIX HERE ALSO
+      pool.query(`SELECT id, service_name AS name FROM offers ORDER BY service_name`),
 
       pool.query(`SELECT id, name FROM publishers ORDER BY name`),
 
