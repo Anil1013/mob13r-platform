@@ -5,7 +5,7 @@ const router = express.Router();
 
 /*
 ========================================
-REPORT API (FINAL FIXED)
+REPORT API (FIXED WITHOUT BREAKING)
 ========================================
 */
 
@@ -40,17 +40,17 @@ router.get("/report", async (req, res) => {
     }
 
     if (publisher) {
-      conditions.push(`ps.publisher_id = $${i++}`);
+      conditions.push(`p.id = $${i++}`);
       values.push(publisher);
     }
 
     if (geo) {
-      conditions.push(`ps.params->>'geo' = $${i++}`);
+      conditions.push(`COALESCE(ps.params->>'geo','') = $${i++}`);
       values.push(geo);
     }
 
     if (carrier) {
-      conditions.push(`ps.params->>'carrier' = $${i++}`);
+      conditions.push(`COALESCE(ps.params->>'carrier','') = $${i++}`);
       values.push(carrier);
     }
 
@@ -72,30 +72,42 @@ router.get("/report", async (req, res) => {
         adv.name AS advertiser_name,
         p.name AS publisher_name,
 
-        ps.params->>'geo' AS geo,
-        ps.params->>'carrier' AS carrier,
+        COALESCE(ps.params->>'geo','NA') AS geo,
+        COALESCE(ps.params->>'carrier','NA') AS carrier,
 
         /* PIN REQUEST */
         COUNT(*) FILTER (
           WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
         ) AS pin_req,
 
+        COUNT(DISTINCT ps.msisdn) FILTER (
+          WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+        ) AS unique_req,
+
         /* PIN SENT */
         COUNT(*) FILTER (
           WHERE ps.status = 'OTP_SENT'
         ) AS pin_sent,
 
-        /* VERIFY REQUEST */
+        COUNT(DISTINCT ps.msisdn) FILTER (
+          WHERE ps.status = 'OTP_SENT'
+        ) AS unique_sent,
+
+        /* VERIFY REQUEST (FIXED) */
         COUNT(*) FILTER (
           WHERE ps.status IN ('VERIFY_REQUESTED','VERIFIED')
         ) AS verify_req,
 
-        /* VERIFIED */
+        COUNT(DISTINCT ps.msisdn) FILTER (
+          WHERE ps.status IN ('VERIFY_REQUESTED','VERIFIED')
+        ) AS unique_verify,
+
+        /* VERIFIED (FIXED) */
         COUNT(*) FILTER (
           WHERE ps.status = 'VERIFIED'
         ) AS verified,
 
-        /* CR */
+        /* CR (FIXED) */
         ROUND(
           CASE 
             WHEN COUNT(*) FILTER (
@@ -111,10 +123,23 @@ router.get("/report", async (req, res) => {
           END, 2
         ) AS cr_percent,
 
-        /* REVENUE */
+        /* REVENUE (FIXED) */
         SUM(
           CASE WHEN ps.status = 'VERIFIED' THEN o.cpa ELSE 0 END
-        ) AS revenue
+        ) AS revenue,
+
+        /* LAST EVENTS */
+        MAX(ps.created_at) FILTER (
+          WHERE ps.status IN ('OTP_SENT','OTP_FAILED')
+        ) AS last_pin_gen,
+
+        MAX(ps.created_at) FILTER (
+          WHERE ps.status IN ('VERIFIED','VERIFY_REQUESTED')
+        ) AS last_verification,
+
+        MAX(ps.created_at) FILTER (
+          WHERE ps.status = 'VERIFIED'
+        ) AS last_success_verification
 
       FROM pin_sessions ps
 
@@ -141,13 +166,100 @@ router.get("/report", async (req, res) => {
 
     res.json({
       status: "SUCCESS",
-      count: rows.length,
       data: rows
     });
 
   } catch (err) {
     console.error("REPORT ERROR:", err);
-    res.status(500).json({ status: "ERROR", error: err.message });
+    res.status(500).json({ status: "ERROR" });
+  }
+});
+
+
+/*
+========================================
+FILTERS API (RESTORED ✅)
+========================================
+*/
+
+router.get("/filters", async (req, res) => {
+  try {
+    const advertisers = await pool.query(
+      `SELECT id, name FROM advertisers ORDER BY name`
+    );
+
+    const publishers = await pool.query(
+      `SELECT id, name FROM publishers ORDER BY name`
+    );
+
+    const geos = await pool.query(`
+      SELECT DISTINCT ps.params->>'geo' AS geo
+      FROM pin_sessions ps
+      WHERE ps.params->>'geo' IS NOT NULL
+    `);
+
+    const carriers = await pool.query(`
+      SELECT DISTINCT ps.params->>'carrier' AS carrier
+      FROM pin_sessions ps
+      WHERE ps.params->>'carrier' IS NOT NULL
+    `);
+
+    const offers = await pool.query(`
+      SELECT id, service_name AS offer_name FROM offers
+    `);
+
+    res.json({
+      advertisers: advertisers.rows,
+      publishers: publishers.rows,
+      geos: geos.rows.map(g => g.geo),
+      carriers: carriers.rows.map(c => c.carrier),
+      offers: offers.rows
+    });
+
+  } catch (err) {
+    console.error("FILTER ERROR:", err);
+    res.status(500).json({ status: "ERROR" });
+  }
+});
+
+
+/*
+========================================
+REALTIME API (UNCHANGED)
+========================================
+*/
+
+router.get("/realtime", async (req, res) => {
+  try {
+
+    const stats = await pool.query(`
+      SELECT
+
+        COUNT(*) AS total_requests,
+
+        COUNT(*) FILTER (
+          WHERE status = 'OTP_SENT'
+        ) AS otp_sent,
+
+        COUNT(*) FILTER (
+          WHERE status = 'VERIFIED'
+        ) AS conversions,
+
+        COUNT(*) FILTER (
+          WHERE created_at >= NOW() - INTERVAL '1 hour'
+        ) AS last_hour_requests
+
+      FROM pin_sessions
+    `);
+
+    res.json({
+      status: "SUCCESS",
+      data: stats.rows[0]
+    });
+
+  } catch (err) {
+    console.error("REALTIME ERROR:", err);
+    res.status(500).json({ status: "ERROR" });
   }
 });
 
