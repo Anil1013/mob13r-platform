@@ -137,8 +137,13 @@ router.get("/dashboard/report", async (req, res) => {
       ${whereClause};
     `;
 
-    const dataRes = await pool.query(dataQuery);
-    const countRes = await pool.query(countQuery);
+    const dataRes = values.length
+  ? await pool.query(dataQuery, values)
+  : await pool.query(dataQuery);
+
+const countRes = values.length
+  ? await pool.query(countQuery, values)
+  : await pool.query(countQuery);
 
     return res.json({
       success: true,
