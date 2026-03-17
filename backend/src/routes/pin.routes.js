@@ -14,7 +14,7 @@ const router = express.Router();
 
 const AXIOS_TIMEOUT = 30000;
 
-// ✅ TEST MODE
+// 🔥 TEST MODE
 const TEST_MODE = true;
 const TEST_OTP = "1234";
 
@@ -41,9 +41,7 @@ async function validatePublisher(req) {
 
   const r = await pool.query(
     `SELECT * FROM publishers
-     WHERE api_key=$1
-     AND status='active'
-     LIMIT 1`,
+     WHERE api_key=$1 AND status='active' LIMIT 1`,
     [apiKey]
   );
 
@@ -116,7 +114,6 @@ PIN SEND
 ===================================================== */
 
 router.all("/pin/send/:offer_id", async (req, res) => {
-
   try {
 
     const publisher = await validatePublisher(req);
@@ -155,7 +152,10 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     const runtime = {
       ...incoming,
       ip: incoming.ip || req.ip,
+      user_ip: incoming.ip || req.ip,
       user_agent: ua,
+      ua,
+      userAgent: ua,
       publisher_id: publisher.id,
       offer_id: offer.id
     };
@@ -163,31 +163,43 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     const payload = buildPayload(params, runtime);
     const sessionToken = uuidv4();
 
-    const publisherRequest = {
-      url: req.originalUrl,
-      method: req.method,
-      headers: captureHeaders(req),
-      params: incoming
-    };
+    // 🔥 INSERT SEND ROW
+    await pool.query(
+      `INSERT INTO pin_sessions
+      (offer_id,msisdn,session_token,params,publisher_request,publisher_id,status)
+      VALUES ($1,$2,$3,$4,$5,$6,'OTP_REQUESTED')`,
+      [
+        offer.id,
+        incoming.msisdn,
+        sessionToken,
+        runtime,
+        {
+          url: req.originalUrl,
+          method: req.method,
+          headers: captureHeaders(req),
+          params: incoming
+        },
+        publisher.id
+      ]
+    );
 
     let advertiserRequest;
     let advertiserResponse;
     let status;
 
     if (TEST_MODE) {
+      status = "OTP_SENT";
 
       advertiserRequest = {
-        url: params.pin_send_url,
-        method: "GET",
+        url: params.pin_send_url || "TEST_URL",
+        method: params.method || "GET",
         payload
       };
 
       advertiserResponse = {
-        response: "SUCCESS",
-        message: "TEST MODE"
+        message: "TEST MODE",
+        response: "SUCCESS"
       };
-
-      status = "OTP_SENT";
 
     } else {
 
@@ -216,22 +228,18 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     });
 
     await pool.query(
-      `INSERT INTO pin_sessions
-      (offer_id, msisdn, session_token,
-       publisher_request, publisher_response,
-       advertiser_request, advertiser_response,
-       publisher_id, status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      `UPDATE pin_sessions
+       SET advertiser_request=$1,
+           advertiser_response=$2,
+           publisher_response=$3,
+           status=$4
+       WHERE session_token=$5`,
       [
-        offer.id,
-        incoming.msisdn,
-        sessionToken,
-        publisherRequest,
-        publisherResponse,
         advertiserRequest,
         advertiserResponse,
-        publisher.id,
-        status
+        publisherResponse,
+        status,
+        sessionToken
       ]
     );
 
@@ -239,9 +247,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
   } catch (err) {
     console.error("PIN SEND ERROR:", err);
-    res.status(500).json({ status: "FAILED" });
+    return res.status(500).json({ status: "FAILED" });
   }
-
 });
 
 /* =====================================================
@@ -249,7 +256,6 @@ PIN VERIFY
 ===================================================== */
 
 router.all("/pin/verify", async (req, res) => {
-
   try {
 
     const publisher = await validatePublisher(req);
@@ -282,28 +288,68 @@ router.all("/pin/verify", async (req, res) => {
     const params = {};
     paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
 
-    const payload = buildPayload(params, {
-      ...session.params,
-      otp
-    });
+    // 🔥 FIXED RUNTIME
+    const ua =
+      session.params?.user_agent ||
+      req.headers["user-agent"] ||
+      "";
 
-    const publisherRequest = {
-      url: req.originalUrl,
-      method: req.method,
-      headers: captureHeaders(req),
-      params: req.query
+    const ip =
+      session.params?.ip ||
+      req.headers["x-forwarded-for"] ||
+      req.ip ||
+      "";
+
+    const advData = session.advertiser_response || {};
+
+    const runtime = {
+      ...session.params,
+      ...advData, // 🔥 ADV CHAINING
+
+      msisdn: session.msisdn,
+      otp,
+
+      ip,
+      user_ip: ip,
+
+      user_agent: ua,
+      ua,
+      userAgent: ua
     };
+
+    const payload = buildPayload(params, runtime);
+    const verifyToken = uuidv4();
+
+    // 🔥 INSERT VERIFY ROW
+    await pool.query(
+      `INSERT INTO pin_sessions
+       (offer_id,msisdn,session_token,parent_session_token,params,publisher_request,publisher_id,status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'VERIFY_REQUESTED')`,
+      [
+        session.offer_id,
+        session.msisdn,
+        verifyToken,
+        session_token,
+        runtime,
+        {
+          url: req.originalUrl,
+          method: req.method,
+          headers: captureHeaders(req),
+          params: { ...req.query, otp }
+        },
+        session.publisher_id
+      ]
+    );
 
     let advertiserRequest;
     let advertiserResponse;
     let status;
 
     if (TEST_MODE) {
-
       status = otp === TEST_OTP ? "VERIFIED" : "OTP_FAILED";
 
       advertiserRequest = {
-        url: params.verify_pin_url,
+        url: params.verify_pin_url || "TEST_URL",
         method: params.verify_method || "GET",
         payload
       };
@@ -343,24 +389,18 @@ router.all("/pin/verify", async (req, res) => {
     });
 
     await pool.query(
-      `INSERT INTO pin_sessions
-      (offer_id, msisdn, session_token,
-       parent_session_token,
-       publisher_request, publisher_response,
-       advertiser_request, advertiser_response,
-       publisher_id, status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      `UPDATE pin_sessions
+       SET advertiser_request=$1,
+           advertiser_response=$2,
+           publisher_response=$3,
+           status=$4
+       WHERE session_token=$5`,
       [
-        session.offer_id,
-        session.msisdn,
-        uuidv4(),
-        session_token,
-        publisherRequest,
-        publisherResponse,
         advertiserRequest,
         advertiserResponse,
-        session.publisher_id,
-        status
+        publisherResponse,
+        status,
+        verifyToken
       ]
     );
 
@@ -368,9 +408,8 @@ router.all("/pin/verify", async (req, res) => {
 
   } catch (err) {
     console.error("PIN VERIFY ERROR:", err);
-    res.status(500).json({ status: "FAILED" });
+    return res.status(500).json({ status: "FAILED" });
   }
-
 });
 
 export default router;
