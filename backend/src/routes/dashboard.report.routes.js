@@ -5,18 +5,12 @@ const router = express.Router();
 
 router.get("/report", async (req, res) => {
   try {
-    const {
-      offer_id,
-      publisher_id,
-      from_date,
-      to_date
-    } = req.query;
+    const { offer_id, publisher_id, from_date, to_date } = req.query;
 
     let conditions = [];
     let values = [];
     let i = 1;
 
-    // Filters
     if (offer_id) {
       conditions.push(`ps.offer_id = $${i++}`);
       values.push(offer_id);
@@ -27,15 +21,16 @@ router.get("/report", async (req, res) => {
       values.push(publisher_id);
     }
 
+    // ✅ FIXED DATE FILTER
     if (from_date) {
-  conditions.push(`ps.created_at >= $${i++}::date`);
-  values.push(from_date);
-}
+      conditions.push(`ps.created_at >= $${i++}::date`);
+      values.push(from_date);
+    }
 
-if (to_date) {
-  conditions.push(`ps.created_at < ($${i++}::date + interval '1 day')`);
-  values.push(to_date);
-}
+    if (to_date) {
+      conditions.push(`ps.created_at < ($${i++}::date + interval '1 day')`);
+      values.push(to_date);
+    }
 
     const whereClause = conditions.length
       ? `WHERE ${conditions.join(" AND ")}`
@@ -47,11 +42,11 @@ if (to_date) {
         o.name AS offer_name,
         ps.publisher_id,
 
-        COUNT(*) AS total_requests,
+        COUNT(*) AS requests,
 
+        COUNT(*) FILTER (WHERE ps.status = 'OTP_SENT') AS otp_sent,
         COUNT(*) FILTER (WHERE ps.status = 'VERIFIED') AS verified,
-        COUNT(*) FILTER (WHERE ps.status = 'FAILED') AS failed,
-        COUNT(*) FILTER (WHERE ps.status = 'OTP_INVALID') AS otp_invalid,
+        COUNT(*) FILTER (WHERE ps.status = 'OTP_FAILED') AS failed,
 
         COALESCE(MAX(o.cpa), 0) AS cpa,
 
@@ -67,8 +62,11 @@ if (to_date) {
         o.name,
         ps.publisher_id
 
-      ORDER BY total_requests DESC
+      ORDER BY requests DESC
     `;
+
+    console.log("QUERY:", query);
+    console.log("VALUES:", values);
 
     const { rows } = await pool.query(query, values);
 
