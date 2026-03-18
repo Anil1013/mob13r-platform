@@ -28,14 +28,14 @@ router.get("/report", async (req, res) => {
     }
 
     if (from_date) {
-      conditions.push(`DATE(ps.created_at) >= $${i++}`);
-      values.push(from_date);
-    }
+  conditions.push(`ps.created_at >= $${i++}::date`);
+  values.push(from_date);
+}
 
-    if (to_date) {
-      conditions.push(`DATE(ps.created_at) <= $${i++}`);
-      values.push(to_date);
-    }
+if (to_date) {
+  conditions.push(`ps.created_at < ($${i++}::date + interval '1 day')`);
+  values.push(to_date);
+}
 
     const whereClause = conditions.length
       ? `WHERE ${conditions.join(" AND ")}`
