@@ -5,7 +5,7 @@ const router = express.Router();
 
 /*
 =====================================================
-DASHBOARD REPORT (FIXED TIMEZONE + FILTER)
+DASHBOARD REPORT (FINAL FIXED)
 =====================================================
 */
 
@@ -18,42 +18,43 @@ router.get("/dashboard/report", async (req, res) => {
   let conditions = [];
   let values = [];
 
-  // ✅ IST DATE RANGE FIX
+  // ✅ DATE FILTER (IST)
   if (from) {
-   values.push(`${from} 00:00:00`);
+   values.push(from);
    conditions.push(`
-   (ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') >= $${values.length}
+    DATE(ps.created_at AT TIME ZONE 'Asia/Kolkata') >= $${values.length}
    `);
   }
 
   if (to) {
-   values.push(`${to} 23:59:59`);
+   values.push(to);
    conditions.push(`
-   (ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') <= $${values.length}
+    DATE(ps.created_at AT TIME ZONE 'Asia/Kolkata') <= $${values.length}
    `);
   }
 
-  if (geo) {
+  // ✅ DROPDOWN FILTERS (IGNORE EMPTY = ALL)
+  if (geo && geo !== "") {
    values.push(geo);
    conditions.push(`ps.params->>'geo' = $${values.length}`);
   }
 
-  if (carrier) {
+  if (carrier && carrier !== "") {
    values.push(carrier);
    conditions.push(`ps.params->>'carrier' = $${values.length}`);
   }
 
-  if (publisher) {
+  if (publisher && publisher !== "") {
    values.push(publisher);
    conditions.push(`ps.publisher_id = $${values.length}`);
   }
 
-  if (offer_id) {
+  if (offer_id && offer_id !== "") {
    values.push(offer_id);
    conditions.push(`ps.offer_id = $${values.length}`);
   }
 
-  if (advertiser) {
+  if (advertiser && advertiser !== "") {
    values.push(advertiser);
    conditions.push(`o.advertiser_id = $${values.length}`);
   }
@@ -67,7 +68,7 @@ router.get("/dashboard/report", async (req, res) => {
 
 SELECT
 
-DATE(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') AS date,
+DATE(ps.created_at AT TIME ZONE 'Asia/Kolkata') AS date,
 
 COALESCE(a.name,'Unknown Advertiser') AS advertiser_name,
 COALESCE(o.service_name,'Unknown Offer') AS offer_name,
@@ -119,13 +120,14 @@ COUNT(*) FILTER (WHERE ps.parent_session_token IS NOT NULL),0
 
 COUNT(*) FILTER (WHERE ps.status='VERIFIED') * o.cpa AS revenue,
 
-MAX(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+-- ✅ TIMEZONE FIXED (NO DOUBLE CONVERSION)
+MAX(ps.created_at AT TIME ZONE 'Asia/Kolkata')
 FILTER (WHERE ps.status='OTP_SENT') AS last_pin_gen,
 
-MAX(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+MAX(ps.created_at AT TIME ZONE 'Asia/Kolkata')
 FILTER (WHERE ps.parent_session_token IS NOT NULL) AS last_verification,
 
-MAX(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+MAX(ps.created_at AT TIME ZONE 'Asia/Kolkata')
 FILTER (WHERE ps.status='VERIFIED') AS last_success_verification
 
 FROM pin_sessions ps
@@ -137,7 +139,7 @@ LEFT JOIN advertisers a ON a.id = o.advertiser_id
 ${where}
 
 GROUP BY
-DATE(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'),
+DATE(ps.created_at AT TIME ZONE 'Asia/Kolkata'),
 a.name,
 o.service_name,
 p.name,
@@ -169,9 +171,10 @@ ORDER BY date DESC
 
 });
 
+
 /*
 =====================================================
-REALTIME FIX (IST)
+REALTIME (FINAL FIXED)
 =====================================================
 */
 
@@ -196,7 +199,7 @@ WHERE status='VERIFIED'
 ) AS conversions,
 
 COUNT(*) FILTER (
-WHERE (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+WHERE (created_at AT TIME ZONE 'Asia/Kolkata')
 >= (NOW() AT TIME ZONE 'Asia/Kolkata') - INTERVAL '1 hour'
 ) AS last_hour_requests
 
