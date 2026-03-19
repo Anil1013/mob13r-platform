@@ -5,7 +5,7 @@ const router = express.Router();
 
 /*
 =====================================================
-DASHBOARD REPORT (FINAL FIXED)
+DASHBOARD REPORT (PURE UTC)
 =====================================================
 */
 
@@ -18,22 +18,22 @@ router.get("/dashboard/report", async (req, res) => {
   let conditions = [];
   let values = [];
 
-  // ✅ DATE FILTER (IST)
+  // ✅ DATE FILTER (UTC)
   if (from) {
    values.push(from);
    conditions.push(`
-    DATE(ps.created_at AT TIME ZONE 'Asia/Kolkata') >= $${values.length}
+    DATE(ps.created_at) >= $${values.length}
    `);
   }
 
   if (to) {
    values.push(to);
    conditions.push(`
-    DATE(ps.created_at AT TIME ZONE 'Asia/Kolkata') <= $${values.length}
+    DATE(ps.created_at) <= $${values.length}
    `);
   }
 
-  // ✅ DROPDOWN FILTERS (IGNORE EMPTY = ALL)
+  // ✅ DROPDOWN FILTERS
   if (geo && geo !== "") {
    values.push(geo);
    conditions.push(`ps.params->>'geo' = $${values.length}`);
@@ -68,7 +68,7 @@ router.get("/dashboard/report", async (req, res) => {
 
 SELECT
 
-DATE(ps.created_at AT TIME ZONE 'Asia/Kolkata') AS date,
+DATE(ps.created_at) AS date,
 
 COALESCE(a.name,'Unknown Advertiser') AS advertiser_name,
 COALESCE(o.service_name,'Unknown Offer') AS offer_name,
@@ -120,14 +120,14 @@ COUNT(*) FILTER (WHERE ps.parent_session_token IS NOT NULL),0
 
 COUNT(*) FILTER (WHERE ps.status='VERIFIED') * o.cpa AS revenue,
 
--- ✅ TIMEZONE FIXED (NO DOUBLE CONVERSION)
-MAX(ps.created_at AT TIME ZONE 'Asia/Kolkata')
+-- ✅ PURE UTC TIMES
+MAX(ps.created_at)
 FILTER (WHERE ps.status='OTP_SENT') AS last_pin_gen,
 
-MAX(ps.created_at AT TIME ZONE 'Asia/Kolkata')
+MAX(ps.created_at)
 FILTER (WHERE ps.parent_session_token IS NOT NULL) AS last_verification,
 
-MAX(ps.created_at AT TIME ZONE 'Asia/Kolkata')
+MAX(ps.created_at)
 FILTER (WHERE ps.status='VERIFIED') AS last_success_verification
 
 FROM pin_sessions ps
@@ -139,7 +139,7 @@ LEFT JOIN advertisers a ON a.id = o.advertiser_id
 ${where}
 
 GROUP BY
-DATE(ps.created_at AT TIME ZONE 'Asia/Kolkata'),
+DATE(ps.created_at),
 a.name,
 o.service_name,
 p.name,
@@ -174,7 +174,7 @@ ORDER BY date DESC
 
 /*
 =====================================================
-REALTIME (FINAL FIXED)
+REALTIME (PURE UTC)
 =====================================================
 */
 
@@ -199,8 +199,7 @@ WHERE status='VERIFIED'
 ) AS conversions,
 
 COUNT(*) FILTER (
-WHERE (created_at AT TIME ZONE 'Asia/Kolkata')
->= (NOW() AT TIME ZONE 'Asia/Kolkata') - INTERVAL '1 hour'
+WHERE created_at >= NOW() - INTERVAL '1 hour'
 ) AS last_hour_requests
 
 FROM pin_sessions
@@ -223,6 +222,13 @@ FROM pin_sessions
  }
 
 });
+
+
+/*
+=====================================================
+FILTERS (UNCHANGED)
+=====================================================
+*/
 
 router.get("/dashboard/filters", async (req, res) => {
 
@@ -264,16 +270,12 @@ router.get("/dashboard/filters", async (req, res) => {
   res.json({
 
     advertisers: advertisers.rows || [],
-
     publishers: publishers.rows || [],
-
     offers: offers.rows.map(o => ({
       id: o.id,
       offer_name: o.service_name
     })),
-
     geos: geos.rows.map(g => g.geo),
-
     carriers: carriers.rows.map(c => c.carrier)
 
   });
