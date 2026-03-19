@@ -4,204 +4,295 @@ import pool from "../db.js";
 const router = express.Router();
 
 /*
-==================================================
+=====================================================
 DASHBOARD REPORT
-==================================================
+=====================================================
 */
 
 router.get("/dashboard/report", async (req, res) => {
 
-  try {
+ try {
 
-    const {
-      from,
-      to,
-      advertiser,
-      publisher,
-      offer,
-      geo,
-      carrier
-    } = req.query;
+  const { from, to, geo, carrier, publisher, offer_id, advertiser } = req.query;
 
-    let filters = [];
-    let values = [];
-    let i = 1;
+  let conditions = [];
+  let values = [];
 
-    /* DATE FILTER */
+  if (from) {
+   values.push(from);
+   conditions.push(`ps.created_at >= $${values.length}`);
+  }
 
-    if (from) {
-      filters.push(`ps.created_at >= $${i++}`);
-      values.push(from + " 00:00:00");
-    }
+  if (to) {
+   values.push(to);
+   conditions.push(`ps.created_at <= $${values.length}`);
+  }
 
-    if (to) {
-      filters.push(`ps.created_at <= $${i++}`);
-      values.push(to + " 23:59:59");
-    }
+  if (geo) {
+   values.push(geo);
+   conditions.push(`ps.params->>'geo' = $${values.length}`);
+  }
 
-    /* ADVERTISER */
+  if (carrier) {
+   values.push(carrier);
+   conditions.push(`ps.params->>'carrier' = $${values.length}`);
+  }
 
-    if (advertiser) {
-      filters.push(`ps.advertiser_id = $${i++}`);
-      values.push(advertiser);
-    }
+  if (publisher) {
+   values.push(publisher);
+   conditions.push(`ps.publisher_id = $${values.length}`);
+  }
 
-    /* PUBLISHER */
+  if (offer_id) {
+   values.push(offer_id);
+   conditions.push(`ps.offer_id = $${values.length}`);
+  }
 
-    if (publisher) {
-      filters.push(`ps.publisher_id = $${i++}`);
-      values.push(publisher);
-    }
+  if (advertiser) {
+   values.push(advertiser);
+   conditions.push(`o.advertiser_id = $${values.length}`);
+  }
 
-    /* OFFER */
+  const where =
+   conditions.length > 0
+    ? "WHERE " + conditions.join(" AND ")
+    : "";
 
-    if (offer) {
-      filters.push(`ps.offer_id = $${i++}`);
-      values.push(offer);
-    }
-
-    /* GEO */
-
-    if (geo) {
-      filters.push(`o.geo = $${i++}`);
-      values.push(geo);
-    }
-
-    /* CARRIER */
-
-    if (carrier) {
-      filters.push(`o.carrier = $${i++}`);
-      values.push(carrier);
-    }
-
-    const whereClause =
-      filters.length > 0
-        ? `WHERE ${filters.join(" AND ")}`
-        : "";
-
-    const query = `
+  const query = `
 
 SELECT
 
-DATE(ps.created_at) as date,
+DATE(ps.created_at) AS date,
 
-CASE
-WHEN o.service_name IS NULL OR o.service_name=''
-THEN 'Offer #' || ps.offer_id
-ELSE o.service_name
-END as offer_name,
+COALESCE(a.name,'Unknown Advertiser') AS advertiser_name,
+COALESCE(o.service_name,'Unknown Offer') AS offer_name,
+COALESCE(p.name,'Unknown Publisher') AS publisher_name,
 
-COALESCE(pub.name,'Unknown Publisher') as publisher_name,
-
-o.geo,
-o.carrier,
+COALESCE(ps.params->>'geo','Unknown') AS geo,
+COALESCE(ps.params->>'carrier','Unknown') AS carrier,
 
 o.cpa,
-o.daily_cap as cap,
+o.capping AS cap,
 
-COUNT(*) as pin_req,
-
-COUNT(DISTINCT ps.msisdn) as unique_req,
-
-COUNT(*) FILTER (WHERE ps.status='OTP_SENT')
-as pin_sent,
+COUNT(*) FILTER (
+WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+) AS pin_req,
 
 COUNT(DISTINCT ps.msisdn)
-FILTER (WHERE ps.status='OTP_SENT')
-as unique_sent,
+FILTER (
+WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+) AS unique_req,
 
-COUNT(*) FILTER (WHERE ps.status='VERIFY_REQUESTED')
-as verify_req,
+COUNT(*) FILTER (
+WHERE ps.status='OTP_SENT'
+) AS pin_sent,
 
 COUNT(DISTINCT ps.msisdn)
-FILTER (WHERE ps.status='VERIFY_REQUESTED')
-as unique_verify,
+FILTER (
+WHERE ps.status='OTP_SENT'
+) AS unique_sent,
 
-COUNT(*) FILTER (WHERE ps.verified_at IS NOT NULL)
-as verified,
+COUNT(*) FILTER (
+WHERE ps.parent_session_token IS NOT NULL
+) AS verify_req,
+
+COUNT(DISTINCT ps.msisdn)
+FILTER (
+WHERE ps.parent_session_token IS NOT NULL
+) AS unique_verify,
+
+COUNT(*) FILTER (
+WHERE ps.status='VERIFIED'
+) AS verified,
 
 ROUND(
-
-COUNT(*) FILTER (WHERE ps.verified_at IS NOT NULL)::numeric
-
-/
-
+COUNT(*) FILTER (WHERE ps.status='VERIFIED')::numeric /
 NULLIF(
-COUNT(*) FILTER (WHERE ps.status='OTP_SENT')
-,0)
+COUNT(*) FILTER (WHERE ps.parent_session_token IS NOT NULL),0
+)*100,2
+) AS cr_percent,
 
-*100
-
-,2)
-
-as cr_percent,
-
-COALESCE(
-
-SUM(ps.publisher_cpa)
-FILTER (WHERE ps.publisher_credited=true)
-
-,0)
-
-as revenue,
+COUNT(*) FILTER (WHERE ps.status='VERIFIED') * o.cpa AS revenue,
 
 MAX(ps.created_at)
-as last_pin_gen,
+FILTER (WHERE ps.status='OTP_SENT') AS last_pin_gen,
 
 MAX(ps.created_at)
-FILTER (WHERE ps.status='OTP_SENT')
-as last_pin_gen_success,
+FILTER (WHERE ps.parent_session_token IS NOT NULL) AS last_verification,
 
 MAX(ps.created_at)
-FILTER (WHERE ps.status='VERIFY_REQUESTED')
-as last_verification,
-
-MAX(ps.verified_at)
-as last_success_verification
+FILTER (WHERE ps.status='VERIFIED') AS last_success_verification
 
 FROM pin_sessions ps
 
 LEFT JOIN offers o
-ON ps.offer_id = o.id
+ON o.id = ps.offer_id
 
-LEFT JOIN publishers pub
-ON ps.publisher_id = pub.id
+LEFT JOIN publishers p
+ON p.id = ps.publisher_id
 
-${whereClause}
+LEFT JOIN advertisers a
+ON a.id = o.advertiser_id
+
+${where}
 
 GROUP BY
-
 DATE(ps.created_at),
-ps.offer_id,
+a.name,
 o.service_name,
-pub.name,
-o.geo,
-o.carrier,
+p.name,
+ps.params->>'geo',
+ps.params->>'carrier',
 o.cpa,
-o.daily_cap
+o.capping
 
 ORDER BY date DESC
 
 `;
 
-    const result = await pool.query(query, values);
+  const result = await pool.query(query, values);
 
-    res.json({
-      status: "SUCCESS",
-      data: result.rows
-    });
+  res.json({
+   status: "SUCCESS",
+   data: result.rows
+  });
 
-  } catch (err) {
+ } catch (err) {
 
-    console.error("Dashboard Report Error:", err);
+  console.error("DASHBOARD REPORT ERROR:", err);
 
-    res.status(500).json({
-      status: "FAILED",
-      error: err.message
-    });
+  res.status(500).json({
+   status: "FAILED"
+  });
 
-  }
+ }
 
 });
+
+
+/*
+=====================================================
+DASHBOARD FILTER LIST
+=====================================================
+*/
+
+router.get("/dashboard/filters", async (req, res) => {
+
+ try {
+
+  const advertisers = await pool.query(`
+  SELECT id,name
+  FROM advertisers
+  ORDER BY name
+  `);
+
+  const publishers = await pool.query(`
+  SELECT id,name
+  FROM publishers
+  ORDER BY name
+  `);
+
+  const offers = await pool.query(`
+  SELECT id,service_name
+  FROM offers
+  WHERE status='active'
+  ORDER BY service_name
+  `);
+
+  const geos = await pool.query(`
+  SELECT DISTINCT params->>'geo' AS geo
+  FROM pin_sessions
+  WHERE params->>'geo' IS NOT NULL
+  ORDER BY geo
+  `);
+
+  const carriers = await pool.query(`
+  SELECT DISTINCT params->>'carrier' AS carrier
+  FROM pin_sessions
+  WHERE params->>'carrier' IS NOT NULL
+  ORDER BY carrier
+  `);
+
+  res.json({
+
+   advertisers: advertisers.rows,
+
+   publishers: publishers.rows,
+
+   offers: offers.rows.map(o => ({
+    id: o.id,
+    offer_name: o.service_name
+   })),
+
+   geos: geos.rows.map(g => g.geo),
+
+   carriers: carriers.rows.map(c => c.carrier)
+
+  });
+
+ } catch (err) {
+
+  console.error("FILTER API ERROR:", err);
+
+  res.status(500).json({
+   status: "FAILED"
+  });
+
+ }
+
+});
+
+
+/*
+=====================================================
+REALTIME DASHBOARD STATS
+=====================================================
+*/
+
+router.get("/dashboard/realtime", async (req, res) => {
+
+ try {
+
+  const stats = await pool.query(`
+
+SELECT
+
+COUNT(*) FILTER (
+WHERE status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+) AS total_requests,
+
+COUNT(*) FILTER (
+WHERE status='OTP_SENT'
+) AS otp_sent,
+
+COUNT(*) FILTER (
+WHERE status='VERIFIED'
+) AS conversions,
+
+COUNT(*) FILTER (
+WHERE created_at >= NOW() - INTERVAL '1 hour'
+) AS last_hour_requests
+
+FROM pin_sessions
+
+`);
+
+  res.json({
+   status: "SUCCESS",
+   data: stats.rows[0]
+  });
+
+ } catch (err) {
+
+  console.error("REALTIME DASHBOARD ERROR:", err);
+
+  res.status(500).json({
+   status: "FAILED"
+  });
+
+ }
+
+});
+
 
 export default router;
