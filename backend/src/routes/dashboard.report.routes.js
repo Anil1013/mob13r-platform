@@ -254,18 +254,18 @@ router.get("/dashboard/filters", async (req, res) => {
   `);
 
   const geos = await pool.query(`
-    SELECT DISTINCT params->>'geo' AS geo
-    FROM pin_sessions
-    WHERE params->>'geo' IS NOT NULL
-    ORDER BY geo
-  `);
+  SELECT DISTINCT TRIM(UPPER(params->>'geo')) AS geo
+  FROM pin_sessions
+  WHERE params->>'geo' IS NOT NULL AND params->>'geo' <> ''
+  ORDER BY geo
+`);
 
-  const carriers = await pool.query(`
-    SELECT DISTINCT params->>'carrier' AS carrier
-    FROM pin_sessions
-    WHERE params->>'carrier' IS NOT NULL
-    ORDER BY carrier
-  `);
+const carriers = await pool.query(`
+  SELECT DISTINCT TRIM(UPPER(params->>'carrier')) AS carrier
+  FROM pin_sessions
+  WHERE params->>'carrier' IS NOT NULL AND params->>'carrier' <> ''
+  ORDER BY carrier
+`);
 
   res.json({
 
