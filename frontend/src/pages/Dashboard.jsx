@@ -6,9 +6,17 @@ const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 
 const formatDate = (date) => {
-  if (!date) return "-";
+  if (!date) return "";
   const d = new Date(date);
-  return d.toLocaleString("en-GB");
+  return d.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true
+  });
 };
 
 export default function Dashboard() {
@@ -35,16 +43,18 @@ const [geo,setGeo] = useState("");
 const [carrier,setCarrier] = useState("");
 const [offer,setOffer] = useState("");
 
-/* ============================
+/*
+============================
 LOAD REPORT
-============================ */
+============================
+*/
 
 const loadReport = async () => {
 
  const params = new URLSearchParams();
 
- if(from) params.append("from",from);
- if(to) params.append("to",to);
+ params.append("from",from);
+ params.append("to",to);
 
  if(advertiser) params.append("advertiser",advertiser);
  if(publisher) params.append("publisher",publisher);
@@ -58,35 +68,34 @@ const loadReport = async () => {
 
  const json = await res.json();
 
- // ✅ FIXED
- if(json.success){
-  setData(json.data || []);
-  setStats(json.summary || {});
+ if(json.status === "SUCCESS"){
+  setData(json.data);
  }else{
   setData([]);
  }
 
 };
 
-/* ============================
+/*
+============================
 LOAD FILTERS
-============================ */
+============================
+*/
 
 const loadFilters = async () => {
 
  const res = await fetch(`${API_BASE}/api/dashboard/filters`);
  const json = await res.json();
 
- // ✅ FIXED
- if(json.success){
-  setFilters(json.filters || {});
- }
+ setFilters(json);
 
 };
 
-/* ============================
-REALTIME
-============================ */
+/*
+============================
+REALTIME STATS
+============================
+*/
 
 const loadRealtime = async () => {
 
@@ -104,9 +113,12 @@ useEffect(()=>{
 
 },[]);
 
-/* ============================
+
+/*
+============================
 EXPORT
-============================ */
+============================
+*/
 
 const exportExcel = () => {
 
@@ -122,21 +134,24 @@ const exportCSV = () => {
 
  if(!data.length) return;
 
- const ws = XLSX.utils.json_to_sheet(data);
- const csv = XLSX.utils.sheet_to_csv(ws);
+ const rows = data.map(row => Object.values(row).join(","));
+ const csv = [Object.keys(data[0]).join(","),...rows].join("\n");
 
  const blob = new Blob([csv],{type:"text/csv"});
  const url = window.URL.createObjectURL(blob);
 
  const a = document.createElement("a");
+
  a.href = url;
  a.download = "traffic_report.csv";
  a.click();
 };
 
-/* ============================
+/*
+============================
 TOTALS
-============================ */
+============================
+*/
 
 const total = data.reduce((acc,row)=>{
 
@@ -176,9 +191,21 @@ return(
 
 <div style={{display:"flex",gap:"10px",marginBottom:"15px"}}>
 
-<div>Requests <b>{stats.requests || 0}</b></div>
-<div>OTP Sent <b>{stats.otp_sent || 0}</b></div>
-<div>Verified <b>{stats.verified || 0}</b></div>
+<div style={{background:"#e8f1ff",padding:"8px"}}>
+Requests <b>{stats.total_requests || 0}</b>
+</div>
+
+<div style={{background:"#e7fff3",padding:"8px"}}>
+OTP Sent <b>{stats.otp_sent || 0}</b>
+</div>
+
+<div style={{background:"#fff3e8",padding:"8px"}}>
+Conversions <b>{stats.conversions || 0}</b>
+</div>
+
+<div style={{background:"#f3e8ff",padding:"8px"}}>
+Last Hour <b>{stats.last_hour_requests || 0}</b>
+</div>
 
 </div>
 
@@ -220,7 +247,7 @@ return(
 <select value={offer} onChange={(e)=>setOffer(e.target.value)}>
 <option value="">All Offers</option>
 {filters.offers?.map(o=>(
-<option key={o.id} value={o.id}>{o.name}</option>
+<option key={o.id} value={o.id}>{o.offer_name}</option>
 ))}
 </select>
 
@@ -240,6 +267,7 @@ return(
 <thead>
 
 <tr>
+
 <th>Date</th>
 <th>Advertiser</th>
 <th>Offer</th>
@@ -265,15 +293,14 @@ return(
 <th>Last Pin Gen</th>
 <th>Last Verification</th>
 <th>Last Success Verification</th>
+
 </tr>
 
 </thead>
 
 <tbody>
 
-{data.length === 0 ? (
-<tr><td colSpan="20">No Data</td></tr>
-) : data.map((row,i)=>(
+{data.map((row,i)=>(
 
 <tr key={i}>
 
@@ -283,9 +310,8 @@ return(
 <td>{row.publisher_name}</td>
 <td>{row.geo}</td>
 <td>{row.carrier}</td>
-
-<td>{row.cpa || 0}</td>
-<td>{row.cap || 0}</td>
+<td>{row.cpa}</td>
+<td>{row.cap}</td>
 
 <td>{row.pin_req}</td>
 <td>{row.unique_req}</td>
