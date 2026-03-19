@@ -3,86 +3,205 @@ import pool from "../db.js";
 
 const router = express.Router();
 
-router.get("/report", async (req, res) => {
-  try {
-    const { offer_id, publisher_id, from_date, to_date } = req.query;
+/*
+==================================================
+DASHBOARD REPORT
+==================================================
+*/
 
-    let conditions = [];
+router.get("/dashboard/report", async (req, res) => {
+
+  try {
+
+    const {
+      from,
+      to,
+      advertiser,
+      publisher,
+      offer,
+      geo,
+      carrier
+    } = req.query;
+
+    let filters = [];
     let values = [];
     let i = 1;
 
-    if (offer_id) {
-      conditions.push(`ps.offer_id = $${i++}`);
-      values.push(offer_id);
+    /* DATE FILTER */
+
+    if (from) {
+      filters.push(`ps.created_at >= $${i++}`);
+      values.push(from + " 00:00:00");
     }
 
-    if (publisher_id) {
-      conditions.push(`ps.publisher_id = $${i++}`);
-      values.push(publisher_id);
+    if (to) {
+      filters.push(`ps.created_at <= $${i++}`);
+      values.push(to + " 23:59:59");
     }
 
-    // ✅ FIXED DATE FILTER
-    if (from_date) {
-      conditions.push(`ps.created_at >= $${i++}::date`);
-      values.push(from_date);
+    /* ADVERTISER */
+
+    if (advertiser) {
+      filters.push(`ps.advertiser_id = $${i++}`);
+      values.push(advertiser);
     }
 
-    if (to_date) {
-      conditions.push(`ps.created_at < ($${i++}::date + interval '1 day')`);
-      values.push(to_date);
+    /* PUBLISHER */
+
+    if (publisher) {
+      filters.push(`ps.publisher_id = $${i++}`);
+      values.push(publisher);
     }
 
-    const whereClause = conditions.length
-      ? `WHERE ${conditions.join(" AND ")}`
-      : "";
+    /* OFFER */
+
+    if (offer) {
+      filters.push(`ps.offer_id = $${i++}`);
+      values.push(offer);
+    }
+
+    /* GEO */
+
+    if (geo) {
+      filters.push(`o.geo = $${i++}`);
+      values.push(geo);
+    }
+
+    /* CARRIER */
+
+    if (carrier) {
+      filters.push(`o.carrier = $${i++}`);
+      values.push(carrier);
+    }
+
+    const whereClause =
+      filters.length > 0
+        ? `WHERE ${filters.join(" AND ")}`
+        : "";
 
     const query = `
-      SELECT
-        ps.offer_id,
-        o.name AS offer_name,
-        ps.publisher_id,
 
-        COUNT(*) AS requests,
+SELECT
 
-        COUNT(*) FILTER (WHERE ps.status = 'OTP_SENT') AS otp_sent,
-        COUNT(*) FILTER (WHERE ps.status = 'VERIFIED') AS verified,
-        COUNT(*) FILTER (WHERE ps.status = 'OTP_FAILED') AS failed,
+DATE(ps.created_at) as date,
 
-        COALESCE(MAX(o.cpa), 0) AS cpa,
+CASE
+WHEN o.service_name IS NULL OR o.service_name=''
+THEN 'Offer #' || ps.offer_id
+ELSE o.service_name
+END as offer_name,
 
-        COUNT(*) FILTER (WHERE ps.status = 'VERIFIED') * COALESCE(MAX(o.cpa), 0) AS revenue
+COALESCE(pub.name,'Unknown Publisher') as publisher_name,
 
-      FROM pin_sessions ps
-      LEFT JOIN offers o ON ps.offer_id = o.id
+o.geo,
+o.carrier,
 
-      ${whereClause}
+o.cpa,
+o.daily_cap as cap,
 
-      GROUP BY
-        ps.offer_id,
-        o.name,
-        ps.publisher_id
+COUNT(*) as pin_req,
 
-      ORDER BY requests DESC
-    `;
+COUNT(DISTINCT ps.msisdn) as unique_req,
 
-    console.log("QUERY:", query);
-    console.log("VALUES:", values);
+COUNT(*) FILTER (WHERE ps.status='OTP_SENT')
+as pin_sent,
 
-    const { rows } = await pool.query(query, values);
+COUNT(DISTINCT ps.msisdn)
+FILTER (WHERE ps.status='OTP_SENT')
+as unique_sent,
+
+COUNT(*) FILTER (WHERE ps.status='VERIFY_REQUESTED')
+as verify_req,
+
+COUNT(DISTINCT ps.msisdn)
+FILTER (WHERE ps.status='VERIFY_REQUESTED')
+as unique_verify,
+
+COUNT(*) FILTER (WHERE ps.verified_at IS NOT NULL)
+as verified,
+
+ROUND(
+
+COUNT(*) FILTER (WHERE ps.verified_at IS NOT NULL)::numeric
+
+/
+
+NULLIF(
+COUNT(*) FILTER (WHERE ps.status='OTP_SENT')
+,0)
+
+*100
+
+,2)
+
+as cr_percent,
+
+COALESCE(
+
+SUM(ps.publisher_cpa)
+FILTER (WHERE ps.publisher_credited=true)
+
+,0)
+
+as revenue,
+
+MAX(ps.created_at)
+as last_pin_gen,
+
+MAX(ps.created_at)
+FILTER (WHERE ps.status='OTP_SENT')
+as last_pin_gen_success,
+
+MAX(ps.created_at)
+FILTER (WHERE ps.status='VERIFY_REQUESTED')
+as last_verification,
+
+MAX(ps.verified_at)
+as last_success_verification
+
+FROM pin_sessions ps
+
+LEFT JOIN offers o
+ON ps.offer_id = o.id
+
+LEFT JOIN publishers pub
+ON ps.publisher_id = pub.id
+
+${whereClause}
+
+GROUP BY
+
+DATE(ps.created_at),
+ps.offer_id,
+o.service_name,
+pub.name,
+o.geo,
+o.carrier,
+o.cpa,
+o.daily_cap
+
+ORDER BY date DESC
+
+`;
+
+    const result = await pool.query(query, values);
 
     res.json({
-      success: true,
-      data: rows
+      status: "SUCCESS",
+      data: result.rows
     });
 
   } catch (err) {
-    console.error("REPORT ERROR:", err);
+
+    console.error("Dashboard Report Error:", err);
 
     res.status(500).json({
-      success: false,
+      status: "FAILED",
       error: err.message
     });
+
   }
+
 });
 
 export default router;
