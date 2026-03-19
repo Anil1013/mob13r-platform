@@ -224,4 +224,70 @@ FROM pin_sessions
 
 });
 
+router.get("/dashboard/filters", async (req, res) => {
+
+ try {
+
+  const advertisers = await pool.query(`
+    SELECT id, name
+    FROM advertisers
+    ORDER BY name
+  `);
+
+  const publishers = await pool.query(`
+    SELECT id, name
+    FROM publishers
+    ORDER BY name
+  `);
+
+  const offers = await pool.query(`
+    SELECT id, service_name
+    FROM offers
+    WHERE status = 'active'
+    ORDER BY service_name
+  `);
+
+  const geos = await pool.query(`
+    SELECT DISTINCT params->>'geo' AS geo
+    FROM pin_sessions
+    WHERE params->>'geo' IS NOT NULL
+    ORDER BY geo
+  `);
+
+  const carriers = await pool.query(`
+    SELECT DISTINCT params->>'carrier' AS carrier
+    FROM pin_sessions
+    WHERE params->>'carrier' IS NOT NULL
+    ORDER BY carrier
+  `);
+
+  res.json({
+
+    advertisers: advertisers.rows || [],
+
+    publishers: publishers.rows || [],
+
+    offers: offers.rows.map(o => ({
+      id: o.id,
+      offer_name: o.service_name
+    })),
+
+    geos: geos.rows.map(g => g.geo),
+
+    carriers: carriers.rows.map(c => c.carrier)
+
+  });
+
+ } catch (err) {
+
+  console.error("FILTER API ERROR:", err);
+
+  res.status(500).json({
+    status: "FAILED"
+  });
+
+ }
+
+});
+
 export default router;
