@@ -34,15 +34,19 @@ router.get("/dashboard/report", async (req, res) => {
   }
 
   // ✅ DROPDOWN FILTERS
-  if (geo && geo !== "") {
-   values.push(geo);
-   conditions.push(`ps.params->>'geo' = $${values.length}`);
-  }
+ if (geo && geo !== "") {
+ values.push(geo);
+ conditions.push(`
+  TRIM(UPPER(ps.params->>'geo')) = $${values.length}
+ `);
+}
 
-  if (carrier && carrier !== "") {
-   values.push(carrier);
-   conditions.push(`ps.params->>'carrier' = $${values.length}`);
-  }
+if (carrier && carrier !== "") {
+ values.push(carrier);
+ conditions.push(`
+  TRIM(UPPER(ps.params->>'carrier')) = $${values.length}
+ `);
+}
 
   if (publisher && publisher !== "") {
    values.push(publisher);
