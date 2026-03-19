@@ -5,7 +5,7 @@ const router = express.Router();
 
 /*
 =====================================================
-DASHBOARD REPORT
+DASHBOARD REPORT (FIXED TIMEZONE + FILTER)
 =====================================================
 */
 
@@ -18,14 +18,19 @@ router.get("/dashboard/report", async (req, res) => {
   let conditions = [];
   let values = [];
 
+  // ✅ IST DATE RANGE FIX
   if (from) {
-   values.push(from);
-   conditions.push(`ps.created_at >= $${values.length}`);
+   values.push(`${from} 00:00:00`);
+   conditions.push(`
+   (ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') >= $${values.length}
+   `);
   }
 
   if (to) {
-   values.push(to);
-   conditions.push(`ps.created_at <= $${values.length}`);
+   values.push(`${to} 23:59:59`);
+   conditions.push(`
+   (ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') <= $${values.length}
+   `);
   }
 
   if (geo) {
@@ -62,7 +67,7 @@ router.get("/dashboard/report", async (req, res) => {
 
 SELECT
 
-DATE(ps.created_at) AS date,
+DATE(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') AS date,
 
 COALESCE(a.name,'Unknown Advertiser') AS advertiser_name,
 COALESCE(o.service_name,'Unknown Offer') AS offer_name,
@@ -114,30 +119,25 @@ COUNT(*) FILTER (WHERE ps.parent_session_token IS NOT NULL),0
 
 COUNT(*) FILTER (WHERE ps.status='VERIFIED') * o.cpa AS revenue,
 
-MAX(ps.created_at)
+MAX(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
 FILTER (WHERE ps.status='OTP_SENT') AS last_pin_gen,
 
-MAX(ps.created_at)
+MAX(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
 FILTER (WHERE ps.parent_session_token IS NOT NULL) AS last_verification,
 
-MAX(ps.created_at)
+MAX(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
 FILTER (WHERE ps.status='VERIFIED') AS last_success_verification
 
 FROM pin_sessions ps
 
-LEFT JOIN offers o
-ON o.id = ps.offer_id
-
-LEFT JOIN publishers p
-ON p.id = ps.publisher_id
-
-LEFT JOIN advertisers a
-ON a.id = o.advertiser_id
+LEFT JOIN offers o ON o.id = ps.offer_id
+LEFT JOIN publishers p ON p.id = ps.publisher_id
+LEFT JOIN advertisers a ON a.id = o.advertiser_id
 
 ${where}
 
 GROUP BY
-DATE(ps.created_at),
+DATE(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'),
 a.name,
 o.service_name,
 p.name,
@@ -169,83 +169,9 @@ ORDER BY date DESC
 
 });
 
-
 /*
 =====================================================
-DASHBOARD FILTER LIST
-=====================================================
-*/
-
-router.get("/dashboard/filters", async (req, res) => {
-
- try {
-
-  const advertisers = await pool.query(`
-  SELECT id,name
-  FROM advertisers
-  ORDER BY name
-  `);
-
-  const publishers = await pool.query(`
-  SELECT id,name
-  FROM publishers
-  ORDER BY name
-  `);
-
-  const offers = await pool.query(`
-  SELECT id,service_name
-  FROM offers
-  WHERE status='active'
-  ORDER BY service_name
-  `);
-
-  const geos = await pool.query(`
-  SELECT DISTINCT params->>'geo' AS geo
-  FROM pin_sessions
-  WHERE params->>'geo' IS NOT NULL
-  ORDER BY geo
-  `);
-
-  const carriers = await pool.query(`
-  SELECT DISTINCT params->>'carrier' AS carrier
-  FROM pin_sessions
-  WHERE params->>'carrier' IS NOT NULL
-  ORDER BY carrier
-  `);
-
-  res.json({
-
-   advertisers: advertisers.rows,
-
-   publishers: publishers.rows,
-
-   offers: offers.rows.map(o => ({
-    id: o.id,
-    offer_name: o.service_name
-   })),
-
-   geos: geos.rows.map(g => g.geo),
-
-   carriers: carriers.rows.map(c => c.carrier)
-
-  });
-
- } catch (err) {
-
-  console.error("FILTER API ERROR:", err);
-
-  res.status(500).json({
-   status: "FAILED"
-  });
-
- }
-
-});
-
-
-/*
-=====================================================
-REALTIME DASHBOARD STATS
+REALTIME FIX (IST)
 =====================================================
 */
 
@@ -270,7 +196,8 @@ WHERE status='VERIFIED'
 ) AS conversions,
 
 COUNT(*) FILTER (
-WHERE created_at >= NOW() - INTERVAL '1 hour'
+WHERE (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+>= (NOW() AT TIME ZONE 'Asia/Kolkata') - INTERVAL '1 hour'
 ) AS last_hour_requests
 
 FROM pin_sessions
@@ -293,6 +220,5 @@ FROM pin_sessions
  }
 
 });
-
 
 export default router;
