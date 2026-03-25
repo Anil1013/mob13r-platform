@@ -125,7 +125,7 @@ COUNT(*) FILTER (WHERE ps.parent_session_token IS NOT NULL),0
 COALESCE(
   SUM(ps.payout) FILTER (WHERE ps.status='VERIFIED'),
   0
-) AS revenue
+) AS revenue,
 
 -- ✅ PURE UTC TIMES
 MAX(ps.created_at)
