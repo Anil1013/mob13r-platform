@@ -413,6 +413,9 @@ router.all("/pin/verify", async (req, res) => {
            advertiser_response=$2,
            publisher_response=$3,
            status=$4
+            payout = o.cpa   -- 🔥 ADD THIS
+   FROM offers o
+   WHERE ps.offer_id = o.id
        WHERE session_token=$5`,
       [
         {
