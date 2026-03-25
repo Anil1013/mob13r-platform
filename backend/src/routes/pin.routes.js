@@ -408,27 +408,26 @@ router.all("/pin/verify", async (req, res) => {
     });
 
     await pool.query(
-      `UPDATE pin_sessions
-       SET advertiser_request=$1,
-           advertiser_response=$2,
-           publisher_response=$3,
-           status=$4
-            payout = o.cpa   -- 🔥 ADD THIS
+  `UPDATE pin_sessions ps
+   SET advertiser_request=$1,
+       advertiser_response=$2,
+       publisher_response=$3,
+       status=$4,
+       payout = o.cpa
    FROM offers o
    WHERE ps.offer_id = o.id
-       WHERE session_token=$5`,
-      [
-        {
-          url: advCall.used,
-          method: advCall.method,
-          payload
-        },
-        advertiserResponse,
-        publisherResponse,
-        advMapped.isSuccess ? "VERIFIED" : "OTP_FAILED",
-        verifyRowToken
-      ]
-    );
+   AND ps.session_token=$5`,
+[
+  {
+    url: advCall.used,
+    method: advCall.method,
+    payload
+  },
+  advertiserResponse,
+  publisherResponse,
+  advMapped.isSuccess ? "VERIFIED" : "OTP_FAILED",
+  verifyRowToken
+]);
 
     return res.json(publisherResponse);
 
