@@ -122,7 +122,10 @@ COUNT(*) FILTER (WHERE ps.parent_session_token IS NOT NULL),0
 )*100,2
 ) AS cr_percent,
 
-COUNT(*) FILTER (WHERE ps.status='VERIFIED') * o.cpa AS revenue,
+COALESCE(
+  SUM(ps.payout) FILTER (WHERE ps.status='VERIFIED'),
+  0
+) AS revenue
 
 -- ✅ PURE UTC TIMES
 MAX(ps.created_at)
