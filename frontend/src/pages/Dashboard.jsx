@@ -5,9 +5,18 @@ const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 
 const getTodayDateInput = () => {
-  const now = new Date();
-  const offsetMs = now.getTimezoneOffset() * 60 * 1000;
-  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).formatToParts(new Date());
+
+  const day = parts.find(part => part.type === "day")?.value;
+  const month = parts.find(part => part.type === "month")?.value;
+  const year = parts.find(part => part.type === "year")?.value;
+
+  return `${year}-${month}-${day}`;
 };
 
 const defaultFilters = {
