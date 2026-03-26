@@ -123,6 +123,12 @@ export default function PublisherDashboard() {
     setLoading(true);
     const key = localStorage.getItem("publisher_key");
 
+if (!key) {
+  alert("Publisher key missing. Please login again.");
+  setLoading(false);
+  return;
+}
+
     const qs = new URLSearchParams({
       from: dateInputToISO(fromDate),
       to: dateInputToISO(toDate, true),
@@ -188,6 +194,12 @@ export default function PublisherDashboard() {
 
   const openHourly = async (row) => {
     const key = localStorage.getItem("publisher_key");
+
+if (!key) {
+  alert("Publisher key missing. Please login again.");
+  setLoading(false);
+  return;
+}
 
     const qs = new URLSearchParams({
       from: dateInputToISO(row.stat_date),
