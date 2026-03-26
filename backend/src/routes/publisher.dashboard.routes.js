@@ -86,16 +86,19 @@ FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')),
 ) AS cr,
 
 /* ================= REVENUE ================= */
-/* 🔥 IMPORTANT: HISTORICAL SAFE */
 
 COALESCE(SUM(pc.publisher_cpa), 0) AS revenue,
 
 /* ================= TIME ================= */
 
-MAX(ps.created_at AT TIME ZONE 'Asia/Kolkata') AS last_pin_gen_date,
-
+/* 🔥 FIXED: ALL PIN ATTEMPTS */
 MAX(ps.created_at AT TIME ZONE 'Asia/Kolkata')
-FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED'))
+FILTER (WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID'))
+AS last_pin_gen_date,
+
+/* 🔥 FIXED: ONLY SUCCESS */
+MAX(ps.created_at AT TIME ZONE 'Asia/Kolkata')
+FILTER (WHERE ps.status = 'OTP_SENT')
 AS last_pin_gen_success_date,
 
 MAX(ps.verified_at AT TIME ZONE 'Asia/Kolkata')
