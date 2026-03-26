@@ -74,7 +74,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
         COALESCE(ps.params->>'carrier', 'Unknown') AS carrier,
 
         o.cpa,
-        o.capping AS cap,
+        o.capping AS cap, -- advertiser offer cap
 
         COUNT(*) FILTER (
           WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
@@ -134,7 +134,6 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
       LEFT JOIN offers o ON o.id = ps.offer_id
       LEFT JOIN publishers p ON p.id = ps.publisher_id
       LEFT JOIN advertisers a ON a.id = o.advertiser_id
-
       ${whereClause}
 
       GROUP BY
