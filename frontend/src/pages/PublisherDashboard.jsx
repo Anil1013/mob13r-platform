@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE || "https://backend.mob13r.com";
@@ -107,18 +105,28 @@ export default function PublisherDashboard() {
   const [hourlyRows, setHourlyRows] = useState([]);
   const [hourlyMeta, setHourlyMeta] = useState(null);
 
+  /* ================= AUTH HEADER FIX ================= */
+
+  const getHeaders = () => {
+    const publisherKey = localStorage.getItem("publisher_key");
+    const token = localStorage.getItem("token");
+
+    if (publisherKey) {
+      return { "x-publisher-key": publisherKey };
+    }
+
+    if (token) {
+      return { Authorization: `Bearer ${token}` };
+    }
+
+    return {};
+  };
+
   /* ================= FETCH ================= */
 
   const fetchData = async () => {
     try {
       setLoading(true);
-
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        alert("Session expired. Please login again.");
-        return;
-      }
 
       const qs = new URLSearchParams({
         from: fromDate,
@@ -128,9 +136,7 @@ export default function PublisherDashboard() {
       const res = await fetch(
         `${API_BASE}/api/publisher/dashboard/offers?${qs}`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: getHeaders(),
         }
       );
 
@@ -189,8 +195,6 @@ export default function PublisherDashboard() {
   /* ================= HOURLY ================= */
 
   const openHourly = async (row) => {
-    const token = localStorage.getItem("token");
-
     const qs = new URLSearchParams({
       from: row.stat_date,
       to: row.stat_date,
@@ -199,9 +203,7 @@ export default function PublisherDashboard() {
     const res = await fetch(
       `${API_BASE}/api/publisher/dashboard/offers/${row.publisher_offer_id}/hourly?${qs}`,
       {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: getHeaders(),
       }
     );
 
@@ -221,7 +223,6 @@ export default function PublisherDashboard() {
         <span style={{ color: "#2563eb" }}>{publisherName}</span>
       </h2>
 
-      {/* FILTER BAR */}
       <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
         <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
         <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
@@ -246,7 +247,6 @@ export default function PublisherDashboard() {
         </select>
       </div>
 
-      {/* TABLE */}
       <table border="1" cellPadding="8" width="100%" style={{ textAlign: "center" }}>
         <thead>
           <tr>
