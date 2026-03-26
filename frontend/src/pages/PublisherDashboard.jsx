@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import Navbar from "../components/Navbar";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE || "https://backend.mob13r.com";
@@ -30,10 +31,20 @@ const hourLabel = (hourValue) => {
   return `${h}:00 – ${n}:00`;
 };
 
+const dateInputToISO = (date, end = false) => {
+  const d = new Date(date);
+  if (end) d.setHours(23, 59, 59, 999);
+  else d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+};
+
 /* ================= CSV EXPORT ================= */
 
 const exportCSV = (rows, fromDate, toDate, publisherName) => {
-  if (!rows.length) return alert("No data to export");
+  if (!rows.length) {
+    alert("No data to export");
+    return;
+  }
 
   const headers = [
     "Date","Offer","Geo","Carrier","CPA","Cap",
@@ -101,59 +112,31 @@ export default function PublisherDashboard() {
 
   const [loading, setLoading] = useState(true);
 
+  /* ===== HOURLY ===== */
   const [hourlyOpen, setHourlyOpen] = useState(false);
   const [hourlyRows, setHourlyRows] = useState([]);
   const [hourlyMeta, setHourlyMeta] = useState(null);
 
-  /* ================= AUTH HEADER FIX ================= */
-
-  const getHeaders = () => {
-    const publisherKey = localStorage.getItem("publisher_key");
-    const token = localStorage.getItem("token");
-
-    if (publisherKey) {
-      return { "x-publisher-key": publisherKey };
-    }
-
-    if (token) {
-      return { Authorization: `Bearer ${token}` };
-    }
-
-    return {};
-  };
-
   /* ================= FETCH ================= */
 
   const fetchData = async () => {
-    try {
-      setLoading(true);
+    setLoading(true);
+    const key = localStorage.getItem("publisher_key");
 
-      const qs = new URLSearchParams({
-        from: fromDate,
-        to: toDate,
-      });
+    const qs = new URLSearchParams({
+      from: dateInputToISO(fromDate),
+      to: dateInputToISO(toDate, true),
+    });
 
-      const res = await fetch(
-        `${API_BASE}/api/publisher/dashboard/offers?${qs}`,
-        {
-          headers: getHeaders(),
-        }
-      );
+    const res = await fetch(
+      `${API_BASE}/api/publisher/dashboard/offers?${qs}`,
+      { headers: { "x-publisher-key": key } }
+    );
 
-      if (res.status === 401) {
-        alert("Unauthorized. Please login again.");
-        return;
-      }
-
-      const data = await res.json();
-
-      setRows(data.rows || []);
-      setPublisherName(data.publisher?.name || "");
-    } catch (err) {
-      console.error("Dashboard Error:", err);
-    } finally {
-      setLoading(false);
-    }
+    const data = await res.json();
+    setRows(data.rows || []);
+    setPublisherName(data.publisher?.name || "");
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -188,27 +171,35 @@ export default function PublisherDashboard() {
         a.rev += Number(r.revenue || 0);
         return a;
       },
-      { pin: 0, uReq: 0, sent: 0, uSent: 0, vReq: 0, uVer: 0, ver: 0, rev: 0 }
+      {
+        pin: 0,
+        uReq: 0,
+        sent: 0,
+        uSent: 0,
+        vReq: 0,
+        uVer: 0,
+        ver: 0,
+        rev: 0,
+      }
     );
   }, [filteredRows]);
 
   /* ================= HOURLY ================= */
 
   const openHourly = async (row) => {
+    const key = localStorage.getItem("publisher_key");
+
     const qs = new URLSearchParams({
-      from: row.stat_date,
-      to: row.stat_date,
+      from: dateInputToISO(row.stat_date),
+      to: dateInputToISO(row.stat_date, true),
     });
 
     const res = await fetch(
       `${API_BASE}/api/publisher/dashboard/offers/${row.publisher_offer_id}/hourly?${qs}`,
-      {
-        headers: getHeaders(),
-      }
+      { headers: { "x-publisher-key": key } }
     );
 
     const data = await res.json();
-
     setHourlyRows(data.rows || []);
     setHourlyMeta(row);
     setHourlyOpen(true);
@@ -223,34 +214,60 @@ export default function PublisherDashboard() {
         <span style={{ color: "#2563eb" }}>{publisherName}</span>
       </h2>
 
+      {/* FILTER BAR – ORIGINAL */}
       <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
         <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
         <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
         <button onClick={fetchData}>Apply</button>
-        <button onClick={() => exportCSV(filteredRows, fromDate, toDate, publisherName)}>
+
+        <button
+          onClick={() =>
+            exportCSV(filteredRows, fromDate, toDate, publisherName)
+          }
+        >
           Export CSV
         </button>
 
         <select value={filterOffer} onChange={(e) => setFilterOffer(e.target.value)}>
           <option value="">All Offers</option>
-          {offerOptions.map((o) => <option key={o}>{o}</option>)}
+          {offerOptions.map((o) => (
+            <option key={o}>{o}</option>
+          ))}
         </select>
 
         <select value={filterGeo} onChange={(e) => setFilterGeo(e.target.value)}>
           <option value="">All Geo</option>
-          {geoOptions.map((g) => <option key={g}>{g}</option>)}
+          {geoOptions.map((g) => (
+            <option key={g}>{g}</option>
+          ))}
         </select>
 
         <select value={filterCarrier} onChange={(e) => setFilterCarrier(e.target.value)}>
           <option value="">All Carrier</option>
-          {carrierOptions.map((c) => <option key={c}>{c}</option>)}
+          {carrierOptions.map((c) => (
+            <option key={c}>{c}</option>
+          ))}
         </select>
       </div>
 
-      <table border="1" cellPadding="8" width="100%" style={{ textAlign: "center" }}>
+      {/* MAIN TABLE */}
+      <table
+        border="1"
+        cellPadding="8"
+        width="100%"
+        style={{ textAlign: "center" }}
+      >
         <thead>
           <tr>
-            {["Date","Offer","Geo","Carrier","CPA","Cap","Pin Req","Unique Req","Pin Sent","Unique Sent","Verify Req","Unique Verify","Verified","CR %","Revenue","Last Pin Gen","Last Pin Gen Success","Last Verification","Last Success Verification"].map((h) => <th key={h}>{h}</th>)}
+            {[
+              "Date","Offer","Geo","Carrier","CPA","Cap",
+              "Pin Req","Unique Req","Pin Sent","Unique Sent",
+              "Verify Req","Unique Verify","Verified","CR %",
+              "Revenue","Last Pin Gen","Last Pin Gen Success",
+              "Last Verification","Last Success Verification",
+            ].map((h) => (
+              <th key={h}>{h}</th>
+            ))}
           </tr>
         </thead>
 
@@ -258,7 +275,9 @@ export default function PublisherDashboard() {
           {filteredRows.map((r, i) => (
             <tr key={i}>
               <td>{formatDateOnly(r.stat_date)}</td>
-              <td><button onClick={() => openHourly(r)}>{r.offer}</button></td>
+              <td>
+                <button onClick={() => openHourly(r)}>{r.offer}</button>
+              </td>
               <td>{r.geo}</td>
               <td>{r.carrier}</td>
               <td>{r.cpa}</td>
@@ -279,6 +298,7 @@ export default function PublisherDashboard() {
             </tr>
           ))}
 
+          {/* TOTAL */}
           <tr style={{ fontWeight: "bold", background: "#f3f4f6" }}>
             <td colSpan="6">TOTAL</td>
             <td>{totals.pin}</td>
@@ -294,6 +314,50 @@ export default function PublisherDashboard() {
           </tr>
         </tbody>
       </table>
+
+      {/* HOURLY TABLE */}
+      {hourlyOpen && (
+        <div style={{ marginTop: 25 }}>
+          <h3>
+            Hourly – {hourlyMeta.offer} ({formatDateOnly(hourlyMeta.stat_date)})
+            <button onClick={() => setHourlyOpen(false)}> ❌</button>
+          </h3>
+
+          <table
+            border="1"
+            cellPadding="8"
+            width="100%"
+            style={{ textAlign: "center" }}
+          >
+            <thead>
+              <tr>
+                {[
+                  "Hour",
+                  "Unique Req",
+                  "Unique Sent",
+                  "Verify Req",
+                  "Verified",
+                  "Revenue ($)",
+                ].map((h) => (
+                  <th key={h}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {hourlyRows.map((h, i) => (
+                <tr key={i}>
+                  <td>{hourLabel(h.hour)}</td>
+                  <td>{h.unique_pin_requests}</td>
+                  <td>{h.unique_pin_sent}</td>
+                  <td>{h.unique_pin_verification_requests}</td>
+                  <td>{h.pin_verified}</td>
+                  <td>${h.revenue}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
