@@ -74,7 +74,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
         COALESCE(ps.params->>'carrier', 'Unknown') AS carrier,
 
         o.cpa,
-        o.capping AS cap, -- advertiser offer cap
+        o.daily_cap AS cap, -- advertiser offer cap
 
         COUNT(*) FILTER (
           WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
@@ -144,7 +144,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
         ps.params->>'geo',
         ps.params->>'carrier',
         o.cpa,
-        o.capping
+        o.daily_cap
 
       ORDER BY date DESC;
     `;
