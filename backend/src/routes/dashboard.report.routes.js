@@ -14,8 +14,6 @@ function isValidDateInput(value) {
 router.get("/dashboard/report", authMiddleware, async (req, res) => {
   try {
     const { from, to, geo, carrier, publisher, offer_id: offerId, advertiser } = req.query;
-    const istDateExpr =
-      "DATE(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')";
 
     if (!isValidDateInput(from) || !isValidDateInput(to)) {
       return res.status(400).json({
@@ -29,12 +27,12 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
 
     if (from) {
       values.push(from);
-      conditions.push(`${istDateExpr} >= $${values.length}`);
+      conditions.push(`DATE(ps.created_at) >= $${values.length}`);
     }
 
     if (to) {
       values.push(to);
-      conditions.push(`${istDateExpr} <= $${values.length}`);
+      conditions.push(`DATE(ps.created_at) <= $${values.length}`);
     }
 
     if (geo) {
@@ -66,7 +64,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
 
     const query = `
       SELECT
-        ${istDateExpr} AS date,
+        DATE(ps.created_at) AS date,
 
         COALESCE(a.name, 'Unknown Advertiser') AS advertiser_name,
         COALESCE(o.service_name, 'Unknown Offer') AS offer_name,
@@ -76,7 +74,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
         COALESCE(ps.params->>'carrier', 'Unknown') AS carrier,
 
         o.cpa,
-        o.daily_cap AS cap, -- advertiser offer cap
+        o.capping AS cap,
 
         COUNT(*) FILTER (
           WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
@@ -136,17 +134,18 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
       LEFT JOIN offers o ON o.id = ps.offer_id
       LEFT JOIN publishers p ON p.id = ps.publisher_id
       LEFT JOIN advertisers a ON a.id = o.advertiser_id
+
       ${whereClause}
 
       GROUP BY
-        ${istDateExpr},
+        DATE(ps.created_at),
         a.name,
         o.service_name,
         p.name,
         ps.params->>'geo',
         ps.params->>'carrier',
         o.cpa,
-        o.daily_cap
+        o.capping
 
       ORDER BY date DESC;
     `;
