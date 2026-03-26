@@ -6,7 +6,6 @@ const router = express.Router();
 
 /* ================== HELPERS ================== */
 
-// Today IST
 const todayIST = () => {
   const now = new Date();
   return new Date(
@@ -18,7 +17,7 @@ const todayIST = () => {
 
 /*
 =====================================================
-PUBLISHER DASHBOARD (FINAL FIXED)
+PUBLISHER DASHBOARD
 =====================================================
 */
 router.get("/dashboard/offers", publisherAuth, async (req, res) => {
@@ -91,12 +90,11 @@ COALESCE(SUM(pc.publisher_cpa), 0) AS revenue,
 
 /* ================= TIME ================= */
 
-/* 🔥 FIXED: ALL PIN ATTEMPTS */
+/* ✅ FIX: ALL ACTIVITY (NO FILTER) */
 MAX(ps.created_at AT TIME ZONE 'Asia/Kolkata')
-FILTER (WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID'))
 AS last_pin_gen_date,
 
-/* 🔥 FIXED: ONLY SUCCESS */
+/* ✅ ONLY SUCCESS */
 MAX(ps.created_at AT TIME ZONE 'Asia/Kolkata')
 FILTER (WHERE ps.status = 'OTP_SENT')
 AS last_pin_gen_success_date,
@@ -173,7 +171,7 @@ ORDER BY stat_date ASC, offer;
 
 /*
 =====================================================
-HOURLY DASHBOARD (FIXED)
+HOURLY DASHBOARD
 =====================================================
 */
 router.get(
