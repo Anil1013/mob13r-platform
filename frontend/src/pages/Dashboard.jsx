@@ -4,6 +4,12 @@ import Navbar from "../components/Navbar";
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 
+const getTodayDateInput = () => {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60 * 1000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
+};
+
 const defaultFilters = {
   advertisers: [],
   publishers: [],
