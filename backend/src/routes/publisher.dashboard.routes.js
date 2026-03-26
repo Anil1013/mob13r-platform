@@ -6,26 +6,13 @@ const router = express.Router();
 
 /* ================== HELPERS ================== */
 
-// Today IST as YYYY-MM-DD (stable)
-const todayIST = () => {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-
-  const y = parts.find((p) => p.type === "year")?.value;
-  const m = parts.find((p) => p.type === "month")?.value;
-  const d = parts.find((p) => p.type === "day")?.value;
-
-  return `${y}-${m}-${d}`;
-};
+// Today UTC as YYYY-MM-DD
+const todayUTC = () => new Date().toISOString().slice(0, 10);
 
 /**
  * =========================================================
  * GET /api/publisher/dashboard/offers
- * IST DATE-WISE DASHBOARD
+ * UTC DATE-WISE DASHBOARD
  * =========================================================
  */
 router.get("/dashboard/offers", publisherAuth, async (req, res) => {
@@ -33,9 +20,10 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
     const publisherId = req.publisher.id;
     let { from, to } = req.query;
 
+    // Default = today UTC
     if (!from || !to) {
-      from = todayIST();
-      to = todayIST();
+      from = todayUTC();
+      to = todayUTC();
     }
 
     const params = [publisherId, from, to];
@@ -43,9 +31,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
     const query = `
       WITH offer_stats AS (
         SELECT
-          DATE(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) AS stat_date,
+          DATE(ps.created_at AT TIME ZONE 'UTC') AS stat_date,
 
           po.id AS publisher_offer_id,
           o.service_name AS offer,
@@ -87,23 +73,15 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
 
           COALESCE(SUM(pc.publisher_cpa), 0) AS revenue,
 
-          MAX(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) AS last_pin_gen_date,
+          MAX(ps.created_at AT TIME ZONE 'UTC') AS last_pin_gen_date,
 
-          MAX(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) FILTER (
+          MAX(ps.created_at AT TIME ZONE 'UTC') FILTER (
             WHERE ps.status IN ('OTP_SENT','VERIFIED')
           ) AS last_pin_gen_success_date,
 
-          MAX(
-            ps.verified_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) AS last_pin_verification_date,
+          MAX(ps.verified_at AT TIME ZONE 'UTC') AS last_pin_verification_date,
 
-          MAX(
-            ps.credited_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) FILTER (
+          MAX(ps.credited_at AT TIME ZONE 'UTC') FILTER (
             WHERE ps.publisher_credited = TRUE
           ) AS last_success_pin_verification_date
 
@@ -112,9 +90,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
 
         LEFT JOIN pin_sessions ps
           ON ps.publisher_offer_id = po.id
-         AND DATE(
-              ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-            ) BETWEEN $2 AND $3
+         AND DATE(ps.created_at AT TIME ZONE 'UTC') BETWEEN $2 AND $3
 
         LEFT JOIN publisher_conversions pc
           ON pc.pin_session_uuid = ps.session_id
@@ -172,7 +148,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
 /**
  * =========================================================
  * GET /api/publisher/dashboard/offers/:publisherOfferId/hourly
- * IST HOURLY DASHBOARD
+ * UTC HOURLY DASHBOARD
  * =========================================================
  */
 router.get(
@@ -185,8 +161,8 @@ router.get(
       let { from, to } = req.query;
 
       if (!from || !to) {
-        from = todayIST();
-        to = todayIST();
+        from = todayUTC();
+        to = todayUTC();
       }
 
       const params = [publisherId, publisherOfferId, from, to];
@@ -195,7 +171,7 @@ router.get(
         SELECT
           DATE_TRUNC(
             'hour',
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+            ps.created_at AT TIME ZONE 'UTC'
           ) AS hour,
 
           COUNT(DISTINCT ps.msisdn) AS unique_pin_requests,
@@ -222,9 +198,7 @@ router.get(
 
         WHERE po.publisher_id = $1
           AND po.id = $2
-          AND DATE(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) BETWEEN $3 AND $4
+          AND DATE(ps.created_at AT TIME ZONE 'UTC') BETWEEN $3 AND $4
 
         GROUP BY hour
         ORDER BY hour ASC;
