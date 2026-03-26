@@ -6,7 +6,7 @@ const router = express.Router();
 
 /* ================== HELPERS ================== */
 
-// Today IST as YYYY-MM-DD
+// Today IST
 const todayIST = () => {
   const now = new Date();
   return new Date(
@@ -16,18 +16,16 @@ const todayIST = () => {
     .slice(0, 10);
 };
 
-/**
- * =========================================================
- * GET /api/publisher/dashboard/offers
- * IST DATE-WISE DASHBOARD (CORRECTED)
- * =========================================================
- */
+/*
+=====================================================
+PUBLISHER DASHBOARD (FINAL FIXED)
+=====================================================
+*/
 router.get("/dashboard/offers", publisherAuth, async (req, res) => {
   try {
     const publisherId = req.publisher.id;
     let { from, to } = req.query;
 
-    // Default = today IST
     if (!from || !to) {
       from = todayIST();
       to = todayIST();
@@ -36,105 +34,110 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
     const params = [publisherId, from, to];
 
     const query = `
-      WITH offer_stats AS (
-        SELECT
-          DATE(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) AS stat_date,
 
-          po.id AS publisher_offer_id,
-          o.service_name AS offer,
-          o.geo,
-          o.carrier,
-          po.publisher_cpa AS cpa,
-          po.daily_cap AS cap,
+WITH offer_stats AS (
 
-          COUNT(ps.session_id) AS pin_request_count,
-          COUNT(DISTINCT ps.msisdn) AS unique_pin_request_count,
+SELECT
 
-          COUNT(*) FILTER (
-            WHERE ps.status IN ('OTP_SENT','VERIFIED')
-          ) AS pin_send_count,
+DATE(ps.created_at AT TIME ZONE 'Asia/Kolkata') AS stat_date,
 
-          COUNT(DISTINCT ps.msisdn) FILTER (
-            WHERE ps.status IN ('OTP_SENT','VERIFIED')
-          ) AS unique_pin_sent,
+po.id AS publisher_offer_id,
+o.service_name AS offer,
+o.geo,
+o.carrier,
 
-          COUNT(*) FILTER (
-            WHERE ps.otp_attempts > 0
-          ) AS pin_validation_request_count,
+po.publisher_cpa AS current_payout,
+po.daily_cap AS cap,
 
-          COUNT(DISTINCT ps.msisdn) FILTER (
-            WHERE ps.otp_attempts > 0
-          ) AS unique_pin_validation_request_count,
+/* ================= COUNTS ================= */
 
-          COUNT(DISTINCT pc.pin_session_uuid) AS unique_pin_verified,
+COUNT(ps.session_id) AS pin_request_count,
 
-          ROUND(
-            COUNT(DISTINCT pc.pin_session_uuid)::numeric /
-            NULLIF(
-              COUNT(DISTINCT ps.msisdn)
-              FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')),
-              0
-            ) * 100,
-            2
-          ) AS cr,
+COUNT(DISTINCT ps.msisdn) AS unique_pin_request_count,
 
-          COALESCE(SUM(pc.publisher_cpa), 0) AS revenue,
+COUNT(*) FILTER (
+WHERE ps.status IN ('OTP_SENT','VERIFIED')
+) AS pin_send_count,
 
-          MAX(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) AS last_pin_gen_date,
+COUNT(DISTINCT ps.msisdn) FILTER (
+WHERE ps.status IN ('OTP_SENT','VERIFIED')
+) AS unique_pin_sent,
 
-          MAX(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) FILTER (
-            WHERE ps.status IN ('OTP_SENT','VERIFIED')
-          ) AS last_pin_gen_success_date,
+COUNT(*) FILTER (
+WHERE ps.otp_attempts > 0
+) AS pin_validation_request_count,
 
-          MAX(
-            ps.verified_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) AS last_pin_verification_date,
+COUNT(DISTINCT ps.msisdn) FILTER (
+WHERE ps.otp_attempts > 0
+) AS unique_pin_validation_request_count,
 
-          MAX(
-            ps.credited_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) FILTER (
-            WHERE ps.publisher_credited = TRUE
-          ) AS last_success_pin_verification_date
+COUNT(DISTINCT pc.pin_session_uuid) AS unique_pin_verified,
 
-        FROM publisher_offers po
-        JOIN offers o ON o.id = po.offer_id
+/* ================= CR ================= */
 
-        LEFT JOIN pin_sessions ps
-          ON ps.publisher_offer_id = po.id
-         AND DATE(
-              ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-            ) BETWEEN $2 AND $3
+ROUND(
+COUNT(DISTINCT pc.pin_session_uuid)::numeric /
+NULLIF(
+COUNT(DISTINCT ps.msisdn)
+FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')),
+0
+) * 100,
+2
+) AS cr,
 
-        LEFT JOIN publisher_conversions pc
-          ON pc.pin_session_uuid = ps.session_id
-         AND pc.status = 'SUCCESS'
+/* ================= REVENUE ================= */
+/* 🔥 IMPORTANT: HISTORICAL SAFE */
 
-        WHERE po.publisher_id = $1
+COALESCE(SUM(pc.publisher_cpa), 0) AS revenue,
 
-        GROUP BY
-          stat_date,
-          po.id,
-          o.service_name,
-          o.geo,
-          o.carrier,
-          po.publisher_cpa,
-          po.daily_cap
-      )
+/* ================= TIME ================= */
 
-      SELECT
-        *,
-        (SELECT COALESCE(SUM(pin_request_count),0) FROM offer_stats) AS total_pin_requests,
-        (SELECT COALESCE(SUM(unique_pin_verified),0) FROM offer_stats) AS total_verified,
-        (SELECT COALESCE(SUM(revenue),0) FROM offer_stats) AS total_revenue
-      FROM offer_stats
-      ORDER BY stat_date ASC, offer, geo, carrier;
-    `;
+MAX(ps.created_at AT TIME ZONE 'Asia/Kolkata') AS last_pin_gen_date,
+
+MAX(ps.created_at AT TIME ZONE 'Asia/Kolkata')
+FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED'))
+AS last_pin_gen_success_date,
+
+MAX(ps.verified_at AT TIME ZONE 'Asia/Kolkata')
+AS last_pin_verification_date,
+
+MAX(ps.credited_at AT TIME ZONE 'Asia/Kolkata')
+FILTER (WHERE ps.publisher_credited = TRUE)
+AS last_success_pin_verification_date
+
+FROM publisher_offers po
+JOIN offers o ON o.id = po.offer_id
+
+LEFT JOIN pin_sessions ps
+ON ps.publisher_offer_id = po.id
+AND ps.created_at >= $2::date
+AND ps.created_at < ($3::date + INTERVAL '1 day')
+
+LEFT JOIN publisher_conversions pc
+ON pc.pin_session_uuid = ps.session_id
+AND pc.status = 'SUCCESS'
+
+WHERE po.publisher_id = $1
+
+GROUP BY
+stat_date,
+po.id,
+o.service_name,
+o.geo,
+o.carrier,
+po.publisher_cpa,
+po.daily_cap
+)
+
+SELECT
+*,
+(SELECT COALESCE(SUM(pin_request_count),0) FROM offer_stats) AS total_pin_requests,
+(SELECT COALESCE(SUM(unique_pin_verified),0) FROM offer_stats) AS total_verified,
+(SELECT COALESCE(SUM(revenue),0) FROM offer_stats) AS total_revenue
+FROM offer_stats
+ORDER BY stat_date ASC, offer;
+
+`;
 
     const { rows } = await pool.query(query, params);
 
@@ -158,18 +161,18 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
       summary,
       rows: cleanRows,
     });
+
   } catch (err) {
     console.error("❌ PUBLISHER DASHBOARD ERROR:", err);
     res.status(500).json({ error: "Failed to load dashboard data" });
   }
 });
 
-/**
- * =========================================================
- * GET /api/publisher/dashboard/offers/:publisherOfferId/hourly
- * IST HOURLY (CORRECTED)
- * =========================================================
- */
+/*
+=====================================================
+HOURLY DASHBOARD (FIXED)
+=====================================================
+*/
 router.get(
   "/dashboard/offers/:publisherOfferId/hourly",
   publisherAuth,
@@ -187,43 +190,46 @@ router.get(
       const params = [publisherId, publisherOfferId, from, to];
 
       const query = `
-        SELECT
-          DATE_TRUNC(
-            'hour',
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) AS hour,
 
-          COUNT(DISTINCT ps.msisdn) AS unique_pin_requests,
+SELECT
 
-          COUNT(DISTINCT ps.msisdn) FILTER (
-            WHERE ps.status IN ('OTP_SENT','VERIFIED')
-          ) AS unique_pin_sent,
+DATE_TRUNC(
+  'hour',
+  ps.created_at AT TIME ZONE 'Asia/Kolkata'
+) AS hour,
 
-          COUNT(DISTINCT ps.msisdn) FILTER (
-            WHERE ps.otp_attempts > 0
-          ) AS unique_pin_verification_requests,
+COUNT(DISTINCT ps.msisdn) AS unique_pin_requests,
 
-          COUNT(DISTINCT pc.pin_session_uuid) AS pin_verified,
+COUNT(DISTINCT ps.msisdn) FILTER (
+WHERE ps.status IN ('OTP_SENT','VERIFIED')
+) AS unique_pin_sent,
 
-          COALESCE(SUM(pc.publisher_cpa), 0) AS revenue
+COUNT(DISTINCT ps.msisdn) FILTER (
+WHERE ps.otp_attempts > 0
+) AS unique_pin_verification_requests,
 
-        FROM publisher_offers po
-        JOIN pin_sessions ps
-          ON ps.publisher_offer_id = po.id
+COUNT(DISTINCT pc.pin_session_uuid) AS pin_verified,
 
-        LEFT JOIN publisher_conversions pc
-          ON pc.pin_session_uuid = ps.session_id
-         AND pc.status = 'SUCCESS'
+COALESCE(SUM(pc.publisher_cpa), 0) AS revenue
 
-        WHERE po.publisher_id = $1
-          AND po.id = $2
-          AND DATE(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
-          ) BETWEEN $3 AND $4
+FROM publisher_offers po
 
-        GROUP BY hour
-        ORDER BY hour ASC;
-      `;
+JOIN pin_sessions ps
+ON ps.publisher_offer_id = po.id
+
+LEFT JOIN publisher_conversions pc
+ON pc.pin_session_uuid = ps.session_id
+AND pc.status = 'SUCCESS'
+
+WHERE po.publisher_id = $1
+AND po.id = $2
+AND ps.created_at >= $3::date
+AND ps.created_at < ($4::date + INTERVAL '1 day')
+
+GROUP BY hour
+ORDER BY hour ASC;
+
+`;
 
       const { rows } = await pool.query(query, params);
 
@@ -233,6 +239,7 @@ router.get(
         to,
         rows,
       });
+
     } catch (err) {
       console.error("❌ HOURLY DASHBOARD ERROR:", err);
       res.status(500).json({ error: "Failed to load hourly data" });
