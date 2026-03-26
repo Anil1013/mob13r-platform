@@ -31,7 +31,9 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
     const query = `
       WITH offer_stats AS (
         SELECT
-          DATE(ps.created_at AT TIME ZONE 'UTC') AS stat_date,
+          DATE(
+            ps.created_at AT TIME ZONE 'UTC'
+          ) AS stat_date,
 
           po.id AS publisher_offer_id,
           o.service_name AS offer,
@@ -40,48 +42,70 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
           po.publisher_cpa AS cpa,
           po.daily_cap AS cap,
 
-          COUNT(ps.session_id) AS pin_request_count,
-          COUNT(DISTINCT ps.msisdn) AS unique_pin_request_count,
+          COUNT(*) FILTER (
+            WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+          ) AS pin_request_count,
+
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+          ) AS unique_pin_request_count,
 
           COUNT(*) FILTER (
-            WHERE ps.status IN ('OTP_SENT','VERIFIED')
+            WHERE ps.status = 'OTP_SENT'
           ) AS pin_send_count,
 
           COUNT(DISTINCT ps.msisdn) FILTER (
-            WHERE ps.status IN ('OTP_SENT','VERIFIED')
+            WHERE ps.status = 'OTP_SENT'
           ) AS unique_pin_sent,
 
           COUNT(*) FILTER (
-            WHERE ps.otp_attempts > 0
+            WHERE ps.parent_session_token IS NOT NULL
           ) AS pin_validation_request_count,
 
           COUNT(DISTINCT ps.msisdn) FILTER (
-            WHERE ps.otp_attempts > 0
+            WHERE ps.parent_session_token IS NOT NULL
           ) AS unique_pin_validation_request_count,
 
-          COUNT(DISTINCT pc.pin_session_uuid) AS unique_pin_verified,
+          COUNT(DISTINCT ps.session_id) FILTER (
+            WHERE ps.publisher_credited = TRUE
+          ) AS unique_pin_verified,
 
           ROUND(
-            COUNT(DISTINCT pc.pin_session_uuid)::numeric /
+            COUNT(DISTINCT ps.session_id) FILTER (
+              WHERE ps.publisher_credited = TRUE
+            )::numeric /
             NULLIF(
               COUNT(DISTINCT ps.msisdn)
-              FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')),
+              FILTER (WHERE ps.status = 'OTP_SENT'),
               0
             ) * 100,
             2
           ) AS cr,
 
-          COALESCE(SUM(pc.publisher_cpa), 0) AS revenue,
+          COALESCE(
+            SUM(ps.payout) FILTER (WHERE ps.publisher_credited = TRUE),
+            0
+          ) AS revenue,
 
-          MAX(ps.created_at AT TIME ZONE 'UTC') AS last_pin_gen_date,
+          MAX(
+            ps.created_at AT TIME ZONE 'UTC'
+          ) AS last_pin_gen_date,
 
-          MAX(ps.created_at AT TIME ZONE 'UTC') FILTER (
-            WHERE ps.status IN ('OTP_SENT','VERIFIED')
+          MAX(
+            ps.created_at AT TIME ZONE 'UTC'
+          ) FILTER (
+            WHERE ps.status = 'OTP_SENT'
           ) AS last_pin_gen_success_date,
 
-          MAX(ps.verified_at AT TIME ZONE 'UTC') AS last_pin_verification_date,
+          MAX(
+            ps.created_at AT TIME ZONE 'UTC'
+          ) FILTER (
+            WHERE ps.parent_session_token IS NOT NULL
+          ) AS last_pin_verification_date,
 
-          MAX(ps.credited_at AT TIME ZONE 'UTC') FILTER (
+          MAX(
+            ps.credited_at AT TIME ZONE 'UTC'
+          ) FILTER (
             WHERE ps.publisher_credited = TRUE
           ) AS last_success_pin_verification_date
 
@@ -89,12 +113,17 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
         JOIN offers o ON o.id = po.offer_id
 
         LEFT JOIN pin_sessions ps
-          ON ps.publisher_offer_id = po.id
-         AND DATE(ps.created_at AT TIME ZONE 'UTC') BETWEEN $2 AND $3
-
-        LEFT JOIN publisher_conversions pc
-          ON pc.pin_session_uuid = ps.session_id
-         AND pc.status = 'SUCCESS'
+          ON (
+               ps.publisher_offer_id = po.id
+               OR (
+                    ps.publisher_offer_id IS NULL
+                    AND ps.publisher_id = po.publisher_id
+                    AND ps.offer_id = po.offer_id
+                  )
+             )
+         AND DATE(
+              ps.created_at AT TIME ZONE 'UTC'
+            ) BETWEEN $2 AND $3
 
         WHERE po.publisher_id = $1
 
@@ -114,6 +143,10 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
         (SELECT COALESCE(SUM(unique_pin_verified),0) FROM offer_stats) AS total_verified,
         (SELECT COALESCE(SUM(revenue),0) FROM offer_stats) AS total_revenue
       FROM offer_stats
+      WHERE
+        pin_request_count > 0
+        OR pin_send_count > 0
+        OR pin_validation_request_count > 0
       ORDER BY stat_date ASC, offer, geo, carrier;
     `;
 
@@ -174,31 +207,43 @@ router.get(
             ps.created_at AT TIME ZONE 'UTC'
           ) AS hour,
 
-          COUNT(DISTINCT ps.msisdn) AS unique_pin_requests,
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+          ) AS unique_pin_requests,
 
           COUNT(DISTINCT ps.msisdn) FILTER (
-            WHERE ps.status IN ('OTP_SENT','VERIFIED')
+            WHERE ps.status = 'OTP_SENT'
           ) AS unique_pin_sent,
 
           COUNT(DISTINCT ps.msisdn) FILTER (
-            WHERE ps.otp_attempts > 0
+            WHERE ps.parent_session_token IS NOT NULL
           ) AS unique_pin_verification_requests,
 
-          COUNT(DISTINCT pc.pin_session_uuid) AS pin_verified,
+          COUNT(DISTINCT ps.session_id) FILTER (
+            WHERE ps.publisher_credited = TRUE
+          ) AS pin_verified,
 
-          COALESCE(SUM(pc.publisher_cpa), 0) AS revenue
+          COALESCE(
+            SUM(ps.payout) FILTER (WHERE ps.publisher_credited = TRUE),
+            0
+          ) AS revenue
 
         FROM publisher_offers po
         JOIN pin_sessions ps
-          ON ps.publisher_offer_id = po.id
-
-        LEFT JOIN publisher_conversions pc
-          ON pc.pin_session_uuid = ps.session_id
-         AND pc.status = 'SUCCESS'
+          ON (
+               ps.publisher_offer_id = po.id
+               OR (
+                    ps.publisher_offer_id IS NULL
+                    AND ps.publisher_id = po.publisher_id
+                    AND ps.offer_id = po.offer_id
+                  )
+             )
 
         WHERE po.publisher_id = $1
           AND po.id = $2
-          AND DATE(ps.created_at AT TIME ZONE 'UTC') BETWEEN $3 AND $4
+          AND DATE(
+            ps.created_at AT TIME ZONE 'UTC'
+          ) BETWEEN $3 AND $4
 
         GROUP BY hour
         ORDER BY hour ASC;
