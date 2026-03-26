@@ -52,7 +52,7 @@ function csvCell(value) {
 }
 
 export default function Dashboard() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIST(); // ✅ FIXED
 
   const [data, setData] = useState([]);
   const [stats, setStats] = useState({});
