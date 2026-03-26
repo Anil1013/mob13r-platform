@@ -4,19 +4,19 @@ import Navbar from "../components/Navbar";
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 
-const getTodayDateInput = () => {
-  const parts = new Intl.DateTimeFormat("en-GB", {
+const todayIST = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata",
-    day: "2-digit",
-    month: "2-digit",
     year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   }).formatToParts(new Date());
 
-  const day = parts.find(part => part.type === "day")?.value;
-  const month = parts.find(part => part.type === "month")?.value;
-  const year = parts.find(part => part.type === "year")?.value;
+  const y = parts.find((p) => p.type === "year")?.value;
+  const m = parts.find((p) => p.type === "month")?.value;
+  const d = parts.find((p) => p.type === "day")?.value;
 
-  return `${year}-${month}-${day}`;
+  return `${y}-${m}-${d}`;
 };
 
 const defaultFilters = {
