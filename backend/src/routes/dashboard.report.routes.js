@@ -4,6 +4,7 @@ import authMiddleware from "../middleware/auth.js";
 
 const router = express.Router();
 
+/* ---------------- DATE VALIDATION ---------------- */
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 function isValidDateInput(value) {
@@ -11,9 +12,33 @@ function isValidDateInput(value) {
   return DATE_REGEX.test(value);
 }
 
+/* ---------------- MAIN API ---------------- */
 router.get("/dashboard/report", authMiddleware, async (req, res) => {
   try {
-    const { from, to, geo, carrier, publisher, offer_id: offerId, advertiser } = req.query;
+    let {
+      from,
+      to,
+      geo,
+      carrier,
+      publisher,
+      advertiser,
+      offer_id,
+      view
+    } = req.query;
+
+    /* ---------------- DEFAULT DATE (TODAY IST) ---------------- */
+    if (!from || !to) {
+      const now = new Date();
+
+      // IST date निकालो
+      const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+      const yyyy = ist.getFullYear();
+      const mm = String(ist.getMonth() + 1).padStart(2, "0");
+      const dd = String(ist.getDate()).padStart(2, "0");
+
+      from = `${yyyy}-${mm}-${dd}`;
+      to = `${yyyy}-${mm}-${dd}`;
+    }
 
     if (!isValidDateInput(from) || !isValidDateInput(to)) {
       return res.status(400).json({
@@ -22,39 +47,36 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
       });
     }
 
+    /* ---------------- FILTERS ---------------- */
     const conditions = [];
     const values = [];
 
-    /* ✅ IST → UTC FILTER */
-    if (from && to) {
-      values.push(from);
-      values.push(to);
+    /* IST → UTC FILTER */
+    values.push(from);
+    values.push(to);
 
-      conditions.push(`
-        ps.created_at >= ($${values.length - 1}::date - INTERVAL '5 hours 30 minutes')
-        AND ps.created_at < ($${values.length}::date + INTERVAL '1 day' - INTERVAL '5 hours 30 minutes')
-      `);
-    }
+    conditions.push(`
+      ps.created_at >= ($${values.length - 1}::date - INTERVAL '5 hours 30 minutes')
+      AND ps.created_at < ($${values.length}::date + INTERVAL '1 day' - INTERVAL '5 hours 30 minutes')
+    `);
 
-    /* GEO */
     if (geo) {
       values.push(geo.trim().toUpperCase());
       conditions.push(`TRIM(UPPER(ps.params->>'geo')) = $${values.length}`);
     }
 
-    /* CARRIER */
     if (carrier) {
       values.push(carrier.trim().toUpperCase());
       conditions.push(`TRIM(UPPER(ps.params->>'carrier')) = $${values.length}`);
     }
 
     if (publisher) {
-      values.push(publisher);
+      values.push(Number(publisher));
       conditions.push(`ps.publisher_id = $${values.length}`);
     }
 
-    if (offerId) {
-      values.push(offerId);
+    if (offer_id) {
+      values.push(Number(offer_id));
       conditions.push(`ps.offer_id = $${values.length}`);
     }
 
@@ -63,11 +85,25 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
       conditions.push(`o.advertiser_id = $${values.length}`);
     }
 
-    const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    const whereClause = conditions.length
+      ? `WHERE ${conditions.join(" AND ")}`
+      : "";
 
+    /* ---------------- VIEW MODE ---------------- */
+    const isDaily = view === "daily";
+
+    const groupBy = isDaily
+      ? `DATE(ps.created_at), o.id`
+      : `o.id`;
+
+    const selectDate = isDaily
+      ? `DATE(ps.created_at) AS date,`
+      : ``;
+
+    /* ---------------- FINAL QUERY ---------------- */
     const query = `
       SELECT
-        DATE(ps.created_at) AS date,  -- ✅ UTC DATE
+        ${selectDate}
 
         COALESCE(a.name,'Unknown Advertiser') AS advertiser_name,
         COALESCE(o.service_name,'Unknown Offer') AS offer_name,
@@ -97,7 +133,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
           WHERE ps.status = 'OTP_SENT'
         ) AS unique_sent,
 
-        /* VERIFY REQUEST (MULTI-ROW FIX) */
+        /* VERIFY REQUEST */
         COUNT(*) FILTER (
           WHERE ps.parent_session_token IS NOT NULL
         ) AS verify_req,
@@ -156,8 +192,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
 
       ${whereClause}
 
-      GROUP BY
-        DATE(ps.created_at),
+      GROUP BY ${groupBy},
         a.name,
         o.service_name,
         p.name,
@@ -166,14 +201,17 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
         o.cpa,
         o.daily_cap
 
-      ORDER BY date DESC;
+      ORDER BY ${isDaily ? "date DESC," : ""} offer_name;
     `;
 
     const result = await pool.query(query, values);
 
     res.json({
       status: "SUCCESS",
-      data: result.rows
+      view: isDaily ? "daily" : "summary",
+      from,
+      to,
+      data: result.rows,
     });
 
   } catch (err) {
