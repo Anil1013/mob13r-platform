@@ -1,287 +1,202 @@
 import express from "express";
 import pool from "../db.js";
-import authMiddleware from "../middleware/auth.js";
+import publisherAuth from "../middleware/publisherAuth.js";
 
 const router = express.Router();
 
-const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+/* ================== HELPERS ================== */
 
-function isValidDateInput(value) {
-  if (!value) return true;
-  return DATE_REGEX.test(value);
-}
+// Today IST as YYYY-MM-DD
+const todayIST = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
 
-/*
-=====================================================
-PUBLISHER DASHBOARD REPORT (FINAL)
-=====================================================
-*/
-router.get("/dashboard/report", authMiddleware, async (req, res) => {
+  const y = parts.find((p) => p.type === "year")?.value;
+  const m = parts.find((p) => p.type === "month")?.value;
+  const d = parts.find((p) => p.type === "day")?.value;
+
+  return `${y}-${m}-${d}`;
+};
+
+/**
+ * =========================================================
+ * GET /api/publisher/dashboard/offers
+ * IST DATE-WISE DASHBOARD
+ * =========================================================
+ */
+router.get("/dashboard/offers", publisherAuth, async (req, res) => {
   try {
-    let {
-      from,
-      to,
-      geo,
-      carrier,
-      publisher,
-      advertiser,
-      offer_id,
-      view
-    } = req.query;
+    const publisherId = req.publisher.id;
+    let { from, to } = req.query;
 
-    /* ✅ DEFAULT TODAY IST */
+    // Default = today IST
     if (!from || !to) {
-      const now = new Date();
-      const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
-
-      const yyyy = ist.getFullYear();
-      const mm = String(ist.getMonth() + 1).padStart(2, "0");
-      const dd = String(ist.getDate()).padStart(2, "0");
-
-      from = `${yyyy}-${mm}-${dd}`;
-      to = `${yyyy}-${mm}-${dd}`;
+      from = todayIST();
+      to = todayIST();
     }
 
-    if (!isValidDateInput(from) || !isValidDateInput(to)) {
-      return res.status(400).json({
-        status: "FAILED",
-        message: "Invalid date format",
-      });
-    }
-
-    const conditions = [];
-    const values = [];
-
-    /* ✅ IST → UTC */
-    values.push(from);
-    values.push(to);
-
-    conditions.push(`
-      ps.created_at >= ($${values.length - 1}::date - INTERVAL '5 hours 30 minutes')
-      AND ps.created_at < ($${values.length}::date + INTERVAL '1 day' - INTERVAL '5 hours 30 minutes')
-    `);
-
-    /* FILTERS */
-    if (geo) {
-      values.push(geo.trim().toUpperCase());
-      conditions.push(`TRIM(UPPER(ps.params->>'geo')) = $${values.length}`);
-    }
-
-    if (carrier) {
-      values.push(carrier.trim().toUpperCase());
-      conditions.push(`TRIM(UPPER(ps.params->>'carrier')) = $${values.length}`);
-    }
-
-    if (publisher) {
-      values.push(Number(publisher));
-      conditions.push(`ps.publisher_id = $${values.length}`);
-    }
-
-    if (offer_id) {
-      values.push(Number(offer_id));
-      conditions.push(`ps.offer_id = $${values.length}`);
-    }
-
-    if (advertiser) {
-      values.push(advertiser);
-      conditions.push(`o.advertiser_id = $${values.length}`);
-    }
-
-    const whereClause = conditions.length
-      ? `WHERE ${conditions.join(" AND ")}`
-      : "";
-
-    /* VIEW MODE */
-    const isDaily = view === "daily";
-
-    const groupBy = isDaily
-      ? `DATE(ps.created_at), o.id`
-      : `o.id`;
-
-    const selectDate = isDaily
-      ? `DATE(ps.created_at) AS date,`
-      : ``;
+    const params = [publisherId, from, to];
 
     const query = `
-      SELECT
-        ${selectDate}
+      WITH offer_stats AS (
+        SELECT
+          DATE(
+            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+          ) AS stat_date,
 
-        COALESCE(a.name,'Unknown Advertiser') AS advertiser_name,
-        COALESCE(o.service_name,'Unknown Offer') AS offer_name,
-        COALESCE(p.name,'Unknown Publisher') AS publisher_name,
+          po.id AS publisher_offer_id,
+          o.service_name AS offer,
+          o.geo,
+          o.carrier,
+          po.publisher_cpa AS cpa,
+          po.daily_cap AS cap,
 
-        COALESCE(TRIM(UPPER(ps.params->>'geo')),'UNKNOWN') AS geo,
-        COALESCE(TRIM(UPPER(ps.params->>'carrier')),'UNKNOWN') AS carrier,
-
-        o.cpa,
-        o.daily_cap AS cap,
-
-        /* REQUEST */
-        COUNT(*) FILTER (
-          WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
-        ) AS pin_req,
-
-        COUNT(DISTINCT ps.msisdn) FILTER (
-          WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
-        ) AS unique_req,
-
-        /* SENT */
-        COUNT(*) FILTER (
-          WHERE ps.status = 'OTP_SENT'
-        ) AS pin_sent,
-
-        COUNT(DISTINCT ps.msisdn) FILTER (
-          WHERE ps.status = 'OTP_SENT'
-        ) AS unique_sent,
-
-        /* VERIFY */
-        COUNT(*) FILTER (
-          WHERE ps.parent_session_token IS NOT NULL
-        ) AS verify_req,
-
-        COUNT(DISTINCT ps.msisdn) FILTER (
-          WHERE ps.parent_session_token IS NOT NULL
-        ) AS unique_verify,
-
-        /* VERIFIED */
-        COUNT(*) FILTER (
-          WHERE ps.status = 'VERIFIED'
-          AND ps.parent_session_token IS NOT NULL
-        ) AS verified,
-
-        /* CR */
-        ROUND(
           COUNT(*) FILTER (
-            WHERE ps.status = 'VERIFIED'
-            AND ps.parent_session_token IS NOT NULL
-          )::numeric
-          /
-          NULLIF(
-            COUNT(DISTINCT ps.msisdn)
-            FILTER (WHERE ps.status = 'OTP_SENT'),
+            WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+          ) AS pin_request_count,
+
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+          ) AS unique_pin_request_count,
+
+          COUNT(*) FILTER (
+            WHERE ps.status = 'OTP_SENT'
+          ) AS pin_send_count,
+
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.status = 'OTP_SENT'
+          ) AS unique_pin_sent,
+
+          COUNT(*) FILTER (
+            WHERE ps.parent_session_token IS NOT NULL
+          ) AS pin_validation_request_count,
+
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.parent_session_token IS NOT NULL
+          ) AS unique_pin_validation_request_count,
+
+          COUNT(DISTINCT ps.session_id) FILTER (
+            WHERE ps.publisher_credited = TRUE
+          ) AS unique_pin_verified,
+
+          ROUND(
+            COUNT(DISTINCT ps.session_id) FILTER (
+              WHERE ps.publisher_credited = TRUE
+            )::numeric /
+            NULLIF(
+              COUNT(DISTINCT ps.msisdn)
+              FILTER (WHERE ps.status = 'OTP_SENT'),
+              0
+            ) * 100,
+            2
+          ) AS cr,
+
+          COALESCE(
+            SUM(ps.payout) FILTER (WHERE ps.publisher_credited = TRUE),
             0
-          ) * 100,
-          2
-        ) AS cr_percent,
+          ) AS revenue,
 
-        /* 🔥 PUBLISHER REVENUE (FIXED) */
-        COALESCE(
-          SUM(pc.publisher_cpa) FILTER (WHERE pc.status = 'SUCCESS'),
-          0
-        ) AS revenue,
+          MAX(
+            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+          ) AS last_pin_gen_date,
 
-        /* TIMES */
-        MAX(ps.created_at)
-          FILTER (WHERE ps.status = 'OTP_SENT') AS last_pin_gen,
+          MAX(
+            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+          ) FILTER (
+            WHERE ps.status = 'OTP_SENT'
+          ) AS last_pin_gen_success_date,
 
-        MAX(ps.created_at)
-          FILTER (WHERE ps.parent_session_token IS NOT NULL) AS last_verification,
+          MAX(
+            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+          ) FILTER (
+            WHERE ps.parent_session_token IS NOT NULL
+          ) AS last_pin_verification_date,
 
-        MAX(ps.created_at)
-          FILTER (
-            WHERE ps.status = 'VERIFIED'
-            AND ps.parent_session_token IS NOT NULL
-          ) AS last_success_verification
+          MAX(
+            ps.credited_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+          ) FILTER (
+            WHERE ps.publisher_credited = TRUE
+          ) AS last_success_pin_verification_date
 
-      FROM pin_sessions ps
-      LEFT JOIN offers o ON o.id = ps.offer_id
-      LEFT JOIN publishers p ON p.id = ps.publisher_id
-      LEFT JOIN advertisers a ON a.id = o.advertiser_id
+        FROM publisher_offers po
+        JOIN offers o ON o.id = po.offer_id
 
-      /* 🔥 JOIN CONVERSIONS */
-      LEFT JOIN publisher_conversions pc
-        ON pc.pin_session_uuid = ps.session_token
+        LEFT JOIN pin_sessions ps
+          ON (
+               ps.publisher_offer_id = po.id
+               OR (
+                    ps.publisher_offer_id IS NULL
+                    AND ps.publisher_id = po.publisher_id
+                    AND ps.offer_id = po.offer_id
+                  )
+             )
+         AND DATE(
+              ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+            ) BETWEEN $2 AND $3
 
-      ${whereClause}
+        WHERE po.publisher_id = $1
 
-      GROUP BY ${groupBy},
-        a.name,
-        o.service_name,
-        p.name,
-        TRIM(UPPER(ps.params->>'geo')),
-        TRIM(UPPER(ps.params->>'carrier')),
-        o.cpa,
-        o.daily_cap
+        GROUP BY
+          stat_date,
+          po.id,
+          o.service_name,
+          o.geo,
+          o.carrier,
+          po.publisher_cpa,
+          po.daily_cap
+      )
 
-      ORDER BY ${isDaily ? "date DESC," : ""} offer_name;
+      SELECT
+        *,
+        (SELECT COALESCE(SUM(pin_request_count),0) FROM offer_stats) AS total_pin_requests,
+        (SELECT COALESCE(SUM(unique_pin_verified),0) FROM offer_stats) AS total_verified,
+        (SELECT COALESCE(SUM(revenue),0) FROM offer_stats) AS total_revenue
+      FROM offer_stats
+      WHERE
+        pin_request_count > 0
+        OR pin_send_count > 0
+        OR pin_validation_request_count > 0
+      ORDER BY stat_date ASC, offer, geo, carrier;
     `;
 
-    const result = await pool.query(query, values);
+    const { rows } = await pool.query(query, params);
+
+    const summary = {
+      total_pin_requests: rows[0]?.total_pin_requests || 0,
+      total_verified: rows[0]?.total_verified || 0,
+      total_revenue: rows[0]?.total_revenue || 0,
+    };
+
+    const cleanRows = rows.map(
+      ({ total_pin_requests, total_verified, total_revenue, ...rest }) => rest
+    );
 
     res.json({
-      status: "SUCCESS",
-      view: isDaily ? "daily" : "summary",
-      data: result.rows
+      publisher: {
+        id: publisherId,
+        name: req.publisher.name,
+      },
+      from,
+      to,
+      summary,
+      rows: cleanRows,
     });
-
   } catch (err) {
-    console.error("PUBLISHER DASHBOARD ERROR:", err);
-    res.status(500).json({ status: "FAILED" });
+    console.error("❌ PUBLISHER DASHBOARD ERROR:", err);
+    res.status(500).json({ error: "Failed to load dashboard data" });
   }
 });
 
-/*
-=====================================================
-REALTIME
-=====================================================
-*/
-router.get("/dashboard/realtime", authMiddleware, async (req, res) => {
-  try {
-    const { from, to } = req.query;
-
-    let conditions = [];
-    let values = [];
-
-    if (from && to) {
-      values.push(from);
-      values.push(to);
-
-      conditions.push(`
-        created_at >= ($${values.length - 1}::date - INTERVAL '5 hours 30 minutes')
-        AND created_at < ($${values.length}::date + INTERVAL '1 day' - INTERVAL '5 hours 30 minutes')
-      `);
-    }
-
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-
-    const stats = await pool.query(`
-      SELECT
-        COUNT(*) FILTER (
-          WHERE status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
-        ) AS total_requests,
-
-        COUNT(*) FILTER (
-          WHERE status = 'OTP_SENT'
-        ) AS otp_sent,
-
-        COUNT(*) FILTER (
-          WHERE status = 'VERIFIED'
-        ) AS conversions,
-
-        COUNT(*) FILTER (
-          WHERE created_at >= NOW() - INTERVAL '1 hour'
-        ) AS last_hour_requests
-
-      FROM pin_sessions
-      ${where}
-    `, values);
-
-    res.json({
-      status: "SUCCESS",
-      data: stats.rows[0]
-    });
-
-  } catch (err) {
-    console.error("REALTIME ERROR:", err);
-    res.status(500).json({ status: "FAILED" });
-  }
-});
-
-/*
-=====================================================
-HOURLY DASHBOARD (FIXED)
-=====================================================
-*/
+/**
+ * =========================================================
+ * GET /api/publisher/dashboard/offers/:publisherOfferId/hourly
+ * IST HOURLY DASHBOARD
+ * =========================================================
+ */
 router.get(
   "/dashboard/offers/:publisherOfferId/hourly",
   publisherAuth,
@@ -299,46 +214,53 @@ router.get(
       const params = [publisherId, publisherOfferId, from, to];
 
       const query = `
+        SELECT
+          DATE_TRUNC(
+            'hour',
+            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+          ) AS hour,
 
-SELECT
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+          ) AS unique_pin_requests,
 
-DATE_TRUNC(
-  'hour',
-  ps.created_at AT TIME ZONE 'Asia/Kolkata'
-) AS hour,
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.status = 'OTP_SENT'
+          ) AS unique_pin_sent,
 
-COUNT(DISTINCT ps.msisdn) AS unique_pin_requests,
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.parent_session_token IS NOT NULL
+          ) AS unique_pin_verification_requests,
 
-COUNT(DISTINCT ps.msisdn) FILTER (
-WHERE ps.status IN ('OTP_SENT','VERIFIED')
-) AS unique_pin_sent,
+          COUNT(DISTINCT ps.session_id) FILTER (
+            WHERE ps.publisher_credited = TRUE
+          ) AS pin_verified,
 
-COUNT(DISTINCT ps.msisdn) FILTER (
-WHERE ps.otp_attempts > 0
-) AS unique_pin_verification_requests,
+          COALESCE(
+            SUM(ps.payout) FILTER (WHERE ps.publisher_credited = TRUE),
+            0
+          ) AS revenue
 
-COUNT(DISTINCT pc.pin_session_uuid) AS pin_verified,
+        FROM publisher_offers po
+        JOIN pin_sessions ps
+          ON (
+               ps.publisher_offer_id = po.id
+               OR (
+                    ps.publisher_offer_id IS NULL
+                    AND ps.publisher_id = po.publisher_id
+                    AND ps.offer_id = po.offer_id
+                  )
+             )
 
-COALESCE(SUM(pc.publisher_cpa), 0) AS revenue
+        WHERE po.publisher_id = $1
+          AND po.id = $2
+          AND DATE(
+            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+          ) BETWEEN $3 AND $4
 
-FROM publisher_offers po
-
-JOIN pin_sessions ps
-ON ps.publisher_offer_id = po.id
-
-LEFT JOIN publisher_conversions pc
-ON pc.pin_session_uuid = ps.session_id
-AND pc.status = 'SUCCESS'
-
-WHERE po.publisher_id = $1
-AND po.id = $2
-AND ps.created_at >= $3::date
-AND ps.created_at < ($4::date + INTERVAL '1 day')
-
-GROUP BY hour
-ORDER BY hour ASC;
-
-`;
+        GROUP BY hour
+        ORDER BY hour ASC;
+      `;
 
       const { rows } = await pool.query(query, params);
 
@@ -348,7 +270,6 @@ ORDER BY hour ASC;
         to,
         rows,
       });
-
     } catch (err) {
       console.error("❌ HOURLY DASHBOARD ERROR:", err);
       res.status(500).json({ error: "Failed to load hourly data" });
