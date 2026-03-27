@@ -68,6 +68,7 @@ export default function Dashboard() {
   const [geo, setGeo] = useState("");
   const [carrier, setCarrier] = useState("");
   const [offer, setOffer] = useState("");
+  const [view, setView] = useState("summary");
 
   const authHeader = useMemo(() => {
     const token = localStorage.getItem("token");
@@ -92,6 +93,7 @@ export default function Dashboard() {
       const params = new URLSearchParams();
       params.append("from", from);
       params.append("to", to);
+      params.append("view", view);
 
       if (advertiser) params.append("advertiser", advertiser);
       if (publisher) params.append("publisher", publisher);
@@ -112,7 +114,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [from, to, advertiser, publisher, geo, carrier, offer, authHeader, getResponseData]);
+  }, [from, to, advertiser, publisher, geo, carrier, offer, view, authHeader, getResponseData]);
 
   const loadFilters = useCallback(async () => {
     try {
@@ -135,15 +137,27 @@ export default function Dashboard() {
 
   const loadRealtime = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/dashboard/realtime`, {
-        headers: authHeader,
-      });
+      const params = new URLSearchParams();
+
+      params.append("from", from);
+      params.append("to", to);
+
+      if (advertiser) params.append("advertiser", advertiser);
+      if (publisher) params.append("publisher", publisher);
+      if (geo) params.append("geo", geo);
+      if (carrier) params.append("carrier", carrier);
+      if (offer) params.append("offer_id", offer);
+
+      const response = await fetch(
+        `${API_BASE}/api/dashboard/realtime?${params.toString()}`,
+        { headers: authHeader }
+      );
       const json = await getResponseData(response);
       setStats(json?.data && typeof json.data === "object" ? json.data : {});
     } catch {
       setStats({});
     }
-  }, [authHeader, getResponseData]);
+  }, [from, to, advertiser, publisher, geo, carrier, offer, authHeader, getResponseData]);
 
   useEffect(() => {
     loadReport();
@@ -205,6 +219,11 @@ export default function Dashboard() {
 
       <div style={{ padding: "20px", fontFamily: "Lora, serif" }}>
         <h1>Traffic Dashboard</h1>
+
+        <div style={{ marginBottom: "10px" }}>
+          <button onClick={() => setView("summary")}>Summary</button>
+          <button onClick={() => setView("daily")}>Daily</button>
+        </div>
 
         {error ? <p style={{ color: "red" }}>{error}</p> : null}
 
@@ -283,7 +302,7 @@ export default function Dashboard() {
           <table border="1" cellPadding="8" width="100%" style={{ textAlign: "center" }}>
             <thead>
               <tr>
-                <th>Date</th>
+                {view === "daily" && <th>Date</th>}
                 <th>Advertiser</th>
                 <th>Offer</th>
                 <th>Publisher</th>
@@ -309,7 +328,7 @@ export default function Dashboard() {
             <tbody>
               {data.map((row, i) => (
                 <tr key={`${row.offer_id || "offer"}-${row.publisher_id || "pub"}-${i}`}>
-                  <td>{formatDate(row.date)}</td>
+                  {view === "daily" && <td>{formatDate(row.date)}</td>}
                   <td>{row.advertiser_name}</td>
                   <td>{row.offer_name}</td>
                   <td>{row.publisher_name}</td>
@@ -333,7 +352,7 @@ export default function Dashboard() {
               ))}
 
               <tr>
-                <td colSpan="8">
+                <td colSpan={view === "daily" ? 8 : 7}>
                   <b>TOTAL</b>
                 </td>
                 <td>{total.pin_req}</td>
