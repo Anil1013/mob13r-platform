@@ -26,48 +26,25 @@ const todayIST = () => {
 
 const formatDateOnly = (value) => {
   if (!value) return "-";
-  const [y, m, d] = value.slice(0, 10).split("-");
+  const [y, m, d] = String(value).slice(0, 10).split("-");
   return `${d}/${m}/${y}`;
 };
 
 const formatDateTime = (value) => {
   if (!value) return "-";
-
-  const d = new Date(value);
-
-  return d.toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-};
-
-const hourStartIST = (value) => {
-  if (!value) return null;
-  const d = new Date(value);
-  const ist = new Date(
-    d.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
-  );
-  ist.setMinutes(0, 0, 0);
-  return ist;
+  const v = String(value).replace("T", " ").replace("Z", "").split(".")[0];
+  const [date, time] = v.split(" ");
+  if (!date || !time) return "-";
+  const [y, m, d] = date.split("-");
+  return `${d}/${m}/${y}, ${time}`;
 };
 
 const hourLabel = (hourValue) => {
-  const start = hourStartIST(hourValue);
-  if (!start) return "-";
-
-  const end = new Date(start);
-  end.setHours(start.getHours() + 1);
-
-  const hh = String(start.getHours()).padStart(2, "0");
-  const nh = String(end.getHours()).padStart(2, "0");
-
-  return `${hh}:00 – ${nh}:00`;
+  if (!hourValue) return "-";
+  const h = String(hourValue).slice(11, 13);
+  if (!h || Number.isNaN(Number(h))) return "-";
+  const n = String((Number(h) + 1) % 24).padStart(2, "0");
+  return `${h}:00 – ${n}:00`;
 };
 
 /* ================= CSV EXPORT ================= */
@@ -163,8 +140,8 @@ export default function PublisherDashboard() {
       }
 
       const qs = new URLSearchParams({
-        from: fromDate, // send date only
-        to: toDate,     // send date only
+        from: fromDate,
+        to: toDate,
       });
 
       const res = await fetch(
@@ -241,10 +218,9 @@ export default function PublisherDashboard() {
         return;
       }
 
-      // stat_date is already date-only from backend
       const qs = new URLSearchParams({
-        from: row.stat_date?.slice(0, 10),
-        to: row.stat_date?.slice(0, 10),
+        from: String(row.stat_date).slice(0, 10),
+        to: String(row.stat_date).slice(0, 10),
       });
 
       const res = await fetch(
@@ -255,9 +231,9 @@ export default function PublisherDashboard() {
       const data = await res.json();
 
       const sortedHourly = [...(data.rows || [])].sort((a, b) => {
-        const t1 = hourStartIST(a.hour)?.getTime() || 0;
-        const t2 = hourStartIST(b.hour)?.getTime() || 0;
-        return t1 - t2;
+        const t1 = String(a.hour || "");
+        const t2 = String(b.hour || "");
+        return t1.localeCompare(t2);
       });
 
       setHourlyRows(sortedHourly);
