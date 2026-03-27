@@ -29,12 +29,12 @@ const defaultFilters = {
 
 const formatDate = value => {
   if (!value) return "-";
+  if (typeof value === "string") return value;
 
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
 
   return new Intl.DateTimeFormat("en-IN", {
-    timeZone: "Asia/Kolkata",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
