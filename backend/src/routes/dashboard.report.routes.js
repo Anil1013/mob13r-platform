@@ -25,7 +25,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
     const conditions = [];
     const values = [];
 
-    /* ✅ IST → UTC FIX */
+    /* ✅ IST → UTC FILTER */
     if (from && to) {
       values.push(from);
       values.push(to);
@@ -67,7 +67,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
 
     const query = `
       SELECT
-        DATE(ps.created_at + INTERVAL '5 hours 30 minutes') AS date,
+        DATE(ps.created_at) AS date,  -- ✅ UTC DATE
 
         COALESCE(a.name,'Unknown Advertiser') AS advertiser_name,
         COALESCE(o.service_name,'Unknown Offer') AS offer_name,
@@ -97,7 +97,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
           WHERE ps.status = 'OTP_SENT'
         ) AS unique_sent,
 
-        /* VERIFY REQUEST (FIXED) */
+        /* VERIFY REQUEST (MULTI-ROW FIX) */
         COUNT(*) FILTER (
           WHERE ps.parent_session_token IS NOT NULL
         ) AS verify_req,
@@ -136,14 +136,14 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
           0
         ) AS revenue,
 
-        /* TIMES */
-        MAX(ps.created_at + INTERVAL '5 hours 30 minutes')
+        /* TIMES (UTC) */
+        MAX(ps.created_at)
           FILTER (WHERE ps.status = 'OTP_SENT') AS last_pin_gen,
 
-        MAX(ps.created_at + INTERVAL '5 hours 30 minutes')
+        MAX(ps.created_at)
           FILTER (WHERE ps.parent_session_token IS NOT NULL) AS last_verification,
 
-        MAX(ps.created_at + INTERVAL '5 hours 30 minutes')
+        MAX(ps.created_at)
           FILTER (
             WHERE ps.status = 'VERIFIED'
             AND ps.parent_session_token IS NOT NULL
@@ -157,7 +157,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
       ${whereClause}
 
       GROUP BY
-        DATE(ps.created_at + INTERVAL '5 hours 30 minutes'),
+        DATE(ps.created_at),
         a.name,
         o.service_name,
         p.name,
