@@ -79,13 +79,13 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
             WHERE ps.parent_session_token IS NOT NULL
           ) AS unique_pin_validation_request_count,
 
-          COUNT(DISTINCT ps.session_id) FILTER (
-            WHERE ps.publisher_credited = TRUE
+          COUNT(DISTINCT pc.id) FILTER (
+            WHERE pc.status = 'SUCCESS'
           ) AS unique_pin_verified,
 
           ROUND(
-            COUNT(DISTINCT ps.session_id) FILTER (
-              WHERE ps.publisher_credited = TRUE
+            COUNT(DISTINCT pc.id) FILTER (
+              WHERE pc.status = 'SUCCESS'
             )::numeric /
             NULLIF(
               COUNT(DISTINCT ps.msisdn)
@@ -96,7 +96,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
           ) AS cr,
 
           COALESCE(
-            SUM(ps.payout) FILTER (WHERE ps.publisher_credited = TRUE),
+            SUM(pc.publisher_cpa) FILTER (WHERE pc.status = 'SUCCESS'),
             0
           ) AS revenue,
 
@@ -117,9 +117,9 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
           ) AS last_pin_verification_date,
 
           MAX(
-            ps.credited_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
           ) FILTER (
-            WHERE ps.publisher_credited = TRUE
+            WHERE pc.status = 'SUCCESS'
           ) AS last_success_pin_verification_date
 
         FROM publisher_offers po
@@ -137,6 +137,8 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
          AND DATE(
               ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
             ) BETWEEN $2 AND $3
+        LEFT JOIN publisher_conversions pc
+          ON pc.pin_session_uuid = ps.session_token
 
         WHERE po.publisher_id = $1
 
@@ -232,12 +234,12 @@ router.get(
             WHERE ps.parent_session_token IS NOT NULL
           ) AS unique_pin_verification_requests,
 
-          COUNT(DISTINCT ps.session_id) FILTER (
-            WHERE ps.publisher_credited = TRUE
+          COUNT(DISTINCT pc.id) FILTER (
+            WHERE pc.status = 'SUCCESS'
           ) AS pin_verified,
 
           COALESCE(
-            SUM(ps.payout) FILTER (WHERE ps.publisher_credited = TRUE),
+            SUM(pc.publisher_cpa) FILTER (WHERE pc.status = 'SUCCESS'),
             0
           ) AS revenue
 
@@ -248,9 +250,11 @@ router.get(
                OR (
                     ps.publisher_offer_id IS NULL
                     AND ps.publisher_id = po.publisher_id
-                    AND ps.offer_id = po.offer_id
+                   AND ps.offer_id = po.offer_id
                   )
              )
+        LEFT JOIN publisher_conversions pc
+          ON pc.pin_session_uuid = ps.session_token
 
         WHERE po.publisher_id = $1
           AND po.id = $2
