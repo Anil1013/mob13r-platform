@@ -1,6 +1,6 @@
 import express from "express";
 import pool from "../db.js";
-import authMiddleware from "../middleware/auth.js";
+import publisherAuth from "../middleware/publisherAuth.js";
 
 const router = express.Router();
 
