@@ -1,5 +1,3 @@
-// 🔥 SAME FILE - NOTHING REMOVED - ONLY ADDED
-
 import express from "express";
 import pool from "../db.js";
 import authMiddleware from "../middleware/auth.js";
@@ -106,9 +104,9 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
         COALESCE(TRIM(UPPER(ps.params->>'carrier')), 'UNKNOWN') AS carrier,
 
         o.cpa,
-        po.publisher_cpa, -- 🔥 ADDED
+        po.publisher_cpa,
         o.daily_cap AS cap,
-        po.daily_cap AS publisher_cap, -- 🔥 ADDED
+        po.daily_cap AS publisher_cap,
 
         COUNT(*) FILTER (
           WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
@@ -139,8 +137,6 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
           AND ps.parent_session_token IS NOT NULL
         ) AS verified,
 
-        -- 🔥 ADDED BLOCK START
-
         COUNT(*) FILTER (
           WHERE ps.status = 'VERIFIED'
           AND ps.publisher_credited = TRUE
@@ -170,18 +166,18 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
           COALESCE(
             SUM(ps.payout) FILTER (
               WHERE ps.status = 'VERIFIED'
-            ), 0
-          )
-          -
+              AND ps.parent_session_token IS NOT NULL
+            ),
+            0
+          ) -
           COALESCE(
             SUM(ps.publisher_cpa) FILTER (
               WHERE ps.status = 'VERIFIED'
               AND ps.publisher_credited = TRUE
-            ), 0
+            ),
+            0
           )
         ) AS profit,
-
-        -- 🔥 ADDED BLOCK END
 
         ROUND(
           COUNT(*) FILTER (
@@ -227,7 +223,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
       LEFT JOIN offers o ON o.id = ps.offer_id
       LEFT JOIN publishers p ON p.id = ps.publisher_id
       LEFT JOIN advertisers a ON a.id = o.advertiser_id
-      LEFT JOIN publisher_offers po ON po.id = ps.publisher_offer_id -- 🔥 ADDED
+      LEFT JOIN publisher_offers po ON po.id = ps.publisher_offer_id
 
       ${whereClause}
 
@@ -257,6 +253,129 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error("DASHBOARD ERROR:", err);
     return res.status(500).json({ status: "FAILED" });
+  }
+});
+
+router.get("/dashboard/realtime", authMiddleware, async (req, res) => {
+  try {
+    let { from, to, geo, carrier, publisher, advertiser, offer_id } = req.query;
+
+    if (!from || !to) {
+      from = todayIST();
+      to = todayIST();
+    }
+
+    if (!isValidDateInput(from) || !isValidDateInput(to)) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Invalid date format",
+      });
+    }
+
+    const { values, whereClause } = buildCommonFilters({
+      from,
+      to,
+      geo,
+      carrier,
+      publisher,
+      advertiser,
+      offer_id,
+    });
+
+    const stats = await pool.query(
+      `
+      SELECT
+        COUNT(*) FILTER (
+          WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+        ) AS total_requests,
+
+        COUNT(*) FILTER (
+          WHERE ps.status = 'OTP_SENT'
+        ) AS otp_sent,
+
+        COUNT(*) FILTER (
+          WHERE ps.status = 'VERIFIED'
+          AND ps.parent_session_token IS NOT NULL
+        ) AS conversions,
+
+        COUNT(*) FILTER (
+          WHERE ps.created_at >= NOW() - INTERVAL '1 hour'
+        ) AS last_hour_requests
+
+      FROM pin_sessions ps
+      LEFT JOIN offers o ON o.id = ps.offer_id
+      ${whereClause};
+      `,
+      values
+    );
+
+    return res.json({
+      status: "SUCCESS",
+      data: stats.rows[0] || {},
+    });
+  } catch (err) {
+    console.error("REALTIME DASHBOARD ERROR:", err);
+    return res.status(500).json({
+      status: "FAILED",
+      message: "Failed to fetch realtime stats",
+    });
+  }
+});
+
+router.get("/dashboard/filters", authMiddleware, async (_req, res) => {
+  try {
+    const advertisers = await pool.query(`
+      SELECT id, name
+      FROM advertisers
+      ORDER BY name;
+    `);
+
+    const publishers = await pool.query(`
+      SELECT id, name
+      FROM publishers
+      ORDER BY name;
+    `);
+
+    const offers = await pool.query(`
+      SELECT id, service_name
+      FROM offers
+      WHERE status = 'active'
+      ORDER BY service_name;
+    `);
+
+    const geos = await pool.query(`
+      SELECT DISTINCT TRIM(UPPER(params->>'geo')) AS geo
+      FROM pin_sessions
+      WHERE params->>'geo' IS NOT NULL
+        AND params->>'geo' <> ''
+      ORDER BY geo;
+    `);
+
+    const carriers = await pool.query(`
+      SELECT DISTINCT TRIM(UPPER(params->>'carrier')) AS carrier
+      FROM pin_sessions
+      WHERE params->>'carrier' IS NOT NULL
+        AND params->>'carrier' <> ''
+      ORDER BY carrier;
+    `);
+
+    return res.json({
+      status: "SUCCESS",
+      advertisers: advertisers.rows || [],
+      publishers: publishers.rows || [],
+      offers: (offers.rows || []).map(item => ({
+        id: item.id,
+        offer_name: item.service_name,
+      })),
+      geos: (geos.rows || []).map(item => item.geo),
+      carriers: (carriers.rows || []).map(item => item.carrier),
+    });
+  } catch (err) {
+    console.error("FILTER API ERROR:", err);
+    return res.status(500).json({
+      status: "FAILED",
+      message: "Failed to fetch dashboard filters",
+    });
   }
 });
 
