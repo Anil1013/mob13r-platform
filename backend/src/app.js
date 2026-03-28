@@ -7,6 +7,7 @@ import advertisersRoutes from "./routes/advertisers.routes.js";
 import offersRoutes from "./routes/offers.routes.js";
 import pinRoutes from "./routes/pin.routes.js";
 import dumpRoutes from "./routes/dashboard.dump.routes.js";
+import landingRoutes from "./routes/landing.routes.js";
 
 /* 👉 PUBLISHER ROUTES */
 import publisherRoutes from "./routes/publisher.routes.js";
@@ -40,6 +41,8 @@ app.use("/api/offers", offersRoutes);
 app.use("/api", pinRoutes);
 
 app.use("/api", dumpRoutes);
+
+app.use("/api/landing", landingRoutes);
 
 /* -------- DASHBOARD APIs -------- */
 
