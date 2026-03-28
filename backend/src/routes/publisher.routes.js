@@ -247,7 +247,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       UPDATE pin_sessions
       SET publisher_credited=TRUE,
           credited_at=NOW()
-      WHERE session_token=$1
+      WHERE parent_session_token = $1
       `,
       [session_token]
     );
