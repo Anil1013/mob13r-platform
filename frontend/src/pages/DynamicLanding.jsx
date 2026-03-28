@@ -1,48 +1,72 @@
-import { useState } from "react";
-import Navbar from "../components/Navbar";
+import { useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
 
-export default function LandingBuilder() {
-  const [form, setForm] = useState({});
+export default function DynamicLanding() {
+  const { id } = useParams();
 
-  const save = async () => {
-    await fetch("/api/landing", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(form)
-    });
+  const [data, setData] = useState(null);
+  const [msisdn, setMsisdn] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState("input");
 
-    alert("Saved");
+  useEffect(() => {
+    fetch(`/api/landing/${id}`)
+      .then(res => res.json())
+      .then(res => setData(res.data));
+  }, [id]);
+
+  if (!data) return <div>Loading...</div>;
+
+  const sendPin = async () => {
+    const res = await fetch(
+      `/api/publisher/pin/send?offer_id=${data.offer_id}&msisdn=${msisdn}`
+    );
+
+    const json = await res.json();
+    localStorage.setItem("session_token", json.session_token);
+    setStep("otp");
+  };
+
+  const verifyPin = async () => {
+    const token = localStorage.getItem("session_token");
+
+    const res = await fetch(
+      `/api/publisher/pin/verify?session_token=${token}&otp=${otp}`
+    );
+
+    const json = await res.json();
+
+    if (json.status === "SUCCESS") {
+      alert("Success");
+    }
   };
 
   return (
-    <>
-      <Navbar />
+    <div style={{ padding: 20 }}>
+      <h1>{data.title}</h1>
+      <p>{data.description}</p>
 
-      <div style={{ padding: 20 }}>
-        <h2>Create Landing</h2>
+      {data.image_url && (
+        <img src={data.image_url} alt="" width="100%" />
+      )}
 
-        <input placeholder="Publisher Offer ID"
-          onChange={e=>setForm({...form, publisher_offer_id:e.target.value})} />
+      {step === "input" && (
+        <>
+          <input placeholder="Enter Number"
+            onChange={e => setMsisdn(e.target.value)} />
+          <button onClick={sendPin}>Send OTP</button>
+        </>
+      )}
 
-        <input placeholder="Title"
-          onChange={e=>setForm({...form, title:e.target.value})} />
+      {step === "otp" && (
+        <>
+          <input placeholder="Enter OTP"
+            onChange={e => setOtp(e.target.value)} />
+          <button onClick={verifyPin}>Verify</button>
+        </>
+      )}
 
-        <input placeholder="Description"
-          onChange={e=>setForm({...form, description:e.target.value})} />
-
-        <input placeholder="Image URL"
-          onChange={e=>setForm({...form, image_url:e.target.value})} />
-
-        <input placeholder="Button Text"
-          onChange={e=>setForm({...form, button_text:e.target.value})} />
-
-        <textarea placeholder="Disclaimer"
-          onChange={e=>setForm({...form, disclaimer:e.target.value})} />
-
-        <button onClick={save}>Save</button>
-      </div>
-    </>
+      <p>{data.disclaimer}</p>
+    </div>
   );
 }
