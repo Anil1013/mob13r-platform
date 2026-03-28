@@ -51,6 +51,10 @@ export default function Navbar() {
             Assign Offers
           </NavLink>
 
+          <NavLink to="/landing-builder" style={navStyle}>
+           Landing Builder
+          </NavLink>
+          
           {/* ✅ MAIN DUMP DASHBOARD */}
           <NavLink to="/dashboard/dump" style={navStyle}>
             Dump Logs
