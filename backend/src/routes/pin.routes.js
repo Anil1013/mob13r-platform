@@ -363,12 +363,22 @@ router.all("/pin/verify", async (req, res) => {
     const verifyRowToken = uuidv4();
 
     await pool.query(
+
       `INSERT INTO pin_sessions
-       (offer_id,msisdn,session_token,
-        parent_session_token,params,
-        publisher_request,publisher_id,
-        status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'VERIFY_REQUESTED')`,
+  (
+    offer_id,
+    msisdn,
+    session_token,
+    parent_session_token,
+    params,
+    publisher_request,
+    publisher_id,
+    publisher_offer_id,
+    publisher_cpa,
+    status
+  )
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'VERIFY_REQUESTED')`,
+  
       [
         session.offer_id,
         session.msisdn,
@@ -381,7 +391,9 @@ router.all("/pin/verify", async (req, res) => {
           headers: captureHeaders(req),
           params: { ...req.query, otp }
         },
-        session.publisher_id
+        session.publisher_id,
+    session.publisher_offer_id,   // 🔥 ADD
+    session.publisher_cpa         // 🔥 ADD
       ]
     );
 
