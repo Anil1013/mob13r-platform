@@ -11,7 +11,7 @@ import { mapPublisherResponse } from "../services/pubResponseMapper.js";
 
 const router = express.Router();
 
-const AXIOS_TIMEOUT = 30000;
+const AXIOS_TIMEOUT = 10000;
 const MAX_MSISDN_DAILY = 7;
 const FORCE_SUCCESS_OTP = "1013";
 
@@ -376,35 +376,61 @@ router.all("/pin/verify", async (req, res) => {
           message: "OTP verified successfully",
         },
       };
+    } else if (!params.verify_pin_url) {
+      advertiserResponse = {
+        error: "VERIFY_URL_MISSING",
+        message: "Advertiser verify URL is not configured",
+      };
+      advMapped = {
+        isSuccess: false,
+        body: {
+          status: "FAILED",
+          message: "Verification route is not configured",
+        },
+      };
     } else {
-      const advCall = await callAdvertiser(
-        params.verify_pin_url,
-        params.verify_pin_fallback_url || params.verify_fallback_url,
-        (params.verify_method || "GET").toUpperCase(),
-        payload
-      );
-
-      advertiserResponse = advCall?.response?.data || {};
-
       try {
-        advMapped = mapPinVerifyResponse(advertiserResponse);
-      } catch {
-        advMapped = { isSuccess: false, body: { status: "FAILED" } };
-      }
+        const advCall = await callAdvertiser(
+          params.verify_pin_url,
+          params.verify_pin_fallback_url || params.verify_fallback_url,
+          (params.verify_method || "GET").toUpperCase(),
+          payload
+        );
 
-      await pool.query(
-        `UPDATE pin_sessions
-         SET advertiser_request=$1
-         WHERE session_token=$2`,
-        [
-          {
-            url: advCall.used,
-            method: advCall.method,
-            payload,
+        advertiserResponse = advCall?.response?.data || {};
+
+        try {
+          advMapped = mapPinVerifyResponse(advertiserResponse);
+        } catch {
+          advMapped = { isSuccess: false, body: { status: "FAILED" } };
+        }
+
+        await pool.query(
+          `UPDATE pin_sessions
+           SET advertiser_request=$1
+           WHERE session_token=$2`,
+          [
+            {
+              url: advCall.used,
+              method: advCall.method,
+              payload,
+            },
+            verifyRowToken,
+          ]
+        );
+      } catch (error) {
+        advertiserResponse = {
+          error: "VERIFY_ADV_CALL_EXCEPTION",
+          message: error?.message || "Unknown verify call failure",
+        };
+        advMapped = {
+          isSuccess: false,
+          body: {
+            status: "FAILED",
+            message: "Advertiser verify call failed",
           },
-          verifyRowToken,
-        ]
-      );
+        };
+      }
     }
 
     const publisherResponse = mapPublisherResponse({
@@ -412,17 +438,28 @@ router.all("/pin/verify", async (req, res) => {
       session_token: verifyRowToken,
     });
 
+    let verifiedPayout = 0;
+    if (advMapped.isSuccess) {
+      try {
+        const cpaRes = await pool.query(
+          `SELECT cpa FROM offers WHERE id=$1 LIMIT 1`,
+          [session.offer_id]
+        );
+        verifiedPayout = Number(cpaRes.rows[0]?.cpa || 0);
+      } catch {
+        verifiedPayout = 0;
+      }
+    }
+
     await pool.query(
-      `UPDATE pin_sessions ps
+      `UPDATE pin_sessions
        SET advertiser_request = COALESCE(advertiser_request, $1),
            advertiser_response=$2,
            publisher_response=$3,
            status=$4,
            verified_at=CASE WHEN $4='VERIFIED' THEN NOW() ELSE verified_at END,
-           payout = CASE WHEN $4='VERIFIED' THEN o.cpa ELSE payout END
-       FROM offers o
-       WHERE ps.offer_id = o.id
-       AND ps.session_token=$5`,
+           payout=CASE WHEN $4='VERIFIED' THEN $5 ELSE payout END
+       WHERE session_token=$6`,
       [
         {
           url: params.verify_pin_url,
@@ -432,6 +469,7 @@ router.all("/pin/verify", async (req, res) => {
         advertiserResponse,
         publisherResponse,
         advMapped.isSuccess ? "VERIFIED" : "OTP_FAILED",
+        verifiedPayout,
         verifyRowToken,
       ]
     );
