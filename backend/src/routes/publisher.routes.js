@@ -158,11 +158,14 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     const advData = advResp.data;
 
-      // 🔥 FIX: forced success + normal success allow
+// 🔥 FINAL SUCCESS DETECTION (bulletproof)
 const isSuccess =
-  advData.status === "SUCCESS" ||
+  advData?.status === "SUCCESS" ||
+  advData?.status === true ||
+  advData?.status === "true" ||
+  advData?.message === "SUCCESS" ||
   advData?.forced === true ||
-  advData?.status === true;
+  advData?.session_token;   // 👈 MOST IMPORTANT
 
 if (!isSuccess) {
   return res.json(mapPublisherResponse(advData));
