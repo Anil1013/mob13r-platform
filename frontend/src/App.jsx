@@ -7,6 +7,8 @@ import Offers from "./pages/Offers";
 import Publishers from "./pages/Publishers";
 import PublisherDashboard from "./pages/PublisherDashboard";
 import PublisherAssignOffers from "./pages/PublisherAssignOffers.jsx";
+import LandingBuilder from "./pages/LandingBuilder";
+import DynamicLanding from "./pages/DynamicLanding";
 import DumpDashboard from "./pages/DumpDashboard";
 import ProtectedRoute from "./auth/ProtectedRoute";
 
@@ -24,6 +26,8 @@ export default function App() {
           <Route path="/offers" element={<Offers />} />
           <Route path="/publishers" element={<Publishers />} />
           <Route path="/publishers/assign" element={<PublisherAssignOffers />} />
+          <Route path="/landing-builder" element={<LandingBuilder />} />
+        <Route path="/lp/:id" element={<DynamicLanding />} />
           <Route path="/dashboard/dump" element={<DumpDashboard />} />
           <Route path="/publisher/dashboard" element={<PublisherDashboard />} />
         </Route>
