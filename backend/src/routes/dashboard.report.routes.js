@@ -96,11 +96,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
       SELECT
         ${selectDate}
 
-  o.id AS offer_id,              -- 🔥 ADD
-  p.id AS publisher_id,          -- 🔥 ADD
-  a.id AS advertiser_id,         -- 🔥 ADD
-
-  COALESCE(a.name, 'Unknown Advertiser') AS advertiser_name,
+    COALESCE(a.name, 'Unknown Advertiser') AS advertiser_name,
   COALESCE(o.service_name, 'Unknown Offer') AS offer_name,
   COALESCE(p.name, 'Unknown Publisher') AS publisher_name,
 
