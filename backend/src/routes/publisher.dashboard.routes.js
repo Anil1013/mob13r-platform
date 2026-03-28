@@ -33,7 +33,6 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
     const publisherId = req.publisher.id;
     let { from, to } = req.query;
 
-    // Default = today IST
     if (!from || !to) {
       from = todayIST();
       to = todayIST();
@@ -79,13 +78,16 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
             WHERE ps.parent_session_token IS NOT NULL
           ) AS unique_pin_validation_request_count,
 
-          COUNT(DISTINCT pc.id) FILTER (
-            WHERE pc.status = 'SUCCESS'
+          /* 🔥 FIXED VERIFIED */
+          COUNT(*) FILTER (
+            WHERE ps.status = 'VERIFIED'
+            AND ps.publisher_credited = TRUE
           ) AS unique_pin_verified,
 
           ROUND(
-            COUNT(DISTINCT pc.id) FILTER (
-              WHERE pc.status = 'SUCCESS'
+            COUNT(*) FILTER (
+              WHERE ps.status = 'VERIFIED'
+              AND ps.publisher_credited = TRUE
             )::numeric /
             NULLIF(
               COUNT(DISTINCT ps.msisdn)
@@ -95,8 +97,12 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
             2
           ) AS cr,
 
+          /* 🔥 FIXED REVENUE */
           COALESCE(
-            SUM(pc.publisher_cpa) FILTER (WHERE pc.status = 'SUCCESS'),
+            SUM(ps.publisher_cpa) FILTER (
+              WHERE ps.status = 'VERIFIED'
+              AND ps.publisher_credited = TRUE
+            ),
             0
           ) AS revenue,
 
@@ -116,10 +122,12 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
             WHERE ps.parent_session_token IS NOT NULL
           ) AS last_pin_verification_date,
 
+          /* 🔥 FIXED LAST SUCCESS */
           MAX(
             ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
           ) FILTER (
-            WHERE pc.status = 'SUCCESS'
+            WHERE ps.status = 'VERIFIED'
+            AND ps.publisher_credited = TRUE
           ) AS last_success_pin_verification_date
 
         FROM publisher_offers po
@@ -137,8 +145,6 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
          AND DATE(
               ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
             ) BETWEEN $2 AND $3
-        LEFT JOIN publisher_conversions pc
-          ON pc.pin_session_uuid = ps.session_token
 
         WHERE po.publisher_id = $1
 
@@ -196,7 +202,6 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
 /**
  * =========================================================
  * GET /api/publisher/dashboard/offers/:publisherOfferId/hourly
- * IST HOURLY DASHBOARD
  * =========================================================
  */
 router.get(
@@ -234,12 +239,18 @@ router.get(
             WHERE ps.parent_session_token IS NOT NULL
           ) AS unique_pin_verification_requests,
 
-          COUNT(DISTINCT pc.id) FILTER (
-            WHERE pc.status = 'SUCCESS'
+          /* 🔥 FIXED VERIFIED */
+          COUNT(*) FILTER (
+            WHERE ps.status = 'VERIFIED'
+            AND ps.publisher_credited = TRUE
           ) AS pin_verified,
 
+          /* 🔥 FIXED REVENUE */
           COALESCE(
-            SUM(pc.publisher_cpa) FILTER (WHERE pc.status = 'SUCCESS'),
+            SUM(ps.publisher_cpa) FILTER (
+              WHERE ps.status = 'VERIFIED'
+              AND ps.publisher_credited = TRUE
+            ),
             0
           ) AS revenue
 
@@ -253,8 +264,6 @@ router.get(
                    AND ps.offer_id = po.offer_id
                   )
              )
-        LEFT JOIN publisher_conversions pc
-          ON pc.pin_session_uuid = ps.session_token
 
         WHERE po.publisher_id = $1
           AND po.id = $2
