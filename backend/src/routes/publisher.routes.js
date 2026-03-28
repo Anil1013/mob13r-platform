@@ -266,16 +266,13 @@ if (!verifyRow.rows.length) {
 
     await client.query(
   `
+  await client.query(
+  `
   UPDATE pin_sessions
   SET publisher_credited=TRUE,
       credited_at=NOW()
-  WHERE id = (
-    SELECT id FROM pin_sessions
-    WHERE parent_session_token = $1
-    AND status = 'VERIFIED'
-    ORDER BY created_at DESC
-    LIMIT 1
-  )
+  WHERE parent_session_token = $1
+  AND status = 'VERIFIED'
   `,
   [session_token]
 );
