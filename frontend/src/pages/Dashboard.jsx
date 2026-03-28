@@ -304,47 +304,67 @@ export default function Dashboard() {
               <tr>
                 {view === "daily" && <th>Date</th>}
                 <th>Advertiser</th>
-                <th>Offer</th>
-                <th>Publisher</th>
-                <th>Geo</th>
-                <th>Carrier</th>
-                <th>CPA</th>
-                <th>Cap</th>
-                <th>Pin Req</th>
-                <th>Unique Req</th>
-                <th>Pin Sent</th>
-                <th>Unique Sent</th>
-                <th>Verify Req</th>
-                <th>Unique Verify</th>
-                <th>Verified</th>
-                <th>CR %</th>
-                <th>Revenue</th>
-                <th>Last Pin Gen</th>
-                <th>Last Verification</th>
-                <th>Last Success Verification</th>
-              </tr>
-            </thead>
+<th>Offer</th>
+<th>Publisher</th>
+<th>Geo</th>
+<th>Carrier</th>
+<th>CPA</th>
+<th>Publisher CPA</th>
+<th>Cap</th>
+<th>Publisher Cap</th>
+<th>Pin Req</th>
+<th>Unique Req</th>
+<th>Pin Sent</th>
+<th>Unique Sent</th>
+<th>Verify Req</th>
+<th>Unique Verify</th>
+<th>Verified</th>
+<th>Publisher Verified</th>
+<th>CR %</th>
+<th>Publisher CR</th>
+<th>Revenue</th>
+<th>Publisher Revenue</th>
+<th>Profit</th>
+<th>Last Pin Gen</th>
+<th>Last Verification</th>
+<th>Last Success Verification</th>
+</tr>
+</thead>
 
             <tbody>
               {data.map((row, i) => (
                 <tr key={`${row.offer_id || "offer"}-${row.publisher_id || "pub"}-${i}`}>
                   {view === "daily" && <td>{formatDate(row.date)}</td>}
                   <td>{row.advertiser_name}</td>
-                  <td>{row.offer_name}</td>
-                  <td>{row.publisher_name}</td>
-                  <td>{row.geo}</td>
-                  <td>{row.carrier}</td>
-                  <td>{row.cpa}</td>
-                  <td>{row.cap}</td>
-                  <td>{row.pin_req}</td>
-                  <td>{row.unique_req}</td>
-                  <td>{row.pin_sent}</td>
-                  <td>{row.unique_sent}</td>
-                  <td>{row.verify_req}</td>
-                  <td>{row.unique_verify}</td>
-                  <td>{row.verified}</td>
-                  <td>{row.cr_percent}</td>
-                  <td>${Number(row.revenue || 0).toFixed(2)}</td>
+<td>{row.offer_name}</td>
+<td>{row.publisher_name}</td>
+<td>{row.geo}</td>
+<td>{row.carrier}</td>
+<td>{row.cpa}</td>
+<td>{row.publisher_cpa}</td>
+<td>{row.cap}</td>
+<td>{row.publisher_cap}</td>
+
+<td>{row.pin_req}</td>
+<td>{row.unique_req}</td>
+<td>{row.pin_sent}</td>
+<td>{row.unique_sent}</td>
+<td>{row.verify_req}</td>
+<td>{row.unique_verify}</td>
+
+<td>{row.verified}</td>
+<td>{row.publisher_verified}</td>
+
+<td>{row.cr_percent}%</td>
+<td>{row.publisher_cr}%</td>
+
+<td>${Number(row.revenue).toFixed(2)}</td>
+<td>${Number(row.publisher_revenue).toFixed(2)}</td>
+
+<td style={{color: row.profit>=0?'green':'red'}}>
+${Number(row.profit).toFixed(2)}
+</td>
+
                   <td>{formatDate(row.last_pin_gen)}</td>
                   <td>{formatDate(row.last_verification)}</td>
                   <td>{formatDate(row.last_success_verification)}</td>
