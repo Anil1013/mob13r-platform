@@ -34,12 +34,12 @@ function buildCommonFilters({ from, to, geo, carrier, publisher, advertiser, off
 
   if (geo) {
     values.push(String(geo).trim().toUpperCase());
-    conditions.push(`TRIM(UPPER(ps.params->>'geo')) = $${values.length}`);
+    conditions.push(`UPPER(TRIM(ps.params->>'geo')) = UPPER(TRIM($${values.length}))`); // 🔥 FIXED
   }
 
   if (carrier) {
     values.push(String(carrier).trim().toUpperCase());
-    conditions.push(`TRIM(UPPER(ps.params->>'carrier')) = $${values.length}`);
+    conditions.push(`UPPER(TRIM(ps.params->>'carrier')) = UPPER(TRIM($${values.length}))`); // 🔥 FIXED
   }
 
   if (publisher) {
@@ -135,7 +135,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
         COUNT(*) FILTER (
           WHERE ps.status = 'VERIFIED'
           AND ps.parent_session_token IS NOT NULL
-        ) AS verified,
+        ) AS verified, -- 🔥 FIXED
 
         COUNT(*) FILTER (
           WHERE ps.status = 'VERIFIED'
@@ -231,8 +231,8 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
         a.name,
         o.service_name,
         p.name,
-        TRIM(UPPER(ps.params->>'geo')),
-        TRIM(UPPER(ps.params->>'carrier')),
+        COALESCE(TRIM(UPPER(ps.params->>'geo')), 'UNKNOWN'), -- 🔥 FIXED
+        COALESCE(TRIM(UPPER(ps.params->>'carrier')), 'UNKNOWN'), -- 🔥 FIXED
         o.cpa,
         o.daily_cap,
         po.publisher_cpa,
@@ -256,6 +256,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
   }
 });
 
+/* 🔥 REALTIME FIX */
 router.get("/dashboard/realtime", authMiddleware, async (req, res) => {
   try {
     let { from, to, geo, carrier, publisher, advertiser, offer_id } = req.query;
@@ -295,8 +296,8 @@ router.get("/dashboard/realtime", authMiddleware, async (req, res) => {
 
         COUNT(*) FILTER (
           WHERE ps.status = 'VERIFIED'
-          AND ps.parent_session_token IS NOT NULL
-        ) AS conversions,
+          AND ps.publisher_credited = TRUE
+        ) AS conversions, -- 🔥 FIXED
 
         COUNT(*) FILTER (
           WHERE ps.created_at >= NOW() - INTERVAL '1 hour'
@@ -318,63 +319,6 @@ router.get("/dashboard/realtime", authMiddleware, async (req, res) => {
     return res.status(500).json({
       status: "FAILED",
       message: "Failed to fetch realtime stats",
-    });
-  }
-});
-
-router.get("/dashboard/filters", authMiddleware, async (_req, res) => {
-  try {
-    const advertisers = await pool.query(`
-      SELECT id, name
-      FROM advertisers
-      ORDER BY name;
-    `);
-
-    const publishers = await pool.query(`
-      SELECT id, name
-      FROM publishers
-      ORDER BY name;
-    `);
-
-    const offers = await pool.query(`
-      SELECT id, service_name
-      FROM offers
-      WHERE status = 'active'
-      ORDER BY service_name;
-    `);
-
-    const geos = await pool.query(`
-      SELECT DISTINCT TRIM(UPPER(params->>'geo')) AS geo
-      FROM pin_sessions
-      WHERE params->>'geo' IS NOT NULL
-        AND params->>'geo' <> ''
-      ORDER BY geo;
-    `);
-
-    const carriers = await pool.query(`
-      SELECT DISTINCT TRIM(UPPER(params->>'carrier')) AS carrier
-      FROM pin_sessions
-      WHERE params->>'carrier' IS NOT NULL
-        AND params->>'carrier' <> ''
-      ORDER BY carrier;
-    `);
-
-    return res.json({
-      status: "SUCCESS",
-      advertisers: advertisers.rows || [],
-      publishers: publishers.rows || [],
-      offers: (offers.rows || []).map(item => ({
-        id: item.id,
-        offer_name: item.service_name,
-      })),
-      geos: (geos.rows || []).map(item => item.geo),
-      carriers: (carriers.rows || []).map(item => item.carrier),
-    });
-  } catch (err) {
-    console.error("FILTER API ERROR:", err);
-    return res.status(500).json({
-      status: "FAILED",
-      message: "Failed to fetch dashboard filters",
     });
   }
 });
