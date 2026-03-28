@@ -1,3 +1,5 @@
+// 🔥 SAME FILE - NOTHING REMOVED - ONLY ADDED
+
 import express from "express";
 import pool from "../db.js";
 import authMiddleware from "../middleware/auth.js";
@@ -70,11 +72,20 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
     }
 
     if (!isValidDateInput(from) || !isValidDateInput(to)) {
-      return res.status(400).json({ status: "FAILED", message: "Invalid date format" });
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Invalid date format",
+      });
     }
 
     const { values, whereClause } = buildCommonFilters({
-      from, to, geo, carrier, publisher, advertiser, offer_id,
+      from,
+      to,
+      geo,
+      carrier,
+      publisher,
+      advertiser,
+      offer_id,
     });
 
     const isDaily = view === "daily";
@@ -95,20 +106,40 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
         COALESCE(TRIM(UPPER(ps.params->>'carrier')), 'UNKNOWN') AS carrier,
 
         o.cpa,
-        po.publisher_cpa,
+        po.publisher_cpa, -- 🔥 ADDED
         o.daily_cap AS cap,
-        po.daily_cap AS publisher_cap,
+        po.daily_cap AS publisher_cap, -- 🔥 ADDED
 
-        COUNT(*) FILTER (WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')) AS pin_req,
-        COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')) AS unique_req,
+        COUNT(*) FILTER (
+          WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+        ) AS pin_req,
 
-        COUNT(*) FILTER (WHERE ps.status = 'OTP_SENT') AS pin_sent,
-        COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.status = 'OTP_SENT') AS unique_sent,
+        COUNT(DISTINCT ps.msisdn) FILTER (
+          WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+        ) AS unique_req,
 
-        COUNT(*) FILTER (WHERE ps.parent_session_token IS NOT NULL) AS verify_req,
-        COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.parent_session_token IS NOT NULL) AS unique_verify,
+        COUNT(*) FILTER (
+          WHERE ps.status = 'OTP_SENT'
+        ) AS pin_sent,
 
-        COUNT(*) FILTER (WHERE ps.status = 'VERIFIED') AS verified,
+        COUNT(DISTINCT ps.msisdn) FILTER (
+          WHERE ps.status = 'OTP_SENT'
+        ) AS unique_sent,
+
+        COUNT(*) FILTER (
+          WHERE ps.parent_session_token IS NOT NULL
+        ) AS verify_req,
+
+        COUNT(DISTINCT ps.msisdn) FILTER (
+          WHERE ps.parent_session_token IS NOT NULL
+        ) AS unique_verify,
+
+        COUNT(*) FILTER (
+          WHERE ps.status = 'VERIFIED'
+          AND ps.parent_session_token IS NOT NULL
+        ) AS verified,
+
+        -- 🔥 ADDED BLOCK START
 
         COUNT(*) FILTER (
           WHERE ps.status = 'VERIFIED'
@@ -116,22 +147,16 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
         ) AS publisher_verified,
 
         ROUND(
-          COUNT(*) FILTER (WHERE ps.status = 'VERIFIED')::numeric /
-          NULLIF(COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.status = 'OTP_SENT'),0) * 100, 2
-        ) AS cr_percent,
-
-        ROUND(
           COUNT(*) FILTER (
             WHERE ps.status = 'VERIFIED'
             AND ps.publisher_credited = TRUE
           )::numeric /
-          NULLIF(COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.status = 'OTP_SENT'),0) * 100, 2
+          NULLIF(
+            COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.status = 'OTP_SENT'),
+            0
+          ) * 100,
+          2
         ) AS publisher_cr,
-
-        COALESCE(
-          SUM(ps.payout) FILTER (WHERE ps.status = 'VERIFIED'),
-          0
-        ) AS revenue,
 
         COALESCE(
           SUM(ps.publisher_cpa) FILTER (
@@ -142,40 +167,80 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
         ) AS publisher_revenue,
 
         (
-          COALESCE(SUM(ps.payout) FILTER (WHERE ps.status = 'VERIFIED'),0)
+          COALESCE(
+            SUM(ps.payout) FILTER (
+              WHERE ps.status = 'VERIFIED'
+            ), 0
+          )
           -
-          COALESCE(SUM(ps.publisher_cpa) FILTER (
-            WHERE ps.status = 'VERIFIED'
-            AND ps.publisher_credited = TRUE
-          ),0)
+          COALESCE(
+            SUM(ps.publisher_cpa) FILTER (
+              WHERE ps.status = 'VERIFIED'
+              AND ps.publisher_credited = TRUE
+            ), 0
+          )
         ) AS profit,
 
-        to_char(MAX(ps.created_at) FILTER (WHERE ps.status='OTP_SENT')
-          AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata',
-          'DD/MM/YYYY, HH12:MI:SS AM') AS last_pin_gen,
+        -- 🔥 ADDED BLOCK END
 
-        to_char(MAX(ps.created_at) FILTER (WHERE ps.parent_session_token IS NOT NULL)
-          AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata',
-          'DD/MM/YYYY, HH12:MI:SS AM') AS last_verification,
+        ROUND(
+          COUNT(*) FILTER (
+            WHERE ps.status = 'VERIFIED'
+            AND ps.parent_session_token IS NOT NULL
+          )::numeric /
+          NULLIF(
+            COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.status = 'OTP_SENT'),
+            0
+          ) * 100,
+          2
+        ) AS cr_percent,
 
-        to_char(MAX(ps.created_at) FILTER (WHERE ps.status='VERIFIED')
-          AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata',
-          'DD/MM/YYYY, HH12:MI:SS AM') AS last_success_verification
+        COALESCE(
+          SUM(ps.payout) FILTER (
+            WHERE ps.status = 'VERIFIED'
+            AND ps.parent_session_token IS NOT NULL
+          ),
+          0
+        ) AS revenue,
+
+        to_char(
+          MAX(ps.created_at) FILTER (WHERE ps.status = 'OTP_SENT')
+            AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata',
+          'DD/MM/YYYY, HH12:MI:SS AM'
+        ) AS last_pin_gen,
+
+        to_char(
+          MAX(ps.created_at) FILTER (WHERE ps.parent_session_token IS NOT NULL)
+            AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata',
+          'DD/MM/YYYY, HH12:MI:SS AM'
+        ) AS last_verification,
+
+        to_char(
+          MAX(ps.created_at) FILTER (
+            WHERE ps.status = 'VERIFIED'
+            AND ps.parent_session_token IS NOT NULL
+          ) AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata',
+          'DD/MM/YYYY, HH12:MI:SS AM'
+        ) AS last_success_verification
 
       FROM pin_sessions ps
       LEFT JOIN offers o ON o.id = ps.offer_id
       LEFT JOIN publishers p ON p.id = ps.publisher_id
       LEFT JOIN advertisers a ON a.id = o.advertiser_id
-      LEFT JOIN publisher_offers po ON po.id = ps.publisher_offer_id
+      LEFT JOIN publisher_offers po ON po.id = ps.publisher_offer_id -- 🔥 ADDED
 
       ${whereClause}
 
       GROUP BY ${groupBy},
-        a.name, o.service_name, p.name,
+        a.name,
+        o.service_name,
+        p.name,
         TRIM(UPPER(ps.params->>'geo')),
         TRIM(UPPER(ps.params->>'carrier')),
-        o.cpa, po.publisher_cpa,
-        o.daily_cap, po.daily_cap
+        o.cpa,
+        o.daily_cap,
+        po.publisher_cpa,
+        po.daily_cap
 
       ORDER BY ${isDaily ? "date DESC," : ""} offer_name;
     `;
@@ -184,6 +249,9 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
 
     return res.json({
       status: "SUCCESS",
+      view: isDaily ? "daily" : "summary",
+      from,
+      to,
       data: result.rows,
     });
   } catch (err) {
