@@ -167,7 +167,20 @@ const isSuccess =
   advData?.forced === true ||
   advData?.session_token;   // 👈 MOST IMPORTANT
 
-if (!isSuccess) {
+// 🔥 ALWAYS proceed if VERIFIED in DB
+const verifyRow = await client.query(
+  `
+  SELECT *
+  FROM pin_sessions
+  WHERE parent_session_token = $1
+  AND status = 'VERIFIED'
+  ORDER BY created_at DESC
+  LIMIT 1
+  `,
+  [session_token]
+);
+
+if (!verifyRow.rows.length) {
   return res.json(mapPublisherResponse(advData));
 }
     
