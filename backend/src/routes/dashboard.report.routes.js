@@ -262,6 +262,53 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
   }
 });
 
+router.get("/dashboard/filters", authMiddleware, async (req, res) => {
+  try {
+
+    const advertisers = await pool.query(`
+      SELECT id, name FROM advertisers ORDER BY name;
+    `);
+
+    const publishers = await pool.query(`
+      SELECT id, name FROM publishers ORDER BY name;
+    `);
+
+    const offers = await pool.query(`
+      SELECT id, service_name FROM offers ORDER BY service_name;
+    `);
+
+    const geos = await pool.query(`
+      SELECT DISTINCT UPPER(TRIM(params->>'geo')) AS geo
+      FROM pin_sessions
+      WHERE params->>'geo' IS NOT NULL;
+    `);
+
+    const carriers = await pool.query(`
+      SELECT DISTINCT UPPER(TRIM(params->>'carrier')) AS carrier
+      FROM pin_sessions
+      WHERE params->>'carrier' IS NOT NULL;
+    `);
+
+    return res.json({
+      status: "SUCCESS",
+      data: {
+        advertisers: advertisers.rows,
+        publishers: publishers.rows,
+        offers: offers.rows,
+        geos: geos.rows.map(g => g.geo),
+        carriers: carriers.rows.map(c => c.carrier),
+      }
+    });
+
+  } catch (err) {
+    console.error("FILTER API ERROR:", err);
+    return res.status(500).json({
+      status: "FAILED",
+      message: "Failed to load filters"
+    });
+  }
+});
+
 /* 🔥 REALTIME FIX */
 router.get("/dashboard/realtime", authMiddleware, async (req, res) => {
   try {
