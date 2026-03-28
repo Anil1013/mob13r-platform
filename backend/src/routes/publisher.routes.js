@@ -266,8 +266,6 @@ if (!verifyRow.rows.length) {
 
     await client.query(
   `
-  await client.query(
-  `
   UPDATE pin_sessions
   SET publisher_credited=TRUE,
       credited_at=NOW()
