@@ -5,6 +5,25 @@ import Navbar from "../components/Navbar";
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 
+function formatCellValue(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function parseIstDate(createdIst) {
+  if (!createdIst || typeof createdIst !== "string") return null;
+
+  const [datePart] = createdIst.split(",");
+  if (!datePart) return null;
+
+  const [dd, mm, yyyy] = datePart.split("/");
+  if (!dd || !mm || !yyyy) return null;
+
+  const parsedDate = new Date(`${yyyy}-${mm}-${dd}`);
+  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+}
+
 /* ================= CSV EXPORT ================= */
 function exportCSV(rows) {
   if (!rows.length) return alert("No data to export");
@@ -12,8 +31,12 @@ function exportCSV(rows) {
   const headers = Object.keys(rows[0]);
   const csv = [
     headers.join(","),
-    ...rows.map(r =>
-      headers.map(h => `"${JSON.stringify(r[h] ?? "").replace(/"/g, '""')}"`).join(",")
+    ...rows.map(row =>
+      headers
+        .map(header =>
+          `"${formatCellValue(row[header]).replace(/"/g, '""')}"`
+        )
+        .join(",")
     ),
   ].join("\n");
 
@@ -22,6 +45,7 @@ function exportCSV(rows) {
   link.href = URL.createObjectURL(blob);
   link.download = `dump_${Date.now()}.csv`;
   link.click();
+  URL.revokeObjectURL(link.href);
 }
 
 /* ================= JSON VIEW ================= */
@@ -51,39 +75,46 @@ export default function DumpDashboard() {
     fetch(`${API_BASE}/api/dashboard/dump`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then(res => res.json())
-      .then(json => setRows(json.data || []))
-      .catch(() => setError("Failed to load dump"))
+      .then(async res => {
+        const json = await res.json();
+
+        if (!res.ok) {
+          const msg = json?.message || "Failed to load dump";
+          throw new Error(msg);
+        }
+
+        setRows(Array.isArray(json?.data) ? json.data : []);
+      })
+      .catch(err => setError(err.message || "Failed to load dump"))
       .finally(() => setLoading(false));
   }, []);
 
   /* ================= FILTER LOGIC ================= */
   const filteredRows = useMemo(() => {
-    return rows.filter(r => {
-      if (msisdn && !r.msisdn?.includes(msisdn)) return false;
-      if (offer && !r.offer_name?.toLowerCase().includes(offer.toLowerCase()))
+    return rows.filter(row => {
+      if (msisdn && !row.msisdn?.includes(msisdn)) return false;
+      if (offer && !row.offer_name?.toLowerCase().includes(offer.toLowerCase()))
         return false;
       if (
         publisher &&
-        !r.publisher_name?.toLowerCase().includes(publisher.toLowerCase())
+        !row.publisher_name?.toLowerCase().includes(publisher.toLowerCase())
       )
         return false;
       if (
         advertiser &&
-        !r.advertiser_name?.toLowerCase().includes(advertiser.toLowerCase())
+        !row.advertiser_name?.toLowerCase().includes(advertiser.toLowerCase())
       )
         return false;
 
-      if (fromDate) {
-        if (new Date(r.created_ist.split(",")[0].split("/").reverse().join("-")) < new Date(fromDate))
-          return false;
-      }
+      const createdDate = parseIstDate(row.created_ist);
+      if ((fromDate || toDate) && !createdDate) return false;
+
+      if (fromDate && createdDate < new Date(fromDate)) return false;
 
       if (toDate) {
         const end = new Date(toDate);
         end.setHours(23, 59, 59, 999);
-        if (new Date(r.created_ist.split(",")[0].split("/").reverse().join("-")) > end)
-          return false;
+        if (createdDate > end) return false;
       }
 
       return true;
@@ -95,6 +126,7 @@ export default function DumpDashboard() {
 
   return (
     <div style={{ padding: 20 }}>
+      <Navbar />
       <h1>Main Dump Dashboard</h1>
 
       {/* ================= FILTER BAR ================= */}
@@ -106,24 +138,53 @@ export default function DumpDashboard() {
           marginBottom: 10,
         }}
       >
-        <input placeholder="MSISDN" value={msisdn} onChange={e => setMsisdn(e.target.value)} />
-        <input placeholder="Offer" value={offer} onChange={e => setOffer(e.target.value)} />
-        <input placeholder="Publisher" value={publisher} onChange={e => setPublisher(e.target.value)} />
-        <input placeholder="Advertiser" value={advertiser} onChange={e => setAdvertiser(e.target.value)} />
-        <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} />
-        <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} />
+        <input
+          placeholder="MSISDN"
+          value={msisdn}
+          onChange={e => setMsisdn(e.target.value)}
+        />
+        <input
+          placeholder="Offer"
+          value={offer}
+          onChange={e => setOffer(e.target.value)}
+        />
+        <input
+          placeholder="Publisher"
+          value={publisher}
+          onChange={e => setPublisher(e.target.value)}
+        />
+        <input
+          placeholder="Advertiser"
+          value={advertiser}
+          onChange={e => setAdvertiser(e.target.value)}
+        />
+        <input
+          type="date"
+          value={fromDate}
+          onChange={e => setFromDate(e.target.value)}
+        />
+        <input
+          type="date"
+          value={toDate}
+          onChange={e => setToDate(e.target.value)}
+        />
       </div>
 
       {/* ================= ACTIONS ================= */}
       <div style={{ marginBottom: 15 }}>
-        <button onClick={() => {
-          setMsisdn(""); setOffer(""); setPublisher("");
-          setAdvertiser(""); setFromDate(""); setToDate("");
-        }}>
+        <button
+          onClick={() => {
+            setMsisdn("");
+            setOffer("");
+            setPublisher("");
+            setAdvertiser("");
+            setFromDate("");
+            setToDate("");
+          }}
+        >
           Clear Filters
         </button>{" "}
-        <button onClick={() => exportCSV(filteredRows)}>Export CSV</button>{" "}
-        <button onClick={() => exportExcel(filteredRows)}>Export Excel</button>
+        <button onClick={() => exportCSV(filteredRows)}>Export CSV</button>
       </div>
 
       {/* ================= TABLE ================= */}
@@ -147,21 +208,21 @@ export default function DumpDashboard() {
             </tr>
           </thead>
           <tbody>
-            {filteredRows.map((r, i) => (
+            {filteredRows.map((row, i) => (
               <tr key={i}>
-                <td>{r.offer_id}</td>
-                <td>{r.publisher_name}</td>
-                <td>{r.advertiser_name}</td>
-                <td>{r.offer_name}</td>
-                <td>{r.geo}</td>
-                <td>{r.carrier}</td>
-                <td>{r.msisdn}</td>
-                <td>{renderJSON(r.publisher_request)}</td>
-                <td>{renderJSON(r.publisher_response)}</td>
-                <td>{renderJSON(r.advertiser_request)}</td>
-                <td>{renderJSON(r.advertiser_response)}</td>
-                <td>{r.status}</td>
-                <td>{r.created_ist}</td>
+                <td>{row.offer_id}</td>
+                <td>{row.publisher_name}</td>
+                <td>{row.advertiser_name}</td>
+                <td>{row.offer_name}</td>
+                <td>{row.geo}</td>
+                <td>{row.carrier}</td>
+                <td>{row.msisdn}</td>
+                <td>{renderJSON(row.publisher_request)}</td>
+                <td>{renderJSON(row.publisher_response)}</td>
+                <td>{renderJSON(row.advertiser_request)}</td>
+                <td>{renderJSON(row.advertiser_response)}</td>
+                <td>{row.status}</td>
+                <td>{row.created_ist}</td>
               </tr>
             ))}
           </tbody>

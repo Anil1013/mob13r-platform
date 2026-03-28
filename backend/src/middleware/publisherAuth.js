@@ -19,11 +19,14 @@ export default async function publisherAuth(req, res, next) {
     }
 
     /* =====================================================
-       DEBUG LOG (AUTO DISABLED IN PRODUCTION)
+       OPTIONAL DEBUG LOG (SAFE, NO SECRETS)
        ===================================================== */
     if (process.env.NODE_ENV !== "production") {
-      console.log("Publisher Auth Headers:", req.headers);
-      console.log("Resolved API Key:", apiKey);
+      console.log("Publisher auth attempt", {
+        hasApiKey: Boolean(apiKey),
+        path: req.path,
+        method: req.method,
+      });
     }
 
     /* =====================================================
@@ -63,7 +66,6 @@ export default async function publisherAuth(req, res, next) {
     req.publisher = {
       id: result.rows[0].id,
       name: result.rows[0].name,
-      api_key: apiKey,
     };
 
     next();

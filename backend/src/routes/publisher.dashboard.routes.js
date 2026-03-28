@@ -8,18 +8,24 @@ const router = express.Router();
 
 // Today IST as YYYY-MM-DD
 const todayIST = () => {
-  const now = new Date();
-  return new Date(
-    now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
-  )
-    .toISOString()
-    .slice(0, 10);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const y = parts.find((p) => p.type === "year")?.value;
+  const m = parts.find((p) => p.type === "month")?.value;
+  const d = parts.find((p) => p.type === "day")?.value;
+
+  return `${y}-${m}-${d}`;
 };
 
 /**
  * =========================================================
  * GET /api/publisher/dashboard/offers
- * IST DATE-WISE DASHBOARD (CORRECTED)
+ * IST DATE-WISE DASHBOARD
  * =========================================================
  */
 router.get("/dashboard/offers", publisherAuth, async (req, res) => {
@@ -49,38 +55,50 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
           po.publisher_cpa AS cpa,
           po.daily_cap AS cap,
 
-          COUNT(ps.session_id) AS pin_request_count,
-          COUNT(DISTINCT ps.msisdn) AS unique_pin_request_count,
+          COUNT(*) FILTER (
+            WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+          ) AS pin_request_count,
+
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+          ) AS unique_pin_request_count,
 
           COUNT(*) FILTER (
-            WHERE ps.status IN ('OTP_SENT','VERIFIED')
+            WHERE ps.status = 'OTP_SENT'
           ) AS pin_send_count,
 
           COUNT(DISTINCT ps.msisdn) FILTER (
-            WHERE ps.status IN ('OTP_SENT','VERIFIED')
+            WHERE ps.status = 'OTP_SENT'
           ) AS unique_pin_sent,
 
           COUNT(*) FILTER (
-            WHERE ps.otp_attempts > 0
+            WHERE ps.parent_session_token IS NOT NULL
           ) AS pin_validation_request_count,
 
           COUNT(DISTINCT ps.msisdn) FILTER (
-            WHERE ps.otp_attempts > 0
+            WHERE ps.parent_session_token IS NOT NULL
           ) AS unique_pin_validation_request_count,
 
-          COUNT(DISTINCT pc.pin_session_uuid) AS unique_pin_verified,
+          COUNT(DISTINCT ps.session_id) FILTER (
+            WHERE ps.publisher_credited = TRUE
+          ) AS unique_pin_verified,
 
           ROUND(
-            COUNT(DISTINCT pc.pin_session_uuid)::numeric /
+            COUNT(DISTINCT ps.session_id) FILTER (
+              WHERE ps.publisher_credited = TRUE
+            )::numeric /
             NULLIF(
               COUNT(DISTINCT ps.msisdn)
-              FILTER (WHERE ps.status IN ('OTP_SENT','VERIFIED')),
+              FILTER (WHERE ps.status = 'OTP_SENT'),
               0
             ) * 100,
             2
           ) AS cr,
 
-          COALESCE(SUM(pc.publisher_cpa), 0) AS revenue,
+          COALESCE(
+            SUM(ps.payout) FILTER (WHERE ps.publisher_credited = TRUE),
+            0
+          ) AS revenue,
 
           MAX(
             ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
@@ -89,11 +107,13 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
           MAX(
             ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
           ) FILTER (
-            WHERE ps.status IN ('OTP_SENT','VERIFIED')
+            WHERE ps.status = 'OTP_SENT'
           ) AS last_pin_gen_success_date,
 
           MAX(
-            ps.verified_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+          ) FILTER (
+            WHERE ps.parent_session_token IS NOT NULL
           ) AS last_pin_verification_date,
 
           MAX(
@@ -106,14 +126,17 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
         JOIN offers o ON o.id = po.offer_id
 
         LEFT JOIN pin_sessions ps
-          ON ps.publisher_offer_id = po.id
+          ON (
+               ps.publisher_offer_id = po.id
+               OR (
+                    ps.publisher_offer_id IS NULL
+                    AND ps.publisher_id = po.publisher_id
+                    AND ps.offer_id = po.offer_id
+                  )
+             )
          AND DATE(
               ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
             ) BETWEEN $2 AND $3
-
-        LEFT JOIN publisher_conversions pc
-          ON pc.pin_session_uuid = ps.session_id
-         AND pc.status = 'SUCCESS'
 
         WHERE po.publisher_id = $1
 
@@ -133,6 +156,10 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
         (SELECT COALESCE(SUM(unique_pin_verified),0) FROM offer_stats) AS total_verified,
         (SELECT COALESCE(SUM(revenue),0) FROM offer_stats) AS total_revenue
       FROM offer_stats
+      WHERE
+        pin_request_count > 0
+        OR pin_send_count > 0
+        OR pin_validation_request_count > 0
       ORDER BY stat_date ASC, offer, geo, carrier;
     `;
 
@@ -167,7 +194,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
 /**
  * =========================================================
  * GET /api/publisher/dashboard/offers/:publisherOfferId/hourly
- * IST HOURLY (CORRECTED)
+ * IST HOURLY DASHBOARD
  * =========================================================
  */
 router.get(
@@ -193,27 +220,37 @@ router.get(
             ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
           ) AS hour,
 
-          COUNT(DISTINCT ps.msisdn) AS unique_pin_requests,
+          COUNT(DISTINCT ps.msisdn) FILTER (
+            WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
+          ) AS unique_pin_requests,
 
           COUNT(DISTINCT ps.msisdn) FILTER (
-            WHERE ps.status IN ('OTP_SENT','VERIFIED')
+            WHERE ps.status = 'OTP_SENT'
           ) AS unique_pin_sent,
 
           COUNT(DISTINCT ps.msisdn) FILTER (
-            WHERE ps.otp_attempts > 0
+            WHERE ps.parent_session_token IS NOT NULL
           ) AS unique_pin_verification_requests,
 
-          COUNT(DISTINCT pc.pin_session_uuid) AS pin_verified,
+          COUNT(DISTINCT ps.session_id) FILTER (
+            WHERE ps.publisher_credited = TRUE
+          ) AS pin_verified,
 
-          COALESCE(SUM(pc.publisher_cpa), 0) AS revenue
+          COALESCE(
+            SUM(ps.payout) FILTER (WHERE ps.publisher_credited = TRUE),
+            0
+          ) AS revenue
 
         FROM publisher_offers po
         JOIN pin_sessions ps
-          ON ps.publisher_offer_id = po.id
-
-        LEFT JOIN publisher_conversions pc
-          ON pc.pin_session_uuid = ps.session_id
-         AND pc.status = 'SUCCESS'
+          ON (
+               ps.publisher_offer_id = po.id
+               OR (
+                    ps.publisher_offer_id IS NULL
+                    AND ps.publisher_id = po.publisher_id
+                   AND ps.offer_id = po.offer_id
+                  )
+             )
 
         WHERE po.publisher_id = $1
           AND po.id = $2
