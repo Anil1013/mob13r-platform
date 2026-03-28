@@ -96,8 +96,6 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
       SELECT
         ${selectDate}
 
-        SELECT
-
   o.id AS offer_id,              -- 🔥 ADD
   p.id AS publisher_id,          -- 🔥 ADD
   a.id AS advertiser_id,         -- 🔥 ADD
