@@ -57,10 +57,14 @@ router.post("/", async (req, res) => {
 /* GET SINGLE */
 router.get("/:id", async (req, res) => {
   const result = await pool.query(`
-    SELECT lp.*, po.offer_id
-    FROM landing_pages lp
-    JOIN publisher_offers po ON po.id = lp.publisher_offer_id
-    WHERE lp.id = $1
+    SELECT 
+  lp.*,
+  po.offer_id,
+  p.api_key   -- 🔥 ADD
+FROM landing_pages lp
+JOIN publisher_offers po ON po.id = lp.publisher_offer_id
+JOIN publishers p ON p.id = po.publisher_id
+WHERE lp.id = $1
   `, [Number(req.params.id)]);
 
   if (!result.rows.length) {
