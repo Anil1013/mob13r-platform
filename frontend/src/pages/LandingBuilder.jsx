@@ -14,6 +14,7 @@ export default function LandingBuilder() {
   });
 
   const [offers, setOffers] = useState([]);
+  const [landingId, setLandingId] = useState(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/landing/publisher-offers`)
@@ -23,26 +24,28 @@ export default function LandingBuilder() {
   }, []);
 
   const save = async () => {
-    if (!form.publisher_offer_id) return alert("Select Offer");
+  if (!form.publisher_offer_id) return alert("Select Offer");
 
-    const res = await fetch(`${API_BASE}/api/landing`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(form),
-    });
+  const res = await fetch(`${API_BASE}/api/landing`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(form),
+  });
 
-    const data = await res.json();
+  const data = await res.json();
 
-    if (data.status === "SUCCESS") {
-      alert(
-        `Landing Created:\n${window.location.origin}/lp/${data.id}?api_key=YOUR_API_KEY`
-      );
-    } else {
-      alert("Failed");
-    }
-  };
+  if (data.status === "SUCCESS") {
+    setLandingId(data.id); // 🔥 IMPORTANT
+
+    alert(
+      `Landing Created:\n${window.location.origin}/lp/${data.id}`
+    );
+  } else {
+    alert("Failed");
+  }
+};
 
   return (
     <>
@@ -85,10 +88,16 @@ export default function LandingBuilder() {
           <textarea style={styles.input} placeholder="Disclaimer"
             onChange={(e)=>setForm({...form,disclaimer:e.target.value})}/>
 
-          <button style={styles.button} onClick={save}>
-            Save Landing
-          </button>
-        </div>
+             <button style={styles.button} onClick={save}>
+                Save Landing
+                </button>
+
+             {landingId && (
+              <div style={styles.url}>
+              URL: {window.location.origin}/lp/{landingId}
+               </div>
+                )}
+               </div>
 
         <div style={styles.preview}>
           <div style={styles.card}>
@@ -148,4 +157,9 @@ const styles = {
     border: "none",
     borderRadius: 6,
   },
+  url: {
+  marginTop: 10,
+  color: "green",
+  fontWeight: "bold",
+},
 };
