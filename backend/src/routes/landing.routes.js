@@ -14,9 +14,9 @@ router.get("/", async (req, res) => {
         lp.image_url,
         lp.button_text,
         lp.disclaimer,
+        lp.landing_url,
         o.service_name AS offer_name,
-        p.name AS publisher_name,
-        'https://yourdomain.com/landing/' || lp.id AS landing_url
+        p.name AS publisher_name
       FROM landing_pages lp
       JOIN publisher_offers po ON po.id = lp.publisher_offer_id
       JOIN offers o ON o.id = po.offer_id
@@ -64,7 +64,7 @@ router.post("/", async (req, res) => {
       INSERT INTO landing_pages
       (publisher_offer_id, title, description, image_url, button_text, disclaimer)
       VALUES ($1,$2,$3,$4,$5,$6)
-      RETURNING id
+      RETURNING *
       `,
       [
         publisher_offer_id,
@@ -76,16 +76,27 @@ router.post("/", async (req, res) => {
       ]
     );
 
+    const landing = result.rows[0];
+
+    // 🔥 UPDATE landing_url
+    const url = `https://yourdomain.com/landing/${landing.id}`;
+
+    await pool.query(
+      `UPDATE landing_pages SET landing_url=$1 WHERE id=$2`,
+      [url, landing.id]
+    );
+
     res.json({
       status: "SUCCESS",
-      id: result.rows[0].id,
+      id: landing.id,
+      landing_url: url,
     });
   } catch (err) {
     res.json({ status: "FAILED", error: err.message });
   }
 });
 
-/* 🔥 GET SINGLE LANDING */
+/* 🔥 GET SINGLE */
 router.get("/:id", async (req, res) => {
   try {
     const result = await pool.query(
