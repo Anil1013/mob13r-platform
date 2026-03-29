@@ -67,4 +67,23 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+router.get("/publisher-offers", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        po.id,
+        o.service_name,
+        p.name AS publisher_name
+      FROM publisher_offers po
+      JOIN offers o ON o.id = po.offer_id
+      JOIN publishers p ON p.id = po.publisher_id
+      ORDER BY po.id DESC
+    `);
+
+    res.json({ status: "SUCCESS", data: result.rows });
+  } catch (err) {
+    res.status(500).json({ status: "FAILED" });
+  }
+});
+
 export default router;
