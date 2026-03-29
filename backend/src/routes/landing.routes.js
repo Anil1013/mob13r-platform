@@ -6,7 +6,11 @@ const router = express.Router();
 /* GET OFFERS */
 router.get("/publisher-offers", async (req, res) => {
   const result = await pool.query(`
-    SELECT po.id, o.service_name, p.name AS publisher_name
+    SELECT 
+      po.id,
+      o.service_name,
+      p.name AS publisher_name,
+      p.api_key   -- 🔥 ADD THIS
     FROM publisher_offers po
     JOIN offers o ON o.id = po.offer_id
     JOIN publishers p ON p.id = po.publisher_id
