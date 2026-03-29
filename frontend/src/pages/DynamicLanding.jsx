@@ -13,7 +13,7 @@ export default function DynamicLanding() {
   const [sessionToken, setSessionToken] = useState("");
 
   const urlParams = new URLSearchParams(window.location.search);
-  const apiKey = urlParams.get("api_key");
+  const apiKey = landing.api_key;
 
   useEffect(() => {
     fetch(`${API_BASE}/api/landing/${id}`)
