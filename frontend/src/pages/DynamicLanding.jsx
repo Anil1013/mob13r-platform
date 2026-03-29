@@ -12,19 +12,32 @@ export default function DynamicLanding() {
   const [step, setStep] = useState("input");
   const [loading, setLoading] = useState(false);
 
-  /* 🔥 CLICK ID (REFRESH SAFE) */
-  const clickId =
-    localStorage.getItem("click_id") || crypto.randomUUID();
+  /* 🔥 CLICK ID (SAFE + PERSISTENT) */
+  const [clickId, setClickId] = useState("");
 
   useEffect(() => {
-    localStorage.setItem("click_id", clickId);
+    let cid = localStorage.getItem("click_id");
+
+    if (!cid) {
+      cid = crypto.randomUUID();
+      localStorage.setItem("click_id", cid);
+    }
+
+    setClickId(cid);
   }, []);
 
   /* 🔥 FETCH LANDING */
   useEffect(() => {
     fetch(`${API_BASE}/api/landing/${id}`)
       .then((res) => res.json())
-      .then((res) => setLanding(res.data));
+      .then((res) => {
+        if (res.status === "SUCCESS") {
+          setLanding(res.data);
+        } else {
+          alert("Landing not found");
+        }
+      })
+      .catch(() => alert("Failed to load landing"));
   }, [id]);
 
   /* 🔥 GEO + CARRIER DETECT */
@@ -46,7 +59,7 @@ export default function DynamicLanding() {
 
   /* 🔥 SEND PIN */
   const sendPin = async () => {
-    if (!msisdn) return alert("Enter number");
+    if (!msisdn) return alert("Enter mobile number");
 
     setLoading(true);
 
@@ -54,7 +67,12 @@ export default function DynamicLanding() {
 
     try {
       const res = await fetch(
-        `${API_BASE}/api/publisher/pin/send?offer_id=${landing.offer_id}&msisdn=${msisdn}&geo=${geo}&carrier=${carrier}&click_id=${clickId}&x-api-key=${landing.api_key}`
+        `${API_BASE}/api/publisher/pin/send?offer_id=${landing.offer_id}&msisdn=${msisdn}&geo=${geo}&carrier=${carrier}&click_id=${clickId}`,
+        {
+          headers: {
+            "x-api-key": landing.api_key,
+          },
+        }
       );
 
       const data = await res.json();
@@ -65,7 +83,7 @@ export default function DynamicLanding() {
       } else {
         alert(data.message || "Failed to send OTP");
       }
-    } catch {
+    } catch (err) {
       alert("Server error");
     }
 
@@ -80,9 +98,21 @@ export default function DynamicLanding() {
 
     const sessionToken = localStorage.getItem("session_token");
 
+    if (!sessionToken) {
+      alert("Session expired, try again");
+      setStep("input");
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch(
-        `${API_BASE}/api/publisher/pin/verify?session_token=${sessionToken}&otp=${otp}&click_id=${clickId}&x-api-key=${landing.api_key}`
+        `${API_BASE}/api/publisher/pin/verify?session_token=${sessionToken}&otp=${otp}&click_id=${clickId}`,
+        {
+          headers: {
+            "x-api-key": landing.api_key,
+          },
+        }
       );
 
       const data = await res.json();
@@ -97,14 +127,17 @@ export default function DynamicLanding() {
       } else {
         alert(data.message || "Invalid OTP");
       }
-    } catch {
+    } catch (err) {
       alert("Verification failed");
     }
 
     setLoading(false);
   };
 
-  if (!landing) return <div style={{ padding: 40 }}>Loading...</div>;
+  /* 🔥 LOADING */
+  if (!landing) {
+    return <div style={{ padding: 40 }}>Loading...</div>;
+  }
 
   return (
     <div style={styles.container}>
@@ -112,7 +145,7 @@ export default function DynamicLanding() {
         <h2>{landing.title}</h2>
         <p>{landing.description}</p>
 
-        {/* 🔥 IMAGE (ALL FORMAT + FALLBACK) */}
+        {/* 🔥 IMAGE */}
         {landing.image_url && (
           <img
             src={landing.image_url}
@@ -136,7 +169,7 @@ export default function DynamicLanding() {
             />
 
             <button onClick={sendPin} style={styles.button}>
-              {loading ? "Sending..." : "Send OTP"}
+              {loading ? "Sending..." : landing.button_text || "Send OTP"}
             </button>
           </>
         )}
