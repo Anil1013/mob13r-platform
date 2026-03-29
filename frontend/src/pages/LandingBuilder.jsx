@@ -17,13 +17,14 @@ export default function LandingBuilder() {
 
   /* 🔥 FETCH OFFERS (FIXED URL) */
   useEffect(() => {
-    fetch("/api/landing/publisher-offers")
-      .then((res) => res.json())
-      .then((res) => {
-        console.log("OFFERS:", res);
-        setOffers(res.data || []);
-      });
-  }, []);
+  fetch(`${API_BASE}/api/landing/publisher-offers`)
+    .then((res) => res.json())
+    .then((res) => {
+      console.log("OFFERS:", res);
+      setOffers(res.data || []);
+    })
+    .catch((err) => console.error(err));
+}, []);
 
   /* 🔥 SAVE */
   const save = async () => {
@@ -32,7 +33,7 @@ export default function LandingBuilder() {
     }
 
     try {
-      const res = await fetch("/api/landing", {
+      const res = await fetch(`${API_BASE}/api/landing`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
