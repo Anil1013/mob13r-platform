@@ -11,10 +11,9 @@ export default function DynamicLanding() {
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState("input");
   const [loading, setLoading] = useState(false);
-
-  /* 🔥 CLICK ID (SAFE + PERSISTENT) */
   const [clickId, setClickId] = useState("");
 
+  /* 🔥 CLICK ID */
   useEffect(() => {
     let cid = localStorage.getItem("click_id");
 
@@ -40,7 +39,7 @@ export default function DynamicLanding() {
       .catch(() => alert("Failed to load landing"));
   }, [id]);
 
-  /* 🔥 GEO + CARRIER DETECT */
+  /* 🔥 GEO DETECT */
   const detectGeoCarrier = (msisdn) => {
     const num = msisdn.replace(/\D/g, "");
 
@@ -59,7 +58,9 @@ export default function DynamicLanding() {
 
   /* 🔥 SEND PIN */
   const sendPin = async () => {
-    if (!msisdn) return alert("Enter mobile number");
+    if (!msisdn || msisdn.length < 8) {
+      return alert("Enter valid mobile number");
+    }
 
     setLoading(true);
 
@@ -83,7 +84,7 @@ export default function DynamicLanding() {
       } else {
         alert(data.message || "Failed to send OTP");
       }
-    } catch (err) {
+    } catch {
       alert("Server error");
     }
 
@@ -99,7 +100,7 @@ export default function DynamicLanding() {
     const sessionToken = localStorage.getItem("session_token");
 
     if (!sessionToken) {
-      alert("Session expired, try again");
+      alert("Session expired");
       setStep("input");
       setLoading(false);
       return;
@@ -127,14 +128,13 @@ export default function DynamicLanding() {
       } else {
         alert(data.message || "Invalid OTP");
       }
-    } catch (err) {
+    } catch {
       alert("Verification failed");
     }
 
     setLoading(false);
   };
 
-  /* 🔥 LOADING */
   if (!landing) {
     return <div style={{ padding: 40 }}>Loading...</div>;
   }
@@ -142,10 +142,9 @@ export default function DynamicLanding() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h2>{landing.title}</h2>
-        <p>{landing.description}</p>
+        <h2 style={styles.title}>{landing.title}</h2>
+        <p style={styles.desc}>{landing.description}</p>
 
-        {/* 🔥 IMAGE */}
         {landing.image_url && (
           <img
             src={landing.image_url}
@@ -157,7 +156,6 @@ export default function DynamicLanding() {
           />
         )}
 
-        {/* 🔥 STEP 1 */}
         {step === "input" && (
           <>
             <input
@@ -168,13 +166,16 @@ export default function DynamicLanding() {
               style={styles.input}
             />
 
-            <button onClick={sendPin} style={styles.button}>
+            <button
+              onClick={sendPin}
+              style={styles.button}
+              disabled={loading}
+            >
               {loading ? "Sending..." : landing.button_text || "Send OTP"}
             </button>
           </>
         )}
 
-        {/* 🔥 STEP 2 */}
         {step === "otp" && (
           <>
             <input
@@ -185,13 +186,16 @@ export default function DynamicLanding() {
               style={styles.input}
             />
 
-            <button onClick={verifyPin} style={styles.button}>
+            <button
+              onClick={verifyPin}
+              style={styles.button}
+              disabled={loading}
+            >
               {loading ? "Verifying..." : "Verify OTP"}
             </button>
           </>
         )}
 
-        {/* 🔥 DISCLAIMER */}
         <p style={styles.disclaimer}>{landing.disclaimer}</p>
       </div>
     </div>
@@ -205,42 +209,51 @@ const styles = {
     justifyContent: "center",
     alignItems: "center",
     height: "100vh",
-    background: "#f4f4f4",
+    background: "linear-gradient(135deg,#e0f2fe,#f0fdf4)",
   },
   card: {
     background: "#fff",
-    padding: 25,
-    borderRadius: 12,
-    width: 340,
+    padding: 30,
+    borderRadius: 14,
+    width: 360,
     textAlign: "center",
-    boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
+    boxShadow: "0 15px 35px rgba(0,0,0,0.1)",
+  },
+  title: {
+    marginBottom: 5,
+  },
+  desc: {
+    fontSize: 14,
+    color: "#555",
+    marginBottom: 10,
+  },
+  image: {
+    width: "100%",
+    borderRadius: 10,
+    marginBottom: 15,
+    maxHeight: 180,
+    objectFit: "cover",
   },
   input: {
     width: "100%",
-    padding: 10,
+    padding: 12,
     marginBottom: 10,
-    borderRadius: 6,
+    borderRadius: 8,
     border: "1px solid #ccc",
   },
   button: {
     width: "100%",
-    padding: 10,
+    padding: 12,
     background: "#22c55e",
     color: "#fff",
     border: "none",
-    borderRadius: 6,
-    cursor: "pointer",
-  },
-  image: {
-    width: "100%",
     borderRadius: 8,
-    marginBottom: 10,
-    maxHeight: 180,
-    objectFit: "cover",
+    cursor: "pointer",
+    fontWeight: "bold",
   },
   disclaimer: {
     fontSize: 12,
-    marginTop: 10,
-    color: "#555",
+    marginTop: 12,
+    color: "#777",
   },
 };
