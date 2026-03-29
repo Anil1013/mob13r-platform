@@ -63,7 +63,7 @@ router.post("/", async (req, res) => {
       disclaimer,
     } = req.body;
 
-    if (!publisher_offer_id) {
+    if (!publisher_offer_id || isNaN(publisher_offer_id)) {
       return res.json({
         status: "FAILED",
         message: "publisher_offer_id required",
@@ -107,10 +107,10 @@ router.get("/:id", async (req, res) => {
         po.offer_id
       FROM landing_pages lp
       JOIN publisher_offers po ON po.id = lp.publisher_offer_id
-      WHERE lp.publisher_offer_id = $1
+      WHERE lp.id = $1
       LIMIT 1
     `,
-      [id]
+      [Number(id)]
     );
 
     if (!result.rows.length) {
