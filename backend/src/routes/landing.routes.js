@@ -3,8 +3,7 @@ import pool from "../db.js";
 
 const router = express.Router();
 
-/* 🔥 BASE URL (CHANGE HERE ONLY) */
-const BASE_URL = "https://mob13r.com";
+const BASE_URL = "https://dashboard.mob13r.com";
 
 /* 🔥 GET ALL LANDINGS */
 router.get("/", async (req, res) => {
