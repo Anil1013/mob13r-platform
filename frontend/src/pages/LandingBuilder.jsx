@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import Navbar from "../components/Navbar";
 
+const API_BASE = "https://backend.mob13r.com";
+
 export default function LandingBuilder() {
   const [form, setForm] = useState({
     publisher_offer_id: "",
