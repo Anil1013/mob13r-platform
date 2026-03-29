@@ -131,7 +131,9 @@ export default function PublisherDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const key = localStorage.getItem("publisher_key");
+      const key =
+  localStorage.getItem("publisher_key") ||
+  localStorage.getItem("token"); // fallback
 
       if (!key) {
         alert("Publisher key missing. Please login again.");
