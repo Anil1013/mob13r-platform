@@ -68,8 +68,9 @@ export default function LandingBuilder() {
             style={styles.input}
             value={form.publisher_offer_id}
             onChange={(e) =>
-              setForm({ ...form, publisher_offer_id: e.target.value })
-            }
+              setForm({  ...form, publisher_offer_id: Number(e.target.value),
+       })
+        }
           >
             <option value="">Select Offer</option>
             {offers.map((o) => (
