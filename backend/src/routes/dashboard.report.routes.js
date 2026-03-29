@@ -235,15 +235,16 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
       ${whereClause}
 
       GROUP BY ${groupBy},
-        a.name,
-        o.service_name,
-        p.name,
-        TRIM(UPPER(ps.params->>'geo')),
-        TRIM(UPPER(ps.params->>'carrier')),
-        o.cpa,
-        o.daily_cap,
-        po.publisher_cpa,
-        po.daily_cap
+  p.id,
+  a.name,
+  o.service_name,
+  p.name,
+  TRIM(UPPER(ps.params->>'geo')),
+  TRIM(UPPER(ps.params->>'carrier')),
+  o.cpa,
+  o.daily_cap,
+  po.publisher_cpa,
+  po.daily_cap
 
       ORDER BY ${isDaily ? "date DESC," : ""} offer_name;
     `;
