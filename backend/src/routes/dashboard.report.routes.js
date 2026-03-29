@@ -96,9 +96,16 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
       SELECT
         ${selectDate}
 
+         a.name AS advertiser_name_raw,
+         o.service_name AS offer_name_raw,
+         p.name AS publisher_name_raw,
+
         COALESCE(a.name, 'Unknown Advertiser') AS advertiser_name,
         COALESCE(o.service_name, 'Unknown Offer') AS offer_name,
         COALESCE(p.name, 'Unknown Publisher') AS publisher_name,
+
+        TRIM(UPPER(ps.params->>'geo')) AS geo_raw,
+        TRIM(UPPER(ps.params->>'carrier')) AS carrier_raw,
 
         COALESCE(TRIM(UPPER(ps.params->>'geo')), 'UNKNOWN') AS geo,
         COALESCE(TRIM(UPPER(ps.params->>'carrier')), 'UNKNOWN') AS carrier,
