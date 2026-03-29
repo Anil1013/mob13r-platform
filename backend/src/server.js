@@ -19,6 +19,7 @@ app.use(
     allowedHeaders: [
       "Content-Type",
       "Authorization",
+      "x-api-key",
       "x-publisher-key"   // 🔥 THIS WAS MISSING
     ],
   })
