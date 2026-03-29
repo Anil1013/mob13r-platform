@@ -27,14 +27,27 @@ router.post("/", async (req, res) => {
     disclaimer,
   } = req.body;
 
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     INSERT INTO landing_pages
     (publisher_offer_id, title, description, image_url, button_text, disclaimer)
     VALUES ($1,$2,$3,$4,$5,$6)
     RETURNING id
-  `, [publisher_offer_id, title, description, image_url, button_text, disclaimer]);
+    `,
+    [
+      publisher_offer_id,
+      title,
+      description,
+      image_url,
+      button_text,
+      disclaimer,
+    ]
+  );
 
-  res.json({ status: "SUCCESS", id: result.rows[0].id });
+  res.json({
+    status: "SUCCESS",
+    id: result.rows[0].id,   // 🔥 VERY IMPORTANT
+  });
 });
 
 /* GET SINGLE */
