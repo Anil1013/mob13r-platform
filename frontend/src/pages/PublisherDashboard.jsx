@@ -146,7 +146,7 @@ export default function PublisherDashboard() {
 
       const res = await fetch(
         `${API_BASE}/api/publisher/dashboard/offers?${qs}`,
-        { headers: { "x-publisher-key": key } }
+        {headers: { "x-api-key": key } }
       );
 
       const data = await res.json();
@@ -225,7 +225,7 @@ export default function PublisherDashboard() {
 
       const res = await fetch(
         `${API_BASE}/api/publisher/dashboard/offers/${row.publisher_offer_id}/hourly?${qs}`,
-        { headers: { "x-publisher-key": key } }
+        { headers: { "x-api-key": key } }
       );
 
       const data = await res.json();
