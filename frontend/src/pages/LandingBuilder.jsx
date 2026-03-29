@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
-import Navbar from "../components/Navbar";
+import { useEffect, useState } from "react";
 
 const API_BASE = "https://backend.mob13r.com";
 
 export default function LandingBuilder() {
+  const [offers, setOffers] = useState([]);
+  const [landings, setLandings] = useState([]);
+
   const [form, setForm] = useState({
     publisher_offer_id: "",
     title: "",
@@ -13,206 +15,204 @@ export default function LandingBuilder() {
     disclaimer: "",
   });
 
-  const [offers, setOffers] = useState([]);
-  const [landingId, setLandingId] = useState(null);
-
   /* 🔥 FETCH OFFERS */
   useEffect(() => {
-    fetch(`${API_BASE}/api/landing/publisher-offers`)
+    fetch(`${API_BASE}/api/publisher-offers`)
       .then((res) => res.json())
-      .then((res) => {
-        console.log("OFFERS:", res);
-        setOffers(res.data || []);
-      })
-      .catch(console.error);
+      .then((res) => setOffers(res.data || []));
   }, []);
 
-  /* 🔥 SAVE LANDING */
-  const save = async () => {
-    if (!form.publisher_offer_id) return alert("Select Offer");
+  /* 🔥 FETCH LANDINGS */
+  const loadLandings = () => {
+    fetch(`${API_BASE}/api/landing`)
+      .then((res) => res.json())
+      .then((res) => setLandings(res.data || []));
+  };
 
-    try {
-      const res = await fetch(`${API_BASE}/api/landing`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(form),
-      });
+  useEffect(() => {
+    loadLandings();
+  }, []);
 
-      const data = await res.json();
+  /* 🔥 HANDLE CHANGE */
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
 
-      console.log("FULL RESPONSE:", data);
+  /* 🔥 SAVE */
+  const saveLanding = async () => {
+    const res = await fetch(`${API_BASE}/api/landing`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
 
-      // 🔥 SAFE ID EXTRACTION (handles all cases)
-      const landing_id = data.id || data?.data?.id;
+    const data = await res.json();
 
-      if (data.status === "SUCCESS" && landing_id) {
-        setLandingId(landing_id);
-
-        alert(
-          `Landing Created:\n${window.location.origin}/lp/${landing_id}`
-        );
-      } else {
-        alert("Failed: ID not returned");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Server Error");
+    if (data.id) {
+      alert("Landing Created");
+      loadLandings();
+    } else {
+      alert("Error");
     }
   };
 
   return (
-    <>
-      <Navbar />
+    <div style={{ padding: 20 }}>
+      <h2>Create Landing</h2>
 
-      <div style={styles.container}>
-        <div style={styles.left}>
-          <h2>Create Landing</h2>
+      {/* 🔥 HORIZONTAL FORM */}
+      <div style={styles.formRow}>
+        <select
+          name="publisher_offer_id"
+          onChange={handleChange}
+          style={styles.input}
+        >
+          <option>Select Offer</option>
+          {offers.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.service_name}
+            </option>
+          ))}
+        </select>
 
-          {/* 🔥 DROPDOWN */}
-          <select
-            style={styles.input}
-            value={form.publisher_offer_id}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                publisher_offer_id: Number(e.target.value),
-              })
-            }
-          >
-            <option value="">Select Offer</option>
-            {offers.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.service_name} - {o.publisher_name}
-              </option>
-            ))}
-          </select>
+        <input
+          name="title"
+          placeholder="Title"
+          onChange={handleChange}
+          style={styles.input}
+        />
 
-          <input
-            style={styles.input}
-            placeholder="Title"
-            onChange={(e) =>
-              setForm({ ...form, title: e.target.value })
-            }
-          />
+        <input
+          name="description"
+          placeholder="Description"
+          onChange={handleChange}
+          style={styles.input}
+        />
 
-          <input
-            style={styles.input}
-            placeholder="Description"
-            onChange={(e) =>
-              setForm({ ...form, description: e.target.value })
-            }
-          />
+        <input
+          name="image_url"
+          placeholder="Image URL"
+          onChange={handleChange}
+          style={styles.input}
+        />
 
-          <input
-            style={styles.input}
-            placeholder="Image URL"
-            onChange={(e) =>
-              setForm({ ...form, image_url: e.target.value })
-            }
-          />
+        <input
+          name="button_text"
+          placeholder="Button Text"
+          onChange={handleChange}
+          style={styles.input}
+        />
 
-          <input
-            style={styles.input}
-            placeholder="Button Text"
-            onChange={(e) =>
-              setForm({ ...form, button_text: e.target.value })
-            }
-          />
-
-          <textarea
-            style={styles.input}
-            placeholder="Disclaimer"
-            onChange={(e) =>
-              setForm({ ...form, disclaimer: e.target.value })
-            }
-          />
-
-          <button style={styles.button} onClick={save}>
-            Save Landing
-          </button>
-
-          {/* 🔥 URL DISPLAY */}
-          {landingId && (
-            <div style={styles.url}>
-              URL: {window.location.origin}/lp/{landingId}
-            </div>
-          )}
-        </div>
-
-        {/* 🔥 PREVIEW */}
-        <div style={styles.preview}>
-          <div style={styles.card}>
-            <h2>{form.title || "Landing Title"}</h2>
-            <p>{form.description || "Description..."}</p>
-
-            {form.image_url && (
-              <img src={form.image_url} alt="" style={styles.image} />
-            )}
-
-            <button style={styles.cta}>
-              {form.button_text || "Subscribe"}
-            </button>
-          </div>
-        </div>
+        <input
+          name="disclaimer"
+          placeholder="Disclaimer"
+          onChange={handleChange}
+          style={styles.input}
+        />
       </div>
-    </>
+
+      <button onClick={saveLanding} style={styles.saveBtn}>
+        Save Landing
+      </button>
+
+      {/* 🔥 SMALL PREVIEW */}
+      <div style={styles.preview}>
+        <h4>{form.title || "Landing Title"}</h4>
+
+        {form.image_url && (
+          <img
+            src={form.image_url}
+            onError={(e) =>
+              (e.target.src =
+                "https://via.placeholder.com/150x100?text=No+Image")
+            }
+            style={{ width: "100%", maxHeight: 120, objectFit: "cover" }}
+          />
+        )}
+
+        <p>{form.description}</p>
+
+        <button style={styles.previewBtn}>
+          {form.button_text || "Subscribe"}
+        </button>
+
+        <small>{form.disclaimer}</small>
+      </div>
+
+      {/* 🔥 TABLE */}
+      <h3 style={{ marginTop: 30 }}>Landing Pages</h3>
+
+      <table style={styles.table}>
+        <thead>
+          <tr>
+            <th>Advertiser</th>
+            <th>Publisher</th>
+            <th>Offer</th>
+            <th>Landing URL</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {landings.map((l) => (
+            <tr key={l.id}>
+              <td>{l.advertiser_name}</td>
+              <td>{l.publisher_name}</td>
+              <td>{l.offer_name}</td>
+              <td>
+                <a href={l.landing_url} target="_blank">
+                  Open
+                </a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
 /* 🔥 STYLES */
 const styles = {
-  container: {
+  formRow: {
     display: "flex",
-    padding: "80px 30px",
-    gap: 40,
-    background: "#f3f4f6",
-    minHeight: "100vh",
-  },
-  left: {
-    width: "40%",
-    display: "flex",
-    flexDirection: "column",
     gap: 10,
+    flexWrap: "wrap",
+    marginBottom: 15,
   },
   input: {
-    padding: 10,
-    borderRadius: 6,
+    padding: 8,
     border: "1px solid #ccc",
-    width: "100%",
+    borderRadius: 5,
+    minWidth: 150,
   },
-  button: {
-    padding: 12,
+  saveBtn: {
+    padding: "10px 20px",
     background: "#2563eb",
     color: "#fff",
     border: "none",
     borderRadius: 6,
     cursor: "pointer",
+    marginBottom: 20,
   },
-  url: {
-    marginTop: 10,
-    color: "green",
-    fontWeight: "bold",
-  },
-  preview: { width: "60%" },
-  card: {
+  preview: {
+    width: 250,
+    padding: 15,
+    border: "1px solid #ddd",
+    borderRadius: 8,
     background: "#fff",
-    padding: 20,
-    borderRadius: 10,
   },
-  cta: {
-    marginTop: 10,
-    padding: 12,
+  previewBtn: {
     width: "100%",
+    padding: 8,
     background: "#22c55e",
     color: "#fff",
     border: "none",
-    borderRadius: 6,
+    borderRadius: 5,
+    marginTop: 10,
   },
-  image: {
+  table: {
     width: "100%",
-    borderRadius: 8,
+    borderCollapse: "collapse",
     marginTop: 10,
   },
 };
