@@ -12,47 +12,90 @@ export default function DynamicLanding() {
   const [step, setStep] = useState("input");
   const [sessionToken, setSessionToken] = useState("");
 
-  /* ❌ REMOVE api_key */
-  // const apiKey = urlParams.get("api_key");
-
+  /* 🔥 FETCH LANDING */
   useEffect(() => {
     fetch(`${API_BASE}/api/landing/${id}`)
       .then((res) => res.json())
-      .then((res) => {
-        console.log("LANDING:", res);
-        setLanding(res.data);
-      })
-      .catch(console.error);
+      .then((res) => setLanding(res.data));
   }, [id]);
+
+  /* 🔥 GEO + CARRIER DETECT */
+  const detectGeoCarrier = (msisdn) => {
+    const num = msisdn.replace(/\D/g, "");
+
+    if (num.startsWith("96478")) {
+      return { geo: "IQ", carrier: "Zain" };
+    }
+    if (num.startsWith("96477")) {
+      return { geo: "IQ", carrier: "Asiacell" };
+    }
+    if (num.startsWith("96475")) {
+      return { geo: "IQ", carrier: "Korek" };
+    }
+
+    if (num.startsWith("97150")) {
+      return { geo: "AE", carrier: "Etisalat" };
+    }
+    if (num.startsWith("97152")) {
+      return { geo: "AE", carrier: "Du" };
+    }
+
+    if (num.startsWith("9665")) {
+      return { geo: "SA", carrier: "STC" };
+    }
+    if (num.startsWith("96655")) {
+      return { geo: "SA", carrier: "Zain" };
+    }
+
+    return { geo: "IQ", carrier: "Zain" }; // fallback
+  };
 
   /* 🔥 SEND PIN */
   const sendPin = async () => {
-    const res = await fetch(
-      `${API_BASE}/api/publisher/pin/send?offer_id=${landing.offer_id}&msisdn=${msisdn}`
-    );
+    if (!msisdn) return alert("Enter number");
 
-    const data = await res.json();
+    const { geo, carrier } = detectGeoCarrier(msisdn);
 
-    if (data.session_token) {
-      setSessionToken(data.session_token);
-      setStep("otp");
-    } else {
-      alert(data.message || "Failed");
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/publisher/pin/send?offer_id=${landing.offer_id}&msisdn=${msisdn}&geo=${geo}&carrier=${carrier}&x-api-key=${landing.api_key}`
+      );
+
+      const data = await res.json();
+
+      if (data.session_token) {
+        setSessionToken(data.session_token);
+        setStep("otp");
+      } else {
+        alert(data.message || "Failed to send OTP");
+      }
+    } catch (err) {
+      alert("Server error");
     }
   };
 
-  /* 🔥 VERIFY */
+  /* 🔥 VERIFY PIN */
   const verifyPin = async () => {
-    const res = await fetch(
-      `${API_BASE}/api/publisher/pin/verify?session_token=${sessionToken}&otp=${otp}`
-    );
+    if (!otp) return alert("Enter OTP");
 
-    const data = await res.json();
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/publisher/pin/verify?session_token=${sessionToken}&otp=${otp}&x-api-key=${landing.api_key}`
+      );
 
-    if (data.status === "SUCCESS") {
-      window.location.href = data.portal_url || "/";
-    } else {
-      alert(data.message || "Invalid OTP");
+      const data = await res.json();
+
+      if (data.status === "SUCCESS") {
+        if (data.portal_url) {
+          window.location.href = data.portal_url;
+        } else {
+          alert("Success");
+        }
+      } else {
+        alert(data.message || "Invalid OTP");
+      }
+    } catch (err) {
+      alert("Verification failed");
     }
   };
 
@@ -64,14 +107,20 @@ export default function DynamicLanding() {
         <h2>{landing.title}</h2>
         <p>{landing.description}</p>
 
+        {landing.image_url && (
+          <img src={landing.image_url} alt="" style={styles.image} />
+        )}
+
         {step === "input" && (
           <>
             <input
-              placeholder="Enter Mobile"
+              type="text"
+              placeholder="Enter Mobile Number"
               value={msisdn}
               onChange={(e) => setMsisdn(e.target.value)}
               style={styles.input}
             />
+
             <button onClick={sendPin} style={styles.button}>
               Send OTP
             </button>
@@ -81,11 +130,13 @@ export default function DynamicLanding() {
         {step === "otp" && (
           <>
             <input
+              type="text"
               placeholder="Enter OTP"
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
               style={styles.input}
             />
+
             <button onClick={verifyPin} style={styles.button}>
               Verify OTP
             </button>
@@ -105,33 +156,40 @@ const styles = {
     justifyContent: "center",
     alignItems: "center",
     height: "100vh",
-    background: "#f3f4f6",
+    background: "#f4f4f4",
   },
   card: {
     background: "#fff",
-    padding: 20,
+    padding: 30,
     borderRadius: 10,
-    width: 350,
+    width: 320,
+    textAlign: "center",
+    boxShadow: "0 0 10px rgba(0,0,0,0.1)",
   },
   input: {
     width: "100%",
     padding: 10,
-    marginTop: 10,
-    borderRadius: 6,
+    marginBottom: 10,
+    borderRadius: 5,
     border: "1px solid #ccc",
   },
   button: {
-    marginTop: 10,
-    padding: 12,
     width: "100%",
+    padding: 10,
     background: "#22c55e",
     color: "#fff",
     border: "none",
-    borderRadius: 6,
+    borderRadius: 5,
+    cursor: "pointer",
+  },
+  image: {
+    width: "100%",
+    borderRadius: 8,
+    marginBottom: 10,
   },
   disclaimer: {
-    marginTop: 10,
     fontSize: 12,
-    color: "#777",
+    marginTop: 10,
+    color: "#555",
   },
 };
