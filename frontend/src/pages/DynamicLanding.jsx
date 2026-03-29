@@ -12,31 +12,34 @@ export default function DynamicLanding() {
   const [step, setStep] = useState("input");
   const [sessionToken, setSessionToken] = useState("");
 
-  /* 🔥 GET API KEY FROM URL */
   const urlParams = new URLSearchParams(window.location.search);
   const apiKey = urlParams.get("api_key");
 
   useEffect(() => {
     fetch(`${API_BASE}/api/landing/${id}`)
       .then((res) => res.json())
-      .then((res) => setLanding(res.data));
+      .then((res) => {
+        if (res.status === "SUCCESS") {
+          setLanding(res.data);
+        } else {
+          setLanding(false);
+        }
+      })
+      .catch(() => setLanding(false));
   }, [id]);
 
-  /* 🔥 CORRECT CARRIER */
+  if (landing === null) return <div style={styles.center}>Loading...</div>;
+  if (landing === false) return <div style={styles.center}>Not Found</div>;
+
   const detectGeoCarrier = (msisdn) => {
     const num = msisdn.replace(/\D/g, "");
 
-    if (num.startsWith("96478")) {
-      return { geo: "IQ", carrier: "Asiacell" };
-    }
-    if (num.startsWith("96477")) {
-      return { geo: "IQ", carrier: "Zain" };
-    }
+    if (num.startsWith("96478")) return { geo: "IQ", carrier: "Asiacell" };
+    if (num.startsWith("96477")) return { geo: "IQ", carrier: "Zain" };
 
-    return { geo: "IQ", carrier: "Zain" };
+    return { geo: "IQ", carrier: "Zain" }; // fallback
   };
 
-  /* 🔥 SEND PIN */
   const sendPin = async () => {
     const { geo, carrier } = detectGeoCarrier(msisdn);
 
@@ -50,11 +53,10 @@ export default function DynamicLanding() {
       setSessionToken(data.session_token);
       setStep("otp");
     } else {
-      alert(data.message || "Failed");
+      alert(data.message);
     }
   };
 
-  /* 🔥 VERIFY */
   const verifyPin = async () => {
     const res = await fetch(
       `${API_BASE}/api/publisher/pin/verify?session_token=${sessionToken}&otp=${otp}&x-api-key=${apiKey}`
@@ -65,11 +67,9 @@ export default function DynamicLanding() {
     if (data.status === "SUCCESS") {
       window.location.href = data.portal_url || "/";
     } else {
-      alert(data.message || "Invalid OTP");
+      alert(data.message);
     }
   };
-
-  if (!landing) return <div>Loading...</div>;
 
   return (
     <div style={styles.container}>
@@ -89,7 +89,7 @@ export default function DynamicLanding() {
               onChange={(e) => setMsisdn(e.target.value)}
               style={styles.input}
             />
-            <button onClick={sendPin} style={styles.button}>
+            <button style={styles.button} onClick={sendPin}>
               Send OTP
             </button>
           </>
@@ -103,16 +103,50 @@ export default function DynamicLanding() {
               onChange={(e) => setOtp(e.target.value)}
               style={styles.input}
             />
-            <button onClick={verifyPin} style={styles.button}>
+            <button style={styles.button} onClick={verifyPin}>
               Verify OTP
             </button>
           </>
         )}
-
-        <p style={styles.disclaimer}>{landing.disclaimer}</p>
       </div>
     </div>
   );
 }
 
-const styles = { /* same styles */ };
+const styles = {
+  container: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    height: "100vh",
+    background: "#f3f4f6",
+  },
+  center: {
+    textAlign: "center",
+    marginTop: 100,
+  },
+  card: {
+    background: "#fff",
+    padding: 30,
+    borderRadius: 10,
+    width: 320,
+    textAlign: "center",
+  },
+  input: {
+    width: "100%",
+    padding: 10,
+    marginBottom: 10,
+  },
+  button: {
+    width: "100%",
+    padding: 10,
+    background: "#22c55e",
+    color: "#fff",
+    border: "none",
+    borderRadius: 6,
+  },
+  image: {
+    width: "100%",
+    marginBottom: 10,
+  },
+};
