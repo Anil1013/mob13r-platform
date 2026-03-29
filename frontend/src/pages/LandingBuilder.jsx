@@ -16,36 +16,51 @@ export default function LandingBuilder() {
   const [offers, setOffers] = useState([]);
   const [landingId, setLandingId] = useState(null);
 
+  /* 🔥 FETCH OFFERS */
   useEffect(() => {
     fetch(`${API_BASE}/api/landing/publisher-offers`)
       .then((res) => res.json())
-      .then((res) => setOffers(res.data || []))
+      .then((res) => {
+        console.log("OFFERS:", res);
+        setOffers(res.data || []);
+      })
       .catch(console.error);
   }, []);
 
+  /* 🔥 SAVE LANDING */
   const save = async () => {
-  if (!form.publisher_offer_id) return alert("Select Offer");
+    if (!form.publisher_offer_id) return alert("Select Offer");
 
-  const res = await fetch(`${API_BASE}/api/landing`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(form),
-  });
+    try {
+      const res = await fetch(`${API_BASE}/api/landing`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(form),
+      });
 
-  const data = await res.json();
+      const data = await res.json();
 
-  if (data.status === "SUCCESS") {
-    setLandingId(data.id); // 🔥 IMPORTANT
+      console.log("FULL RESPONSE:", data);
 
-    alert(
-      `Landing Created:\n${window.location.origin}/lp/${data.id}`
-    );
-  } else {
-    alert("Failed");
-  }
-};
+      // 🔥 SAFE ID EXTRACTION (handles all cases)
+      const landing_id = data.id || data?.data?.id;
+
+      if (data.status === "SUCCESS" && landing_id) {
+        setLandingId(landing_id);
+
+        alert(
+          `Landing Created:\n${window.location.origin}/lp/${landing_id}`
+        );
+      } else {
+        alert("Failed: ID not returned");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Server Error");
+    }
+  };
 
   return (
     <>
@@ -55,6 +70,7 @@ export default function LandingBuilder() {
         <div style={styles.left}>
           <h2>Create Landing</h2>
 
+          {/* 🔥 DROPDOWN */}
           <select
             style={styles.input}
             value={form.publisher_offer_id}
@@ -73,36 +89,68 @@ export default function LandingBuilder() {
             ))}
           </select>
 
-          <input style={styles.input} placeholder="Title"
-            onChange={(e)=>setForm({...form,title:e.target.value})}/>
+          <input
+            style={styles.input}
+            placeholder="Title"
+            onChange={(e) =>
+              setForm({ ...form, title: e.target.value })
+            }
+          />
 
-          <input style={styles.input} placeholder="Description"
-            onChange={(e)=>setForm({...form,description:e.target.value})}/>
+          <input
+            style={styles.input}
+            placeholder="Description"
+            onChange={(e) =>
+              setForm({ ...form, description: e.target.value })
+            }
+          />
 
-          <input style={styles.input} placeholder="Image URL"
-            onChange={(e)=>setForm({...form,image_url:e.target.value})}/>
+          <input
+            style={styles.input}
+            placeholder="Image URL"
+            onChange={(e) =>
+              setForm({ ...form, image_url: e.target.value })
+            }
+          />
 
-          <input style={styles.input} placeholder="Button Text"
-            onChange={(e)=>setForm({...form,button_text:e.target.value})}/>
+          <input
+            style={styles.input}
+            placeholder="Button Text"
+            onChange={(e) =>
+              setForm({ ...form, button_text: e.target.value })
+            }
+          />
 
-          <textarea style={styles.input} placeholder="Disclaimer"
-            onChange={(e)=>setForm({...form,disclaimer:e.target.value})}/>
+          <textarea
+            style={styles.input}
+            placeholder="Disclaimer"
+            onChange={(e) =>
+              setForm({ ...form, disclaimer: e.target.value })
+            }
+          />
 
-             <button style={styles.button} onClick={save}>
-                Save Landing
-                </button>
+          <button style={styles.button} onClick={save}>
+            Save Landing
+          </button>
 
-             {landingId && (
-              <div style={styles.url}>
+          {/* 🔥 URL DISPLAY */}
+          {landingId && (
+            <div style={styles.url}>
               URL: {window.location.origin}/lp/{landingId}
-               </div>
-                )}
-               </div>
+            </div>
+          )}
+        </div>
 
+        {/* 🔥 PREVIEW */}
         <div style={styles.preview}>
           <div style={styles.card}>
             <h2>{form.title || "Landing Title"}</h2>
             <p>{form.description || "Description..."}</p>
+
+            {form.image_url && (
+              <img src={form.image_url} alt="" style={styles.image} />
+            )}
+
             <button style={styles.cta}>
               {form.button_text || "Subscribe"}
             </button>
@@ -113,7 +161,7 @@ export default function LandingBuilder() {
   );
 }
 
-/* STYLES */
+/* 🔥 STYLES */
 const styles = {
   container: {
     display: "flex",
@@ -142,6 +190,11 @@ const styles = {
     borderRadius: 6,
     cursor: "pointer",
   },
+  url: {
+    marginTop: 10,
+    color: "green",
+    fontWeight: "bold",
+  },
   preview: { width: "60%" },
   card: {
     background: "#fff",
@@ -157,9 +210,9 @@ const styles = {
     border: "none",
     borderRadius: 6,
   },
-  url: {
-  marginTop: 10,
-  color: "green",
-  fontWeight: "bold",
-},
+  image: {
+    width: "100%",
+    borderRadius: 8,
+    marginTop: 10,
+  },
 };
