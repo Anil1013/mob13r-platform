@@ -17,7 +17,7 @@ export default function LandingBuilder() {
 
   /* 🔥 FETCH OFFERS */
   useEffect(() => {
-    fetch(`${API_BASE}/api/publisher-offers`)
+       fetch(`${API_BASE}/api/landing/publisher-offers`)
       .then((res) => res.json())
       .then((res) => setOffers(res.data || []));
   }, []);
