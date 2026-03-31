@@ -16,10 +16,12 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public routes */}
-        <Route path="/login" element={<Login />} />
 
-        {/* Protected routes (ALL INSIDE ONE WRAPPER) */}
+        {/* 🔓 PUBLIC */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/landing/:id" element={<DynamicLanding />} />
+
+        {/* 🔐 PRIVATE */}
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/advertisers" element={<Advertisers />} />
@@ -27,14 +29,14 @@ export default function App() {
           <Route path="/publishers" element={<Publishers />} />
           <Route path="/publishers/assign" element={<PublisherAssignOffers />} />
           <Route path="/landing-builder" element={<LandingBuilder />} />
-        <Route path="/lp/:id" element={<DynamicLanding />} />
           <Route path="/dashboard/dump" element={<DumpDashboard />} />
           <Route path="/publisher/dashboard" element={<PublisherDashboard />} />
         </Route>
 
-        {/* Default & fallback */}
+        {/* Default */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
+
       </Routes>
     </BrowserRouter>
   );
