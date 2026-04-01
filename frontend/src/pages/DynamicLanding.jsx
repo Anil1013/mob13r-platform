@@ -9,168 +9,87 @@ export default function DynamicLanding() {
   const [landing, setLanding] = useState(null);
   const [msisdn, setMsisdn] = useState("");
   const [otp, setOtp] = useState("");
-  const [step, setStep] = useState("input");
+  const [sessionToken, setSessionToken] = useState("");
+  const [step, setStep] = useState("msisdn");
   const [loading, setLoading] = useState(false);
-  const [clickId, setClickId] = useState("");
 
-  /* 🔥 CLICK ID */
-  useEffect(() => {
-    let cid = localStorage.getItem("click_id");
-
-    if (!cid) {
-      cid = crypto.randomUUID();
-      localStorage.setItem("click_id", cid);
-    }
-
-    setClickId(cid);
-  }, []);
-
-  /* 🔥 FETCH LANDING */
   useEffect(() => {
     fetch(`${API_BASE}/api/landing/${id}`)
       .then((res) => res.json())
-      .then((res) => {
-        if (res.status === "SUCCESS") {
-          setLanding(res.data);
-        } else {
-          alert("Landing not found");
+      .then((data) => {
+        if (data.status === "SUCCESS") {
+          setLanding(data.data);
         }
-      })
-      .catch(() => alert("Failed to load landing"));
+      });
   }, [id]);
 
-  /* 🔥 GEO DETECT */
-  const detectGeoCarrier = (msisdn) => {
-    const num = msisdn.replace(/\D/g, "");
-
-    if (num.startsWith("96478")) return { geo: "IQ", carrier: "Zain" };
-    if (num.startsWith("96477")) return { geo: "IQ", carrier: "Asiacell" };
-    if (num.startsWith("96475")) return { geo: "IQ", carrier: "Korek" };
-
-    if (num.startsWith("97150")) return { geo: "AE", carrier: "Etisalat" };
-    if (num.startsWith("97152")) return { geo: "AE", carrier: "Du" };
-
-    if (num.startsWith("9665")) return { geo: "SA", carrier: "STC" };
-    if (num.startsWith("96655")) return { geo: "SA", carrier: "Zain" };
-
-    return { geo: "IQ", carrier: "Zain" };
-  };
-
-  /* 🔥 SEND PIN */
   const sendPin = async () => {
-    if (!msisdn || msisdn.length < 8) {
-      return alert("Enter valid mobile number");
-    }
-
     setLoading(true);
-
-    const { geo, carrier } = detectGeoCarrier(msisdn);
 
     try {
       const res = await fetch(
-        `${API_BASE}/api/publisher/pin/send?offer_id=${landing.offer_id}&msisdn=${msisdn}&geo=${geo}&carrier=${carrier}&click_id=${clickId}`,
-        {
-          headers: {
-            "x-api-key": landing.api_key,
-          },
-        }
+        `${API_BASE}/api/publisher/pin/send?offer_id=${landing.offer_id}&msisdn=${msisdn}&geo=IQ&carrier=Zain&x-api-key=${landing.api_key}`
       );
 
       const data = await res.json();
 
-      if (data.session_token) {
-        localStorage.setItem("session_token", data.session_token);
+      if (data.status === "OTP_SENT") {
+        setSessionToken(data.session_token);
         setStep("otp");
       } else {
-        alert(data.message || "Failed to send OTP");
+        alert("OTP failed");
       }
-    } catch {
-      alert("Server error");
+    } catch (e) {
+      alert("Error sending OTP");
     }
 
     setLoading(false);
   };
 
-  /* 🔥 VERIFY PIN */
   const verifyPin = async () => {
-    if (!otp) return alert("Enter OTP");
-
     setLoading(true);
-
-    const sessionToken = localStorage.getItem("session_token");
-
-    if (!sessionToken) {
-      alert("Session expired");
-      setStep("input");
-      setLoading(false);
-      return;
-    }
 
     try {
       const res = await fetch(
-        `${API_BASE}/api/publisher/pin/verify?session_token=${sessionToken}&otp=${otp}&click_id=${clickId}`,
-        {
-          headers: {
-            "x-api-key": landing.api_key,
-          },
-        }
+        `${API_BASE}/api/pin/verify?session_token=${sessionToken}&otp=${otp}&x-api-key=${landing.api_key}`
       );
 
       const data = await res.json();
 
       if (data.status === "SUCCESS") {
-        const redirectUrl =
-          data.portal_url ||
-          landing.redirect_url ||
-          "https://google.com";
-
-        window.location.href = redirectUrl;
+        window.location.href =
+          landing.redirect_url || "https://google.com";
       } else {
-        alert(data.message || "Invalid OTP");
+        alert("Invalid OTP");
       }
-    } catch {
-      alert("Verification failed");
+    } catch (e) {
+      alert("Error verifying OTP");
     }
 
     setLoading(false);
   };
 
-  if (!landing) {
-    return <div style={{ padding: 40 }}>Loading...</div>;
-  }
+  if (!landing) return <div style={{ textAlign: "center" }}>Loading...</div>;
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h2 style={styles.title}>{landing.title}</h2>
-        <p style={styles.desc}>{landing.description}</p>
+        <h2 style={{ marginBottom: 10 }}>{landing.title}</h2>
 
         {landing.image_url && (
-          <img
-            src={landing.image_url}
-            onError={(e) =>
-              (e.target.src =
-                "https://via.placeholder.com/300x200?text=No+Image")
-            }
-            style={styles.image}
-          />
+          <img src={landing.image_url} alt="" style={styles.image} />
         )}
 
-        {step === "input" && (
+        {step === "msisdn" && (
           <>
             <input
-              type="text"
+              style={styles.input}
               placeholder="Enter Mobile Number"
               value={msisdn}
               onChange={(e) => setMsisdn(e.target.value)}
-              style={styles.input}
             />
 
-            <button
-              onClick={sendPin}
-              style={styles.button}
-              disabled={loading}
-            >
+            <button style={styles.button} onClick={sendPin}>
               {loading ? "Sending..." : landing.button_text || "Send OTP"}
             </button>
           </>
@@ -179,18 +98,13 @@ export default function DynamicLanding() {
         {step === "otp" && (
           <>
             <input
-              type="text"
+              style={styles.input}
               placeholder="Enter OTP"
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
-              style={styles.input}
             />
 
-            <button
-              onClick={verifyPin}
-              style={styles.button}
-              disabled={loading}
-            >
+            <button style={styles.button} onClick={verifyPin}>
               {loading ? "Verifying..." : "Verify OTP"}
             </button>
           </>
@@ -202,58 +116,45 @@ export default function DynamicLanding() {
   );
 }
 
-/* 🔥 STYLES */
 const styles = {
   container: {
+    height: "100vh",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    height: "100vh",
-    background: "linear-gradient(135deg,#e0f2fe,#f0fdf4)",
+    background: "#f5f6fa",
   },
   card: {
-    background: "#fff",
-    padding: 30,
-    borderRadius: 14,
-    width: 360,
-    textAlign: "center",
-    boxShadow: "0 15px 35px rgba(0,0,0,0.1)",
-  },
-  title: {
-    marginBottom: 5,
-  },
-  desc: {
-    fontSize: 14,
-    color: "#555",
-    marginBottom: 10,
-  },
-  image: {
-    width: "100%",
+    width: 320,
+    padding: 25,
     borderRadius: 10,
-    marginBottom: 15,
-    maxHeight: 180,
-    objectFit: "cover",
+    background: "#fff",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.1)",
+    textAlign: "center",
   },
   input: {
     width: "100%",
-    padding: 12,
-    marginBottom: 10,
-    borderRadius: 8,
+    padding: 10,
+    marginBottom: 15,
+    borderRadius: 5,
     border: "1px solid #ccc",
   },
   button: {
     width: "100%",
     padding: 12,
-    background: "#22c55e",
+    background: "#28a745",
     color: "#fff",
     border: "none",
-    borderRadius: 8,
+    borderRadius: 5,
     cursor: "pointer",
-    fontWeight: "bold",
+  },
+  image: {
+    width: "100%",
+    marginBottom: 10,
   },
   disclaimer: {
+    marginTop: 10,
     fontSize: 12,
-    marginTop: 12,
     color: "#777",
   },
 };
