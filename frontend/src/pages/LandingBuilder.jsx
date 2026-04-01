@@ -11,36 +11,30 @@ export default function LandingBuilder() {
     title: "",
     description: "",
     image_url: "",
-    button_text: "Subscribe",
+    button_text: "",
     disclaimer: "",
   });
 
-  /* 🔥 FETCH OFFERS */
+  // 🔥 LOAD OFFERS + LANDINGS
   useEffect(() => {
     fetch(`${API_BASE}/api/landing/publisher-offers`)
       .then((res) => res.json())
-      .then((res) => setOffers(res.data || []));
-  }, []);
+      .then((data) => setOffers(data.data || []));
 
-  /* 🔥 FETCH LANDINGS */
-  const loadLandings = () => {
-    fetch(`${API_BASE}/api/landing`)
-      .then((res) => res.json())
-      .then((res) => setLandings(res.data || []));
-  };
-
-  useEffect(() => {
     loadLandings();
   }, []);
 
-  /* 🔥 HANDLE CHANGE */
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const loadLandings = () => {
+    fetch(`${API_BASE}/api/landing`)
+      .then((res) => res.json())
+      .then((data) => setLandings(data.data || []));
   };
 
-  /* 🔥 SAVE */
-  const saveLanding = async () => {
-    if (!form.publisher_offer_id) return alert("Select Offer");
+  // 🔥 CREATE LANDING
+  const createLanding = async () => {
+    if (!form.publisher_offer_id) {
+      return alert("Select offer");
+    }
 
     const res = await fetch(`${API_BASE}/api/landing`, {
       method: "POST",
@@ -50,80 +44,88 @@ export default function LandingBuilder() {
 
     const data = await res.json();
 
-    if (data.id) {
-      alert("Landing Created");
+    if (data.status === "SUCCESS") {
+      alert("Landing Created ✅");
       loadLandings();
     } else {
-      alert("Error");
+      alert("Error creating landing");
     }
   };
 
-  /* 🔥 COPY URL */
+  // 🔥 COPY URL
   const copyUrl = (url) => {
     navigator.clipboard.writeText(url);
-    alert("Copied!");
+    alert("Copied ✅");
   };
 
   return (
     <div style={styles.container}>
-      <h2 style={styles.heading}>Create Landing</h2>
+      <h2 style={{ marginBottom: 20 }}>Create Landing</h2>
 
-      {/* 🔥 FORM */}
-      <div style={styles.formCard}>
-        <div style={styles.formRow}>
-          <select
-            name="publisher_offer_id"
-            onChange={handleChange}
-            style={styles.input}
-          >
-            <option>Select Offer</option>
-            {offers.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.service_name}
-              </option>
-            ))}
-          </select>
+      {/* FORM */}
+      <div style={styles.form}>
+        <select
+          style={styles.input}
+          value={form.publisher_offer_id}
+          onChange={(e) =>
+            setForm({ ...form, publisher_offer_id: e.target.value })
+          }
+        >
+          <option value="">Select Offer</option>
+          {offers.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.service_name} - {o.publisher_name}
+            </option>
+          ))}
+        </select>
 
-          <input name="title" placeholder="Title" onChange={handleChange} style={styles.input} />
-          <input name="description" placeholder="Description" onChange={handleChange} style={styles.input} />
-          <input name="image_url" placeholder="Image URL" onChange={handleChange} style={styles.input} />
-          <input name="button_text" placeholder="Button Text" onChange={handleChange} style={styles.input} />
-          <input name="disclaimer" placeholder="Disclaimer" onChange={handleChange} style={styles.input} />
-        </div>
+        <input
+          style={styles.input}
+          placeholder="Title"
+          onChange={(e) => setForm({ ...form, title: e.target.value })}
+        />
 
-        <button onClick={saveLanding} style={styles.saveBtn}>
+        <input
+          style={styles.input}
+          placeholder="Description"
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+        />
+
+        <input
+          style={styles.input}
+          placeholder="Image URL"
+          onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+        />
+
+        <input
+          style={styles.input}
+          placeholder="Button Text"
+          onChange={(e) => setForm({ ...form, button_text: e.target.value })}
+        />
+
+        <input
+          style={styles.input}
+          placeholder="Disclaimer"
+          onChange={(e) => setForm({ ...form, disclaimer: e.target.value })}
+        />
+
+        <button style={styles.button} onClick={createLanding}>
           Save Landing
         </button>
       </div>
 
-      {/* 🔥 PREVIEW */}
+      {/* PREVIEW */}
       <div style={styles.preview}>
-        <h4>{form.title || "Landing Title"}</h4>
-
-        {form.image_url && (
-          <img
-            src={form.image_url}
-            onError={(e) =>
-              (e.target.src =
-                "https://via.placeholder.com/150x100?text=No+Image")
-            }
-            style={styles.image}
-          />
-        )}
-
-        <p>{form.description}</p>
-
-        <button style={styles.previewBtn}>
+        <h3>{form.title || "Landing Title"}</h3>
+        <button style={styles.greenBtn}>
           {form.button_text || "Subscribe"}
         </button>
-
-        <small>{form.disclaimer}</small>
       </div>
 
-      {/* 🔥 TABLE */}
-      <h3 style={{ marginTop: 30 }}>Landing Pages</h3>
+      {/* TABLE */}
+      <div style={styles.tableBox}>
+        <h3>Landing Pages</h3>
 
-      <div style={styles.tableWrapper}>
         <table style={styles.table}>
           <thead>
             <tr>
@@ -132,6 +134,7 @@ export default function LandingBuilder() {
               <th>Publisher</th>
               <th>Offer</th>
               <th>Landing URL</th>
+              <th>Action</th>
             </tr>
           </thead>
 
@@ -143,34 +146,25 @@ export default function LandingBuilder() {
                 <td>{l.publisher_name}</td>
                 <td>{l.offer_name}</td>
 
+                <td style={{ maxWidth: 250, wordBreak: "break-all" }}>
+                  {l.landing_url}
+                </td>
+
                 <td>
-                  <div style={styles.urlBox}>
-                    <span style={styles.urlText}>
-                      {l.landing_url || "-"}
-                    </span>
+                  <button
+                    style={styles.copyBtn}
+                    onClick={() => copyUrl(l.landing_url)}
+                  >
+                    Copy
+                  </button>
 
-                    {l.landing_url && (
-                      <>
-                        <button
-                          onClick={() => copyUrl(l.landing_url)}
-                          style={styles.copyBtn}
-                        >
-                          Copy
-                        </button>
-
-                        <a
-                          href={l.landing_url.replace(
-                            "dashboard.mob13r.com",
-                            "mob13r.com"
-                          )}
-                          target="_blank"
-                          style={styles.openBtn}
-                        >
-                          Open
-                        </a>
-                      </>
-                    )}
-                  </div>
+                  <a
+                    href={l.landing_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <button style={styles.openBtn}>Open</button>
+                  </a>
                 </td>
               </tr>
             ))}
@@ -181,101 +175,70 @@ export default function LandingBuilder() {
   );
 }
 
-/* 🔥 STYLES */
 const styles = {
   container: {
     padding: 30,
-    background: "#f4f6f9",
+    background: "#f5f6fa",
     minHeight: "100vh",
   },
-  heading: {
-    marginBottom: 15,
-  },
-  formCard: {
-    background: "#fff",
-    padding: 20,
-    borderRadius: 10,
-    boxShadow: "0 5px 15px rgba(0,0,0,0.1)",
-    marginBottom: 20,
-  },
-  formRow: {
-    display: "flex",
+  form: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3,1fr)",
     gap: 10,
-    flexWrap: "wrap",
-    marginBottom: 15,
+    marginBottom: 20,
   },
   input: {
     padding: 10,
     border: "1px solid #ccc",
-    borderRadius: 6,
-    minWidth: 150,
+    borderRadius: 5,
   },
-  saveBtn: {
-    padding: "10px 20px",
-    background: "#2563eb",
-    color: "#fff",
-    border: "none",
-    borderRadius: 6,
-    cursor: "pointer",
-  },
-  preview: {
-    width: 260,
-    padding: 15,
-    borderRadius: 10,
-    background: "#fff",
-    boxShadow: "0 5px 15px rgba(0,0,0,0.1)",
-    marginBottom: 20,
-  },
-  image: {
-    width: "100%",
-    maxHeight: 120,
-    objectFit: "cover",
-    borderRadius: 6,
-  },
-  previewBtn: {
-    width: "100%",
-    padding: 8,
-    background: "#22c55e",
+  button: {
+    gridColumn: "span 3",
+    padding: 12,
+    background: "#007bff",
     color: "#fff",
     border: "none",
     borderRadius: 5,
-    marginTop: 10,
+    cursor: "pointer",
   },
-  tableWrapper: {
+  preview: {
+    width: 250,
+    padding: 20,
     background: "#fff",
-    padding: 15,
     borderRadius: 10,
-    boxShadow: "0 5px 15px rgba(0,0,0,0.1)",
+    marginBottom: 20,
+    boxShadow: "0 10px 20px rgba(0,0,0,0.1)",
+  },
+  greenBtn: {
+    width: "100%",
+    padding: 10,
+    background: "#28a745",
+    color: "#fff",
+    border: "none",
+    borderRadius: 5,
+  },
+  tableBox: {
+    background: "#fff",
+    padding: 20,
+    borderRadius: 10,
   },
   table: {
     width: "100%",
     borderCollapse: "collapse",
   },
-  urlBox: {
-    display: "flex",
-    gap: 5,
-    alignItems: "center",
-  },
-  urlText: {
-    maxWidth: 200,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-    fontSize: 12,
-  },
   copyBtn: {
-    padding: "4px 8px",
-    background: "#111",
+    marginRight: 5,
+    padding: "5px 10px",
+    background: "#000",
     color: "#fff",
     border: "none",
     borderRadius: 4,
-    cursor: "pointer",
   },
   openBtn: {
-    padding: "4px 8px",
-    background: "#22c55e",
+    padding: "5px 10px",
+    background: "#28a745",
     color: "#fff",
+    border: "none",
     borderRadius: 4,
-    textDecoration: "none",
   },
 };
