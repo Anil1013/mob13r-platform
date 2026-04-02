@@ -77,7 +77,11 @@ export default function DynamicLanding() {
         <h2 style={{ marginBottom: 10 }}>{landing.title}</h2>
 
         {landing.image_url && (
-          <img src={landing.image_url} alt="" style={styles.image} />
+          <img src={landing.image_url} style={styles.image} />
+
+<div style={styles.title}>
+  {landing.title}
+</div>
         )}
 
         {step === "msisdn" && (
@@ -118,43 +122,59 @@ export default function DynamicLanding() {
 
 const styles = {
   container: {
-    height: "100vh",
+    minHeight: "100vh",
+    background: "linear-gradient(135deg,#0f172a,#1e293b)",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    background: "#f5f6fa",
+    padding: 20,
   },
+
   card: {
-    width: 320,
-    padding: 25,
-    borderRadius: 10,
-    background: "#fff",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.1)",
+    width: 360,
+    background: "#0f172a",
+    borderRadius: 16,
+    overflow: "hidden",
+    boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
+    color: "#fff",
     textAlign: "center",
   },
-  input: {
-    width: "100%",
-    padding: 10,
-    marginBottom: 15,
-    borderRadius: 5,
-    border: "1px solid #ccc",
-  },
-  button: {
-    width: "100%",
-    padding: 12,
-    background: "#28a745",
-    color: "#fff",
-    border: "none",
-    borderRadius: 5,
-    cursor: "pointer",
-  },
+
   image: {
     width: "100%",
-    marginBottom: 10,
+    height: 200,
+    objectFit: "cover",
   },
+
+  title: {
+    fontSize: 22,
+    fontWeight: "bold",
+    margin: "15px 0",
+  },
+
+  input: {
+    width: "85%",
+    padding: 12,
+    borderRadius: 8,
+    border: "none",
+    marginBottom: 15,
+    outline: "none",
+  },
+
+  button: {
+    width: "85%",
+    padding: 14,
+    background: "#22c55e",
+    border: "none",
+    borderRadius: 8,
+    color: "#fff",
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
+
   disclaimer: {
-    marginTop: 10,
-    fontSize: 12,
-    color: "#777",
+    fontSize: 11,
+    color: "#9ca3af",
+    padding: 15,
   },
 };
