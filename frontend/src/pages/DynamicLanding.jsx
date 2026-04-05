@@ -58,7 +58,7 @@ export default function DynamicLanding() {
 
       if (data.status === "SUCCESS") {
         window.location.href =
-          landing.redirect_url || "https://google.com";
+          landing?.redirect_url || "https://google.com";
       } else {
         alert("Invalid OTP");
       }
@@ -69,21 +69,33 @@ export default function DynamicLanding() {
     setLoading(false);
   };
 
-  if (!landing) return <div style={{ textAlign: "center" }}>Loading...</div>;
+  if (!landing)
+    return <div style={{ textAlign: "center" }}>Loading...</div>;
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h2 style={{ marginBottom: 10 }}>{landing.title}</h2>
 
+        {/* IMAGE + TITLE FIXED */}
         {landing.image_url && (
-          <img src={landing.image_url} style={styles.image} />
+          <>
+            <img
+              src={landing.image_url}
+              alt=""
+              style={styles.image}
+            />
 
-<div style={styles.title}>
-  {landing.title}
-</div>
+            <div style={styles.title}>
+              {landing.title}
+            </div>
+          </>
         )}
 
+        {!landing.image_url && (
+          <div style={styles.title}>{landing.title}</div>
+        )}
+
+        {/* MSISDN STEP */}
         {step === "msisdn" && (
           <>
             <input
@@ -99,6 +111,7 @@ export default function DynamicLanding() {
           </>
         )}
 
+        {/* OTP STEP */}
         {step === "otp" && (
           <>
             <input
@@ -138,6 +151,7 @@ const styles = {
     boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
     color: "#fff",
     textAlign: "center",
+    paddingBottom: 20,
   },
 
   image: {
@@ -150,6 +164,7 @@ const styles = {
     fontSize: 22,
     fontWeight: "bold",
     margin: "15px 0",
+    padding: "0 10px",
   },
 
   input: {
