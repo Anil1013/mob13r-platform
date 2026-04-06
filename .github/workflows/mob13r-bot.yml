@@ -1,0 +1,50 @@
+name: Mob13r Smart Bot
+
+on:
+  push:
+    branches: [ main ]
+  repository_dispatch:
+    types: [ai-fix-command, deploy-command]
+
+jobs:
+  audit:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Code Check
+        run: |
+          cd backend && npm install && node --check server.js || echo "ERR=true" >> $GITHUB_ENV
+          cd ../frontend && npm install && npm run build || echo "ERR=true" >> $GITHUB_ENV
+      - name: Notify Telegram
+        run: |
+          if [ "${{ env.ERR }}" == "true" ]; then MSG="⚠️ Error in code! Type 'Fix' to repair."; else MSG="✅ Build Success! Type 'Deploy' to AWS."; fi
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d text="$MSG"
+
+  ai-fix:
+    if: github.event.action == 'ai-fix-command'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT_TOKEN }}
+      - name: Run Gemini Fixer
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          pip install google-generativeai
+          python scripts/ai_fixer.py
+          git config --global user.name "Mob13r-Bot"
+          git config --global user.email "bot@mob13r.com"
+          git add . && git commit -m "AI Auto-Fix" && git push
+
+  deploy:
+    if: github.event.action == 'deploy-command'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to AWS
+        run: |
+          aws amplify start-job --app-id ${{ secrets.AMPLIFY_APP_ID }} --branch-name main --job-type RELEASE
+          zip -r deploy.zip backend/
+          aws elasticbeanstalk update-environment --environment-name ${{ secrets.EB_ENV_NAME }} --version-label ${{ github.sha }}
