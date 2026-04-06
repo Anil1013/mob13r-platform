@@ -2,10 +2,16 @@ name: Mob13r Smart Bot (Super Fast & Queue)
 
 on:
   push:
-    branches: [ main ] # Jaise hi aap push karenge, ye turant chalega
-  workflow_dispatch: # Manual button ke liye
+    branches: [ main ]
+  workflow_dispatch: # Manual button ke liye GitHub Actions tab mein
 
-# Ye line ensure karti hai ki deployments line mein rahein (Pending Queue)
+env:
+  # Node.js warning hatane ke liye aur performance ke liye
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
+  # Apna AWS Region yahan confirm karein (Mumbai hai toh ap-south-1)
+  AWS_REGION: 'ap-south-1' 
+
+# Ye section ensure karta hai ki deployments line mein rahein (Pending Queue logic)
 concurrency:
   group: mob13r-deploy-queue
   cancel-in-progress: false 
@@ -14,11 +20,18 @@ jobs:
   ai-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_PAT_TOKEN }}
+          fetch-depth: 0
 
-      - name: AI Processing (Telegram Command)
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: 🤖 AI Processing (Gemini Update)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -27,29 +40,36 @@ jobs:
           pip install google-generativeai requests
           python scripts/ai_fixer.py
           
+          # Git configuration to push changes
           git config --global user.name "Mob13r-Bot"
           git config --global user.email "bot@mob13r.com"
           
-          # Agar AI ne code change kiya hai toh commit karo
+          # Agar AI ne code change kiya hai toh commit aur push karein
           if [[ -n $(git status -s) ]]; then
             git add .
             git commit -m "AI Update: Based on Telegram instruction"
-            git push
+            git push origin main
             curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
             -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d text="✅ AI ne code update kar diya hai! Ab AWS Deploy shuru ho raha hai..."
+          else
+            echo "No changes detected by AI."
           fi
 
-      - name: AWS Deployment (Amplify & Beanstalk)
-        run: |
-          # Amplify Frontend
-          aws amplify start-job --app-id ${{ secrets.AMPLIFY_APP_ID }} --branch-name main --job-type RELEASE
-          # Beanstalk Backend
-          zip -r deploy.zip backend/
-          aws elasticbeanstalk update-environment --environment-name ${{ secrets.EB_ENV_NAME }} --version-label ${{ github.sha }}
-          
-          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
-          -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d text="🚀 Updates AWS par live ho gaye hain!"
+      - name: 🚀 AWS Deployment (Amplify & Beanstalk)
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: 'ap-south-1' # Aapka AWS region yahan check kar lein
+        run: |
+          # 1. Amplify Frontend Deployment
+          # Region flag add kiya hai NotFoundException fix karne ke liye
+          aws amplify start-job --app-id ${{ secrets.AMPLIFY_APP_ID }} --branch-name main --job-type RELEASE --region ${{ env.AWS_REGION }}
+          
+          # 2. Prepare Backend Bundle (Ignoring node_modules)
+          zip -r deploy.zip . -x "node_modules/*" ".git/*" ".github/*"
+          
+          # 3. Beanstalk Backend Deployment
+          aws elasticbeanstalk update-environment --environment-name ${{ secrets.EB_ENV_NAME }} --version-label "deploy-${{ github.sha }}" --region ${{ env.AWS_REGION }}
+          
+          # 4. Final Notification
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+          -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d text="🚀 Mob13r Updates AWS par live ho gaye hain!"
