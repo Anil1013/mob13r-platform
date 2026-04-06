@@ -1,67 +1,41 @@
 import google.generativeai as genai
-import os
-import glob
-import requests
+import os, glob, requests
 
-# Secrets fetch karna
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-genai.configure(api_key=GEMINI_KEY)
+# Setup
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-def get_last_telegram_message():
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
-    response = requests.get(url).json()
-    if response['result']:
-        # Last message uthana (e.g., "Add login route" ya "Hindi me comment likho")
-        return response['result'][-1]['message']['text']
+def get_last_instruction():
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    url = f"https://api.telegram.org/bot{token}/getUpdates"
+    res = requests.get(url).json()
+    if res['result']:
+        # Sabse aakhri message uthana
+        return res['result'][-1]['message']['text']
     return None
 
-def send_telegram_log(message):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": CHAT_ID, "text": f"🤖 Mob13r-Update: {message}"})
-
-def update_code_with_ai():
-    user_instruction = get_last_telegram_message()
-    if not user_instruction:
+def update_code():
+    instruction = get_last_instruction()
+    # Agar message '/start' ya koi command nahi hai, tabhi badlav karega
+    if not instruction or instruction.startswith('/'):
         return
 
-    send_telegram_log(f"📝 Aapki instruction mili: '{user_instruction}'. Code update ho raha hai...")
-
-    # Sirf main files scan karega (node_modules ko chhod kar)
+    # JS files scan karna (node_modules ignore rahega .gitignore ki wajah se)
     files = glob.glob("backend/**/*.js", recursive=True) + glob.glob("frontend/src/**/*.js", recursive=True)
     
-    updated_files = []
     for path in files:
         with open(path, 'r') as f:
-            original_code = f.read()
+            old_code = f.read()
 
-        # AI Prompt: Instruction + Code
-        prompt = (
-            f"User Instruction: {user_instruction}\n"
-            f"Code in file {path}:\n{original_code}\n\n"
-            f"Task: If the instruction applies to this file, update the code. "
-            f"If not, return the original code exactly. "
-            f"Return ONLY the code without any markdown or explanations."
-        )
+        prompt = f"User Instruction: {instruction}\nFile: {path}\nCode:\n{old_code}\n\nUpdate this code as per user instruction. Return ONLY the code, no markdown."
         
         try:
             response = model.generate_content(prompt)
             new_code = response.text.replace("```javascript", "").replace("```", "").strip()
-            
-            if new_code != original_code:
-                with open(path, 'w') as f:
-                    f.write(new_code)
-                updated_files.append(path)
-        except Exception as e:
-            print(f"Error in {path}: {e}")
-
-    if updated_files:
-        send_telegram_log(f"✅ In files ko update kar diya gaya hai: {', '.join(updated_files)}")
-    else:
-        send_telegram_log("ℹ️ Kisi file mein badlav ki zaroorat nahi padi.")
+            if new_code != old_code:
+                with open(path, 'w') as f: f.write(new_code)
+        except:
+            pass
 
 if __name__ == "__main__":
-    update_code_with_ai()
+    update_code()
