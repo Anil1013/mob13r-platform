@@ -8,49 +8,60 @@ GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Gemini Setup
 genai.configure(api_key=GEMINI_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
+def get_last_telegram_message():
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
+    response = requests.get(url).json()
+    if response['result']:
+        # Last message uthana (e.g., "Add login route" ya "Hindi me comment likho")
+        return response['result'][-1]['message']['text']
+    return None
+
 def send_telegram_log(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": CHAT_ID, "text": f"🤖 Mob13r-Log: {message}"})
+    requests.post(url, json={"chat_id": CHAT_ID, "text": f"🤖 Mob13r-Update: {message}"})
 
-def fix_code():
-    send_telegram_log("🔍 AI Fixer active! Files scan ki ja rahi hain...")
-    
-    # Backend aur Frontend files search karna
-    files = glob.glob("backend/**/*.js", recursive=True) + glob.glob("frontend/src/**/*.js", recursive=True)
-    
-    if not files:
-        send_telegram_log("❌ Koi JS files nahi mili check karne ke liye.")
+def update_code_with_ai():
+    user_instruction = get_last_telegram_message()
+    if not user_instruction:
         return
 
-    fixed_count = 0
+    send_telegram_log(f"📝 Aapki instruction mili: '{user_instruction}'. Code update ho raha hai...")
+
+    # Sirf main files scan karega (node_modules ko chhod kar)
+    files = glob.glob("backend/**/*.js", recursive=True) + glob.glob("frontend/src/**/*.js", recursive=True)
+    
+    updated_files = []
     for path in files:
         with open(path, 'r') as f:
-            code = f.read()
+            original_code = f.read()
 
-        # AI ko instruction
-        prompt = f"Fix any syntax errors or bugs in this code. Return ONLY the fixed code without any formatting or backticks:\n\n{code}"
+        # AI Prompt: Instruction + Code
+        prompt = (
+            f"User Instruction: {user_instruction}\n"
+            f"Code in file {path}:\n{original_code}\n\n"
+            f"Task: If the instruction applies to this file, update the code. "
+            f"If not, return the original code exactly. "
+            f"Return ONLY the code without any markdown or explanations."
+        )
         
         try:
             response = model.generate_content(prompt)
-            fixed_code = response.text.replace("```javascript", "").replace("```", "").strip()
+            new_code = response.text.replace("```javascript", "").replace("```", "").strip()
             
-            # Agar code change hua hai tabhi save karein
-            if fixed_code != code:
+            if new_code != original_code:
                 with open(path, 'w') as f:
-                    f.write(fixed_code)
-                fixed_count += 1
-                send_telegram_log(f"✅ File theek kar di gayi: {path}")
+                    f.write(new_code)
+                updated_files.append(path)
         except Exception as e:
-            send_telegram_log(f"⚠️ Error in {path}: {str(e)}")
+            print(f"Error in {path}: {e}")
 
-    if fixed_count > 0:
-        send_telegram_log(f"🎉 Total {fixed_count} files fix ho gayi hain. Ab main ise GitHub par push kar raha hoon...")
+    if updated_files:
+        send_telegram_log(f"✅ In files ko update kar diya gaya hai: {', '.join(updated_files)}")
     else:
-        send_telegram_log("ℹ️ Sab kuch theek lag raha hai, koi badlav ki zaroorat nahi padi.")
+        send_telegram_log("ℹ️ Kisi file mein badlav ki zaroorat nahi padi.")
 
 if __name__ == "__main__":
-    fix_code()
+    update_code_with_ai()
