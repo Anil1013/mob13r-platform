@@ -1,58 +1,55 @@
-name: Mob13r Smart Bot
+name: Mob13r Smart Bot (Super Fast & Queue)
 
 on:
   push:
-    branches: [ main ]
-  schedule:
-    - cron: '*/5 * * * *' # Har 5 minute mein Telegram check karega
+    branches: [ main ] # Jaise hi aap push karenge, ye turant chalega
+  workflow_dispatch: # Manual button ke liye
+
+# Ye line ensure karti hai ki deployments line mein rahein (Pending Queue)
+concurrency:
+  group: mob13r-deploy-queue
+  cancel-in-progress: false 
 
 jobs:
-  audit:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Code Check
-        run: |
-          cd backend && npm install && node --check server.js || echo "ERR=true" >> $GITHUB_ENV
-          cd ../frontend && npm install && npm run build || echo "ERR=true" >> $GITHUB_ENV
-      - name: Notify Telegram
-        run: |
-          if [ "${{ env.ERR }}" == "true" ]; then MSG="⚠️ Error in code! Type 'Fix' to repair."; else MSG="✅ Build Success! Type 'Deploy' to AWS."; fi
-          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d text="$MSG"
-
-  listen-and-act:
-    if: github.event_name == 'schedule'
+  ai-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_PAT_TOKEN }}
-      
-      - name: Check Telegram Message
-        id: telegram
-        run: |
-          # Last message fetch karna
-          RAW_RESPONSE=$(curl -s https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/getUpdates)
-          LAST_MSG=$(echo $RAW_RESPONSE | jq -r '.result[-1].message.text' | tr '[:upper:]' '[:lower:]')
-          echo "COMMAND=$LAST_MSG" >> $GITHUB_ENV
 
-      - name: AI Fix Execution
-        if: env.COMMAND == 'fix'
+      - name: AI Processing (Telegram Command)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          pip install google-generativeai
+          pip install google-generativeai requests
           python scripts/ai_fixer.py
+          
           git config --global user.name "Mob13r-Bot"
           git config --global user.email "bot@mob13r.com"
-          git add . && git commit -m "AI Auto-Fix" && git push
-          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d text="🛠 Fix complete and pushed!"
+          
+          # Agar AI ne code change kiya hai toh commit karo
+          if [[ -n $(git status -s) ]]; then
+            git add .
+            git commit -m "AI Update: Based on Telegram instruction"
+            git push
+            curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d text="✅ AI ne code update kar diya hai! Ab AWS Deploy shuru ho raha hai..."
+          fi
 
-      - name: AWS Deploy Execution
-        if: env.COMMAND == 'deploy'
+      - name: AWS Deployment (Amplify & Beanstalk)
         run: |
+          # Amplify Frontend
           aws amplify start-job --app-id ${{ secrets.AMPLIFY_APP_ID }} --branch-name main --job-type RELEASE
+          # Beanstalk Backend
           zip -r deploy.zip backend/
           aws elasticbeanstalk update-environment --environment-name ${{ secrets.EB_ENV_NAME }} --version-label ${{ github.sha }}
-          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d text="🚀 Deployed to AWS!"
+          
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+          -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d text="🚀 Updates AWS par live ho gaye hain!"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: 'ap-south-1' # Aapka AWS region yahan check kar lein
