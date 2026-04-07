@@ -9,42 +9,32 @@ jobs:
   robo-job:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Initialize Robo
+      - name: 📥 Initialize Repo
         uses: actions/checkout@v4
 
-      - name: 🤖 Thinking Process
+      - name: 🤖 Robo Processing
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # Cloudflare se bhej gaya message yahan receive hoga
+          USER_MSG: ${{ github.event.client_payload.msg }}
         run: |
-          # Message ko hamesha single quotes ' ' mein rakhein
+          # Step 1: Inform User
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
           -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
-          -d "text=⚙️ Mob13r-Robo: Jaag raha hoon aur repository scan kar raha hoon..."
+          -d "text=⚙️ Mob13r-Robo: Jaag raha hoon aur aapki command par kaam kar raha hoon..."
           
           pip install google-generativeai requests
-          python scripts/ai_fixer.py
           
+          # Step 2: Run Script with Message
+          python scripts/ai_fixer.py "$USER_MSG"
+          
+          # Step 3: Git Push (Agar code change hua ho)
           git config --global user.name "Mob13r-Robo"
           git config --global user.email "robo@mob13r.com"
           if [[ -n $(git status -s) ]]; then
             git add .
-            git commit -m "Robo-Update: Automated fix based on user command"
+            git commit -m "Robo-Update: $USER_MSG"
             git push origin main
-            echo "DEPLOY=true" >> $GITHUB_ENV
-          else
-            echo "DEPLOY=false" >> $GITHUB_ENV
           fi
-
-      - name: 🚀 Deploying to AWS
-        if: env.DEPLOY == 'true'
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          zip -r deploy.zip . -x "node_modules/*" ".git/*"
-          S3_BUCKET="elasticbeanstalk-ap-south-1-257394496678"
-          aws s3 cp deploy.zip s3://$S3_BUCKET/deploy-${{ github.sha }}.zip
-          aws elasticbeanstalk create-application-version --application-name "Mb13r-backend" --version-label "v-${{ github.sha }}" --source-bundle S3Bucket="$S3_BUCKET",S3Key="deploy-${{ github.sha }}.zip"
-          aws elasticbeanstalk update-environment --environment-name "Mb13r-backend-env" --version-label "v-${{ github.sha }}"
