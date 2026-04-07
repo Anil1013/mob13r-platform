@@ -18,14 +18,14 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # Pehla Status
-          curl -s -X POST [https://api.telegram.org/bot$](https://api.telegram.org/bot$){{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
-          -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d text="⚙️ *Mob13r-Robo:* Jaag raha hoon aur repository scan kar raha hoon..."
+          # Message ko hamesha single quotes ' ' mein rakhein
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+          -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+          -d "text=⚙️ Mob13r-Robo: Jaag raha hoon aur repository scan kar raha hoon..."
           
           pip install google-generativeai requests
           python scripts/ai_fixer.py
           
-          # Git Push logic
           git config --global user.name "Mob13r-Robo"
           git config --global user.email "robo@mob13r.com"
           if [[ -n $(git status -s) ]]; then
