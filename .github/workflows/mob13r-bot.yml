@@ -1,89 +1,50 @@
-name: Mob13r Autonomous AI Bot (Ultra Smart)
+name: Mob13r Full-Autonomous Robo
 
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch: # Manual run ke liye
   repository_dispatch:
-    types: [telegram_cmd] # Cloudflare se signal lene ke liye
-
-env:
-  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-  AWS_REGION: 'ap-south-1' 
-  EB_APP_NAME: 'Mb13r-backend'
-  EB_ENV_NAME: 'Mb13r-backend-env'
+    types: [telegram_cmd]
+  workflow_dispatch:
 
 jobs:
-  ai-thinker-and-deploy:
+  robo-job:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 1. Code Taiyaar Kar Raha Hoon (Checkout)
+      - name: 📥 Initialize Robo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: 🐍 2. Python Environment Setup
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: 🤖 3. AI Processing (Thinking & Fixing)
+      - name: 🤖 Thinking Process
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # Step-by-step status Telegram par bhejna
-          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
-          -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d text="🤖 Mob13r: Main jaag gaya hoon! Files analyze kar raha hoon..."
-
-          pip install google-generativeai requests
+          # Pehla Status
+          curl -s -X POST [https://api.telegram.org/bot$](https://api.telegram.org/bot$){{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+          -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d text="⚙️ *Mob13r-Robo:* Jaag raha hoon aur repository scan kar raha hoon..."
           
-          # AI Script run karna (Jo humne pehle banayi thi)
+          pip install google-generativeai requests
           python scripts/ai_fixer.py
           
-          # Git configuration
-          git config --global user.name "Mob13r-Bot"
-          git config --global user.email "bot@mob13r.com"
-          
-          # Agar AI ne code badla hai toh push karna
+          # Git Push logic
+          git config --global user.name "Mob13r-Robo"
+          git config --global user.email "robo@mob13r.com"
           if [[ -n $(git status -s) ]]; then
             git add .
-            git commit -m "AI autonomous update via Telegram command"
+            git commit -m "Robo-Update: Automated fix based on user command"
             git push origin main
-            echo "CHANGES_MADE=true" >> $GITHUB_ENV
+            echo "DEPLOY=true" >> $GITHUB_ENV
           else
-            echo "CHANGES_MADE=false" >> $GITHUB_ENV
+            echo "DEPLOY=false" >> $GITHUB_ENV
           fi
 
-      - name: 🚀 4. AWS Deployment (Agar Badlav Huye Hain)
-        if: env.CHANGES_MADE == 'true'
+      - name: 🚀 Deploying to AWS
+        if: env.DEPLOY == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
-          -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d text="📦 Code update ho gaya hai, ab AWS par deploy kar raha hoon..."
-
-          zip -r deploy.zip . -x "node_modules/*" ".git/*" ".github/*"
+          zip -r deploy.zip . -x "node_modules/*" ".git/*"
           S3_BUCKET="elasticbeanstalk-ap-south-1-257394496678"
-          
           aws s3 cp deploy.zip s3://$S3_BUCKET/deploy-${{ github.sha }}.zip
-          
-          aws elasticbeanstalk create-application-version \
-            --application-name "${{ env.EB_APP_NAME }}" \
-            --version-label "v-${{ github.sha }}" \
-            --source-bundle S3Bucket="$S3_BUCKET",S3Key="deploy-${{ github.sha }}.zip"
-          
-          aws elasticbeanstalk update-environment \
-            --environment-name "${{ env.EB_ENV_NAME }}" \
-            --version-label "v-${{ github.sha }}"
-
-          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
-          -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d text="✅ Sab kuch live ho gaya hai! Aap apna dashboard check kar sakte hain."
-
-      - name: ℹ️ 5. No Changes Notification
-        if: env.CHANGES_MADE == 'false'
-        run: |
-          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
-          -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} -d text="ℹ️ Analysis poori hui. Mujhe koi error nahi mila aur koi badlav ki zaroorat nahi padi."
+          aws elasticbeanstalk create-application-version --application-name "Mb13r-backend" --version-label "v-${{ github.sha }}" --source-bundle S3Bucket="$S3_BUCKET",S3Key="deploy-${{ github.sha }}.zip"
+          aws elasticbeanstalk update-environment --environment-name "Mb13r-backend-env" --version-label "v-${{ github.sha }}"
