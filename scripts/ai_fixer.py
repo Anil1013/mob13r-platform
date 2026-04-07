@@ -12,80 +12,73 @@ genai.configure(api_key=GEMINI_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
 def send_telegram_log(message):
-    """Telegram par status update bhejne ke liye"""
+    """Telegram par status update aur analysis report bhejne ke liye"""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": f"🤖 Mob13r-AI: {message}"}
+    payload = {"chat_id": CHAT_ID, "text": f"🤖 {message}", "parse_mode": "Markdown"}
     try:
         requests.post(url, json=payload)
     except Exception as e:
         print(f"Telegram Error: {e}")
 
 def get_last_instruction():
-    """Telegram se aapka aakhri message uthane ke liye"""
+    """Telegram se aapka latest message uthane ke liye"""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
     try:
         res = requests.get(url).json()
         if res.get('result'):
-            # Sabse latest message uthate hain
-            last_msg = res['result'][-1]['message']['text']
-            # Agar sirf /start ya commands hain toh ignore karte hain
-            if last_msg.lower() in ['/start', 'fix', 'deploy']:
-                return None
-            return last_msg
-    except Exception as e:
-        print(f"Error fetching updates: {e}")
+            for item in reversed(res['result']):
+                if 'message' in item and 'text' in item['message']:
+                    return item['message']['text']
+    except: return None
     return None
 
-def process_ai_update():
+def process_ai_dev():
     instruction = get_last_instruction()
-    
-    if not instruction:
-        print("No new instruction found.")
-        return
+    if not instruction: return
 
-    send_telegram_log(f"Aapki instruction mili: '{instruction}'. Files analyze ho rahi hain...")
-
-    # Sirf kaam ki files scan karenge (node_modules ignore rahega .gitignore se)
-    # Backend aur Frontend dono cover honge
+    # Scan Files (Backend + Frontend)
     files = glob.glob("backend/**/*.js", recursive=True) + \
             glob.glob("frontend/src/**/*.js", recursive=True) + \
             glob.glob("frontend/src/**/*.jsx", recursive=True)
 
-    updated_files = []
+    # Filtering: Sirf wahi files dekho jo user ne message mein mention ki hain
+    target_files = [f for f in files if any(word.lower() in f.lower() for word in instruction.split())]
+    if not target_files: target_files = files[:5] # Default top 5 files agar kuch na mile
 
-    for path in files:
+    for path in target_files:
         try:
             with open(path, 'r') as f:
                 original_code = f.read()
 
-            # AI Prompt: Instruction + Code context
             prompt = (
-                f"You are a Senior Full-stack Developer. User Instruction: {instruction}\n"
+                f"User Instruction: {instruction}\n"
                 f"File Path: {path}\n"
                 f"Current Code:\n{original_code}\n\n"
-                f"Task: Update the code according to the instruction. "
-                f"If the instruction doesn't apply to this file, return the original code exactly. "
-                f"Return ONLY the updated code without any backticks, markdown, or explanations."
+                "Task:\n"
+                "1. Pehle file ka analysis do (Hindi/English mix).\n"
+                "2. Agar error hai toh batao.\n"
+                "3. Agar code update karna hai toh pura code [FIXED_CODE] tag ke baad do.\n"
+                "4. Agar koi change nahi chahiye, toh sirf explanation do."
             )
 
-            response = model.generate_content(prompt)
-            # Code clean-up (extra markdown hatane ke liye)
-            new_code = response.text.strip().lstrip("```javascript").lstrip("```").rstrip("```").strip()
+            response = model.generate_content(prompt).text
+            
+            # Split Analysis and Code
+            parts = response.split("[FIXED_CODE]")
+            explanation = parts[0].strip()
+            
+            # User ko explanation bhej rahe hain (Ye sabse zaroori hai)
+            send_telegram_log(f"*Analysis for {os.path.basename(path)}:*\n\n{explanation}")
 
-            if new_code != original_code and len(new_code) > 10:
-                with open(path, 'w') as f:
-                    f.write(new_code)
-                updated_files.append(path)
-                print(f"Updated: {path}")
+            if len(parts) > 1:
+                new_code = parts[1].strip().replace("```javascript", "").replace("```jsx", "").replace("```", "").strip()
+                if new_code != original_code and len(new_code) > 10:
+                    with open(path, 'w') as f:
+                        f.write(new_code)
+                    send_telegram_log(f"✅ Maine {os.path.basename(path)} mein badlav kar diye hain. Ab deploy ho raha hai!")
 
         except Exception as e:
-            print(f"Error processing {path}: {e}")
-
-    if updated_files:
-        files_list = ", ".join([os.path.basename(f) for f in updated_files])
-        send_telegram_log(f"✅ In files mein badlav kar diye gaye hain: {files_list}. Ab main GitHub par push kar raha hoon...")
-    else:
-        send_telegram_log("ℹ️ Kisi file mein badlav ki zaroorat nahi padi. Sab kuch theek hai!")
+            print(f"Error on {path}: {e}")
 
 if __name__ == "__main__":
-    process_ai_update()
+    process_ai_dev()
