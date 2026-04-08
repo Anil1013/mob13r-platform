@@ -25,7 +25,7 @@ jobs:
           -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
           -d "text=⚙️ Mob13r-Robo: Jaag raha hoon aur aapki command par kaam kar raha hoon..."
           
-          pip install google-generativeai requests
+          pip install --upgrade google-generativeai requests
           
           # Step 2: Run Script with Message
           python scripts/ai_fixer.py "$USER_MSG"
