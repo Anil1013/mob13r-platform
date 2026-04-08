@@ -1,12 +1,9 @@
-import google.generativeai as genai
-import os, sys, glob, requests
+import os, sys, glob, requests, json
 
-# Setup Secrets
+# 1. Configuration
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-genai.configure(api_key=GEMINI_KEY)
 
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -14,50 +11,43 @@ def send_telegram(message):
     requests.post(url, json=payload)
 
 def process_robo():
+    # Message uthana
     instruction = sys.argv[1] if len(sys.argv) > 1 else os.getenv("USER_MSG")
-    
-    if not instruction or instruction.strip() == "":
-        send_telegram("⚠️ Command empty hai. Please kuch likhein.")
+    if not instruction:
+        send_telegram("⚠️ Command nahi mili.")
         return
 
-    # Files scan
-    all_files = glob.glob("**/*.js", recursive=True) + \
-                glob.glob("**/*.jsx", recursive=True) + \
-                glob.glob("package.json", recursive=True)
-    
+    # Files scan karna
+    all_files = glob.glob("**/*.js", recursive=True) + glob.glob("**/*.jsx", recursive=True)
     file_list = "\n".join([f"- {f}" for f in all_files[:15]])
 
-    # List of models to try (Sahi sequence mein)
-    candidate_models = [
-        'gemini-1.5-flash', 
-        'gemini-pro', 
-        'models/gemini-1.5-flash', 
-        'models/gemini-pro'
-    ]
+    # 2. Google Gemini Direct API Call (v1beta version)
+    # Isme SDK ki zaroorat nahi padti
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
+    
+    payload = {
+        "contents": [{
+            "parts": [{"text": f"User Instruction: {instruction}\n\nFiles in repo:\n{file_list}\n\nRespond in Hindi-English mix."}]
+        }]
+    }
+    
+    headers = {'Content-Type': 'application/json'}
 
-    success = False
-    for model_name in candidate_models:
-        try:
-            print(f"Trying model: {model_name}")
-            model = genai.GenerativeModel(model_name)
-            
-            prompt = (
-                f"User Instruction: {instruction}\n"
-                f"Files Found: {file_list}\n\n"
-                "Answer as a senior developer in Hindi-English mix."
-            )
+    try:
+        response = requests.post(api_url, headers=headers, data=json.dumps(payload))
+        res_data = response.json()
 
-            response = model.generate_content(prompt)
-            if response.text:
-                send_telegram(response.text)
-                success = True
-                break # Agar chal gaya toh loop se bahar
-        except Exception as e:
-            print(f"Failed with {model_name}: {str(e)}")
-            continue
+        # Success check
+        if "candidates" in res_data:
+            ai_text = res_data['candidates'][0]['content']['parts'][0]['text']
+            send_telegram(ai_text)
+        else:
+            # Agar koi error aaye toh detail dikhao
+            err_msg = res_data.get('error', {}).get('message', 'Unknown API Error')
+            send_telegram(f"❌ *API Error:* {err_msg}\n\nBhai, ek baar GitHub Secrets mein apni API key check karo.")
 
-    if not success:
-        send_telegram("❌ *System Alert:* Saare models fail ho gaye hain. \n\nBhai, ek baar check karo ki aapne **Google AI Studio (aistudio.google.com)** se hi API key li hai na?")
+    except Exception as e:
+        send_telegram(f"❌ *System Failure:* {str(e)}")
 
 if __name__ == "__main__":
     process_robo()
