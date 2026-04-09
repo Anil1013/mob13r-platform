@@ -1,5 +1,3 @@
-// backend/src/routes/publisher.routes.js
-
 import express from "express";
 import axios from "axios";
 import pool from "../db.js";
@@ -28,19 +26,14 @@ function enrichParams(req, params) {
   };
 }
 
-function todayClause() {
-  return `credited_at::date = CURRENT_DATE`;
-}
-
 /* =====================================================
-   📤 PUBLISHER PIN SEND (offer_id based)
+   📤 PIN SEND
 ===================================================== */
 
 router.all("/pin/send", publisherAuth, async (req, res) => {
   try {
     const publisher = req.publisher;
     const base = { ...req.query, ...req.body };
-
     const { offer_id, msisdn, geo, carrier } = base;
 
     if (!offer_id || !msisdn) {
@@ -52,10 +45,9 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 
     const params = enrichParams(req, base);
 
-    /* Validate assignment */
+    /* Offer validation */
     const offerRes = await pool.query(
-      `
-      SELECT 
+      `SELECT 
         po.id AS publisher_offer_id,
         po.publisher_cpa,
         o.id AS offer_id,
@@ -66,19 +58,17 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
       WHERE o.id = $1
         AND po.publisher_id = $2
         AND po.status = 'active'
-        AND o.status = 'active'
-      `,
+        AND o.status = 'active'`,
       [offer_id, publisher.id]
     );
 
     if (!offerRes.rows.length) {
-      return res.status(403).json({
-        status: "INVALID_OFFER",
-      });
+      return res.status(403).json({ status: "INVALID_OFFER" });
     }
 
     const picked = offerRes.rows[0];
 
+    /* GEO / Carrier validation */
     if (geo && picked.geo && geo !== picked.geo) {
       return res.status(400).json({ status: "GEO_MISMATCH" });
     }
@@ -87,7 +77,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
       return res.status(400).json({ status: "CARRIER_MISMATCH" });
     }
 
-    /* Internal call */
+    /* Call advertiser */
     const internal = await axios({
       method: req.method,
       url: `${INTERNAL_API_BASE}/api/pin/send/${picked.offer_id}`,
@@ -99,20 +89,24 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 
     const data = internal.data;
 
+    /* 🔥 CRITICAL FIX: Insert row if not exists */
     if (data?.session_token) {
       await pool.query(
-        `
-        UPDATE pin_sessions
-        SET publisher_id = $1,
-            publisher_offer_id = $2,
-            publisher_cpa = $3
-        WHERE session_token = $4
-        `,
+        `INSERT INTO pin_sessions 
+        (session_token, publisher_id, publisher_offer_id, publisher_cpa, offer_id, msisdn, status)
+        VALUES ($1,$2,$3,$4,$5,$6,'PENDING')
+        ON CONFLICT (session_token) 
+        DO UPDATE SET 
+          publisher_id = EXCLUDED.publisher_id,
+          publisher_offer_id = EXCLUDED.publisher_offer_id,
+          publisher_cpa = EXCLUDED.publisher_cpa`,
         [
+          data.session_token,
           publisher.id,
           picked.publisher_offer_id,
           picked.publisher_cpa,
-          data.session_token,
+          picked.offer_id,
+          msisdn,
         ]
       );
     }
@@ -122,13 +116,13 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
       offer_id: picked.offer_id,
     });
   } catch (err) {
-    console.error("PUBLISHER PIN SEND ERROR:", err);
+    console.error("PIN SEND ERROR:", err);
     return res.status(500).json({ status: "FAILED" });
   }
 });
 
 /* =====================================================
-    ✅ PUBLISHER PIN VERIFY (The Final Fix)
+   ✅ PIN VERIFY (FINAL FIXED)
 ===================================================== */
 
 router.all("/pin/verify", publisherAuth, async (req, res) => {
@@ -137,13 +131,16 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
   try {
     const publisher = req.publisher;
     const params = enrichParams(req, { ...req.query, ...req.body });
-    const { session_token } = params; 
+    const { session_token } = params;
 
     if (!session_token) {
-      return res.status(400).json({ status: "FAILED", message: "session_token required" });
+      return res.status(400).json({
+        status: "FAILED",
+        message: "session_token required",
+      });
     }
 
-    // 1. Advertiser se status confirm karein
+    /* 1. Advertiser verify */
     const advResp = await axios({
       method: req.method,
       url: `${INTERNAL_API_BASE}/api/pin/verify`,
@@ -155,21 +152,20 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     const advData = advResp.data;
 
-    // 🔥 SUCCESS DETECTION (Trust the Advertiser)
-    const isActuallyVerified = 
-        advData?.status === "SUCCESS" || 
-        advData?.status === true || 
-        advData?.session_token; // Agar token aa gaya matlab verified hai
+    const isSuccess =
+      advData?.status === "SUCCESS" ||
+      advData?.status === true ||
+      advData?.verified === true;
 
-    if (!isActuallyVerified) {
-        return res.json(mapPublisherResponse(advData));
+    if (!isSuccess) {
+      return res.json(mapPublisherResponse(advData));
     }
 
-    // 2. Database mein row dhundein (Search both columns)
-    // Hum '::text' cast use kar rahe hain taaki UUID mismatch na ho
+    /* 2. Find session */
     const sessionRes = await client.query(
       `SELECT * FROM pin_sessions 
-       WHERE (session_token::text = $1 OR parent_session_token::text = $1)
+       WHERE session_token::text = $1 
+          OR parent_session_token::text = $1
        ORDER BY created_at DESC LIMIT 1`,
       [session_token]
     );
@@ -178,69 +174,79 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       return res.json(mapPublisherResponse(advData));
     }
 
-    const s = sessionRes.rows[0];
-
-    // Transaction Start
     await client.query("BEGIN");
 
-    // Re-verify and Lock
+    /* LOCK row */
     const lockRes = await client.query(
-        `SELECT * FROM pin_sessions WHERE session_id = $1 FOR UPDATE`, 
-        [s.session_id]
+      `SELECT * FROM pin_sessions 
+       WHERE session_id = $1 FOR UPDATE`,
+      [sessionRes.rows[0].session_id]
     );
+
     const session = lockRes.rows[0];
 
+    /* 🔥 Duplicate protection */
     if (session.publisher_credited) {
       await client.query("COMMIT");
       return res.json(mapPublisherResponse(advData));
     }
 
-    // 3. HOLD / FILTER LOGIC
+    /* 3. Rules */
     const ruleRes = await client.query(
-      `SELECT daily_cap, pass_percent FROM publisher_offers WHERE id = $1 AND status='active'`,
+      `SELECT daily_cap, pass_percent 
+       FROM publisher_offers 
+       WHERE id = $1 AND status='active'`,
       [session.publisher_offer_id]
     );
 
     if (ruleRes.rows.length) {
       const { daily_cap, pass_percent } = ruleRes.rows[0];
 
-      // Daily Cap (IST Fix)
-      const creditedRes = await client.query(
-        `SELECT COUNT(*)::int FROM pin_sessions 
-         WHERE publisher_id=$1 AND offer_id=$2 AND publisher_credited=TRUE 
-         AND (credited_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date = CURRENT_DATE`,
+      /* Daily cap (IST) */
+      const capRes = await client.query(
+        `SELECT COUNT(*)::int FROM pin_sessions
+         WHERE publisher_id=$1 
+           AND offer_id=$2 
+           AND publisher_credited=TRUE
+           AND (credited_at AT TIME ZONE 'UTC' 
+           AT TIME ZONE 'Asia/Kolkata')::date = CURRENT_DATE`,
         [publisher.id, session.offer_id]
       );
 
-      if (daily_cap !== null && creditedRes.rows[0].count >= daily_cap) {
+      if (daily_cap && capRes.rows[0].count >= daily_cap) {
         await client.query("COMMIT");
-        return res.json(mapPublisherResponse(advData, { isHold: true }));
+        return res.json(
+          mapPublisherResponse(advData, { isHold: true })
+        );
       }
 
-      // Pass %
-      if (Number(pass_percent ?? 100) < 100) {
-        if ((Math.random() * 100) >= Number(pass_percent)) {
+      /* Pass percentage */
+      if (pass_percent !== null && pass_percent < 100) {
+        if ((Math.random() * 100) >= pass_percent) {
           await client.query("COMMIT");
-          return res.json(mapPublisherResponse(advData, { isHold: true }));
+          return res.json(
+            mapPublisherResponse(advData, { isHold: true })
+          );
         }
       }
     }
 
-    // 4. FORCE UPDATE: Yahan hum 'f' ko 't' kar rahe hain
+    /* 4. CREDIT */
     await client.query(
-      `UPDATE pin_sessions 
-       SET publisher_credited = TRUE, 
+      `UPDATE pin_sessions
+       SET publisher_credited = TRUE,
            credited_at = NOW(),
-           status = 'VERIFIED' 
+           status = 'VERIFIED'
        WHERE session_id = $1`,
       [session.session_id]
     );
 
     await client.query("COMMIT");
+
     return res.json(mapPublisherResponse(advData));
 
   } catch (err) {
-    if (client) await client.query("ROLLBACK");
+    await client.query("ROLLBACK");
     console.error("VERIFY ERROR:", err);
     return res.status(500).json({ status: "FAILED" });
   } finally {
