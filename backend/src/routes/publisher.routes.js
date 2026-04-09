@@ -128,19 +128,18 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 });
 
 /* =====================================================
-    ✅ PUBLISHER PIN VERIFY (Updated with Fixes)
+    ✅ PUBLISHER PIN VERIFY (Final Mapping Logic)
 ===================================================== */
+
 router.all("/pin/verify", publisherAuth, async (req, res) => {
   const client = await pool.connect();
 
   try {
     const publisher = req.publisher;
     const params = enrichParams(req, { ...req.query, ...req.body });
-    
-    // Ye wo token hai jo publisher bhej raha hai (Jo uske liye session_token hai)
-    const incomingToken = params.session_token; 
+    const { session_token } = params; // Ye Publisher ka bheja hua token hai (e.g., 'cb63...')
 
-    if (!incomingToken) {
+    if (!session_token) {
       return res.status(400).json({ status: "FAILED", message: "session_token required" });
     }
 
@@ -156,9 +155,9 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     const advData = advResp.data;
 
-    // 2. DB Search Logic: 
-    // Hum check kar rahe hain ki incomingToken ya toh session_token ho ya parent_session_token
-    // Aur status 'VERIFIED' ho.
+    // 2. Mapping Search:
+    // Hum aisi row dhund rahe hain jahan status VERIFIED ho 
+    // Aur input token 'session_token' ya 'parent_session_token' kisi bhi column mein match ho jaye
     const verifyRowRes = await client.query(
       `
       SELECT *
@@ -168,36 +167,38 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       ORDER BY created_at DESC
       LIMIT 1
       `,
-      [incomingToken]
+      [session_token]
     );
 
-    // Agar status abhi update nahi hua par Advertiser Success hai, toh hum fallback search karenge
-    let session;
     if (!verifyRowRes.rows.length) {
+       // Agar row nahi milti (Advertiser slow hai ya mapping miss hui)
+       // Toh hum status check ke bina row dhund kar verify karenge
        const fallback = await client.query(
          `SELECT * FROM pin_sessions 
           WHERE (session_token::text = $1 OR parent_session_token::text = $1) 
           ORDER BY created_at DESC LIMIT 1`,
-         [incomingToken]
+         [session_token]
        );
+       
        if (!fallback.rows.length) {
           return res.json(mapPublisherResponse(advData));
        }
-       session = fallback.rows[0];
+       // Agar row mili but status 'VERIFIED' nahi hai, toh advertiser ke SUCCESS response ke basis pe ise verify maan lenge
+       var targetSession = fallback.rows[0];
     } else {
-       session = verifyRowRes.rows[0];
+       var targetSession = verifyRowRes.rows[0];
     }
 
     await client.query("BEGIN");
 
-    // Row Lock for transaction
+    // Primary Key (session_id) se row lock karein taaki mapping bilkul accurate ho
     const sRes = await client.query(
       `SELECT * FROM pin_sessions WHERE session_id = $1 FOR UPDATE`,
-      [session.session_id]
+      [targetSession.session_id]
     );
     const s = sRes.rows[0];
 
-    // Security & Duplicate Check
+    // Security & State Checks
     if (s.publisher_id !== publisher.id) { await client.query("ROLLBACK"); return res.status(403).json({status:"FORBIDDEN"}); }
     if (s.publisher_credited) { await client.query("COMMIT"); return res.json(mapPublisherResponse(advData)); }
 
@@ -210,7 +211,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
     if (ruleRes.rows.length) {
       const { daily_cap, pass_percent } = ruleRes.rows[0];
 
-      // Daily Cap Check (IST Timezone)
+      // Daily Cap Check (India Timezone Fix)
       const creditedRes = await client.query(
         `SELECT COUNT(*)::int FROM pin_sessions 
          WHERE publisher_id=$1 AND offer_id=$2 AND publisher_credited=TRUE 
@@ -223,7 +224,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
         return res.json(mapPublisherResponse(advData, { isHold: true }));
       }
 
-      // Pass % Check
+      // Pass % Check (Random Hold)
       if (Number(pass_percent ?? 100) < 100) {
         if ((Math.random() * 100) >= Number(pass_percent)) {
           await client.query("COMMIT");
@@ -232,9 +233,13 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       }
     }
 
-    // 4. FINAL UPDATE (Crediting the Publisher)
+    // 4. FINAL COMMIT: Change 'f' to 't'
     await client.query(
-      `UPDATE pin_sessions SET publisher_credited=TRUE, credited_at=NOW() WHERE session_id = $1`,
+      `UPDATE pin_sessions 
+       SET publisher_credited = TRUE, 
+           credited_at = NOW(),
+           status = 'VERIFIED'
+       WHERE session_id = $1`,
       [s.session_id]
     );
 
