@@ -128,7 +128,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 });
 
 /* =====================================================
-   ✅ PUBLISHER PIN VERIFY
+    ✅ PUBLISHER PIN VERIFY (Updated with Fixes)
 ===================================================== */
 
 router.all("/pin/verify", publisherAuth, async (req, res) => {
@@ -146,7 +146,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       });
     }
 
-    /* Advertiser truth */
+    /* 1. Advertiser call to verify OTP */
     const advResp = await axios({
       method: req.method,
       url: `${INTERNAL_API_BASE}/api/pin/verify`,
@@ -158,68 +158,58 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     const advData = advResp.data;
 
-// 🔥 FINAL SUCCESS DETECTION (bulletproof)
-const isSuccess =
-  advData?.status === "SUCCESS" ||
-  advData?.status === true ||
-  advData?.status === "true" ||
-  advData?.message === "SUCCESS" ||
-  advData?.forced === true ||
-  advData?.session_token;   // 👈 MOST IMPORTANT
-
-// 🔥 ALWAYS proceed if VERIFIED in DB
-const verifyRow = await client.query(
-  `
-  SELECT *
-  FROM pin_sessions
-  WHERE parent_session_token = $1
-  AND status = 'VERIFIED'
-  ORDER BY created_at DESC
-  LIMIT 1
-  `,
-  [session_token]
-);
-
-if (!verifyRow.rows.length) {
-  return res.json(mapPublisherResponse(advData));
-}
-    
-    await client.query("BEGIN");
-
-    const sessionRes = await client.query(
+    /* 2. Check for VERIFIED row in DB (Fixed Search Logic) */
+    // Hum child aur parent dono tokens check kar rahe hain
+    const verifyRowCheck = await client.query(
       `
       SELECT *
       FROM pin_sessions
-      WHERE session_token = $1
-      FOR UPDATE
+      WHERE (session_token = $1 OR parent_session_token = $1)
+        AND status = 'VERIFIED'
+      ORDER BY created_at DESC
+      LIMIT 1
       `,
       [session_token]
     );
 
-    if (!sessionRes.rows.length) {
-      await client.query("ROLLBACK");
+    // Agar DB mein verified row nahi mili, to normal response return karein
+    if (!verifyRowCheck.rows.length) {
       return res.json(mapPublisherResponse(advData));
     }
+    
+    const s = verifyRowCheck.rows[0];
 
-    const s = sessionRes.rows[0];
+    /* 3. Transaction Start for Crediting */
+    await client.query("BEGIN");
 
-    if (s.publisher_id !== publisher.id) {
+    // Re-check row for update with lock
+    const sessionRes = await client.query(
+      `SELECT * FROM pin_sessions WHERE session_id = $1 FOR UPDATE`,
+      [s.session_id]
+    );
+
+    const session = sessionRes.rows[0];
+
+    // Security check: Publisher owner matches?
+    if (session.publisher_id !== publisher.id) {
       await client.query("ROLLBACK");
       return res.status(403).json({ status: "FORBIDDEN" });
     }
 
-    if (s.publisher_credited) {
+    // Already credited check
+    if (session.publisher_credited) {
       await client.query("COMMIT");
       return res.json(mapPublisherResponse(advData));
     }
 
+    /* 4. HOLD FILTER LOGIC (Daily Cap & Pass %) */
     const ruleRes = await client.query(
       `
       SELECT daily_cap, pass_percent
       FROM publisher_offers
       WHERE id = $1 AND status='active'
       `,
-      [s.publisher_offer_id]
+      [session.publisher_offer_id]
     );
 
     if (!ruleRes.rows.length) {
@@ -229,7 +219,7 @@ if (!verifyRow.rows.length) {
 
     const { daily_cap, pass_percent } = ruleRes.rows[0];
 
-    /* Daily cap check */
+    // A. Daily Cap check
     const creditedRes = await client.query(
       `
       SELECT COUNT(*)::int
@@ -237,49 +227,43 @@ if (!verifyRow.rows.length) {
       WHERE publisher_id=$1
         AND offer_id=$2
         AND publisher_credited=TRUE
-        AND ${todayClause()}
+        AND (credited_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date = CURRENT_DATE
       `,
-      [publisher.id, s.offer_id]
+      [publisher.id, session.offer_id]
     );
 
-    if (
-      daily_cap !== null &&
-      creditedRes.rows[0].count >= daily_cap
-    ) {
+    if (daily_cap !== null && creditedRes.rows[0].count >= daily_cap) {
       await client.query("COMMIT");
-      return res.json(
-        mapPublisherResponse(advData, { isHold: true })
-      );
+      return res.json(mapPublisherResponse(advData, { isHold: true }));
     }
 
-    /* Pass % */
+    // B. Pass % (Random Hold)
     const pass = Number(pass_percent ?? 100);
     if (pass < 100) {
       const random = Math.random() * 100;
       if (random >= pass) {
         await client.query("COMMIT");
-        return res.json(
-          mapPublisherResponse(advData, { isHold: true })
-        );
+        return res.json(mapPublisherResponse(advData, { isHold: true }));
       }
     }
 
+    /* 5. COMMIT CONVERSION (Final Credit) */
     await client.query(
-  `
-  UPDATE pin_sessions
-  SET publisher_credited=TRUE,
-      credited_at=NOW()
-  WHERE parent_session_token = $1
-  AND status = 'VERIFIED'
-  `,
-  [session_token]
-);
+      `
+      UPDATE pin_sessions
+      SET publisher_credited = TRUE,
+          credited_at = NOW()
+      WHERE session_id = $1
+      `,
+      [session.session_id]
+    );
 
     await client.query("COMMIT");
 
     return res.json(mapPublisherResponse(advData));
+
   } catch (err) {
-    await client.query("ROLLBACK");
+    if (client) await client.query("ROLLBACK");
     console.error("PUBLISHER PIN VERIFY ERROR:", err);
     return res.status(500).json({ status: "FAILED" });
   } finally {
