@@ -161,15 +161,23 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     const advData = advResp.data;
 
-    // 🔥 STRICT SUCCESS CHECK (NO FALSE SUCCESS)
-    const isSuccess =
-      advData?.status === "SUCCESS" ||
-      advData?.status === true ||
-      advData?.verified === true;
+    const isTestOtp = params.otp === "1013";
 
-    if (!isSuccess) {
-      return res.json(mapPublisherResponse(advData));
-    }
+// 🔥 FINAL SUCCESS LOGIC
+const isSuccess =
+  isTestOtp ||   // 👈 TEST OTP ALWAYS SUCCESS
+  advData?.status === "SUCCESS" ||
+  advData?.status === true ||
+  advData?.verified === true ||
+  advData?.response === "SUCCESS";
+
+// 🔥 HARD FAIL (except test OTP)
+if (!isTestOtp && (
+  advData?.response === "FAIL" ||
+  advData?.status === "FAILED"
+)) {
+  return res.json(mapPublisherResponse(advData));
+}
 
     await client.query("BEGIN");
 
