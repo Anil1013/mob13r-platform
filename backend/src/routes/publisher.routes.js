@@ -127,7 +127,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 });
 
 /* =====================================================
-   ✅ PIN VERIFY (FINAL FIXED)
+   ✅ PIN VERIFY (FINAL FIXED - CLEAN)
 ===================================================== */
 
 router.all("/pin/verify", publisherAuth, async (req, res) => {
@@ -159,29 +159,36 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       validateStatus: () => true,
     });
 
-    const advData = advResp.data;
+    let advData = advResp.data;
 
+    /* 🔥 TEST OTP OVERRIDE (SAFE PLACE) */
     const isTestOtp = params.otp === "1013";
 
-// 🔥 FINAL SUCCESS LOGIC
-const isSuccess =
-  isTestOtp ||   // 👈 TEST OTP ALWAYS SUCCESS
-  advData?.status === "SUCCESS" ||
-  advData?.status === true ||
-  advData?.verified === true ||
-  advData?.response === "SUCCESS";
+    if (isTestOtp) {
+      advData = {
+        ...advData,
+        status: "SUCCESS",
+        response: "SUCCESS",
+        message: "Test OTP Success",
+      };
+    }
 
-// 🔥 HARD FAIL (except test OTP)
-if (!isTestOtp && (
-  advData?.response === "FAIL" ||
-  advData?.status === "FAILED"
-)) {
-  return res.json(mapPublisherResponse(advData));
-}
+    /* 🔥 FINAL SUCCESS LOGIC */
+    const isSuccess =
+      advData?.status === "SUCCESS" ||
+      advData?.status === true ||
+      advData?.verified === true ||
+      advData?.response === "SUCCESS";
 
+    /* 🔥 HARD FAIL (except test OTP already overridden) */
+    if (!isSuccess) {
+      return res.json(mapPublisherResponse(advData));
+    }
+
+    /* ================= TRANSACTION START ================= */
     await client.query("BEGIN");
 
-    // 🔥 MATCH ALL TOKEN TYPES
+    /* 🔥 MATCH ALL TOKEN TYPES */
     const sessionRes = await client.query(
       `SELECT *
        FROM pin_sessions
@@ -201,17 +208,20 @@ if (!isTestOtp && (
 
     const s = sessionRes.rows[0];
 
+    /* Security check */
     if (s.publisher_id !== publisher.id) {
       await client.query("ROLLBACK");
       return res.status(403).json({ status: "FORBIDDEN" });
     }
 
+    /* Duplicate credit protection */
     if (s.publisher_credited) {
       await client.query("COMMIT");
       return res.json(mapPublisherResponse(advData));
     }
 
-    /* Fetch rules */
+    /* ================= RULES ================= */
+
     const ruleRes = await client.query(
       `SELECT daily_cap, pass_percent
        FROM publisher_offers
@@ -251,7 +261,8 @@ if (!isTestOtp && (
       }
     }
 
-    /* 🔥 FINAL CREDIT FIX */
+    /* ================= CREDIT ================= */
+
     await client.query(
       `UPDATE pin_sessions
        SET publisher_credited = TRUE,
@@ -264,8 +275,12 @@ if (!isTestOtp && (
     await client.query("COMMIT");
 
     return res.json(mapPublisherResponse(advData));
+
   } catch (err) {
-    await client.query("ROLLBACK");
+    try {
+      await client.query("ROLLBACK");
+    } catch (e) {}
+
     console.error("VERIFY ERROR:", err);
     return res.status(500).json({ status: "FAILED" });
   } finally {
