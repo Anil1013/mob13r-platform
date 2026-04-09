@@ -31,7 +31,7 @@ function todayClause() {
 }
 
 /* =====================================================
-   📤 PIN SEND (FIXED)
+   📤 PIN SEND (FINAL FIXED)
 ===================================================== */
 
 router.all("/pin/send", publisherAuth, async (req, res) => {
@@ -50,7 +50,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 
     const params = enrichParams(req, base);
 
-    /* Offer validation */
+    /* Validate offer */
     const offerRes = await pool.query(
       `SELECT 
         po.id AS publisher_offer_id,
@@ -93,9 +93,10 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 
     const data = internal.data;
 
-    // 🔥 HANDLE ALL POSSIBLE TOKENS
+    // 🔥 HANDLE ALL TOKEN TYPES
     const sessionToken = data?.session_token || null;
-    const advSessionKey = data?.sessionKey || data?.session_key || null;
+    const advSessionKey =
+      data?.sessionKey || data?.session_key || null;
 
     if (sessionToken) {
       await pool.query(
@@ -126,7 +127,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 });
 
 /* =====================================================
-   ✅ PIN VERIFY (FIXED FINAL)
+   ✅ PIN VERIFY (FINAL FIXED)
 ===================================================== */
 
 router.all("/pin/verify", publisherAuth, async (req, res) => {
@@ -148,7 +149,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       });
     }
 
-    /* Advertiser verify */
+    /* Call advertiser verify */
     const advResp = await axios({
       method: req.method,
       url: `${INTERNAL_API_BASE}/api/pin/verify`,
@@ -160,11 +161,11 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     const advData = advResp.data;
 
+    // 🔥 STRICT SUCCESS CHECK (NO FALSE SUCCESS)
     const isSuccess =
       advData?.status === "SUCCESS" ||
       advData?.status === true ||
-      advData?.verified === true ||
-      advData?.session_token;
+      advData?.verified === true;
 
     if (!isSuccess) {
       return res.json(mapPublisherResponse(advData));
@@ -172,7 +173,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     await client.query("BEGIN");
 
-    // 🔥 MATCH ANY TOKEN TYPE
+    // 🔥 MATCH ALL TOKEN TYPES
     const sessionRes = await client.query(
       `SELECT *
        FROM pin_sessions
@@ -202,7 +203,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       return res.json(mapPublisherResponse(advData));
     }
 
-    /* Rules */
+    /* Fetch rules */
     const ruleRes = await client.query(
       `SELECT daily_cap, pass_percent
        FROM publisher_offers
@@ -242,7 +243,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       }
     }
 
-    /* CREDIT */
+    /* 🔥 FINAL CREDIT FIX */
     await client.query(
       `UPDATE pin_sessions
        SET publisher_credited = TRUE,
