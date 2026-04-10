@@ -282,13 +282,13 @@ if (!verifiedRes.rows.length) {
 
 const verifiedRow = verifiedRes.rows[0];
 
-// 🔥 CREDIT ON PARENT ROW
+// ✅ FIXED LINE
 await client.query(
   `UPDATE pin_sessions
    SET publisher_credited = TRUE,
        credited_at = NOW()
    WHERE session_token = $1`,
-  [s.parent_session_token]
+  [verifiedRow.parent_session_token]
 );
 
 await client.query("COMMIT");
