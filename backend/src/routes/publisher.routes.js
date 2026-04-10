@@ -263,18 +263,37 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     /* ================= CREDIT ================= */
 
-    await client.query(
-      `UPDATE pin_sessions
-       SET publisher_credited = TRUE,
-           credited_at = NOW(),
-           status = 'VERIFIED'
-       WHERE session_id = $1`,
-      [s.session_id]
-    );
+    // 🔥 FIND VERIFIED CHILD ROW
+const verifiedRes = await client.query(
+  `SELECT *
+   FROM pin_sessions
+   WHERE parent_session_token = $1
+   AND status = 'VERIFIED'
+   ORDER BY created_at DESC
+   LIMIT 1
+   FOR UPDATE`,
+  [inputToken]
+);
 
-    await client.query("COMMIT");
+if (!verifiedRes.rows.length) {
+  await client.query("ROLLBACK");
+  return res.json(mapPublisherResponse(advData));
+}
 
-    return res.json(mapPublisherResponse(advData));
+const s = verifiedRes.rows[0];
+
+// 🔥 CREDIT ON PARENT ROW
+await client.query(
+  `UPDATE pin_sessions
+   SET publisher_credited = TRUE,
+       credited_at = NOW()
+   WHERE session_token = $1`,
+  [s.parent_session_token]
+);
+
+await client.query("COMMIT");
+
+return res.json(mapPublisherResponse(advData));
 
   } catch (err) {
     try {
