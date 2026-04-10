@@ -280,7 +280,7 @@ if (!verifiedRes.rows.length) {
   return res.json(mapPublisherResponse(advData));
 }
 
-const s = verifiedRes.rows[0];
+const verifiedRow = verifiedRes.rows[0];
 
 // 🔥 CREDIT ON PARENT ROW
 await client.query(
