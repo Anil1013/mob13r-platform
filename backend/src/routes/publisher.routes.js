@@ -267,8 +267,9 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 const verifiedRes = await client.query(
   `SELECT *
    FROM pin_sessions
-   WHERE parent_session_token = $1
-   AND status = 'VERIFIED'
+   WHERE 
+     (parent_session_token::text = $1 OR session_token::text = $1)
+     AND status = 'VERIFIED'
    ORDER BY created_at DESC
    LIMIT 1
    FOR UPDATE`,
@@ -282,13 +283,15 @@ if (!verifiedRes.rows.length) {
 
 const verifiedRow = verifiedRes.rows[0];
 
-// ✅ FIXED LINE
+const parentToken =
+  verifiedRow.parent_session_token || verifiedRow.session_token;
+
 await client.query(
   `UPDATE pin_sessions
    SET publisher_credited = TRUE,
        credited_at = NOW()
    WHERE session_token = $1`,
-  [verifiedRow.parent_session_token]
+  [parentToken]
 );
 
 await client.query("COMMIT");
