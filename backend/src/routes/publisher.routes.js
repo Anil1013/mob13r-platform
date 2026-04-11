@@ -273,10 +273,13 @@ const verifiedRes = await client.query(
    ORDER BY created_at DESC
    LIMIT 1
    FOR UPDATE`,
-  [inputToken]
+  [inputToken.toString()]
 );
 
+console.log("Verified Rows:", verifiedRes.rows);
+
 if (!verifiedRes.rows.length) {
+  console.log("❌ NO VERIFIED ROW FOUND");
   await client.query("ROLLBACK");
   return res.json(mapPublisherResponse(advData));
 }
@@ -293,6 +296,8 @@ await client.query(
    WHERE session_token = $1`,
   [parentToken]
 );
+
+console.log("✅ CREDIT APPLIED:", parentToken);
 
 await client.query("COMMIT");
 
