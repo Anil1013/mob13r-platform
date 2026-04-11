@@ -261,43 +261,37 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       }
     }
 
-    /* ================= CREDIT ================= */
+   /* ================= CREDIT (FINAL FIX) ================= */
 
-    // 🔥 FIND VERIFIED CHILD ROW
+// 🔥 STEP 1: VERIFIED CHILD ROW FIND
 const verifiedRes = await client.query(
-  `SELECT *
+  `SELECT session_id, parent_session_token
    FROM pin_sessions
-   WHERE 
-     (parent_session_token::text = $1 OR session_token::text = $1)
+   WHERE parent_session_token::text = $1
      AND status = 'VERIFIED'
    ORDER BY created_at DESC
    LIMIT 1
    FOR UPDATE`,
-  [inputToken.toString()]
+  [inputToken]
 );
 
-console.log("Verified Rows:", verifiedRes.rows);
-
 if (!verifiedRes.rows.length) {
-  console.log("❌ NO VERIFIED ROW FOUND");
   await client.query("ROLLBACK");
   return res.json(mapPublisherResponse(advData));
 }
 
 const verifiedRow = verifiedRes.rows[0];
 
-const parentToken =
-  verifiedRow.parent_session_token || verifiedRow.session_token;
-
+// 🔥 STEP 2: CREDIT DIRECTLY USING JOIN (BULLETPROOF)
 await client.query(
-  `UPDATE pin_sessions
+  `UPDATE pin_sessions parent
    SET publisher_credited = TRUE,
        credited_at = NOW()
-   WHERE session_token = $1`,
-  [parentToken]
+   FROM pin_sessions child
+   WHERE child.session_id = $1
+     AND parent.session_token = child.parent_session_token`,
+  [verifiedRow.session_id]
 );
-
-console.log("✅ CREDIT APPLIED:", parentToken);
 
 await client.query("COMMIT");
 
