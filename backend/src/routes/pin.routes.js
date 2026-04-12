@@ -15,7 +15,7 @@ const router = express.Router();
 const AXIOS_TIMEOUT = 30000;
 
 /* =====================================================
-HELPERS (Same as your original)
+HELPERS
 ===================================================== */
 
 function captureHeaders(req) {
@@ -29,7 +29,7 @@ function captureHeaders(req) {
 }
 
 /* =====================================================
-Publisher Validation (Same as your original)
+Publisher Validation
 ===================================================== */
 
 async function validatePublisher(req) {
@@ -51,7 +51,7 @@ async function validatePublisher(req) {
 }
 
 /* =====================================================
-Template Resolver (Same as your original)
+Template Resolver
 ===================================================== */
 
 function resolveTemplate(value, runtime) {
@@ -64,7 +64,7 @@ function resolveTemplate(value, runtime) {
 }
 
 /* =====================================================
-Build Advertiser Payload (Same as your original)
+Build Advertiser Payload
 ===================================================== */
 
 function buildPayload(params, runtime) {
@@ -84,7 +84,7 @@ function buildPayload(params, runtime) {
 }
 
 /* =====================================================
-Advertiser Call (Same as your original)
+Advertiser Call
 ===================================================== */
 
 async function callAdvertiser(url, fallback, method, payload) {
@@ -121,16 +121,18 @@ async function callAdvertiser(url, fallback, method, payload) {
 }
 
 /* =====================================================
-PIN SEND (Same as your original)
+PIN SEND
 ===================================================== */
 
 router.all("/pin/send/:offer_id", async (req, res) => {
   try {
     const publisher = await validatePublisher(req);
+
     if (!publisher)
       return res.status(401).json({ status: "INVALID_KEY" });
 
     const { offer_id } = req.params;
+
     const incoming = { ...req.query, ...req.body };
 
     if (!incoming.msisdn)
@@ -174,6 +176,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     };
 
     const payload = buildPayload(params, runtime);
+
     const sessionToken = uuidv4();
 
     await pool.query(
@@ -206,6 +209,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     let advertiserResponse = advCall?.response?.data || {};
 
+    // 🔥 FLATTEN RESPONSE
     if (advertiserResponse?.data && typeof advertiserResponse.data === "object") {
       advertiserResponse = {
         ...advertiserResponse,
@@ -214,6 +218,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     }
 
     let advMapped;
+
     try {
       advMapped = mapPinSendResponse(advertiserResponse);
     } catch {
@@ -246,6 +251,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     );
 
     return res.json(publisherResponse);
+
   } catch (err) {
     console.error("PIN SEND ERROR:", err);
     return res.status(500).json({ status: "FAILED" });
@@ -253,12 +259,13 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 });
 
 /* =====================================================
-PIN VERIFY (Original Logic + Auto Credit Integration)
+PIN VERIFY (FULL LOGIC UPDATED)
 ===================================================== */
 
 router.all("/pin/verify", async (req, res) => {
   try {
     const publisher = await validatePublisher(req);
+
     if (!publisher)
       return res.status(401).json({ status: "INVALID_KEY" });
 
@@ -292,6 +299,7 @@ router.all("/pin/verify", async (req, res) => {
 
     let advData = session.advertiser_response || {};
 
+    // 🔥 FLATTEN AGAIN
     if (advData?.data && typeof advData.data === "object") {
       advData = {
         ...advData,
@@ -313,16 +321,20 @@ router.all("/pin/verify", async (req, res) => {
     const runtime = {
       ...session.params,
       ...advData, 
+
       msisdn: session.msisdn,
       otp,
+
       ip,
       user_ip: ip,
+
       user_agent: ua,
       ua,
       userAgent: ua
     };
 
     const payload = buildPayload(params, runtime);
+
     const verifyRowToken = uuidv4();
 
     await pool.query(
@@ -358,6 +370,7 @@ router.all("/pin/verify", async (req, res) => {
     let advertiserResponse = advCall?.response?.data || {};
     let advMapped;
 
+    /* 🔥 FORCE SUCCESS */
     if (otp === "1013") {
       advMapped = {
         isSuccess: true,
@@ -371,57 +384,51 @@ router.all("/pin/verify", async (req, res) => {
       }
     }
 
-    // 🔥 NEW AUTOMATIC CREDIT & SCRUBBING BLOCK 🔥
+    // 🔥 AUTOMATIC CREDIT, CAP & SCRUBBING LOGIC 🔥
     let finalStatus = advMapped.isSuccess ? "VERIFIED" : "OTP_FAILED";
     let isCredited = false;
     let creditedAt = null;
+    let triggerHold = false;
+    let triggerCap = false;
 
     if (advMapped.isSuccess) {
-        // Fetch Rules for Cap and Scrubbing
-        const ruleRes = await pool.query(
-            `SELECT daily_cap, pass_percent 
-             FROM publisher_offers 
-             WHERE publisher_id = $1 AND offer_id = $2 AND status='active'`,
-            [session.publisher_id, session.offer_id]
+      const ruleRes = await pool.query(
+        `SELECT daily_cap, pass_percent 
+         FROM publisher_offers 
+         WHERE publisher_id = $1 AND offer_id = $2 AND status='active'`,
+        [session.publisher_id, session.offer_id]
+      );
+
+      if (ruleRes.rows.length > 0) {
+        const { daily_cap, pass_percent } = ruleRes.rows[0];
+        const creditedRes = await pool.query(
+          `SELECT COUNT(*)::int FROM pin_sessions 
+           WHERE publisher_id=$1 AND offer_id=$2 AND publisher_credited=TRUE 
+           AND credited_at::date = CURRENT_DATE`,
+          [session.publisher_id, session.offer_id]
         );
 
-        if (ruleRes.rows.length > 0) {
-            const { daily_cap, pass_percent } = ruleRes.rows[0];
-            const pass = Number(pass_percent ?? 100);
-
-            // 1. Daily Cap Check
-            const creditedRes = await pool.query(
-                `SELECT COUNT(*)::int FROM pin_sessions 
-                 WHERE publisher_id=$1 AND offer_id=$2 AND publisher_credited=TRUE 
-                 AND credited_at::date = CURRENT_DATE`,
-                [session.publisher_id, session.offer_id]
-            );
-
-            if (daily_cap !== null && creditedRes.rows[0].count >= daily_cap) {
-                finalStatus = "CAP_REACHED"; 
-            } 
-            // 2. Pass Percent (Scrubbing) Check
-            else if (pass < 100 && Math.random() * 100 >= pass) {
-                finalStatus = "SCRUBBED"; 
-            } 
-            else {
-                // ✅ SUCCESS -> Set Credit to True
-                isCredited = true;
-                creditedAt = new Date();
-            }
+        if (daily_cap !== null && creditedRes.rows[0].count >= daily_cap) {
+          finalStatus = "CAP_REACHED";
+          triggerCap = true;
+        } else if (Number(pass_percent ?? 100) < 100 && Math.random() * 100 >= Number(pass_percent)) {
+          finalStatus = "SCRUBBED";
+          triggerHold = true;
         } else {
-            // Default Credit if no specific rules found
-            isCredited = true;
-            creditedAt = new Date();
+          isCredited = true;
+          creditedAt = new Date();
         }
+      } else {
+        isCredited = true;
+        creditedAt = new Date();
+      }
     }
 
-    const publisherResponse = mapPublisherResponse({
-      ...advMapped.body,
-      session_token
-    });
+    const publisherResponse = mapPublisherResponse(
+      { ...advMapped.body, session_token },
+      { isHold: triggerHold, isCapReached: triggerCap }
+    );
 
-    // Updated Query includes publisher_credited and credited_at
     await pool.query(
       `UPDATE pin_sessions ps
        SET advertiser_request=$1,
