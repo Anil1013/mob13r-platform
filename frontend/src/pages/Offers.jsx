@@ -20,6 +20,11 @@ export default function Offers() {
     geo: "",
     carrier: "",
     service_type: "NORMAL",
+    // Universal Workflow Defaults
+    has_antifraud: false,
+    has_status_check: false,
+    af_trigger_point: "BEFORE_SEND",
+    encode_headers_base64: false
   });
 
   const [paramForm, setParamForm] = useState({
@@ -227,7 +232,7 @@ export default function Offers() {
                 {[
                   "ID","Advertiser","Service","CPA ($)",
                   "Geo","Carrier","Cap","Used","Remain",
-                  "Revenue ($)","Route","Control","Params"
+                  "Revenue ($)","Route","Workflow","Control","Params"
                 ].map(h => (
                   <th key={h} style={styles.th}>{h}</th>
                 ))}
@@ -297,6 +302,15 @@ export default function Offers() {
                   <td style={styles.td}>{autoRevenue(o)}</td>
                   <td style={styles.td}>{routeBadge(o)}</td>
 
+                  {/* ⚙️ WORKFLOW CONFIG CELL */}
+                  <td style={styles.td}>
+                    <div style={{ display: 'flex', flexDirection: 'column', fontSize: '10px', textAlign: 'left' }}>
+                      <label><input type="checkbox" defaultChecked={o.has_antifraud} onChange={e => updateOffer(o.id, { has_antifraud: e.target.checked })} /> AF</label>
+                      <label><input type="checkbox" defaultChecked={o.has_status_check} onChange={e => updateOffer(o.id, { has_status_check: e.target.checked })} /> Status</label>
+                      <label><input type="checkbox" defaultChecked={o.encode_headers_base64} onChange={e => updateOffer(o.id, { encode_headers_base64: e.target.checked })} /> B64 Head</label>
+                    </div>
+                  </td>
+
                   <td style={styles.td}>
                     {o.service_type === "NORMAL" ? (
                       <button onClick={() => changeServiceType(o.id, "FALLBACK")}>
@@ -323,11 +337,37 @@ export default function Offers() {
           </table>
         </div>
 
-        {/* PARAMETERS */}
+        {/* 🛠️ ADVANCED UNIVERSAL SETTINGS */}
         {selectedOffer && (
           <div style={styles.card}>
-            <h3>Parameters – {selectedOffer.service_name}</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+               <h3>Universal Engine Config – {selectedOffer.service_name}</h3>
+               <button onClick={() => setSelectedOffer(null)}>Close</button>
+            </div>
 
+            {/* Workflow URL Inputs */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+               <div>
+                  <label style={styles.label}>Anti-Fraud Prep URL (#HEADERS_B64#)</label>
+                  <input style={styles.wideInput} defaultValue={selectedOffer.af_prepare_url} onBlur={e => updateOffer(selectedOffer.id, { af_prepare_url: e.target.value })} />
+               </div>
+               <div>
+                  <label style={styles.label}>Status Check URL (#MSISDN#)</label>
+                  <input style={styles.wideInput} defaultValue={selectedOffer.check_status_url} onBlur={e => updateOffer(selectedOffer.id, { check_status_url: e.target.value })} />
+               </div>
+               <div>
+                  <label style={styles.label}>PIN Send URL (#MSISDN#, #TXID#, #AF_ID#)</label>
+                  <input style={styles.wideInput} defaultValue={selectedOffer.pin_send_url} onBlur={e => updateOffer(selectedOffer.id, { pin_send_url: e.target.value })} />
+               </div>
+               <div>
+                  <label style={styles.label}>PIN Verify URL (#OTP#, #TXID#)</label>
+                  <input style={styles.wideInput} defaultValue={selectedOffer.pin_verify_url} onBlur={e => updateOffer(selectedOffer.id, { pin_verify_url: e.target.value })} />
+               </div>
+            </div>
+
+            <hr />
+
+            <h3>Parameters (Legacy / Key-Value)</h3>
             <form onSubmit={addParameter} style={styles.inline}>
               <input
                 placeholder="param_key"
@@ -371,11 +411,13 @@ const styles = {
   topBar: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 15 },
   tableWrap: { overflowX: "auto", marginTop: 15 },
   table: { width: "100%", borderCollapse: "collapse", textAlign: "center", background: "#fff" },
-  th: { border: "1px solid #ddd", padding: 8, background: "#f3f4f6" },
-  td: { border: "1px solid #ddd", padding: 8, textAlign: "center" },
+  th: { border: "1px solid #ddd", padding: 8, background: "#f3f4f6", fontSize: '12px' },
+  td: { border: "1px solid #ddd", padding: 8, textAlign: "center", fontSize: '12px' },
   input: { width: "90%", border: "none", textAlign: "center", background: "transparent" },
   card: { background: "#fff", padding: 20, marginTop: 15, borderRadius: 6, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" },
   inline: { display: "flex", gap: 10, marginBottom: 10 },
+  wideInput: { width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px' },
+  label: { fontSize: '11px', fontWeight: 'bold', display: 'block', marginBottom: '4px' },
   badgePrimary: { color: "green", fontWeight: 700 },
   badgeFallback: { color: "#ca8a04", fontWeight: 700 },
   badgeCap: { color: "red", fontWeight: 700 },
