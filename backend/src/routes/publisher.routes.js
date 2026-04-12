@@ -146,7 +146,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       });
     }
 
-    /* CALL ADVERTISER */
+    /* 🔥 CALL ADVERTISER */
     const advResp = await axios({
       method: req.method,
       url: `${INTERNAL_API_BASE}/api/pin/verify`,
@@ -158,7 +158,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     let advData = advResp.data;
 
-    /* 🔥 TEST OTP OVERRIDE */
+    /* 🔥 TEST OTP FORCE SUCCESS */
     const isTestOtp = params.otp === "1013";
 
     if (isTestOtp) {
@@ -172,7 +172,6 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     const isSuccess =
       advData?.status === "SUCCESS" ||
-      advData?.status === true ||
       advData?.verified === true ||
       advData?.response === "SUCCESS";
 
@@ -182,11 +181,12 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     await client.query("BEGIN");
 
-    /* 🔥 FIND VERIFIED CHILD */
+    /* 🔥 FIND VERIFIED ROW ONLY */
     const verifiedRes = await client.query(
-      `SELECT session_id, parent_session_token, publisher_id, publisher_offer_id, offer_id
+      `SELECT session_id, publisher_id, publisher_offer_id, offer_id
        FROM pin_sessions
-       WHERE parent_session_token::text = $1
+       WHERE 
+         (parent_session_token::text = $1 OR session_token::text = $1)
          AND status = 'VERIFIED'
        ORDER BY created_at DESC
        LIMIT 1
@@ -199,22 +199,23 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       return res.json(mapPublisherResponse(advData));
     }
 
-    const verifiedRow = verifiedRes.rows[0];
+    const row = verifiedRes.rows[0];
 
-    if (verifiedRow.publisher_id !== publisher.id) {
+    /* 🔐 SECURITY */
+    if (row.publisher_id !== publisher.id) {
       await client.query("ROLLBACK");
       return res.status(403).json({ status: "FORBIDDEN" });
     }
 
     /* 🔁 DUPLICATE CHECK */
-    const alreadyCredited = await client.query(
+    const already = await client.query(
       `SELECT publisher_credited
        FROM pin_sessions
-       WHERE session_token = $1`,
-      [verifiedRow.parent_session_token]
+       WHERE session_id = $1`,
+      [row.session_id]
     );
 
-    if (alreadyCredited.rows[0]?.publisher_credited) {
+    if (already.rows[0]?.publisher_credited) {
       await client.query("COMMIT");
       return res.json(mapPublisherResponse(advData));
     }
@@ -225,26 +226,21 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
         `UPDATE pin_sessions
          SET publisher_credited = TRUE,
              credited_at = NOW()
-         WHERE session_token = $1`,
-        [verifiedRow.parent_session_token]
+         WHERE session_id = $1`,
+        [row.session_id]
       );
 
       await client.query("COMMIT");
       return res.json(mapPublisherResponse(advData));
     }
 
-    /* RULES */
+    /* 🔥 RULES */
     const ruleRes = await client.query(
       `SELECT daily_cap, pass_percent
        FROM publisher_offers
        WHERE id = $1 AND status='active'`,
-      [verifiedRow.publisher_offer_id]
+      [row.publisher_offer_id]
     );
-
-    if (!ruleRes.rows.length) {
-      await client.query("ROLLBACK");
-      return res.json(mapPublisherResponse(advData));
-    }
 
     const { daily_cap, pass_percent } = ruleRes.rows[0];
 
@@ -255,7 +251,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
          AND offer_id=$2
          AND publisher_credited=TRUE
          AND ${todayClause()}`,
-      [publisher.id, verifiedRow.offer_id]
+      [publisher.id, row.offer_id]
     );
 
     if (daily_cap !== null && creditedRes.rows[0].count >= daily_cap) {
@@ -274,8 +270,8 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       `UPDATE pin_sessions
        SET publisher_credited = TRUE,
            credited_at = NOW()
-       WHERE session_token = $1`,
-      [verifiedRow.parent_session_token]
+       WHERE session_id = $1`,
+      [row.session_id]
     );
 
     await client.query("COMMIT");
