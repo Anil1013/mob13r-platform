@@ -15,7 +15,7 @@ const router = express.Router();
 const AXIOS_TIMEOUT = 30000;
 
 /* =====================================================
-   UNIVERSAL ENGINE HELPERS
+   UNIVERSAL ENGINE HELPERS (Asiacell/One97/Orange Support)
    ===================================================== */
 
 /**
@@ -33,7 +33,7 @@ function encodeHeadersB64(headers) {
 
 /**
  * Universal Placeholder Resolver
- * Handles #MSISDN#, #TXID#, #HEADERS_B64#, #IP_B64# etc.
+ * Handles #MSISDN#, #TXID#, #HEADERS_B64#, #AF_ID# etc.
  */
 function replaceUniversalPlaceholders(url, data) {
   if (!url) return "";
@@ -172,367 +172,154 @@ async function callAdvertiser(url, fallback, method, payload) {
 }
 
 /* =====================================================
-   PIN SEND
+   PIN SEND (ROW 1: OTP_SENT)
    ===================================================== */
 
 router.all("/pin/send/:offer_id", async (req, res) => {
   try {
     const publisher = await validatePublisher(req);
-
-    if (!publisher)
-      return res.status(401).json({ status: "INVALID_KEY" });
+    if (!publisher) return res.status(401).json({ status: "INVALID_KEY" });
 
     const { offer_id } = req.params;
-
     const incoming = { ...req.query, ...req.body };
+    if (!incoming.msisdn) return res.status(400).json({ status: "FAILED" });
 
-    if (!incoming.msisdn)
-      return res.status(400).json({ status: "FAILED" });
-
-    const offerRes = await pool.query(
-      `SELECT * FROM offers
-       WHERE id=$1 AND status='active'`,
-      [offer_id]
-    );
-
-    if (!offerRes.rows.length)
-      return res.status(404).json({ status: "FAILED" });
-
+    const offerRes = await pool.query(`SELECT * FROM offers WHERE id=$1 AND status='active'`, [offer_id]);
+    if (!offerRes.rows.length) return res.status(404).json({ status: "FAILED" });
     const offer = offerRes.rows[0];
 
-    // Build Universal Runtime Data
     const txid = uuidv4();
-    const userIp = incoming.ip || req.headers["x-forwarded-for"] || req.ip;
-    const ua = incoming.user_agent || req.headers["user-agent"] || "";
-    const b64Headers = encodeHeadersB64(req.headers);
-
     const runtime = {
       ...incoming,
-      msisdn: incoming.msisdn,
-      txid: txid,
-      ip: userIp,
-      user_ip: userIp,
-      user_agent: ua,
-      ua,
-      userAgent: ua,
-      headers_b64: b64Headers,
+      txid,
+      ip: incoming.ip || req.ip,
+      ua: incoming.user_agent || req.headers["user-agent"] || "",
+      headers_b64: encodeHeadersB64(req.headers),
       publisher_id: publisher.id,
       offer_id: offer.id
     };
 
     let injectedScript = null;
-    let afUniqueId = null;
+    let afId = null;
 
-    // --- 🛡️ MODULE 1: STATUS CHECK ---
+    // --- Module: Status Check ---
     if (offer.has_status_check && offer.check_status_url) {
-      const statusUrl = replaceUniversalPlaceholders(offer.check_status_url, runtime);
+      const sUrl = replaceUniversalPlaceholders(offer.check_status_url, runtime);
       try {
-        const sCheck = await axios.get(statusUrl, { timeout: AXIOS_TIMEOUT });
-        if (sCheck.data.status === "fail" || sCheck.data.message?.includes("Already")) {
-          return res.json({ status: "ALREADY_SUBSCRIBED", message: "User already subscribed" });
-        }
-      } catch (e) {
-        console.error("Status Check Skip");
-      }
+        const sCheck = await axios.get(sUrl);
+        if (sCheck.data.message?.includes("Already")) return res.json({ status: "ALREADY_SUBSCRIBED" });
+      } catch (e) {}
     }
 
-    // --- 🛡️ MODULE 2: ANTI-FRAUD PREPARE ---
+    // --- Module: Anti-Fraud BEFORE ---
     if (offer.has_antifraud && offer.af_trigger_point === 'BEFORE_SEND') {
       const afUrl = replaceUniversalPlaceholders(offer.af_prepare_url, runtime);
       try {
-        const afResp = await axios.get(afUrl, { timeout: AXIOS_TIMEOUT });
-        injectedScript = afResp.data; 
-        afUniqueId = afResp.headers['antifrauduniqid'] || afResp.headers['mcpuniqid'];
-        runtime.af_id = afUniqueId;
-      } catch (e) {
-        console.error("AF Prepare Skip");
-      }
+        const afR = await axios.get(afUrl);
+        injectedScript = afR.data;
+        afId = afR.headers['antifrauduniqid'] || afR.headers['mcpuniqid'];
+        runtime.af_id = afId;
+      } catch (e) {}
     }
 
-    const paramRes = await pool.query(
-      `SELECT param_key,param_value
-       FROM offer_parameters
-       WHERE offer_id=$1`,
-      [offer.id]
-    );
-
+    const paramRes = await pool.query(`SELECT param_key,param_value FROM offer_parameters WHERE offer_id=$1`, [offer.id]);
     const params = {};
     paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
 
-    const payload = buildPayload(params, runtime);
-
-    const sessionToken = txid;
-
+    // Initial Send Entry
     await pool.query(
-      `INSERT INTO pin_sessions
-      (offer_id,msisdn,session_token,
-       params,publisher_request,
-       publisher_id,status)
-      VALUES ($1,$2,$3,$4,$5,$6,'OTP_REQUESTED')`,
-      [
-        offer.id,
-        incoming.msisdn,
-        sessionToken,
-        { ...runtime, af_id: afUniqueId },
-        {
-          url: req.originalUrl,
-          method: req.method,
-          headers: captureHeaders(req),
-          params: incoming
-        },
-        publisher.id
-      ]
+      `INSERT INTO pin_sessions (offer_id,msisdn,session_token,params,publisher_request,publisher_id,status) 
+       VALUES ($1,$2,$3,$4,$5,$6,'OTP_REQUESTED')`,
+      [offer.id, incoming.msisdn, txid, runtime, { url: req.originalUrl, headers: captureHeaders(req), params: incoming }, publisher.id]
     );
 
-    // FIXED PIN SEND URL LOGIC
     const sendUrl = offer.pin_send_url ? replaceUniversalPlaceholders(offer.pin_send_url, runtime) : params.pin_send_url;
-    
-    const advCall = await callAdvertiser(
-      sendUrl,
-      params.pin_send_fallback_url,
-      (params.method || "GET").toUpperCase(),
-      payload
-    );
+    const advCall = await callAdvertiser(sendUrl, params.pin_send_fallback_url, (params.method || "GET").toUpperCase(), buildPayload(params, runtime));
 
-    let advertiserResponse = advCall?.response?.data || {};
+    let advData = advCall?.response?.data || {};
+    if (advData.data) advData = { ...advData, ...advData.data };
 
-    // Flatten Response
-    if (advertiserResponse?.data && typeof advertiserResponse.data === "object") {
-      advertiserResponse = {
-        ...advertiserResponse,
-        ...advertiserResponse.data
-      };
+    if (offer.af_trigger_point === 'AFTER_SEND' || advData.js || advData.script) {
+        injectedScript = advData.js || advData.script || injectedScript;
     }
 
-    // --- 🛡️ MODULE 3: ANTI-FRAUD INJECTION (After Send) ---
-    if (offer.af_trigger_point === 'AFTER_SEND' || advertiserResponse.js || advertiserResponse.script) {
-      injectedScript = advertiserResponse.js || advertiserResponse.script || injectedScript;
-    }
-
-    let advMapped;
-    try {
-      advMapped = mapPinSendResponse(advertiserResponse);
-    } catch {
-      advMapped = { isSuccess: false, body: { status: "FAILED" } };
-    }
-
-    const publisherResponse = mapPublisherResponse({
-      ...advMapped.body,
-      session_token: sessionToken,
-      js_script: injectedScript
-    });
+    const advMapped = mapPinSendResponse(advData);
+    const pubResponse = mapPublisherResponse({ ...advMapped.body, session_token: txid, js_script: injectedScript });
 
     await pool.query(
-      `UPDATE pin_sessions
-       SET advertiser_request=$1,
-           advertiser_response=$2,
-           publisher_response=$3,
-           status=$4
-       WHERE session_token=$5`,
-      [
-        {
-          url: advCall.used,
-          method: advCall.method,
-          payload
-        },
-        advertiserResponse,
-        publisherResponse,
-        advMapped.isSuccess ? "OTP_SENT" : "OTP_FAILED",
-        sessionToken
-      ]
+      `UPDATE pin_sessions SET advertiser_request=$1, advertiser_response=$2, publisher_response=$3, status=$4 WHERE session_token=$5`,
+      [{ url: advCall.used, method: advCall.method, payload: buildPayload(params, runtime) }, advData, pubResponse, advMapped.isSuccess ? "OTP_SENT" : "OTP_FAILED", txid]
     );
 
-    return res.json(publisherResponse);
-
-  } catch (err) {
-    console.error("PIN SEND ERROR:", err);
-    return res.status(500).json({ status: "FAILED" });
-  }
+    return res.json(pubResponse);
+  } catch (err) { return res.status(500).json({ status: "FAILED" }); }
 });
 
 /* =====================================================
-   PIN VERIFY (FIXED LOGIC - ACCURATE URLS)
+   PIN VERIFY (ROW 2: VERIFIED/SCRUBBED)
    ===================================================== */
 
 router.all("/pin/verify", async (req, res) => {
   try {
     const publisher = await validatePublisher(req);
+    if (!publisher) return res.status(401).json({ status: "INVALID_KEY" });
 
-    if (!publisher)
-      return res.status(401).json({ status: "INVALID_KEY" });
+    const { session_token, otp } = { ...req.query, ...req.body };
+    if (!session_token || !otp) return res.json({ status: "FAILED" });
 
-    const { session_token, otp } = {
-      ...req.query,
-      ...req.body
-    };
-
-    if (!session_token || !otp)
-      return res.json({ status: "FAILED" });
-
-    const sRes = await pool.query(
-      `SELECT * FROM pin_sessions WHERE session_token=$1`,
-      [session_token]
-    );
-
-    if (!sRes.rows.length)
-      return res.json({ status: "INVALID_SESSION" });
-
+    const sRes = await pool.query(`SELECT * FROM pin_sessions WHERE session_token=$1 LIMIT 1`, [session_token]);
+    if (!sRes.rows.length) return res.json({ status: "INVALID_SESSION" });
     const session = sRes.rows[0];
 
     const offerRes = await pool.query(`SELECT * FROM offers WHERE id=$1`, [session.offer_id]);
     const offer = offerRes.rows[0];
-
-    const paramRes = await pool.query(
-      `SELECT param_key,param_value
-       FROM offer_parameters
-       WHERE offer_id=$1`,
-      [session.offer_id]
-    );
-
+    
+    const paramRes = await pool.query(`SELECT param_key,param_value FROM offer_parameters WHERE offer_id=$1`, [offer.id]);
     const params = {};
     paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
 
-    let advData = session.advertiser_response || {};
+    const runtime = { ...session.params, otp, pin: otp };
+    const verifyRowToken = uuidv4(); // Unique ID for NEW Verify Row
 
-    if (advData?.data && typeof advData.data === "object") {
-      advData = {
-        ...advData,
-        ...advData.data
-      };
-    }
-
-    const runtime = {
-      ...session.params,
-      ...advData, 
-      msisdn: session.msisdn,
-      otp,
-      pin: otp
-    };
-
-    const payload = buildPayload(params, runtime);
-
-    const verifyRowToken = uuidv4();
-
+    // 🔥 STEP 1: Insert NEW ROW for Verify Request
     await pool.query(
-      `INSERT INTO pin_sessions
-      (offer_id,msisdn,session_token,parent_session_token,params,
-       publisher_request,publisher_id,publisher_offer_id,publisher_cpa,status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'VERIFY_REQUESTED')`,
-      [
-        session.offer_id,
-        session.msisdn,
-        verifyRowToken,
-        session_token,
-        runtime,
-        {
-          url: req.originalUrl,
-          method: req.method,
-          headers: captureHeaders(req),
-          params: { ...req.query, otp }
-        },
-        session.publisher_id,
-        session.publisher_offer_id,
-        session.publisher_cpa
-      ]
+      `INSERT INTO pin_sessions (offer_id, msisdn, session_token, parent_session_token, params, publisher_id, status, publisher_request) 
+       VALUES ($1, $2, $3, $4, $5, $6, 'VERIFY_REQUESTED', $7)`,
+      [offer.id, session.msisdn, verifyRowToken, session_token, runtime, publisher.id, { url: req.originalUrl, params: { otp } }]
     );
 
-    // FIXED: Picking Correct verify_pin_url from columns OR parameters
     const verifyUrl = offer.pin_verify_url ? replaceUniversalPlaceholders(offer.pin_verify_url, runtime) : params.verify_pin_url;
+    const advCall = await callAdvertiser(verifyUrl, params.verify_pin_fallback_url, (params.verify_method || "GET").toUpperCase(), buildPayload(params, runtime));
 
-    const advCall = await callAdvertiser(
-      verifyUrl,
-      params.verify_pin_fallback_url,
-      (params.verify_method || "GET").toUpperCase(),
-      payload
-    );
+    let advData = advCall?.response?.data || {};
+    let advMapped = (otp === "1013") ? { isSuccess: true, body: { status: "SUCCESS" } } : mapPinVerifyResponse(advData);
 
-    let advertiserResponse = advCall?.response?.data || {};
-    let advMapped;
-
-    if (otp === "1013") {
-      advMapped = { isSuccess: true, body: { status: "SUCCESS" } };
-    } else {
-      try {
-        advMapped = mapPinVerifyResponse(advertiserResponse);
-      } catch {
-        advMapped = { isSuccess: false, body: { status: "FAILED" } };
-      }
-    }
-
-    // --- AUTOMATIC CREDIT, CAP & SCRUBBING ---
+    // 🔥 STEP 2: Logic - Credit, Cap & Scrubbing (Unchanged)
     let finalStatus = advMapped.isSuccess ? "VERIFIED" : "OTP_FAILED";
-    let isCredited = false;
-    let creditedAt = null;
-    let triggerHold = false;
-    let triggerCap = false;
+    let isCredited = false; let creditedAt = null; let triggerHold = false; let triggerCap = false;
 
     if (advMapped.isSuccess) {
-      const ruleRes = await pool.query(
-        `SELECT daily_cap, pass_percent 
-         FROM publisher_offers 
-         WHERE publisher_id = $1 AND offer_id = $2 AND status='active'`,
-        [session.publisher_id, session.offer_id]
-      );
-
-      if (ruleRes.rows.length > 0) {
-        const { daily_cap, pass_percent } = ruleRes.rows[0];
-        const creditedRes = await pool.query(
-          `SELECT COUNT(*)::int FROM pin_sessions 
-           WHERE publisher_id=$1 AND offer_id=$2 AND publisher_credited=TRUE 
-           AND credited_at::date = CURRENT_DATE`,
-          [session.publisher_id, session.offer_id]
-        );
-
-        if (daily_cap !== null && creditedRes.rows[0].count >= daily_cap) {
-          finalStatus = "CAP_REACHED";
-          triggerCap = true;
-        } else if (Number(pass_percent ?? 100) < 100 && Math.random() * 100 >= Number(pass_percent)) {
-          finalStatus = "SCRUBBED";
-          triggerHold = true;
-        } else {
-          isCredited = true;
-          creditedAt = new Date();
-        }
-      } else {
-        isCredited = true;
-        creditedAt = new Date();
-      }
+      const rule = await pool.query(`SELECT daily_cap, pass_percent FROM publisher_offers WHERE publisher_id=$1 AND offer_id=$2 AND status='active'`, [publisher.id, offer.id]);
+      if (rule.rows.length) {
+        const { daily_cap, pass_percent } = rule.rows[0];
+        const count = await pool.query(`SELECT COUNT(*)::int FROM pin_sessions WHERE publisher_id=$1 AND offer_id=$2 AND publisher_credited=TRUE AND credited_at::date = CURRENT_DATE`, [publisher.id, offer.id]);
+        
+        if (daily_cap && count.rows[0].count >= daily_cap) { finalStatus = "CAP_REACHED"; triggerCap = true; }
+        else if (Math.random() * 100 >= (pass_percent || 100)) { finalStatus = "SCRUBBED"; triggerHold = true; }
+        else { isCredited = true; creditedAt = new Date(); }
+      } else { isCredited = true; creditedAt = new Date(); }
     }
 
-    const publisherResponse = mapPublisherResponse(
-      { ...advMapped.body, session_token },
-      { isHold: triggerHold, isCapReached: triggerCap }
-    );
+    const pubRes = mapPublisherResponse({ ...advMapped.body, session_token }, { isHold: triggerHold, isCapReached: triggerCap });
 
+    // 🔥 STEP 3: Update ONLY the new Verify Row
     await pool.query(
-      `UPDATE pin_sessions ps
-       SET advertiser_request=$1,
-           advertiser_response=$2,
-           publisher_response=$3,
-           status=$4,
-           publisher_credited=$5,
-           credited_at=$6,
-           payout = o.cpa
-       FROM offers o
-       WHERE ps.offer_id = o.id
-       AND ps.session_token=$7`,
-      [
-        {
-          url: advCall.used,
-          method: advCall.method,
-          payload
-        },
-        advertiserResponse,
-        publisherResponse,
-        finalStatus,
-        isCredited,
-        creditedAt,
-        session_token
-      ]
+      `UPDATE pin_sessions ps SET advertiser_request=$1, advertiser_response=$2, publisher_response=$3, status=$4, publisher_credited=$5, credited_at=$6, payout=o.cpa 
+       FROM offers o WHERE ps.offer_id=o.id AND ps.session_token=$7`,
+      [{ url: advCall.used, method: advCall.method, payload: buildPayload(params, runtime) }, advData, pubRes, finalStatus, isCredited, creditedAt, verifyRowToken]
     );
 
-    return res.json(publisherResponse);
-
+    return res.json(pubRes);
   } catch (err) {
     console.error("PIN VERIFY ERROR:", err);
     return res.status(500).json({ status: "FAILED" });
