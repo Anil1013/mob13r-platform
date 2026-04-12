@@ -31,7 +31,7 @@ function todayClause() {
 }
 
 /* =====================================================
-   📤 PIN SEND (FINAL FIXED)
+   📤 PIN SEND
 ===================================================== */
 
 router.all("/pin/send", publisherAuth, async (req, res) => {
@@ -50,7 +50,6 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 
     const params = enrichParams(req, base);
 
-    /* Validate offer */
     const offerRes = await pool.query(
       `SELECT 
         po.id AS publisher_offer_id,
@@ -81,7 +80,6 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
       return res.status(400).json({ status: "CARRIER_MISMATCH" });
     }
 
-    /* Call advertiser */
     const internal = await axios({
       method: req.method,
       url: `${INTERNAL_API_BASE}/api/pin/send/${picked.offer_id}`,
@@ -93,7 +91,6 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 
     const data = internal.data;
 
-    // 🔥 HANDLE ALL TOKEN TYPES
     const sessionToken = data?.session_token || null;
     const advSessionKey =
       data?.sessionKey || data?.session_key || null;
@@ -127,7 +124,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 });
 
 /* =====================================================
-   ✅ PIN VERIFY (FINAL FIXED - CLEAN)
+   ✅ PIN VERIFY (FINAL WORKING)
 ===================================================== */
 
 router.all("/pin/verify", publisherAuth, async (req, res) => {
@@ -149,7 +146,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       });
     }
 
-    /* Call advertiser verify */
+    /* CALL ADVERTISER */
     const advResp = await axios({
       method: req.method,
       url: `${INTERNAL_API_BASE}/api/pin/verify`,
@@ -161,7 +158,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     let advData = advResp.data;
 
-    /* 🔥 TEST OTP OVERRIDE (SAFE PLACE) */
+    /* 🔥 TEST OTP OVERRIDE */
     const isTestOtp = params.otp === "1013";
 
     if (isTestOtp) {
@@ -169,64 +166,79 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
         ...advData,
         status: "SUCCESS",
         response: "SUCCESS",
-        message: "Test OTP Success",
+        verified: true,
       };
     }
 
-    /* 🔥 FINAL SUCCESS LOGIC */
     const isSuccess =
       advData?.status === "SUCCESS" ||
       advData?.status === true ||
       advData?.verified === true ||
       advData?.response === "SUCCESS";
 
-    /* 🔥 HARD FAIL (except test OTP already overridden) */
     if (!isSuccess) {
       return res.json(mapPublisherResponse(advData));
     }
 
-    /* ================= TRANSACTION START ================= */
     await client.query("BEGIN");
 
-    /* 🔥 MATCH ALL TOKEN TYPES */
-    const sessionRes = await client.query(
-      `SELECT *
+    /* 🔥 FIND VERIFIED CHILD */
+    const verifiedRes = await client.query(
+      `SELECT session_id, parent_session_token, publisher_id, publisher_offer_id, offer_id
        FROM pin_sessions
-       WHERE session_token::text = $1
-          OR adv_session_key = $1
-          OR parent_session_token::text = $1
+       WHERE parent_session_token::text = $1
+         AND status = 'VERIFIED'
        ORDER BY created_at DESC
        LIMIT 1
        FOR UPDATE`,
       [inputToken]
     );
 
-    if (!sessionRes.rows.length) {
+    if (!verifiedRes.rows.length) {
       await client.query("ROLLBACK");
       return res.json(mapPublisherResponse(advData));
     }
 
-    const s = sessionRes.rows[0];
+    const verifiedRow = verifiedRes.rows[0];
 
-    /* Security check */
-    if (s.publisher_id !== publisher.id) {
+    if (verifiedRow.publisher_id !== publisher.id) {
       await client.query("ROLLBACK");
       return res.status(403).json({ status: "FORBIDDEN" });
     }
 
-    /* Duplicate credit protection */
-    if (s.publisher_credited) {
+    /* 🔁 DUPLICATE CHECK */
+    const alreadyCredited = await client.query(
+      `SELECT publisher_credited
+       FROM pin_sessions
+       WHERE session_token = $1`,
+      [verifiedRow.parent_session_token]
+    );
+
+    if (alreadyCredited.rows[0]?.publisher_credited) {
       await client.query("COMMIT");
       return res.json(mapPublisherResponse(advData));
     }
 
-    /* ================= RULES ================= */
+    /* 🔥 TEST OTP → DIRECT CREDIT */
+    if (isTestOtp) {
+      await client.query(
+        `UPDATE pin_sessions
+         SET publisher_credited = TRUE,
+             credited_at = NOW()
+         WHERE session_token = $1`,
+        [verifiedRow.parent_session_token]
+      );
 
+      await client.query("COMMIT");
+      return res.json(mapPublisherResponse(advData));
+    }
+
+    /* RULES */
     const ruleRes = await client.query(
       `SELECT daily_cap, pass_percent
        FROM publisher_offers
        WHERE id = $1 AND status='active'`,
-      [s.publisher_offer_id]
+      [verifiedRow.publisher_offer_id]
     );
 
     if (!ruleRes.rows.length) {
@@ -236,7 +248,6 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     const { daily_cap, pass_percent } = ruleRes.rows[0];
 
-    /* Daily cap */
     const creditedRes = await client.query(
       `SELECT COUNT(*)::int
        FROM pin_sessions
@@ -244,7 +255,7 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
          AND offer_id=$2
          AND publisher_credited=TRUE
          AND ${todayClause()}`,
-      [publisher.id, s.offer_id]
+      [publisher.id, verifiedRow.offer_id]
     );
 
     if (daily_cap !== null && creditedRes.rows[0].count >= daily_cap) {
@@ -252,50 +263,24 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
       return res.json(mapPublisherResponse(advData, { isHold: true }));
     }
 
-    /* Pass % */
     const pass = Number(pass_percent ?? 100);
-    if (pass < 100) {
-      if (Math.random() * 100 >= pass) {
-        await client.query("COMMIT");
-        return res.json(mapPublisherResponse(advData, { isHold: true }));
-      }
+    if (pass < 100 && Math.random() * 100 >= pass) {
+      await client.query("COMMIT");
+      return res.json(mapPublisherResponse(advData, { isHold: true }));
     }
 
-   /* ================= CREDIT (FINAL FIX) ================= */
+    /* 🔥 FINAL CREDIT */
+    await client.query(
+      `UPDATE pin_sessions
+       SET publisher_credited = TRUE,
+           credited_at = NOW()
+       WHERE session_token = $1`,
+      [verifiedRow.parent_session_token]
+    );
 
-// 🔥 STEP 1: VERIFIED CHILD ROW FIND
-const verifiedRes = await client.query(
-  `SELECT session_id, parent_session_token
-   FROM pin_sessions
-   WHERE parent_session_token::text = $1
-     AND status = 'VERIFIED'
-   ORDER BY created_at DESC
-   LIMIT 1
-   FOR UPDATE`,
-  [inputToken]
-);
+    await client.query("COMMIT");
 
-if (!verifiedRes.rows.length) {
-  await client.query("ROLLBACK");
-  return res.json(mapPublisherResponse(advData));
-}
-
-const verifiedRow = verifiedRes.rows[0];
-
-// 🔥 STEP 2: CREDIT DIRECTLY USING JOIN (BULLETPROOF)
-await client.query(
-  `UPDATE pin_sessions parent
-   SET publisher_credited = TRUE,
-       credited_at = NOW()
-   FROM pin_sessions child
-   WHERE child.session_id = $1
-     AND parent.session_token = child.parent_session_token`,
-  [verifiedRow.session_id]
-);
-
-await client.query("COMMIT");
-
-return res.json(mapPublisherResponse(advData));
+    return res.json(mapPublisherResponse(advData));
 
   } catch (err) {
     try {
