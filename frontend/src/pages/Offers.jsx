@@ -85,7 +85,7 @@ export default function Offers() {
     });
 
     const data = await res.json();
-    setOffers((prev) => [...prev, data]);
+    setOffers((prev) => [data, ...prev]);
 
     setOfferForm({
       ...offerForm,
@@ -366,23 +366,17 @@ export default function Offers() {
   );
 }
 
-/* ---------------- STYLES ---------------- */
 const styles = {
-  page: { padding: "60px 30px", fontFamily: "Inter, system-ui, Arial" },
+  page: { padding: "80px 30px", background: "#f9fafb", minHeight: "100vh" },
   topBar: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 15 },
-  tableWrap: { display: "flex", justifyContent: "center", marginTop: 15 },
-  table: { width: "95%", borderCollapse: "collapse", textAlign: "center" },
+  tableWrap: { overflowX: "auto", marginTop: 15 },
+  table: { width: "100%", borderCollapse: "collapse", textAlign: "center", background: "#fff" },
   th: { border: "1px solid #ddd", padding: 8, background: "#f3f4f6" },
   td: { border: "1px solid #ddd", padding: 8, textAlign: "center" },
-  input: {
-    width: "90%",
-    textAlign: "center",
-    padding: 4,
-  },
-  card: { background: "#fff", padding: 20, marginTop: 15, borderRadius: 6 },
+  input: { width: "90%", border: "none", textAlign: "center", background: "transparent" },
+  card: { background: "#fff", padding: 20, marginTop: 15, borderRadius: 6, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" },
   inline: { display: "flex", gap: 10, marginBottom: 10 },
-
-  badgePrimary: { color: "green", fontWeight: 600 },
-  badgeFallback: { color: "#ca8a04", fontWeight: 600 },
-  badgeCap: { color: "red", fontWeight: 600 },
+  badgePrimary: { color: "green", fontWeight: 700 },
+  badgeFallback: { color: "#ca8a04", fontWeight: 700 },
+  badgeCap: { color: "red", fontWeight: 700 },
 };
