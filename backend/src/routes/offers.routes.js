@@ -4,13 +4,13 @@ import pool from "../db.js";
 const router = express.Router();
 
 /* =====================================================
-   DEFAULT UNIVERSAL PARAMETERS (Automatic Setup)
+   DEFAULT UNIVERSAL PARAMETERS (Automatic Mentioned Keys)
    ===================================================== */
 const DEFAULT_PARAMS = [
   ["pin_send_url", ""],
   ["verify_pin_url", ""],
   ["check_status_url", ""],
-  ["portal_url", ""],
+  ["af_prepare_url", ""],
   ["method", "GET"],
   ["promoId", ""],
   ["pubId", ""],
@@ -21,10 +21,7 @@ const DEFAULT_PARAMS = [
   ["geo", "{geo}"],
   ["carrier", "{carrier}"],
   ["click_id", "{click_id}"],
-  ["transaction_id", "{transaction_id}"],
-  ["sub1", "{click_id}"],
-  ["sub2", "{publisher_id}"],
-  ["sub3", "{offer_id}"]
+  ["transaction_id", "{transaction_id}"]
 ];
 
 async function insertDefaultParams(offerId) {
@@ -37,12 +34,12 @@ async function insertDefaultParams(offerId) {
       );
     }
   } catch (err) {
-    console.error("Default Param Error:", err.message);
+    console.error("Default Param Insertion Error:", err.message);
   }
 }
 
 /* =====================================================
-   GET OFFERS (With Advertiser & Calculation Logic)
+   GET OFFERS
    ===================================================== */
 router.get("/", async (req, res) => {
   try {
@@ -61,12 +58,12 @@ router.get("/", async (req, res) => {
     const result = await pool.query(query, params);
     return res.json(result.rows);
   } catch (err) {
-    return res.status(500).json({ status: "FAILED", message: err.message });
+    return res.status(500).json({ status: "FAILED", message: "Fetch failed" });
   }
 });
 
 /* =====================================================
-   CREATE NEW OFFER (Full Columns Support)
+   CREATE OFFER
    ===================================================== */
 router.post("/", async (req, res) => {
   try {
@@ -82,12 +79,12 @@ router.post("/", async (req, res) => {
     await insertDefaultParams(offer.id);
     return res.json(offer);
   } catch (err) {
-    return res.status(500).json({ message: "Failed to create" });
+    return res.status(500).json({ status: "FAILED" });
   }
 });
 
 /* =====================================================
-   PARAMETERS ROUTES
+   PARAMETERS MANAGEMENT
    ===================================================== */
 router.get("/:offerId/parameters", async (req, res) => {
   const result = await pool.query(`SELECT * FROM offer_parameters WHERE offer_id = $1 ORDER BY id ASC`, [req.params.offerId]);
@@ -106,13 +103,18 @@ router.patch("/parameters/:id", async (req, res) => {
   res.json(result.rows[0]);
 });
 
+// 🔥 DELETE ROUTE (To remove SESSION_KEY etc.)
 router.delete("/parameters/:id", async (req, res) => {
-  await pool.query(`DELETE FROM offer_parameters WHERE id = $1`, [req.params.id]);
-  res.json({ success: true });
+  try {
+    await pool.query(`DELETE FROM offer_parameters WHERE id = $1`, [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ status: "FAILED" });
+  }
 });
 
 /* =====================================================
-   UPDATE OFFER (Workflow Columns)
+   UPDATE OFFER DATA
    ===================================================== */
 router.patch("/:id", async (req, res) => {
   try {
@@ -120,19 +122,16 @@ router.patch("/:id", async (req, res) => {
     const sets = [];
     const values = [];
     let i = 1;
-
     for (const [key, val] of Object.entries(fields)) {
       sets.push(`${key} = $${i}`);
       values.push(val);
       i++;
     }
     values.push(req.params.id);
-
-    const query = `UPDATE offers SET ${sets.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = $${i} RETURNING *`;
-    const result = await pool.query(query, values);
+    const result = await pool.query(`UPDATE offers SET ${sets.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = $${i} RETURNING *`, values);
     return res.json(result.rows[0]);
   } catch (err) {
-    return res.status(500).json({ message: "Failed to update" });
+    return res.status(500).json({ status: "FAILED" });
   }
 });
 
