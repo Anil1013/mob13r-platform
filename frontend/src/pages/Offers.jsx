@@ -416,7 +416,7 @@ const styles = {
   select: { padding: "12px 15px", borderRadius: "8px", border: "1px solid #cbd5e1", width: "180px" },
   btnPrimary: { background: "#3b82f6", color: "#fff", padding: "10px 25px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "700" },
   btnBlack: { background: "#0f172a", color: "#fff", padding: "10px 20px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "600" },
-  tableWrapper: { background: "#fff", borderRadius: "16px", boxShadow: "0 10px 30px rgba(0,0,0,0.04)", overflow: "hidden" },
+  tableWrapper: { background: "#fff", borderRadius: "16px", boxShadow: "0 10px 30px rgba(0,0,0,0.04)", overflow: "hidden", border: '1px solid #e2e8f0' },
   mainTable: { width: "100%", borderCollapse: "collapse", textAlign: "center" },
   thRow: { background: "#f1f5f9" },
   tr: { borderBottom: '1px solid #f1f5f9', height: '60px' },
@@ -433,5 +433,6 @@ const styles = {
   paramCard: { background: "#f1f5f9", padding: "12px", borderRadius: "10px", display: "flex", flexDirection: "column", gap: "5px", textAlign: 'left' },
   pLabel: { fontSize: "11px", fontWeight: "800", color: "#475569", textTransform: "uppercase" },
   pInput: { padding: "10px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px", background: "#fff" },
-  btnClose: { background: "#ef4444", color: "#fff", padding: "8px 20px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }
+  btnClose: { background: "#ef4444", color: "#fff", padding: "8px 20px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" },
+  btnDel: { color: '#ef4444', fontSize: '20px', cursor: 'pointer', fontWeight: 'bold', lineHeight: '1' }
 };
