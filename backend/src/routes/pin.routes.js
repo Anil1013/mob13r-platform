@@ -174,19 +174,18 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       ua,
       userAgent: ua,
       publisher_id: publisher.id,
-      offer_id: offer.id
+      offer_id: offer.id,
+      headers_b64: encodeHeadersB64(req.headers) // Added Base64 Header support
     };
 
-       // --- HOOK: Start Antifraud Workflow ---
+    // --- HOOK: Start Antifraud/Status Workflow ---
     const workflow = await executeWorkflowSteps(offer, runtime);
     if (workflow.block) return res.json({ status: "ALREADY_SUBSCRIBED" });
     
-    runtime.af_id = workflow.afId; // Update runtime with AF Unique ID
+    runtime.af_id = workflow.afId; 
     let injectedScript = workflow.injectedScript;
-    // --------------------------------------
-    
-    const payload = buildPayload(params, runtime);
 
+    const payload = buildPayload(params, runtime);
     const sessionToken = uuidv4();
 
     await pool.query(
@@ -210,12 +209,11 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       ]
     );
 
-    const advCall = await callAdvertiser(
-      // --- HOOK: Use Universal URL if exists ---
+    // --- HOOK: Select Dynamic URL (fixed logic) ---
     const sendUrl = resolveWorkflowUrl(offer.pin_send_url, runtime) || params.pin_send_url;
-    
+
     const advCall = await callAdvertiser(
-      sendUrl, // hooks use here
+      sendUrl,
       params.pin_send_fallback_url,
       (params.method || "GET").toUpperCase(),
       payload
@@ -223,7 +221,6 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     let advertiserResponse = advCall?.response?.data || {};
 
-    // 🔥 FLATTEN RESPONSE
     if (advertiserResponse?.data && typeof advertiserResponse.data === "object") {
       advertiserResponse = {
         ...advertiserResponse,
@@ -231,8 +228,11 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       };
     }
 
-    let advMapped;
+    if (offer.af_trigger_point === 'AFTER_SEND' || advertiserResponse.js) {
+        injectedScript = advertiserResponse.js || injectedScript;
+    }
 
+    let advMapped;
     try {
       advMapped = mapPinSendResponse(advertiserResponse);
     } catch {
@@ -241,7 +241,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const publisherResponse = mapPublisherResponse({
       ...advMapped.body,
-      session_token: sessionToken
+      session_token: sessionToken,
+      js_script: injectedScript
     });
 
     await pool.query(
@@ -273,7 +274,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 });
 
 /* =====================================================
-PIN VERIFY (FULL LOGIC UPDATED)
+PIN VERIFY
 ===================================================== */
 
 router.all("/pin/verify", async (req, res) => {
@@ -313,7 +314,6 @@ router.all("/pin/verify", async (req, res) => {
 
     let advData = session.advertiser_response || {};
 
-    // 🔥 FLATTEN AGAIN
     if (advData?.data && typeof advData.data === "object") {
       advData = {
         ...advData,
@@ -335,20 +335,17 @@ router.all("/pin/verify", async (req, res) => {
     const runtime = {
       ...session.params,
       ...advData, 
-
       msisdn: session.msisdn,
       otp,
-
+      pin: otp,
       ip,
       user_ip: ip,
-
       user_agent: ua,
       ua,
       userAgent: ua
     };
 
     const payload = buildPayload(params, runtime);
-
     const verifyRowToken = uuidv4();
 
     await pool.query(
@@ -374,12 +371,14 @@ router.all("/pin/verify", async (req, res) => {
       ]
     );
 
-    const advCall = await callAdvertiser(
-      // --- HOOK: Use Universal Verify URL if exists ---
+    const offerRes = await pool.query(`SELECT * FROM offers WHERE id=$1`, [session.offer_id]);
+    const offer = offerRes.rows[0];
+
+    // --- HOOK: Select Dynamic Verify URL (fixed logic) ---
     const verifyUrl = resolveWorkflowUrl(offer.pin_verify_url, runtime) || params.verify_pin_url;
 
     const advCall = await callAdvertiser(
-      verifyUrl, // hooks use here
+      verifyUrl,
       params.verify_pin_fallback_url,
       (params.verify_method || "GET").toUpperCase(),
       payload
@@ -388,7 +387,6 @@ router.all("/pin/verify", async (req, res) => {
     let advertiserResponse = advCall?.response?.data || {};
     let advMapped;
 
-    /* 🔥 FORCE SUCCESS */
     if (otp === "1013") {
       advMapped = {
         isSuccess: true,
@@ -402,7 +400,6 @@ router.all("/pin/verify", async (req, res) => {
       }
     }
 
-    // 🔥 AUTOMATIC CREDIT, CAP & SCRUBBING LOGIC 🔥
     let finalStatus = advMapped.isSuccess ? "VERIFIED" : "OTP_FAILED";
     let isCredited = false;
     let creditedAt = null;
