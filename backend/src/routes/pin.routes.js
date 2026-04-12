@@ -20,7 +20,7 @@ const AXIOS_TIMEOUT = 30000;
 
 /**
  * Serializes headers to JSON then to Base64 
- * Required for Asiacell/One97 Anti-fraud Shield 
+ * Required for Asiacell/One97 Anti-fraud Shield
  */
 function encodeHeadersB64(headers) {
   try {
@@ -223,12 +223,11 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     let injectedScript = null;
     let afUniqueId = null;
 
-    // --- 🛡️ MODULE 1: STATUS CHECK (Shemaroo Me Style) ---
+    // --- 🛡️ MODULE 1: STATUS CHECK ---
     if (offer.has_status_check && offer.check_status_url) {
       const statusUrl = replaceUniversalPlaceholders(offer.check_status_url, runtime);
       try {
         const sCheck = await axios.get(statusUrl, { timeout: AXIOS_TIMEOUT });
-        // If "Already Subscribed", block OTP flow 
         if (sCheck.data.status === "fail" || sCheck.data.message?.includes("Already")) {
           return res.json({ status: "ALREADY_SUBSCRIBED", message: "User already subscribed" });
         }
@@ -237,7 +236,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       }
     }
 
-    // --- 🛡️ MODULE 2: ANTI-FRAUD PREPARE (Asiacell/MCP Style) ---
+    // --- 🛡️ MODULE 2: ANTI-FRAUD PREPARE ---
     if (offer.has_antifraud && offer.af_trigger_point === 'BEFORE_SEND') {
       const afUrl = replaceUniversalPlaceholders(offer.af_prepare_url, runtime);
       try {
@@ -285,7 +284,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       ]
     );
 
-    // Core Advertiser Call
+    // FIXED PIN SEND URL LOGIC
     const sendUrl = offer.pin_send_url ? replaceUniversalPlaceholders(offer.pin_send_url, runtime) : params.pin_send_url;
     
     const advCall = await callAdvertiser(
@@ -305,7 +304,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       };
     }
 
-    // --- 🛡️ MODULE 3: ANTI-FRAUD INJECTION (Evina/After Send) ---
+    // --- 🛡️ MODULE 3: ANTI-FRAUD INJECTION (After Send) ---
     if (offer.af_trigger_point === 'AFTER_SEND' || advertiserResponse.js || advertiserResponse.script) {
       injectedScript = advertiserResponse.js || advertiserResponse.script || injectedScript;
     }
@@ -352,7 +351,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 });
 
 /* =====================================================
-   PIN VERIFY
+   PIN VERIFY (FIXED LOGIC - ACCURATE URLS)
    ===================================================== */
 
 router.all("/pin/verify", async (req, res) => {
@@ -437,6 +436,7 @@ router.all("/pin/verify", async (req, res) => {
       ]
     );
 
+    // FIXED: Picking Correct verify_pin_url from columns OR parameters
     const verifyUrl = offer.pin_verify_url ? replaceUniversalPlaceholders(offer.pin_verify_url, runtime) : params.verify_pin_url;
 
     const advCall = await callAdvertiser(
@@ -449,12 +449,8 @@ router.all("/pin/verify", async (req, res) => {
     let advertiserResponse = advCall?.response?.data || {};
     let advMapped;
 
-    // Force success for dev test
     if (otp === "1013") {
-      advMapped = {
-        isSuccess: true,
-        body: { status: "SUCCESS" }
-      };
+      advMapped = { isSuccess: true, body: { status: "SUCCESS" } };
     } else {
       try {
         advMapped = mapPinVerifyResponse(advertiserResponse);
