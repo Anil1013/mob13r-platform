@@ -33,6 +33,7 @@ export default function Offers() {
 
   const addParam = async (e) => {
     e.preventDefault();
+    if (!paramForm.param_key) return alert("Enter Key Name");
     await fetch(`${API_BASE}/api/offers/${selectedOffer.id}/parameters`, { method: "POST", headers: authHeaders, body: JSON.stringify(paramForm) });
     setParamForm({ param_key: "", param_value: "" });
     const res = await fetch(`${API_BASE}/api/offers/${selectedOffer.id}/parameters`, { headers: authHeaders });
@@ -41,6 +42,15 @@ export default function Offers() {
 
   const updateParam = async (id, val) => {
     await fetch(`${API_BASE}/api/offers/parameters/${id}`, { method: "PATCH", headers: authHeaders, body: JSON.stringify({ param_value: val }) });
+  };
+
+  // 🔥 DELETE PARAMETER FUNCTION
+  const deleteParam = async (id) => {
+    if (window.confirm("Remove this parameter?")) {
+      await fetch(`${API_BASE}/api/offers/parameters/${id}`, { method: "DELETE", headers: authHeaders });
+      const res = await fetch(`${API_BASE}/api/offers/${selectedOffer.id}/parameters`, { headers: authHeaders });
+      setParameters(await res.json());
+    }
   };
 
   const remaining = (o) => !o.daily_cap ? "∞" : Math.max(o.daily_cap - o.today_hits, 0);
@@ -53,7 +63,6 @@ export default function Offers() {
         <div style={styles.container}>
           <h1 style={styles.heroTitle}>Universal Offer Engine</h1>
           
-          {/* CREATE BOX */}
           <form style={styles.topBar} onSubmit={async (e) => {
             e.preventDefault();
             await fetch(`${API_BASE}/api/offers`, { method: "POST", headers: authHeaders, body: JSON.stringify(offerForm) });
@@ -70,7 +79,6 @@ export default function Offers() {
             <button type="submit" style={styles.btnPrimary}>+ Create New</button>
           </form>
 
-          {/* MAIN DATA TABLE */}
           <div style={styles.tableWrapper}>
             <table style={styles.mainTable}>
               <thead>
@@ -84,8 +92,8 @@ export default function Offers() {
                     <td style={styles.td}>{o.id}</td>
                     <td style={{...styles.td, fontWeight: '700', textAlign: 'left', paddingLeft: '20px'}}>{o.advertiser_name}</td>
                     <td style={{...styles.td, textAlign: 'left'}}>{o.service_name}</td>
-                    <td style={styles.td}>{o.geo}</td>
-                    <td style={styles.td}>{o.carrier}</td>
+                    <td style={styles.td}>{o.geo || "-"}</td>
+                    <td style={styles.td}>{o.carrier || "-"}</td>
                     <td style={{...styles.td, color: '#16a34a', fontWeight: '700'}}>${o.cpa}</td>
                     <td style={styles.td}>{o.daily_cap || '∞'}</td>
                     <td style={{...styles.td, fontWeight: '700'}}>{o.today_hits}</td>
@@ -104,18 +112,14 @@ export default function Offers() {
             </table>
           </div>
 
-          {/* CONFIGURATION / UNIVERSAL ENGINE PANEL */}
           {selectedOffer && (
             <div style={styles.manageCard}>
               <div style={styles.manageHeader}>
-                <div>
-                    <h2 style={{margin:0}}>Configuring: <span style={{color: '#3b82f6'}}>{selectedOffer.advertiser_name} - {selectedOffer.service_name}</span></h2>
-                    <span style={{fontSize: '12px', color: '#64748b'}}>Workflow settings auto-save on change</span>
-                </div>
+                <h2 style={{margin:0}}>Configuring: <span style={{color: '#3b82f6'}}>{selectedOffer.advertiser_name} - {selectedOffer.service_name}</span></h2>
                 <button style={styles.btnClose} onClick={() => setSelectedOffer(null)}>Close</button>
               </div>
 
-              {/* ANTIFRAUD & WORKFLOW CONTROLS */}
+              {/* ANTIFRAUD WORKFLOW */}
               <div style={styles.workflowGrid}>
                 <div style={styles.workflowItem}>
                    <label style={styles.checkLabel}><input type="checkbox" defaultChecked={selectedOffer.has_antifraud} onChange={e => updateOffer(selectedOffer.id, {has_antifraud: e.target.checked})} /> Anti-Fraud (MCP/Evina)</label>
@@ -134,9 +138,9 @@ export default function Offers() {
                 </div>
               </div>
 
-              {/* MANUAL PARAMETERS */}
+              {/* MANUAL ADD BOX */}
               <div style={styles.manualBox}>
-                <h4 style={{marginTop: 0, color: '#1e293b'}}>+ Add Custom Advertiser Key</h4>
+                <h4 style={{marginTop: 0}}>+ Add Custom Parameter</h4>
                 <form onSubmit={addParam} style={{display: 'flex', gap: '10px'}}>
                     <input placeholder="param_key" style={styles.input} value={paramForm.param_key} onChange={e => setParamForm({...paramForm, param_key: e.target.value})} />
                     <input placeholder="value" style={styles.input} value={paramForm.param_value} onChange={e => setParamForm({...paramForm, param_value: e.target.value})} />
@@ -144,10 +148,14 @@ export default function Offers() {
                 </form>
               </div>
 
+              {/* PARAMETER LIST WITH DELETE */}
               <div style={styles.paramGrid}>
                 {parameters.map(p => (
                   <div key={p.id} style={styles.paramCard}>
-                    <label style={styles.pLabel}>{p.param_key}</label>
+                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                        <label style={styles.pLabel}>{p.param_key}</label>
+                        <span style={styles.btnDel} onClick={() => deleteParam(p.id)}>×</span>
+                    </div>
                     <input style={styles.pInput} defaultValue={p.param_value} onBlur={(e) => updateParam(p.id, e.target.value)} />
                   </div>
                 ))}
@@ -170,7 +178,7 @@ const styles = {
   select: { padding: "12px 15px", borderRadius: "8px", border: "1px solid #cbd5e1", width: "180px" },
   btnPrimary: { background: "#3b82f6", color: "#fff", padding: "10px 25px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "700" },
   btnBlack: { background: "#0f172a", color: "#fff", padding: "10px 20px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "600" },
-  tableWrapper: { background: "#fff", borderRadius: "16px", boxShadow: "0 10px 30px rgba(0,0,0,0.04)", overflow: "hidden" },
+  tableWrapper: { background: "#fff", borderRadius: "16px", boxShadow: "0 10px 30px rgba(0,0,0,0.04)", overflow: "hidden", border: '1px solid #e2e8f0' },
   mainTable: { width: "100%", borderCollapse: "collapse", textAlign: "center" },
   thRow: { background: "#f1f5f9" },
   tr: { borderBottom: '1px solid #f1f5f9', height: '60px' },
@@ -187,5 +195,6 @@ const styles = {
   paramCard: { background: "#f1f5f9", padding: "12px", borderRadius: "10px", display: "flex", flexDirection: "column", gap: "5px", textAlign: 'left' },
   pLabel: { fontSize: "11px", fontWeight: "800", color: "#475569", textTransform: "uppercase" },
   pInput: { padding: "10px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "12px", background: "#fff" },
-  btnClose: { background: "#ef4444", color: "#fff", padding: "8px 20px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }
+  btnClose: { background: "#ef4444", color: "#fff", padding: "8px 20px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" },
+  btnDel: { color: '#ef4444', fontSize: '20px', cursor: 'pointer', fontWeight: 'bold', lineHeight: '1' }
 };
