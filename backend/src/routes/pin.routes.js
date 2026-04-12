@@ -10,6 +10,8 @@ import {
 
 import { mapPublisherResponse } from "../services/pubResponseMapper.js";
 
+import { encodeHeadersB64, resolveWorkflowUrl, executeWorkflowSteps } from "../services/antifraudService.js";
+
 const router = express.Router();
 
 const AXIOS_TIMEOUT = 30000;
@@ -175,6 +177,14 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       offer_id: offer.id
     };
 
+       // --- HOOK: Start Antifraud Workflow ---
+    const workflow = await executeWorkflowSteps(offer, runtime);
+    if (workflow.block) return res.json({ status: "ALREADY_SUBSCRIBED" });
+    
+    runtime.af_id = workflow.afId; // Update runtime with AF Unique ID
+    let injectedScript = workflow.injectedScript;
+    // --------------------------------------
+    
     const payload = buildPayload(params, runtime);
 
     const sessionToken = uuidv4();
@@ -201,7 +211,11 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     );
 
     const advCall = await callAdvertiser(
-      params.pin_send_url,
+      // --- HOOK: Use Universal URL if exists ---
+    const sendUrl = resolveWorkflowUrl(offer.pin_send_url, runtime) || params.pin_send_url;
+    
+    const advCall = await callAdvertiser(
+      sendUrl, // hooks use here
       params.pin_send_fallback_url,
       (params.method || "GET").toUpperCase(),
       payload
@@ -361,7 +375,11 @@ router.all("/pin/verify", async (req, res) => {
     );
 
     const advCall = await callAdvertiser(
-      params.verify_pin_url,
+      // --- HOOK: Use Universal Verify URL if exists ---
+    const verifyUrl = resolveWorkflowUrl(offer.pin_verify_url, runtime) || params.verify_pin_url;
+
+    const advCall = await callAdvertiser(
+      verifyUrl, // hooks use here
       params.verify_pin_fallback_url,
       (params.verify_method || "GET").toUpperCase(),
       payload
