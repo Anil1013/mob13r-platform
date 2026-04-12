@@ -139,8 +139,9 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
           WHERE ps.parent_session_token IS NOT NULL
         ) AS unique_verify,
 
+        /* 🔥 VERIFIED Column now includes SCRUBBED and CAP_REACHED (Advertiser Truth) */
         COUNT(*) FILTER (
-          WHERE ps.status = 'VERIFIED'
+          WHERE ps.status IN ('VERIFIED', 'SCRUBBED', 'CAP_REACHED')
           AND ps.parent_session_token IS NOT NULL
         ) AS verified,
 
@@ -169,10 +170,11 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
           0
         ) AS publisher_revenue,
 
+        /* 🔥 PROFIT calculation updated to use Adv Truth minus Pub Payout */
         (
           COALESCE(
             SUM(ps.payout) FILTER (
-              WHERE ps.status = 'VERIFIED'
+              WHERE ps.status IN ('VERIFIED', 'SCRUBBED', 'CAP_REACHED')
               AND ps.parent_session_token IS NOT NULL
             ),
             0
@@ -188,7 +190,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
 
         ROUND(
           COUNT(*) FILTER (
-            WHERE ps.status = 'VERIFIED'
+            WHERE ps.status IN ('VERIFIED', 'SCRUBBED', 'CAP_REACHED')
             AND ps.parent_session_token IS NOT NULL
           )::numeric /
           NULLIF(
@@ -200,7 +202,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
 
         COALESCE(
           SUM(ps.payout) FILTER (
-            WHERE ps.status = 'VERIFIED'
+            WHERE ps.status IN ('VERIFIED', 'SCRUBBED', 'CAP_REACHED')
             AND ps.parent_session_token IS NOT NULL
           ),
           0
@@ -220,7 +222,7 @@ router.get("/dashboard/report", authMiddleware, async (req, res) => {
 
         to_char(
           MAX(ps.created_at) FILTER (
-            WHERE ps.status = 'VERIFIED'
+            WHERE ps.status IN ('VERIFIED', 'SCRUBBED', 'CAP_REACHED')
             AND ps.parent_session_token IS NOT NULL
           ) AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata',
           'DD/MM/YYYY, HH12:MI:SS AM'
@@ -302,8 +304,9 @@ router.get("/dashboard/realtime", authMiddleware, async (req, res) => {
           WHERE ps.status = 'OTP_SENT'
         ) AS otp_sent,
 
+        /* Realtime Conversions now include SCRUBBED & CAP_REACHED */
         COUNT(*) FILTER (
-          WHERE ps.status = 'VERIFIED'
+          WHERE ps.status IN ('VERIFIED', 'SCRUBBED', 'CAP_REACHED')
           AND ps.parent_session_token IS NOT NULL
         ) AS conversions,
 
