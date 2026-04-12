@@ -116,7 +116,7 @@ router.get("/", async (req, res) => {
 });
 
 /* =====================================================
-   CREATE NEW OFFER
+   CREATE NEW OFFER (Universal Support)
    ===================================================== */
 
 router.post("/", async (req, res) => {
@@ -130,7 +130,12 @@ router.post("/", async (req, res) => {
       daily_cap,
       geo,
       carrier,
-      service_type
+      service_type,
+      // Universal Flags from Body
+      has_antifraud,
+      has_status_check,
+      af_trigger_point,
+      encode_headers_base64
     } = req.body;
 
     if (!advertiser_id || !service_name) {
@@ -155,10 +160,14 @@ router.post("/", async (req, res) => {
         service_type,
         today_hits,
         last_reset_date,
-        status
+        status,
+        has_antifraud,
+        has_status_check,
+        af_trigger_point,
+        encode_headers_base64
       )
       VALUES
-      ($1, $2, $3, $4, $5, $6, $7, 0, CURRENT_DATE, 'active')
+      ($1, $2, $3, $4, $5, $6, $7, 0, CURRENT_DATE, 'active', $8, $9, $10, $11)
       RETURNING *
       `,
       [
@@ -168,7 +177,11 @@ router.post("/", async (req, res) => {
         daily_cap || null,
         geo || "",
         carrier || "",
-        service_type || "NORMAL"
+        service_type || "NORMAL",
+        has_antifraud || false,
+        has_status_check || false,
+        af_trigger_point || 'BEFORE_SEND',
+        encode_headers_base64 || false
       ]
     );
 
@@ -398,7 +411,7 @@ router.patch("/:offerId/service-type", async (req, res) => {
 });
 
 /* =====================================================
-   UPDATE OFFER DATA (MAIN)
+   UPDATE OFFER DATA (MAIN - Universal Support)
    ===================================================== */
 
 router.patch("/:id", async (req, res) => {
@@ -413,7 +426,16 @@ router.patch("/:id", async (req, res) => {
       daily_cap,
       geo,
       carrier,
-      status
+      status,
+      // Universal Workflow Columns
+      has_antifraud,
+      has_status_check,
+      af_prepare_url,
+      check_status_url,
+      pin_send_url,
+      pin_verify_url,
+      encode_headers_base64,
+      af_trigger_point
     } = req.body;
 
     const result = await pool.query(
@@ -425,8 +447,16 @@ router.patch("/:id", async (req, res) => {
         daily_cap = $3,
         geo = COALESCE($4, geo),
         carrier = COALESCE($5, carrier),
-        status = COALESCE($6, status)
-      WHERE id = $7
+        status = COALESCE($6, status),
+        has_antifraud = COALESCE($7, has_antifraud),
+        has_status_check = COALESCE($8, has_status_check),
+        af_prepare_url = COALESCE($9, af_prepare_url),
+        check_status_url = COALESCE($10, check_status_url),
+        pin_send_url = COALESCE($11, pin_send_url),
+        pin_verify_url = COALESCE($12, pin_verify_url),
+        encode_headers_base64 = COALESCE($13, encode_headers_base64),
+        af_trigger_point = COALESCE($14, af_trigger_point)
+      WHERE id = $15
       RETURNING *
       `,
       [
@@ -436,6 +466,14 @@ router.patch("/:id", async (req, res) => {
         geo,
         carrier,
         status,
+        has_antifraud,
+        has_status_check,
+        af_prepare_url,
+        check_status_url,
+        pin_send_url,
+        pin_verify_url,
+        encode_headers_base64,
+        af_trigger_point,
         offerId
       ]
     );
