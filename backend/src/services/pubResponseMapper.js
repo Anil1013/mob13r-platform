@@ -6,12 +6,12 @@
  *
  * FLOW:
  * PIN SEND
- *   → session_token ALWAYS returned
+ * → session_token ALWAYS returned
  *
  * PIN VERIFY
- *   ADV FAIL → forward
- *   HOLD     → smart response
- *   SUCCESS  → forward
+ * ADV FAIL → forward
+ * HOLD     → smart response
+ * SUCCESS  → forward
  *
  * Publisher never loses session_token
  */
@@ -20,7 +20,7 @@ export function mapPublisherResponse(
   internalData,
   options = {}
 ) {
-  const { isHold = false } = options;
+  const { isHold = false, isCapReached = false } = options;
 
   /* ================= SAFETY ================= */
 
@@ -41,7 +41,19 @@ export function mapPublisherResponse(
   } = internalData;
 
   /* =====================================================
-     🔐 HOLD LOGIC (VERIFY ONLY)
+      🚫 CAP REACHED LOGIC (Explicit for Publisher)
+  ===================================================== */
+
+  if (isCapReached === true) {
+    return {
+      status: "CAP_REACHED",
+      message: "Daily conversion limit reached for this offer",
+      session_token,
+    };
+  }
+
+  /* =====================================================
+      🔐 HOLD LOGIC (SCRUBBING ONLY)
   ===================================================== */
 
   if (isHold === true) {
@@ -66,7 +78,7 @@ export function mapPublisherResponse(
   }
 
   /* =====================================================
-     ✅ NORMAL FLOW
+      ✅ NORMAL FLOW
   ===================================================== */
 
   const response = {
