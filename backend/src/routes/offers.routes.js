@@ -8,7 +8,9 @@ const router = express.Router();
    ===================================================== */
 const DEFAULT_PARAMS = [
   ["pin_send_url", ""],
+   ["pin_send_fallback_url", ""],
   ["verify_pin_url", ""],
+   ["verify_pin_fallback_url", ""],
   ["check_status_url", ""],
   ["af_prepare_url", ""],
   ["method", "GET"],
