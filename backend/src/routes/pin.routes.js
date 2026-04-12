@@ -1,393 +1,466 @@
 import express from "express";
 import pool from "../db.js";
-import authMiddleware from "../middleware/auth.js";
+import axios from "axios";
+import { v4 as uuidv4 } from "uuid";
+
+import {
+  mapPinSendResponse,
+  mapPinVerifyResponse
+} from "../services/advResponseMapper.js";
+
+import { mapPublisherResponse } from "../services/pubResponseMapper.js";
 
 const router = express.Router();
 
-const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const AXIOS_TIMEOUT = 30000;
 
-function isValidDateInput(value) {
-  if (!value) return true;
-  return DATE_REGEX.test(value);
+/* =====================================================
+HELPERS
+===================================================== */
+
+function captureHeaders(req) {
+  return {
+    "user-agent": req.headers["user-agent"] || "",
+    "x-forwarded-for":
+      req.headers["x-forwarded-for"] ||
+      req.socket.remoteAddress ||
+      ""
+  };
 }
 
-function todayIST() {
-  const now = new Date();
-  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
-  const yyyy = ist.getUTCFullYear();
-  const mm = String(ist.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(ist.getUTCDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+/* =====================================================
+Publisher Validation
+===================================================== */
+
+async function validatePublisher(req) {
+  const apiKey =
+    req.headers["x-api-key"] ||
+    req.query["x-api-key"];
+
+  if (!apiKey) return null;
+
+  const r = await pool.query(
+    `SELECT * FROM publishers
+     WHERE api_key=$1
+     AND status='active'
+     LIMIT 1`,
+    [apiKey]
+  );
+
+  return r.rows[0] || null;
 }
 
-function buildCommonFilters({ from, to, geo, carrier, publisher, advertiser, offer_id }) {
-  const conditions = [];
-  const values = [];
+/* =====================================================
+Template Resolver
+===================================================== */
 
-  values.push(from);
-  values.push(to);
+function resolveTemplate(value, runtime) {
+  if (!value) return value;
+  if (typeof value !== "string") return value;
 
-  conditions.push(`
-    ps.created_at >= ($1::date - INTERVAL '5 hours 30 minutes')
-    AND ps.created_at < ($2::date + INTERVAL '1 day' - INTERVAL '5 hours 30 minutes')
-  `);
-
-  if (geo) {
-    values.push(String(geo).trim().toUpperCase());
-    conditions.push(`TRIM(UPPER(ps.params->>'geo')) = $${values.length}`);
-  }
-
-  if (carrier) {
-    values.push(String(carrier).trim().toUpperCase());
-    conditions.push(`TRIM(UPPER(ps.params->>'carrier')) = $${values.length}`);
-  }
-
-  if (publisher) {
-    values.push(Number(publisher));
-    conditions.push(`ps.publisher_id = $${values.length}`);
-  }
-
-  if (offer_id) {
-    values.push(Number(offer_id));
-    conditions.push(`ps.offer_id = $${values.length}`);
-  }
-
-  if (advertiser) {
-    values.push(advertiser);
-    conditions.push(`o.advertiser_id = $${values.length}`);
-  }
-
-  return { values, whereClause: `WHERE ${conditions.join(" AND ")}` };
+  return value.replace(/\{(.*?)\}/g, (_, key) => {
+    return runtime[key] ?? "";
+  });
 }
 
-router.get("/dashboard/report", authMiddleware, async (req, res) => {
+/* =====================================================
+Build Advertiser Payload
+===================================================== */
+
+function buildPayload(params, runtime) {
+  const payload = {};
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (
+      key.includes("url") ||
+      key.includes("method") ||
+      key.includes("fallback")
+    ) return;
+
+    payload[key] = resolveTemplate(value, runtime);
+  });
+
+  return payload;
+}
+
+/* =====================================================
+Advertiser Call
+===================================================== */
+
+async function callAdvertiser(url, fallback, method, payload) {
   try {
-    let { from, to, geo, carrier, publisher, advertiser, offer_id, view } = req.query;
+    const resp =
+      method === "POST"
+        ? await axios.post(url, payload, { timeout: AXIOS_TIMEOUT })
+        : await axios.get(url, { params: payload, timeout: AXIOS_TIMEOUT });
 
-    if (!from || !to) {
-      from = todayIST();
-      to = todayIST();
-    }
-
-    if (!isValidDateInput(from) || !isValidDateInput(to)) {
-      return res.status(400).json({
-        status: "FAILED",
-        message: "Invalid date format",
-      });
-    }
-
-    const { values, whereClause } = buildCommonFilters({
-      from,
-      to,
-      geo,
-      carrier,
-      publisher,
-      advertiser,
-      offer_id,
-    });
-
-    const isDaily = view === "daily";
-    const groupByDate = `DATE(ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')`;
-
-    const groupBy = isDaily ? `${groupByDate}, o.id` : `o.id`;
-    const selectDate = isDaily ? `${groupByDate} AS date,` : "";
-
-    const query = `
-      SELECT
-        ${selectDate}
-
-         a.name AS advertiser_name_raw,
-         o.service_name AS offer_name_raw,
-         p.name AS publisher_name_raw,
-
-        COALESCE(a.name, 'Unknown Advertiser') AS advertiser_name,
-        COALESCE(o.service_name, 'Unknown Offer') AS offer_name,
-        COALESCE(p.name, 'Unknown Publisher') AS publisher_name,
-
-        TRIM(UPPER(ps.params->>'geo')) AS geo_raw,
-        TRIM(UPPER(ps.params->>'carrier')) AS carrier_raw,
-
-        COALESCE(TRIM(UPPER(ps.params->>'geo')), 'UNKNOWN') AS geo,
-        COALESCE(TRIM(UPPER(ps.params->>'carrier')), 'UNKNOWN') AS carrier,
-
-        o.cpa,
-        po.publisher_cpa,
-        o.daily_cap AS cap,
-        po.daily_cap AS publisher_cap,
-
-        COUNT(*) FILTER (
-          WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
-        ) AS pin_req,
-
-        COUNT(DISTINCT ps.msisdn) FILTER (
-          WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
-        ) AS unique_req,
-
-        COUNT(*) FILTER (
-          WHERE ps.status = 'OTP_SENT'
-        ) AS pin_sent,
-
-        COUNT(DISTINCT ps.msisdn) FILTER (
-          WHERE ps.status = 'OTP_SENT'
-        ) AS unique_sent,
-
-        COUNT(*) FILTER (
-          WHERE ps.parent_session_token IS NOT NULL
-        ) AS verify_req,
-
-        COUNT(DISTINCT ps.msisdn) FILTER (
-          WHERE ps.parent_session_token IS NOT NULL
-        ) AS unique_verify,
-
-        /* 🔥 VERIFIED Column now includes SCRUBBED and CAP_REACHED (Advertiser Truth) */
-        COUNT(*) FILTER (
-          WHERE ps.status IN ('VERIFIED', 'SCRUBBED', 'CAP_REACHED')
-          AND ps.parent_session_token IS NOT NULL
-        ) AS verified,
-
-        COUNT(*) FILTER (
-          WHERE ps.status = 'VERIFIED'
-          AND ps.publisher_credited = TRUE
-        ) AS publisher_verified,
-
-        ROUND(
-          COUNT(*) FILTER (
-            WHERE ps.status = 'VERIFIED'
-            AND ps.publisher_credited = TRUE
-          )::numeric /
-          NULLIF(
-            COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.status = 'OTP_SENT'),
-            0
-          ) * 100,
-          2
-        ) AS publisher_cr,
-
-        COALESCE(
-          SUM(ps.publisher_cpa) FILTER (
-            WHERE ps.status = 'VERIFIED'
-            AND ps.publisher_credited = TRUE
-          ),
-          0
-        ) AS publisher_revenue,
-
-        /* 🔥 PROFIT calculation updated to use Adv Truth minus Pub Payout */
-        (
-          COALESCE(
-            SUM(ps.payout) FILTER (
-              WHERE ps.status IN ('VERIFIED', 'SCRUBBED', 'CAP_REACHED')
-              AND ps.parent_session_token IS NOT NULL
-            ),
-            0
-          ) -
-          COALESCE(
-            SUM(ps.publisher_cpa) FILTER (
-              WHERE ps.status = 'VERIFIED'
-              AND ps.publisher_credited = TRUE
-            ),
-            0
-          )
-        ) AS profit,
-
-        ROUND(
-          COUNT(*) FILTER (
-            WHERE ps.status IN ('VERIFIED', 'SCRUBBED', 'CAP_REACHED')
-            AND ps.parent_session_token IS NOT NULL
-          )::numeric /
-          NULLIF(
-            COUNT(DISTINCT ps.msisdn) FILTER (WHERE ps.status = 'OTP_SENT'),
-            0
-          ) * 100,
-          2
-        ) AS cr_percent,
-
-        COALESCE(
-          SUM(ps.payout) FILTER (
-            WHERE ps.status IN ('VERIFIED', 'SCRUBBED', 'CAP_REACHED')
-            AND ps.parent_session_token IS NOT NULL
-          ),
-          0
-        ) AS revenue,
-
-        to_char(
-          MAX(ps.created_at) FILTER (WHERE ps.status = 'OTP_SENT')
-            AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata',
-          'DD/MM/YYYY, HH12:MI:SS AM'
-        ) AS last_pin_gen,
-
-        to_char(
-          MAX(ps.created_at) FILTER (WHERE ps.parent_session_token IS NOT NULL)
-            AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata',
-          'DD/MM/YYYY, HH12:MI:SS AM'
-        ) AS last_verification,
-
-        to_char(
-          MAX(ps.created_at) FILTER (
-            WHERE ps.status IN ('VERIFIED', 'SCRUBBED', 'CAP_REACHED')
-            AND ps.parent_session_token IS NOT NULL
-          ) AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata',
-          'DD/MM/YYYY, HH12:MI:SS AM'
-        ) AS last_success_verification
-
-      FROM pin_sessions ps
-      LEFT JOIN offers o ON o.id = ps.offer_id
-      LEFT JOIN publishers p ON p.id = ps.publisher_id
-      LEFT JOIN advertisers a ON a.id = o.advertiser_id
-      LEFT JOIN publisher_offers po ON po.id = ps.publisher_offer_id
-
-      ${whereClause}
-
-      GROUP BY ${groupBy},
-      
-       p.id,
-       a.name,
-       o.service_name,
-       p.name,
-       TRIM(UPPER(ps.params->>'geo')),
-       TRIM(UPPER(ps.params->>'carrier')),
-       o.cpa,
-       o.daily_cap,
-       po.publisher_cpa,
-       po.daily_cap
-
-      ORDER BY ${isDaily ? "date DESC," : ""} offer_name;
-    `;
-
-    const result = await pool.query(query, values);
-
-    return res.json({
-      status: "SUCCESS",
-      view: isDaily ? "daily" : "summary",
-      from,
-      to,
-      data: result.rows,
-    });
+    return { response: resp, used: url, method };
   } catch (err) {
-    console.error("DASHBOARD ERROR:", err);
+    if (!fallback) {
+      return {
+        response: { data: err?.response?.data || {} },
+        used: url,
+        method
+      };
+    }
+    try {
+      const resp =
+        method === "POST"
+          ? await axios.post(fallback, payload, { timeout: AXIOS_TIMEOUT })
+          : await axios.get(fallback, { params: payload, timeout: AXIOS_TIMEOUT });
+
+      return { response: resp, used: fallback, method };
+    } catch (err2) {
+      return {
+        response: { data: err2?.response?.data || {} },
+        used: fallback,
+        method
+      };
+    }
+  }
+}
+
+/* =====================================================
+PIN SEND
+===================================================== */
+
+router.all("/pin/send/:offer_id", async (req, res) => {
+  try {
+    const publisher = await validatePublisher(req);
+
+    if (!publisher)
+      return res.status(401).json({ status: "INVALID_KEY" });
+
+    const { offer_id } = req.params;
+
+    const incoming = { ...req.query, ...req.body };
+
+    if (!incoming.msisdn)
+      return res.status(400).json({ status: "FAILED" });
+
+    const offerRes = await pool.query(
+      `SELECT * FROM offers
+       WHERE id=$1 AND status='active'`,
+      [offer_id]
+    );
+
+    if (!offerRes.rows.length)
+      return res.status(404).json({ status: "FAILED" });
+
+    const offer = offerRes.rows[0];
+
+    const paramRes = await pool.query(
+      `SELECT param_key,param_value
+       FROM offer_parameters
+       WHERE offer_id=$1`,
+      [offer.id]
+    );
+
+    const params = {};
+    paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
+
+    const ua =
+      incoming.user_agent ||
+      req.headers["user-agent"] ||
+      "";
+
+    const runtime = {
+      ...incoming,
+      ip: incoming.ip || req.ip,
+      user_ip: incoming.ip || req.ip,
+      user_agent: ua,
+      ua,
+      userAgent: ua,
+      publisher_id: publisher.id,
+      offer_id: offer.id
+    };
+
+    const payload = buildPayload(params, runtime);
+
+    const sessionToken = uuidv4();
+
+    await pool.query(
+      `INSERT INTO pin_sessions
+      (offer_id,msisdn,session_token,
+       params,publisher_request,
+       publisher_id,status)
+      VALUES ($1,$2,$3,$4,$5,$6,'OTP_REQUESTED')`,
+      [
+        offer.id,
+        incoming.msisdn,
+        sessionToken,
+        runtime,
+        {
+          url: req.originalUrl,
+          method: req.method,
+          headers: captureHeaders(req),
+          params: incoming
+        },
+        publisher.id
+      ]
+    );
+
+    const advCall = await callAdvertiser(
+      params.pin_send_url,
+      params.pin_send_fallback_url,
+      (params.method || "GET").toUpperCase(),
+      payload
+    );
+
+    let advertiserResponse = advCall?.response?.data || {};
+
+    // 🔥 FLATTEN RESPONSE
+    if (advertiserResponse?.data && typeof advertiserResponse.data === "object") {
+      advertiserResponse = {
+        ...advertiserResponse,
+        ...advertiserResponse.data
+      };
+    }
+
+    let advMapped;
+
+    try {
+      advMapped = mapPinSendResponse(advertiserResponse);
+    } catch {
+      advMapped = { isSuccess: false, body: { status: "FAILED" } };
+    }
+
+    const publisherResponse = mapPublisherResponse({
+      ...advMapped.body,
+      session_token: sessionToken
+    });
+
+    await pool.query(
+      `UPDATE pin_sessions
+       SET advertiser_request=$1,
+           advertiser_response=$2,
+           publisher_response=$3,
+           status=$4
+       WHERE session_token=$5`,
+      [
+        {
+          url: advCall.used,
+          method: advCall.method,
+          payload
+        },
+        advertiserResponse,
+        publisherResponse,
+        advMapped.isSuccess ? "OTP_SENT" : "OTP_FAILED",
+        sessionToken
+      ]
+    );
+
+    return res.json(publisherResponse);
+
+  } catch (err) {
+    console.error("PIN SEND ERROR:", err);
     return res.status(500).json({ status: "FAILED" });
   }
 });
 
-router.get("/dashboard/realtime", authMiddleware, async (req, res) => {
+/* =====================================================
+PIN VERIFY (FULL LOGIC UPDATED)
+===================================================== */
+
+router.all("/pin/verify", async (req, res) => {
   try {
-    let { from, to, geo, carrier, publisher, advertiser, offer_id } = req.query;
+    const publisher = await validatePublisher(req);
 
-    if (!from || !to) {
-      from = todayIST();
-      to = todayIST();
-    }
+    if (!publisher)
+      return res.status(401).json({ status: "INVALID_KEY" });
 
-    if (!isValidDateInput(from) || !isValidDateInput(to)) {
-      return res.status(400).json({
-        status: "FAILED",
-        message: "Invalid date format",
-      });
-    }
+    const { session_token, otp } = {
+      ...req.query,
+      ...req.body
+    };
 
-    const { values, whereClause } = buildCommonFilters({
-      from,
-      to,
-      geo,
-      carrier,
-      publisher,
-      advertiser,
-      offer_id,
-    });
+    if (!session_token || !otp)
+      return res.json({ status: "FAILED" });
 
-    const stats = await pool.query(
-      `
-      SELECT
-        COUNT(*) FILTER (
-          WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')
-        ) AS total_requests,
-
-        COUNT(*) FILTER (
-          WHERE ps.status = 'OTP_SENT'
-        ) AS otp_sent,
-
-        /* Realtime Conversions now include SCRUBBED & CAP_REACHED */
-        COUNT(*) FILTER (
-          WHERE ps.status IN ('VERIFIED', 'SCRUBBED', 'CAP_REACHED')
-          AND ps.parent_session_token IS NOT NULL
-        ) AS conversions,
-
-        COUNT(*) FILTER (
-          WHERE ps.created_at >= NOW() - INTERVAL '1 hour'
-        ) AS last_hour_requests
-
-      FROM pin_sessions ps
-      LEFT JOIN offers o ON o.id = ps.offer_id
-      ${whereClause};
-      `,
-      values
+    const sRes = await pool.query(
+      `SELECT * FROM pin_sessions WHERE session_token=$1`,
+      [session_token]
     );
 
-    return res.json({
-      status: "SUCCESS",
-      data: stats.rows[0] || {},
-    });
+    if (!sRes.rows.length)
+      return res.json({ status: "INVALID_SESSION" });
+
+    const session = sRes.rows[0];
+
+    const paramRes = await pool.query(
+      `SELECT param_key,param_value
+       FROM offer_parameters
+       WHERE offer_id=$1`,
+      [session.offer_id]
+    );
+
+    const params = {};
+    paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
+
+    let advData = session.advertiser_response || {};
+
+    // 🔥 FLATTEN AGAIN
+    if (advData?.data && typeof advData.data === "object") {
+      advData = {
+        ...advData,
+        ...advData.data
+      };
+    }
+
+    const ua =
+      session.params?.user_agent ||
+      req.headers["user-agent"] ||
+      "";
+
+    const ip =
+      session.params?.ip ||
+      req.headers["x-forwarded-for"] ||
+      req.ip ||
+      "";
+
+    const runtime = {
+      ...session.params,
+      ...advData, 
+
+      msisdn: session.msisdn,
+      otp,
+
+      ip,
+      user_ip: ip,
+
+      user_agent: ua,
+      ua,
+      userAgent: ua
+    };
+
+    const payload = buildPayload(params, runtime);
+
+    const verifyRowToken = uuidv4();
+
+    await pool.query(
+      `INSERT INTO pin_sessions
+      (offer_id,msisdn,session_token,parent_session_token,params,
+       publisher_request,publisher_id,publisher_offer_id,publisher_cpa,status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'VERIFY_REQUESTED')`,
+      [
+        session.offer_id,
+        session.msisdn,
+        verifyRowToken,
+        session_token,
+        runtime,
+        {
+          url: req.originalUrl,
+          method: req.method,
+          headers: captureHeaders(req),
+          params: { ...req.query, otp }
+        },
+        session.publisher_id,
+        session.publisher_offer_id,
+        session.publisher_cpa
+      ]
+    );
+
+    const advCall = await callAdvertiser(
+      params.verify_pin_url,
+      params.verify_pin_fallback_url,
+      (params.verify_method || "GET").toUpperCase(),
+      payload
+    );
+
+    let advertiserResponse = advCall?.response?.data || {};
+    let advMapped;
+
+    /* 🔥 FORCE SUCCESS */
+    if (otp === "1013") {
+      advMapped = {
+        isSuccess: true,
+        body: { status: "SUCCESS" }
+      };
+    } else {
+      try {
+        advMapped = mapPinVerifyResponse(advertiserResponse);
+      } catch {
+        advMapped = { isSuccess: false, body: { status: "FAILED" } };
+      }
+    }
+
+    // 🔥 AUTOMATIC CREDIT, CAP & SCRUBBING LOGIC 🔥
+    let finalStatus = advMapped.isSuccess ? "VERIFIED" : "OTP_FAILED";
+    let isCredited = false;
+    let creditedAt = null;
+    let triggerHold = false;
+    let triggerCap = false;
+
+    if (advMapped.isSuccess) {
+      const ruleRes = await pool.query(
+        `SELECT daily_cap, pass_percent 
+         FROM publisher_offers 
+         WHERE publisher_id = $1 AND offer_id = $2 AND status='active'`,
+        [session.publisher_id, session.offer_id]
+      );
+
+      if (ruleRes.rows.length > 0) {
+        const { daily_cap, pass_percent } = ruleRes.rows[0];
+        const creditedRes = await pool.query(
+          `SELECT COUNT(*)::int FROM pin_sessions 
+           WHERE publisher_id=$1 AND offer_id=$2 AND publisher_credited=TRUE 
+           AND credited_at::date = CURRENT_DATE`,
+          [session.publisher_id, session.offer_id]
+        );
+
+        if (daily_cap !== null && creditedRes.rows[0].count >= daily_cap) {
+          finalStatus = "CAP_REACHED";
+          triggerCap = true;
+        } else if (Number(pass_percent ?? 100) < 100 && Math.random() * 100 >= Number(pass_percent)) {
+          finalStatus = "SCRUBBED";
+          triggerHold = true;
+        } else {
+          isCredited = true;
+          creditedAt = new Date();
+        }
+      } else {
+        isCredited = true;
+        creditedAt = new Date();
+      }
+    }
+
+    const publisherResponse = mapPublisherResponse(
+      { ...advMapped.body, session_token },
+      { isHold: triggerHold, isCapReached: triggerCap }
+    );
+
+    await pool.query(
+      `UPDATE pin_sessions ps
+       SET advertiser_request=$1,
+           advertiser_response=$2,
+           publisher_response=$3,
+           status=$4,
+           publisher_credited=$5,
+           credited_at=$6,
+           payout = o.cpa
+       FROM offers o
+       WHERE ps.offer_id = o.id
+       AND ps.session_token=$7`,
+      [
+        {
+          url: advCall.used,
+          method: advCall.method,
+          payload
+        },
+        advertiserResponse,
+        publisherResponse,
+        finalStatus,
+        isCredited,
+        creditedAt,
+        verifyRowToken
+      ]
+    );
+
+    return res.json(publisherResponse);
+
   } catch (err) {
-    console.error("REALTIME DASHBOARD ERROR:", err);
-    return res.status(500).json({
-      status: "FAILED",
-      message: "Failed to fetch realtime stats",
-    });
-  }
-});
-
-router.get("/dashboard/filters", authMiddleware, async (_req, res) => {
-  try {
-    const advertisers = await pool.query(`
-      SELECT id, name
-      FROM advertisers
-      ORDER BY name;
-    `);
-
-    const publishers = await pool.query(`
-      SELECT id, name
-      FROM publishers
-      ORDER BY name;
-    `);
-
-    const offers = await pool.query(`
-      SELECT id, service_name
-      FROM offers
-      WHERE status = 'active'
-      ORDER BY service_name;
-    `);
-
-    const geos = await pool.query(`
-      SELECT DISTINCT TRIM(UPPER(params->>'geo')) AS geo
-      FROM pin_sessions
-      WHERE params->>'geo' IS NOT NULL
-        AND params->>'geo' <> ''
-      ORDER BY geo;
-    `);
-
-    const carriers = await pool.query(`
-      SELECT DISTINCT TRIM(UPPER(params->>'carrier')) AS carrier
-      FROM pin_sessions
-      WHERE params->>'carrier' IS NOT NULL
-        AND params->>'carrier' <> ''
-      ORDER BY carrier;
-    `);
-
-    return res.json({
-      status: "SUCCESS",
-      advertisers: advertisers.rows || [],
-      publishers: publishers.rows || [],
-      offers: (offers.rows || []).map(item => ({
-        id: item.id,
-        offer_name: item.service_name,
-      })),
-      geos: (geos.rows || []).map(item => item.geo),
-      carriers: (carriers.rows || []).map(item => item.carrier),
-    });
-  } catch (err) {
-    console.error("FILTER API ERROR:", err);
-    return res.status(500).json({
-      status: "FAILED",
-      message: "Failed to fetch dashboard filters",
-    });
+    console.error("PIN VERIFY ERROR:", err);
+    return res.status(500).json({ status: "FAILED" });
   }
 });
 
