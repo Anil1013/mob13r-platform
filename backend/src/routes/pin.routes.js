@@ -15,8 +15,59 @@ const router = express.Router();
 const AXIOS_TIMEOUT = 30000;
 
 /* =====================================================
-HELPERS
-===================================================== */
+   UNIVERSAL ENGINE HELPERS
+   ===================================================== */
+
+/**
+ * Serializes headers to JSON then to Base64 
+ * Required for Asiacell/One97 Anti-fraud Shield 
+ */
+function encodeHeadersB64(headers) {
+  try {
+    const jsonHeader = JSON.stringify(headers);
+    return Buffer.from(jsonHeader).toString('base64');
+  } catch (e) {
+    return "";
+  }
+}
+
+/**
+ * Universal Placeholder Resolver
+ * Handles #MSISDN#, #TXID#, #HEADERS_B64#, #IP_B64# etc.
+ */
+function replaceUniversalPlaceholders(url, data) {
+  if (!url) return "";
+  let updatedUrl = url;
+
+  const map = {
+    "#MSISDN#": data.msisdn || "",
+    "{msisdn}": data.msisdn || "",
+    "#TXID#": data.txid || "",
+    "{transaction_id}": data.txid || "",
+    "#ANDROIDID#": data.txid || "",
+    "#IP#": data.ip || "",
+    "{user_ip}": data.ip || "",
+    "#IP_B64#": data.ip ? Buffer.from(data.ip).toString('base64') : "",
+    "#UA#": data.ua || "",
+    "{user_agent}": data.ua || "",
+    "#HEADERS_B64#": data.headers_b64 || "",
+    "#OTP#": data.otp || "",
+    "{otp}": data.otp || "",
+    "#CLICKID#": data.click_id || "",
+    "{click_id}": data.click_id || "",
+    "#AF_ID#": data.af_id || ""
+  };
+
+  Object.entries(map).forEach(([key, value]) => {
+    updatedUrl = updatedUrl.split(key).join(encodeURIComponent(value));
+  });
+
+  return updatedUrl;
+}
+
+/* =====================================================
+   HELPERS
+   ===================================================== */
 
 function captureHeaders(req) {
   return {
@@ -29,8 +80,8 @@ function captureHeaders(req) {
 }
 
 /* =====================================================
-Publisher Validation
-===================================================== */
+   Publisher Validation
+   ===================================================== */
 
 async function validatePublisher(req) {
   const apiKey =
@@ -51,8 +102,8 @@ async function validatePublisher(req) {
 }
 
 /* =====================================================
-Template Resolver
-===================================================== */
+   Template Resolver
+   ===================================================== */
 
 function resolveTemplate(value, runtime) {
   if (!value) return value;
@@ -64,8 +115,8 @@ function resolveTemplate(value, runtime) {
 }
 
 /* =====================================================
-Build Advertiser Payload
-===================================================== */
+   Build Advertiser Payload
+   ===================================================== */
 
 function buildPayload(params, runtime) {
   const payload = {};
@@ -84,8 +135,8 @@ function buildPayload(params, runtime) {
 }
 
 /* =====================================================
-Advertiser Call
-===================================================== */
+   Advertiser Call
+   ===================================================== */
 
 async function callAdvertiser(url, fallback, method, payload) {
   try {
@@ -121,8 +172,8 @@ async function callAdvertiser(url, fallback, method, payload) {
 }
 
 /* =====================================================
-PIN SEND
-===================================================== */
+   PIN SEND
+   ===================================================== */
 
 router.all("/pin/send/:offer_id", async (req, res) => {
   try {
@@ -149,6 +200,56 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const offer = offerRes.rows[0];
 
+    // Build Universal Runtime Data
+    const txid = uuidv4();
+    const userIp = incoming.ip || req.headers["x-forwarded-for"] || req.ip;
+    const ua = incoming.user_agent || req.headers["user-agent"] || "";
+    const b64Headers = encodeHeadersB64(req.headers);
+
+    const runtime = {
+      ...incoming,
+      msisdn: incoming.msisdn,
+      txid: txid,
+      ip: userIp,
+      user_ip: userIp,
+      user_agent: ua,
+      ua,
+      userAgent: ua,
+      headers_b64: b64Headers,
+      publisher_id: publisher.id,
+      offer_id: offer.id
+    };
+
+    let injectedScript = null;
+    let afUniqueId = null;
+
+    // --- 🛡️ MODULE 1: STATUS CHECK (Shemaroo Me Style) ---
+    if (offer.has_status_check && offer.check_status_url) {
+      const statusUrl = replaceUniversalPlaceholders(offer.check_status_url, runtime);
+      try {
+        const sCheck = await axios.get(statusUrl, { timeout: AXIOS_TIMEOUT });
+        // If "Already Subscribed", block OTP flow 
+        if (sCheck.data.status === "fail" || sCheck.data.message?.includes("Already")) {
+          return res.json({ status: "ALREADY_SUBSCRIBED", message: "User already subscribed" });
+        }
+      } catch (e) {
+        console.error("Status Check Skip");
+      }
+    }
+
+    // --- 🛡️ MODULE 2: ANTI-FRAUD PREPARE (Asiacell/MCP Style) ---
+    if (offer.has_antifraud && offer.af_trigger_point === 'BEFORE_SEND') {
+      const afUrl = replaceUniversalPlaceholders(offer.af_prepare_url, runtime);
+      try {
+        const afResp = await axios.get(afUrl, { timeout: AXIOS_TIMEOUT });
+        injectedScript = afResp.data; 
+        afUniqueId = afResp.headers['antifrauduniqid'] || afResp.headers['mcpuniqid'];
+        runtime.af_id = afUniqueId;
+      } catch (e) {
+        console.error("AF Prepare Skip");
+      }
+    }
+
     const paramRes = await pool.query(
       `SELECT param_key,param_value
        FROM offer_parameters
@@ -159,25 +260,9 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     const params = {};
     paramRes.rows.forEach(p => params[p.param_key] = p.param_value);
 
-    const ua =
-      incoming.user_agent ||
-      req.headers["user-agent"] ||
-      "";
-
-    const runtime = {
-      ...incoming,
-      ip: incoming.ip || req.ip,
-      user_ip: incoming.ip || req.ip,
-      user_agent: ua,
-      ua,
-      userAgent: ua,
-      publisher_id: publisher.id,
-      offer_id: offer.id
-    };
-
     const payload = buildPayload(params, runtime);
 
-    const sessionToken = uuidv4();
+    const sessionToken = txid;
 
     await pool.query(
       `INSERT INTO pin_sessions
@@ -189,7 +274,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
         offer.id,
         incoming.msisdn,
         sessionToken,
-        runtime,
+        { ...runtime, af_id: afUniqueId },
         {
           url: req.originalUrl,
           method: req.method,
@@ -200,8 +285,11 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       ]
     );
 
+    // Core Advertiser Call
+    const sendUrl = offer.pin_send_url ? replaceUniversalPlaceholders(offer.pin_send_url, runtime) : params.pin_send_url;
+    
     const advCall = await callAdvertiser(
-      params.pin_send_url,
+      sendUrl,
       params.pin_send_fallback_url,
       (params.method || "GET").toUpperCase(),
       payload
@@ -209,7 +297,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     let advertiserResponse = advCall?.response?.data || {};
 
-    // 🔥 FLATTEN RESPONSE
+    // Flatten Response
     if (advertiserResponse?.data && typeof advertiserResponse.data === "object") {
       advertiserResponse = {
         ...advertiserResponse,
@@ -217,8 +305,12 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       };
     }
 
-    let advMapped;
+    // --- 🛡️ MODULE 3: ANTI-FRAUD INJECTION (Evina/After Send) ---
+    if (offer.af_trigger_point === 'AFTER_SEND' || advertiserResponse.js || advertiserResponse.script) {
+      injectedScript = advertiserResponse.js || advertiserResponse.script || injectedScript;
+    }
 
+    let advMapped;
     try {
       advMapped = mapPinSendResponse(advertiserResponse);
     } catch {
@@ -227,7 +319,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const publisherResponse = mapPublisherResponse({
       ...advMapped.body,
-      session_token: sessionToken
+      session_token: sessionToken,
+      js_script: injectedScript
     });
 
     await pool.query(
@@ -259,8 +352,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 });
 
 /* =====================================================
-PIN VERIFY (FULL LOGIC UPDATED)
-===================================================== */
+   PIN VERIFY
+   ===================================================== */
 
 router.all("/pin/verify", async (req, res) => {
   try {
@@ -287,6 +380,9 @@ router.all("/pin/verify", async (req, res) => {
 
     const session = sRes.rows[0];
 
+    const offerRes = await pool.query(`SELECT * FROM offers WHERE id=$1`, [session.offer_id]);
+    const offer = offerRes.rows[0];
+
     const paramRes = await pool.query(
       `SELECT param_key,param_value
        FROM offer_parameters
@@ -299,7 +395,6 @@ router.all("/pin/verify", async (req, res) => {
 
     let advData = session.advertiser_response || {};
 
-    // 🔥 FLATTEN AGAIN
     if (advData?.data && typeof advData.data === "object") {
       advData = {
         ...advData,
@@ -307,30 +402,12 @@ router.all("/pin/verify", async (req, res) => {
       };
     }
 
-    const ua =
-      session.params?.user_agent ||
-      req.headers["user-agent"] ||
-      "";
-
-    const ip =
-      session.params?.ip ||
-      req.headers["x-forwarded-for"] ||
-      req.ip ||
-      "";
-
     const runtime = {
       ...session.params,
       ...advData, 
-
       msisdn: session.msisdn,
       otp,
-
-      ip,
-      user_ip: ip,
-
-      user_agent: ua,
-      ua,
-      userAgent: ua
+      pin: otp
     };
 
     const payload = buildPayload(params, runtime);
@@ -360,8 +437,10 @@ router.all("/pin/verify", async (req, res) => {
       ]
     );
 
+    const verifyUrl = offer.pin_verify_url ? replaceUniversalPlaceholders(offer.pin_verify_url, runtime) : params.verify_pin_url;
+
     const advCall = await callAdvertiser(
-      params.verify_pin_url,
+      verifyUrl,
       params.verify_pin_fallback_url,
       (params.verify_method || "GET").toUpperCase(),
       payload
@@ -370,7 +449,7 @@ router.all("/pin/verify", async (req, res) => {
     let advertiserResponse = advCall?.response?.data || {};
     let advMapped;
 
-    /* 🔥 FORCE SUCCESS */
+    // Force success for dev test
     if (otp === "1013") {
       advMapped = {
         isSuccess: true,
@@ -384,7 +463,7 @@ router.all("/pin/verify", async (req, res) => {
       }
     }
 
-    // 🔥 AUTOMATIC CREDIT, CAP & SCRUBBING LOGIC 🔥
+    // --- AUTOMATIC CREDIT, CAP & SCRUBBING ---
     let finalStatus = advMapped.isSuccess ? "VERIFIED" : "OTP_FAILED";
     let isCredited = false;
     let creditedAt = null;
@@ -452,7 +531,7 @@ router.all("/pin/verify", async (req, res) => {
         finalStatus,
         isCredited,
         creditedAt,
-        verifyRowToken
+        session_token
       ]
     );
 
