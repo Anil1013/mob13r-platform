@@ -267,19 +267,12 @@ router.all("/pin/verify", publisherAuth, async (req, res) => {
 
     /* 🔥 FINAL CREDIT */
     await client.query(
+  `await client.query(
   `UPDATE pin_sessions
    SET publisher_credited = TRUE,
        credited_at = NOW()
-   WHERE session_id = (
-     SELECT session_id
-     FROM pin_sessions
-     WHERE 
-       (parent_session_token::text = $1 OR session_token::text = $1)
-       AND status = 'VERIFIED'
-     ORDER BY created_at DESC
-     LIMIT 1
-   )`,
-  [inputToken]
+   WHERE session_id = $1`,
+  [row.session_id]   // 🔥 already fetched VERIFIED row
 );
 
     await client.query("COMMIT");
