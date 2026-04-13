@@ -219,15 +219,47 @@ router.get("/:offerId/parameters", async (req, res) => {
       return res.status(400).json({ message: "Invalid offerId" });
     }
 
-    const result = await pool.query(
+    // 1️⃣ Get existing params
+    let result = await pool.query(
       `
       SELECT id, param_key, param_value
       FROM offer_parameters
       WHERE offer_id = $1
-      ORDER BY id ASC
       `,
       [offerId]
     );
+
+    const existingKeys = result.rows.map(p => p.param_key);
+
+    // 2️⃣ Find missing required params
+    const missing = DEFAULT_PARAMS.filter(
+      ([key]) => !existingKeys.includes(key)
+    );
+
+    // 3️⃣ Auto insert missing
+    if (missing.length > 0) {
+      for (const [key, value] of missing) {
+        await pool.query(
+          `
+          INSERT INTO offer_parameters (offer_id, param_key, param_value)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (offer_id, param_key) DO NOTHING
+          `,
+          [offerId, key, value]
+        );
+      }
+
+      // 🔁 refetch after insert
+      result = await pool.query(
+        `
+        SELECT id, param_key, param_value
+        FROM offer_parameters
+        WHERE offer_id = $1
+        ORDER BY id ASC
+        `,
+        [offerId]
+      );
+    }
 
     return res.json(result.rows);
 
