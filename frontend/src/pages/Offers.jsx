@@ -281,18 +281,19 @@ export default function Offers() {
                     />
                   </td>
 
-                  <td style={styles.td}>
-                    <input
-                      style={styles.input}
-                      defaultValue={o.daily_cap || ""}
-                      placeholder="∞"
-                      onBlur={(e) =>
-                        updateOffer(o.id, {
-                          daily_cap: e.target.value || null,
-                        })
-                      }
-                    />
-                  </td>
+                    <td style={styles.td}>
+  <input
+    style={styles.input}
+    /* 🔥 defaultValue badal di taaki 0 dikhe */
+    defaultValue={o.daily_cap === null ? "" : o.daily_cap}
+    placeholder="0" 
+    onBlur={(e) => {
+      /* 🔥 Empty value ko null ki jagah 0 save karein */
+      const val = e.target.value === "" ? 0 : parseInt(e.target.value);
+      updateOffer(o.id, { daily_cap: val });
+    }}
+  />
+</td>
 
                   <td style={styles.td}>{o.today_hits}</td>
                   <td style={styles.td}>{remaining(o)}</td>
