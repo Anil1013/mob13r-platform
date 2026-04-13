@@ -221,13 +221,14 @@ router.get("/:offerId/parameters", async (req, res) => {
 
     // 1️⃣ Get existing params
     let result = await pool.query(
-      `
-      SELECT id, param_key, param_value
-      FROM offer_parameters
-      WHERE offer_id = $1
-      `,
-      [offerId]
-    );
+  `
+  SELECT id, param_key, param_value
+  FROM offer_parameters
+  WHERE offer_id = $1
+  ORDER BY id ASC
+  `,
+  [offerId]
+);
 
     const existingKeys = result.rows.map(p => p.param_key);
 
