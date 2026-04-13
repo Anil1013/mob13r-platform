@@ -19,10 +19,6 @@ export default function Offers() {
     geo: "",
     carrier: "",
     service_type: "NORMAL",
-    has_antifraud: false,
-    has_status_check: false,
-    af_trigger_point: "BEFORE_SEND",
-    encode_headers_base64: false,
   });
 
   const [paramForm, setParamForm] = useState({
@@ -66,14 +62,14 @@ export default function Offers() {
     fetchOffers();
   }, []);
 
-  /* ---------------- ACTIONS ---------------- */
-  const updateOffer = async (id, payload) => {
-    await fetch(`${API_BASE}/api/offers/${id}`, {
+  /* ---------------- UPDATE ---------------- */
+  const updateOffer = async (offerId, payload) => {
+    await fetch(`${API_BASE}/api/offers/${offerId}`, {
       method: "PATCH",
       headers: authHeaders,
       body: JSON.stringify(payload),
     });
-    fetchOffers();
+    fetchOffers(offerForm.advertiser_id);
   };
 
   const createOffer = async (e) => {
@@ -86,17 +82,72 @@ export default function Offers() {
     });
 
     const data = await res.json();
-    setOffers((prev) => [data, ...prev]);
+    setOffers((prev) => [...prev, data]);
+
+    setOfferForm({
+      ...offerForm,
+      service_name: "",
+      cpa: "",
+      daily_cap: "",
+      geo: "",
+      carrier: "",
+      service_type: "NORMAL",
+    });
+  };
+
+  /* ---------------- PARAMETERS ---------------- */
+  const addParameter = async (e) => {
+    e.preventDefault();
+
+    await fetch(
+      `${API_BASE}/api/offers/${selectedOffer.id}/parameters`,
+      {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify(paramForm),
+      }
+    );
+
+    setParamForm({ param_key: "", param_value: "" });
+    fetchParameters(selectedOffer.id);
+  };
+
+  const deleteParameter = async (id) => {
+    await fetch(
+      `${API_BASE}/api/offers/parameters/${id}`,
+      { method: "DELETE", headers: authHeaders }
+    );
+    fetchParameters(selectedOffer.id);
+  };
+
+  /* ---------------- SERVICE TYPE ---------------- */
+  const changeServiceType = async (offerId, service_type) => {
+    await fetch(`${API_BASE}/api/offers/${offerId}/service-type`, {
+      method: "PATCH",
+      headers: authHeaders,
+      body: JSON.stringify({ service_type }),
+    });
+    fetchOffers(offerForm.advertiser_id);
   };
 
   /* ---------------- HELPERS ---------------- */
   const remaining = (o) =>
     !o.daily_cap ? "∞" : Math.max(o.daily_cap - o.today_hits, 0);
 
-  const revenue = (o) =>
+  const autoRevenue = (o) =>
     o.cpa
       ? `$${(Number(o.cpa) * Number(o.today_hits || 0)).toFixed(2)}`
       : "$0.00";
+
+  const routeBadge = (o) => {
+    if (o.daily_cap && o.today_hits >= o.daily_cap) {
+      return <span style={styles.badgeCap}>Cap Reached</span>;
+    }
+    if (o.service_type === "FALLBACK") {
+      return <span style={styles.badgeFallback}>Fallback</span>;
+    }
+    return <span style={styles.badgePrimary}>Primary</span>;
+  };
 
   /* ---------------- UI ---------------- */
   return (
@@ -104,255 +155,247 @@ export default function Offers() {
       <Navbar />
 
       <div style={styles.page}>
-        <div style={styles.container}>
-          <h2 style={styles.title}>Offers Control Panel</h2>
+        <h1 style={styles.heading}>Offers</h1>
 
-          {/* CREATE */}
-          <form onSubmit={createOffer} style={styles.glassCard}>
-            <select
-              value={offerForm.advertiser_id}
-              onChange={(e) =>
-                setOfferForm({ ...offerForm, advertiser_id: e.target.value })
-              }
-            >
-              <option value="">Advertiser</option>
-              {advertisers.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+        {/* CREATE */}
+        <form onSubmit={createOffer} style={styles.glassBar}>
+          <select
+            value={offerForm.advertiser_id}
+            onChange={(e) => {
+              const id = e.target.value;
+              setOfferForm({ ...offerForm, advertiser_id: id });
+              setSelectedOffer(null);
+              fetchOffers(id);
+            }}
+          >
+            <option value="">All Advertisers</option>
+            {advertisers.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
 
-            <input placeholder="Service"
-              value={offerForm.service_name}
-              onChange={(e) =>
-                setOfferForm({ ...offerForm, service_name: e.target.value })
-              }
-            />
+          <input placeholder="Service" required
+            value={offerForm.service_name}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, service_name: e.target.value })
+            }
+          />
 
-            <input placeholder="CPA"
-              value={offerForm.cpa}
-              onChange={(e) =>
-                setOfferForm({ ...offerForm, cpa: e.target.value })
-              }
-            />
+          <input placeholder="CPA" value={offerForm.cpa}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, cpa: e.target.value })
+            }
+          />
 
-            <input placeholder="Cap"
-              value={offerForm.daily_cap}
-              onChange={(e) =>
-                setOfferForm({ ...offerForm, daily_cap: e.target.value })
-              }
-            />
+          <input placeholder="Cap" value={offerForm.daily_cap}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, daily_cap: e.target.value })
+            }
+          />
 
-            <button style={styles.btn}>Create</button>
-          </form>
+          <input placeholder="Geo" value={offerForm.geo}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, geo: e.target.value })
+            }
+          />
 
-          {/* TABLE */}
-          <div style={styles.glassCard}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Service</th>
-                  <th>CPA</th>
-                  <th>Used</th>
-                  <th>Remain</th>
-                  <th>Revenue</th>
-                  <th>AF</th>
-                  <th>Status</th>
-                  <th>Control</th>
-                </tr>
-              </thead>
+          <input placeholder="Carrier" value={offerForm.carrier}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, carrier: e.target.value })
+            }
+          />
 
-              <tbody>
-                {offers.map((o) => (
-                  <tr key={o.id}>
-                    <td>{o.id}</td>
+          <select
+            value={offerForm.service_type}
+            onChange={(e) =>
+              setOfferForm({ ...offerForm, service_type: e.target.value })
+            }
+          >
+            <option value="NORMAL">Primary</option>
+            <option value="FALLBACK">Fallback</option>
+          </select>
 
-                    <td>
-                      <input
-                        defaultValue={o.service_name}
-                        onBlur={(e) =>
-                          updateOffer(o.id, {
-                            service_name: e.target.value,
-                          })
-                        }
-                      />
-                    </td>
+          <button type="submit">Create</button>
+        </form>
 
-                    <td>
-                      <input
-                        defaultValue={o.cpa}
-                        onBlur={(e) =>
-                          updateOffer(o.id, { cpa: e.target.value })
-                        }
-                      />
-                    </td>
-
-                    <td>{o.today_hits}</td>
-                    <td>{remaining(o)}</td>
-                    <td>{revenue(o)}</td>
-
-                    {/* ANTIFRAUD */}
-                    <td>
-                      <input
-                        type="checkbox"
-                        defaultChecked={o.has_antifraud}
-                        onChange={(e) =>
-                          updateOffer(o.id, {
-                            has_antifraud: e.target.checked,
-                          })
-                        }
-                      />
-                    </td>
-
-                    <td>
-                      {o.service_type === "FALLBACK" ? "Fallback" : "Primary"}
-                    </td>
-
-                    <td>
-                      <button
-                        style={styles.btnSmall}
-                        onClick={() => {
-                          setSelectedOffer(o);
-                          fetchParameters(o.id);
-                        }}
-                      >
-                        Manage
-                      </button>
-                    </td>
-                  </tr>
+        {/* TABLE */}
+        <div style={styles.tableWrap}>
+          <table style={styles.glassTable}>
+            <thead>
+              <tr>
+                {[
+                  "ID","Advertiser","Service","CPA",
+                  "Geo","Carrier","Cap","Used","Remain",
+                  "Revenue","Route","Control","Params"
+                ].map(h => (
+                  <th key={h}>{h}</th>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </tr>
+            </thead>
 
-          {/* ADVANCED PANEL */}
-          {selectedOffer && (
-            <div style={styles.glassCard}>
-              <h3>{selectedOffer.service_name}</h3>
+            <tbody>
+              {offers.map(o => (
+                <tr key={o.id}>
+                  <td>{o.id}</td>
+                  <td>{o.advertiser_name || "-"}</td>
 
-              <input
-                placeholder="AF URL"
-                defaultValue={selectedOffer.af_prepare_url}
-                onBlur={(e) =>
-                  updateOffer(selectedOffer.id, {
-                    af_prepare_url: e.target.value,
-                  })
-                }
-              />
+                  <td>
+                    <input defaultValue={o.service_name}
+                      onBlur={(e) =>
+                        updateOffer(o.id, { service_name: e.target.value })
+                      }
+                    />
+                  </td>
 
-              <input
-                placeholder="PIN SEND URL"
-                defaultValue={selectedOffer.pin_send_url}
-                onBlur={(e) =>
-                  updateOffer(selectedOffer.id, {
-                    pin_send_url: e.target.value,
-                  })
-                }
-              />
+                  <td>
+                    <input defaultValue={o.cpa || ""}
+                      onBlur={(e) =>
+                        updateOffer(o.id, { cpa: e.target.value })
+                      }
+                    />
+                  </td>
 
-              <input
-                placeholder="PIN VERIFY URL"
-                defaultValue={selectedOffer.pin_verify_url}
-                onBlur={(e) =>
-                  updateOffer(selectedOffer.id, {
-                    pin_verify_url: e.target.value,
-                  })
-                }
-              />
+                  <td>
+                    <input defaultValue={o.geo || ""}
+                      onBlur={(e) =>
+                        updateOffer(o.id, { geo: e.target.value })
+                      }
+                    />
+                  </td>
 
-              {/* PARAMETERS */}
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  await fetch(
-                    `${API_BASE}/api/offers/${selectedOffer.id}/parameters`,
-                    {
-                      method: "POST",
-                      headers: authHeaders,
-                      body: JSON.stringify(paramForm),
-                    }
-                  );
-                  fetchParameters(selectedOffer.id);
-                }}
-              >
-                <input
-                  placeholder="key"
-                  value={paramForm.param_key}
-                  onChange={(e) =>
-                    setParamForm({
-                      ...paramForm,
-                      param_key: e.target.value,
-                    })
-                  }
-                />
-                <input
-                  placeholder="value"
-                  value={paramForm.param_value}
-                  onChange={(e) =>
-                    setParamForm({
-                      ...paramForm,
-                      param_value: e.target.value,
-                    })
-                  }
-                />
-                <button>Add</button>
-              </form>
-            </div>
-          )}
+                  <td>
+                    <input defaultValue={o.carrier || ""}
+                      onBlur={(e) =>
+                        updateOffer(o.id, { carrier: e.target.value })
+                      }
+                    />
+                  </td>
+
+                  <td>
+                    <input defaultValue={o.daily_cap || ""}
+                      onBlur={(e) =>
+                        updateOffer(o.id, {
+                          daily_cap: e.target.value || null,
+                        })
+                      }
+                    />
+                  </td>
+
+                  <td>{o.today_hits}</td>
+                  <td>{remaining(o)}</td>
+                  <td>{autoRevenue(o)}</td>
+                  <td>{routeBadge(o)}</td>
+
+                  <td>
+                    {o.service_type === "NORMAL" ? (
+                      <button onClick={() => changeServiceType(o.id, "FALLBACK")}>
+                        → Fallback
+                      </button>
+                    ) : (
+                      <button onClick={() => changeServiceType(o.id, "NORMAL")}>
+                        → Primary
+                      </button>
+                    )}
+                  </td>
+
+                  <td>
+                    <button onClick={() => {
+                      setSelectedOffer(o);
+                      fetchParameters(o.id);
+                    }}>
+                      Manage
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+
+        {/* PARAMETERS */}
+        {selectedOffer && (
+          <div style={styles.glassCard}>
+            <h3>{selectedOffer.service_name} Params</h3>
+
+            <form onSubmit={addParameter} style={styles.inline}>
+              <input placeholder="key"
+                value={paramForm.param_key}
+                onChange={(e) =>
+                  setParamForm({ ...paramForm, param_key: e.target.value })
+                }
+              />
+              <input placeholder="value"
+                value={paramForm.param_value}
+                onChange={(e) =>
+                  setParamForm({ ...paramForm, param_value: e.target.value })
+                }
+              />
+              <button>Add</button>
+            </form>
+
+            {parameters.map(p => (
+              <div key={p.id} style={styles.paramRow}>
+                {p.param_key} = {p.param_value}
+                <button onClick={() => deleteParameter(p.id)}>❌</button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </>
   );
 }
 
-/* ================= GLASS UI ================= */
+/* ---------------- STYLES (GLASS) ---------------- */
+const glass = {
+  background: "rgba(255,255,255,0.08)",
+  backdropFilter: "blur(12px)",
+  border: "1px solid rgba(255,255,255,0.2)",
+  borderRadius: "16px",
+};
 
 const styles = {
   page: {
+    padding: 30,
     background: "linear-gradient(135deg,#0f172a,#1e293b)",
     minHeight: "100vh",
-    paddingTop: "80px",
+    color: "white",
+  },
+  heading: { textAlign: "center", marginBottom: 20 },
+
+  glassBar: {
+    ...glass,
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    padding: 15,
+    justifyContent: "center",
   },
 
-  container: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-  },
+  tableWrap: { marginTop: 20, display: "flex", justifyContent: "center" },
 
-  title: {
-    color: "#fff",
+  glassTable: {
+    ...glass,
+    width: "95%",
+    borderCollapse: "collapse",
     textAlign: "center",
-    marginBottom: "30px",
   },
 
   glassCard: {
-    backdropFilter: "blur(20px)",
-    background: "rgba(255,255,255,0.1)",
-    borderRadius: "16px",
-    padding: "20px",
-    marginBottom: "20px",
-    color: "#fff",
+    ...glass,
+    marginTop: 20,
+    padding: 20,
   },
 
-  table: {
-    width: "100%",
-    color: "#fff",
+  inline: { display: "flex", gap: 10 },
+
+  paramRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginTop: 5,
   },
 
-  btn: {
-    background: "#3b82f6",
-    color: "#fff",
-    border: "none",
-    padding: "10px",
-    borderRadius: "8px",
-  },
-
-  btnSmall: {
-    background: "#111",
-    color: "#fff",
-    padding: "6px 10px",
-    borderRadius: "6px",
-  },
+  badgePrimary: { color: "#22c55e" },
+  badgeFallback: { color: "#facc15" },
+  badgeCap: { color: "#ef4444" },
 };
