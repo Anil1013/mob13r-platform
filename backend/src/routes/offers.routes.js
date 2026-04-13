@@ -210,71 +210,38 @@ router.post("/", async (req, res) => {
    ===================================================== */
 
 router.get("/:offerId/parameters", async (req, res) => {
-
   try {
-
     const offerId = Number(req.params.offerId);
+    if (isNaN(offerId)) return res.status(400).json([]); // Return empty array if ID invalid
 
-    if (isNaN(offerId)) {
-      return res.status(400).json({ message: "Invalid offerId" });
-    }
-
-    // 1️⃣ Get existing params
+    // 1. Fetch current params
     let result = await pool.query(
-  `
-  SELECT id, param_key, param_value
-  FROM offer_parameters
-  WHERE offer_id = $1
-  ORDER BY id ASC
-  `,
-  [offerId]
-);
-
-    const existingKeys = result.rows.map(p => p.param_key);
-
-    // 2️⃣ Find missing required params
-    const missing = DEFAULT_PARAMS.filter(
-      ([key]) => !existingKeys.includes(key)
+      `SELECT id, param_key, param_value FROM offer_parameters WHERE offer_id = $1 ORDER BY id ASC`,
+      [offerId]
     );
 
-    // 3️⃣ Auto insert missing
+    const existingKeys = result.rows.map(p => p.param_key);
+    const missing = DEFAULT_PARAMS.filter(([key]) => !existingKeys.includes(key));
+
+    // 2. If missing, insert and re-fetch
     if (missing.length > 0) {
       for (const [key, value] of missing) {
         await pool.query(
-          `
-          INSERT INTO offer_parameters (offer_id, param_key, param_value)
-          VALUES ($1, $2, $3)
-          ON CONFLICT (offer_id, param_key) DO NOTHING
-          `,
+          `INSERT INTO offer_parameters (offer_id, param_key, param_value) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
           [offerId, key, value]
         );
       }
-
-      // 🔁 refetch after insert
       result = await pool.query(
-        `
-        SELECT id, param_key, param_value
-        FROM offer_parameters
-        WHERE offer_id = $1
-        ORDER BY id ASC
-        `,
+        `SELECT id, param_key, param_value FROM offer_parameters WHERE offer_id = $1 ORDER BY id ASC`,
         [offerId]
       );
     }
 
-    return res.json(result.rows);
-
+    return res.json(result.rows); // Hamesha array bhejega
   } catch (err) {
-
     console.error("GET PARAMETERS ERROR:", err.message);
-
-    return res.status(500).json({
-      status: "FAILED",
-      message: "Failed to fetch parameters"
-    });
-
+    return res.status(500).json([]); // Error hone par empty array bhejega taaki frontend na phate
   }
-
 });
 
 /* =====================================================
