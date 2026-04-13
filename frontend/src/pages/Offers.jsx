@@ -137,7 +137,7 @@ export default function Offers() {
 
   /* ---------------- HELPERS ---------------- */
   const remaining = (o) =>
-    !o.daily_cap ? "∞" : Math.max(o.daily_cap - o.today_hits, 0);
+    !o.daily_cap ? "0" : Math.max(o.daily_cap - o.today_hits, 0);
 
   const autoRevenue = (o) =>
     o.cpa ? `$${(Number(o.cpa) * Number(o.today_hits || 0)).toFixed(2)}` : "$0.00";
