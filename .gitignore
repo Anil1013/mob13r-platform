@@ -26,3 +26,8 @@ Thumbs.db
 # AWS specific
 .aws/
 deploy.zip
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
