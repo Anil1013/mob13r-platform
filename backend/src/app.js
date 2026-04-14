@@ -13,6 +13,7 @@ import landingRoutes from "./routes/landing.routes.js";
 import publisherRoutes from "./routes/publisher.routes.js";
 import publisherDashboardRoutes from "./routes/publisher.dashboard.routes.js";
 import publishersRoutes from "./routes/publishers.routes.js";
+import autoConfigRoutes from "./routes/auto-config.routes.js";
 
 /* 👉 DASHBOARD ROUTES */
 import dashboardReportRoutes from "./routes/dashboard.report.routes.js";
@@ -41,6 +42,8 @@ app.use("/api/offers", offersRoutes);
 app.use("/api", pinRoutes);
 
 app.use("/api", dumpRoutes);
+
+app.use("/api", autoConfigRoutes);
 
 app.use("/api/landing", landingRoutes);
 
