@@ -17,7 +17,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
 
-    /* 🔥 FLEXIBLE FILE */
+    /* 🔥 FILE DETECTION */
     const file = req.files?.doc || req.files?.file;
 
     if (!file) {
@@ -43,7 +43,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       return res.status(400).json({ error: "Empty or invalid document" });
     }
 
-    /* 🔥 LIMIT TEXT (SAFE) */
+    /* 🔥 LIMIT TEXT (SAFE FOR AI) */
     const safeText = docText.slice(0, 20000);
 
     /* 🔥 UNIVERSAL AI PROMPT */
@@ -93,37 +93,40 @@ ${safeText}
 
     let raw = result.response.text();
 
-console.log("🤖 RAW AI:", raw);
+    console.log("🤖 RAW AI:", raw);
 
-// 🔥 clean response
-raw = raw.replace(/```json|```/g, "").trim();
+    /* 🔥 REMOVE MARKDOWN */
+    raw = raw.replace(/```json|```/g, "").trim();
 
-// 🔥 extract only JSON part
-const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    /* 🔥 STRONG JSON EXTRACTION */
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
 
-if (!jsonMatch) {
-  return res.status(400).json({
-    error: "AI did not return valid JSON",
-    raw,
-  });
-}
+    if (start === -1 || end === -1) {
+      return res.status(400).json({
+        error: "No JSON found in AI response",
+        raw,
+      });
+    }
 
-let aiConfig;
+    const jsonString = raw.substring(start, end + 1);
 
-try {
-  aiConfig = JSON.parse(jsonMatch[0]);
-} catch (e) {
-  console.error("❌ JSON PARSE ERROR:", jsonMatch[0]);
+    let aiConfig;
 
-  return res.status(400).json({
-    error: "Invalid JSON from AI",
-    raw: jsonMatch[0],
-  });
-}
+    try {
+      aiConfig = JSON.parse(jsonString);
+    } catch (e) {
+      console.error("❌ JSON PARSE ERROR:", jsonString);
+
+      return res.status(400).json({
+        error: "Invalid JSON from AI",
+        raw: jsonString,
+      });
+    }
 
     const steps = aiConfig.steps || [];
 
-    /* 🔥 STRONG STEP DETECTION */
+    /* 🔥 STEP DETECTION */
     const match = (types, s) =>
       types.some(t => s?.type?.toLowerCase()?.includes(t));
 
@@ -143,7 +146,7 @@ try {
       match(["redirect", "portal", "product", "success"], s)
     );
 
-    /* 🔥 SAFE URL PICKER */
+    /* 🔥 SAFE URL PICK */
     const getUrl = (step) => {
       if (!step) return null;
       return step.url || step.endpoint || null;
