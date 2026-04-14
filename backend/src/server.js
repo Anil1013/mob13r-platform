@@ -32,8 +32,8 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
 /* ✅ BODY SIZE FIX (413 ERROR FIX) */
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
+app.use(express.json({ limit: "100mb" }));
+app.use(express.urlencoded({ limit: "100mb", extended: true }));
 
 /* ✅ HEALTH CHECK (OPTIONAL BUT USEFUL) */
 app.get("/health", (req, res) => {
