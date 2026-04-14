@@ -135,6 +135,33 @@ export default function Offers() {
     fetchOffers(offerForm.advertiser_id);
   };
 
+  /* 🔥 NEW: AI AUTO-INTEGRATION HANDLER (NEW ADDITION) */
+  const handleAIUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("doc", file);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auto-integrate/${selectedOffer.id}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (res.ok) {
+        alert("AI Magic: Integration Completed Successfully!");
+        fetchOffers(offerForm.advertiser_id);
+        fetchParameters(selectedOffer.id);
+      } else {
+        alert("AI Integration Failed. Please check the document format.");
+      }
+    } catch (err) {
+      console.error("AI Error:", err);
+    }
+  };
+
   /* ---------------- HELPERS ---------------- */
   const remaining = (o) =>
     !o.daily_cap ? "0" : Math.max(o.daily_cap - o.today_hits, 0);
@@ -281,19 +308,17 @@ export default function Offers() {
                     />
                   </td>
 
-                    <td style={styles.td}>
-  <input
-    style={styles.input}
-    /* 🔥 defaultValue badal di taaki 0 dikhe */
-    defaultValue={o.daily_cap === null ? "" : o.daily_cap}
-    placeholder="0" 
-    onBlur={(e) => {
-      /* 🔥 Empty value ko null ki jagah 0 save karein */
-      const val = e.target.value === "" ? 0 : parseInt(e.target.value);
-      updateOffer(o.id, { daily_cap: val });
-    }}
-  />
-</td>
+                  <td style={styles.td}>
+                    <input
+                      style={styles.input}
+                      defaultValue={o.daily_cap === null ? "" : o.daily_cap}
+                      placeholder="0" 
+                      onBlur={(e) => {
+                        const val = e.target.value === "" ? 0 : parseInt(e.target.value);
+                        updateOffer(o.id, { daily_cap: val });
+                      }}
+                    />
+                  </td>
 
                   <td style={styles.td}>{o.today_hits}</td>
                   <td style={styles.td}>{remaining(o)}</td>
@@ -331,7 +356,14 @@ export default function Offers() {
                 <button onClick={() => setSelectedOffer(null)} style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '5px 15px', borderRadius: '4px', cursor: 'pointer' }}>Close</button>
             </div>
 
-            {/* 🔥 NEW WORKFLOW SECTION ADDED (NO PURANA CODE DELETED) */}
+            {/* 🔥 NEW: AI MAGIC INTEGRATOR SECTION (NEW ADDITION) */}
+            <div style={{ background: '#eff6ff', padding: '20px', borderRadius: '12px', border: '2px dashed #3b82f6', marginBottom: '20px' }}>
+                <h4 style={{ marginTop: 0, color: '#1e40af' }}>🚀 AI Magic Integrator</h4>
+                <p style={{ fontSize: '12px', color: '#3b82f6', fontWeight: 'bold' }}>Upload API Document (PDF/DOCX) to auto-configure this service</p>
+                <input type="file" accept=".pdf,.docx" onChange={handleAIUpload} style={{ fontSize: '12px' }} />
+            </div>
+
+            {/* 🔥 WORKFLOW SECTION */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', background: '#f8fafc', padding: '15px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
                 <div>
                    <label style={{ fontSize: '12px', fontWeight: 'bold' }}>
@@ -404,7 +436,6 @@ export default function Offers() {
   );
 }
 
-/* ---------------- STYLES (UNCHANGED) ---------------- */
 const styles = {
   page: { padding: "60px 30px", fontFamily: "Inter, system-ui, Arial", background: '#f0f2f5', minHeight: '100vh' },
   topBar: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 15, background: '#fff', padding: '15px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' },
