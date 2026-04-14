@@ -3,7 +3,6 @@ import pool from "../db.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import mammoth from "mammoth";
 
-// 🔥 Mechanical Fix: pdf-parse import for ES Modules (Crash rokne ke liye)
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const pdf = require("pdf-parse");
@@ -11,21 +10,29 @@ const pdf = require("pdf-parse");
 const router = express.Router();
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+/* ========================= */
+/* AUTO INTEGRATE GENERIC   */
+/* ========================= */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
 
-    /* Aapka Original Flexible File Detection */
+    /* 🔥 FLEXIBLE FILE */
     const file = req.files?.doc || req.files?.file;
-    if (!file) return res.status(400).json({ error: "No document uploaded" });
+
+    if (!file) {
+      return res.status(400).json({ error: "No document uploaded" });
+    }
+
+    console.log("📄 FILE:", file.name, file.mimetype);
 
     let docText = "";
 
-    /* Aapka Original Text Extraction Logic */
-    if (file.name.endsWith(".docx")) {
+    /* 🔥 TEXT EXTRACTION */
+    if (file.name.toLowerCase().endsWith(".docx")) {
       const result = await mammoth.extractRawText({ buffer: file.data });
       docText = result.value;
-    } else if (file.name.endsWith(".pdf")) {
+    } else if (file.name.toLowerCase().endsWith(".pdf")) {
       const data = await pdf(file.data);
       docText = data.text;
     } else {
@@ -36,50 +43,103 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       return res.status(400).json({ error: "Empty or invalid document" });
     }
 
-    const safeText = docText.slice(0, 15000);
+    /* 🔥 LIMIT TEXT (SAFE) */
+    const safeText = docText.slice(0, 20000);
 
-    /* 🔥 Universal Prompt: Ab ye kisi bhi service ke headers aur params nikal lega */
+    /* 🔥 UNIVERSAL AI PROMPT */
     const prompt = `
-      Analyze this API documentation for ANY VAS service.
-      Extract ALL technical steps and return ONLY JSON.
-      Instruction: Look for any 'Authorization' headers or API keys and include them in params.
-      Placeholders: Use {msisdn}, {otp}, {transaction_id}.
+You are an expert API integration parser.
 
-      {
-        "flow_type": "string",
-        "steps": [
-          {
-            "name": "string",
-            "url": "string",
-            "method": "POST/GET",
-            "type": "send | verify | check | redirect",
-            "params": [{ "key": "string", "value": "string" }]
-          }
-        ],
-        "has_antifraud": boolean
-      }
+Analyze ANY API documentation and extract structured data.
 
-      DOC: ${safeText}
-    `;
+Return ONLY valid JSON. No explanation.
+
+{
+  "flow_type": "otp | pin | subscription | api | unknown",
+  "steps": [
+    {
+      "name": "string",
+      "url": "string",
+      "method": "GET | POST",
+      "type": "send | verify | check | redirect | subscribe | other",
+      "headers": {
+        "Authorization": "",
+        "api_key": ""
+      },
+      "params": [
+        { "key": "string", "value": "string" }
+      ]
+    }
+  ],
+  "has_antifraud": true/false
+}
+
+Rules:
+- Extract ALL endpoints
+- Extract ALL params
+- Extract Authorization / API keys
+- Detect flow automatically
+- Use placeholders: {msisdn}, {otp}, {transaction_id}
+
+DOC:
+${safeText}
+`;
 
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-flash",
-      generationConfig: { response_mime_type: "application/json" }
     });
 
     const result = await model.generateContent(prompt);
-    let raw = result.response.text().replace(/```json|```/g, "").trim();
 
-    let aiConfig = JSON.parse(raw);
+    let raw = result.response.text();
 
-    /* Aapka Original Step Detection Logic */
+    console.log("🤖 RAW AI:", raw);
+
+    /* 🔥 CLEAN RESPONSE */
+    raw = raw.replace(/```json|```/g, "").trim();
+
+    let aiConfig;
+
+    try {
+      aiConfig = JSON.parse(raw);
+    } catch (e) {
+      console.error("❌ AI JSON ERROR:", raw);
+
+      return res.status(400).json({
+        error: "Invalid AI JSON",
+        raw,
+      });
+    }
+
     const steps = aiConfig.steps || [];
-    const sendStep = steps.find(s => ["send", "otp"].includes(s.type));
-    const verifyStep = steps.find(s => ["verify", "validate"].includes(s.type));
-    const checkStep = steps.find(s => ["check", "status"].includes(s.type));
-    const redirectStep = steps.find(s => ["redirect", "portal", "product"].includes(s.type));
 
-    /* Aapka Original Update Logic + Auto-Flags */
+    /* 🔥 STRONG STEP DETECTION */
+    const match = (types, s) =>
+      types.some(t => s?.type?.toLowerCase()?.includes(t));
+
+    const sendStep = steps.find(s =>
+      match(["send", "otp", "generate", "initiate", "subscribe"], s)
+    );
+
+    const verifyStep = steps.find(s =>
+      match(["verify", "validate", "confirm"], s)
+    );
+
+    const checkStep = steps.find(s =>
+      match(["check", "status", "lookup"], s)
+    );
+
+    const redirectStep = steps.find(s =>
+      match(["redirect", "portal", "product", "success"], s)
+    );
+
+    /* 🔥 SAFE URL PICKER */
+    const getUrl = (step) => {
+      if (!step) return null;
+      return step.url || step.endpoint || null;
+    };
+
+    /* 🔥 UPDATE OFFER */
     await pool.query(
       `UPDATE offers SET 
         pin_send_url = $1,
@@ -92,30 +152,45 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
         updated_at = CURRENT_TIMESTAMP
        WHERE id = $8`,
       [
-        sendStep?.url || null,
-        verifyStep?.url || null,
-        checkStep?.url || null,
-        redirectStep?.url || null,
+        getUrl(sendStep),
+        getUrl(verifyStep),
+        getUrl(checkStep),
+        getUrl(redirectStep),
         !!aiConfig.has_antifraud,
-        !!checkStep,    // Auto-detect check status
-        !!redirectStep, // Auto-detect portal step
+        !!checkStep,
+        !!redirectStep,
         offerId,
       ]
     );
 
-    /* Aapka Original Params Merge & Insertion Logic */
+    /* 🔥 MERGE PARAMS + HEADERS */
     let allParams = [];
+
     steps.forEach(s => {
-      if (Array.isArray(s.params)) allParams.push(...s.params);
+      if (Array.isArray(s.params)) {
+        allParams.push(...s.params);
+      }
+
+      if (s.headers) {
+        Object.entries(s.headers).forEach(([k, v]) => {
+          allParams.push({ key: k, value: v });
+        });
+      }
     });
 
+    /* 🔥 UNIQUE PARAMS */
     const unique = {};
+
     allParams.forEach(p => {
-      const key = p.key || p.param;
+      let key = (p.key || p.param || "").toLowerCase().trim();
       if (!key) return;
-      if (!unique[key]) unique[key] = p.value || "";
+
+      if (!unique[key]) {
+        unique[key] = p.value || "";
+      }
     });
 
+    /* 🔥 INSERT PARAMS */
     for (const key in unique) {
       await pool.query(
         `INSERT INTO offer_parameters (offer_id, param_key, param_value)
@@ -133,8 +208,12 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("AUTO INTEGRATE ERROR:", err);
-    return res.status(500).json({ error: "Integration Failed", details: err.message });
+    console.error("🔥 AUTO INTEGRATE ERROR:", err);
+
+    return res.status(500).json({
+      error: "Integration Failed",
+      details: err.message,
+    });
   }
 });
 
