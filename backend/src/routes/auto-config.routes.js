@@ -3,31 +3,25 @@ import pool from "../db.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import mammoth from "mammoth";
 
+// 🔥 Mechanical Fix: pdf-parse import for ES Modules (Crash rokne ke liye)
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const pdf = require("pdf-parse");
 
 const router = express.Router();
-
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-/* ========================= */
-/* AUTO INTEGRATE GENERIC   */
-/* ========================= */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
 
-    /* 🔥 FLEXIBLE FILE */
+    /* Aapka Original Flexible File Detection */
     const file = req.files?.doc || req.files?.file;
-
-    if (!file) {
-      return res.status(400).json({ error: "No document uploaded" });
-    }
+    if (!file) return res.status(400).json({ error: "No document uploaded" });
 
     let docText = "";
 
-    /* 🔥 TEXT EXTRACTION */
+    /* Aapka Original Text Extraction Logic */
     if (file.name.endsWith(".docx")) {
       const result = await mammoth.extractRawText({ buffer: file.data });
       docText = result.value;
@@ -42,69 +36,50 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       return res.status(400).json({ error: "Empty or invalid document" });
     }
 
-    /* 🔥 LIMIT TEXT */
     const safeText = docText.slice(0, 15000);
 
-    /* 🔥 GENERIC AI PROMPT */
+    /* 🔥 Universal Prompt: Ab ye kisi bhi service ke headers aur params nikal lega */
     const prompt = `
-You are an API parser.
+      Analyze this API documentation for ANY VAS service.
+      Extract ALL technical steps and return ONLY JSON.
+      Instruction: Look for any 'Authorization' headers or API keys and include them in params.
+      Placeholders: Use {msisdn}, {otp}, {transaction_id}.
 
-Analyze ANY API documentation and extract structured data.
+      {
+        "flow_type": "string",
+        "steps": [
+          {
+            "name": "string",
+            "url": "string",
+            "method": "POST/GET",
+            "type": "send | verify | check | redirect",
+            "params": [{ "key": "string", "value": "string" }]
+          }
+        ],
+        "has_antifraud": boolean
+      }
 
-Return ONLY JSON.
-
-{
-  "flow_type": "otp | pin | subscription | api | unknown",
-  "steps": [
-    {
-      "name": "",
-      "url": "",
-      "method": "GET/POST",
-      "type": "send | verify | check | redirect | other",
-      "params": [
-        { "key": "", "value": "" }
-      ]
-    }
-  ],
-  "has_antifraud": true/false
-}
-
-DOC:
-${safeText}
-`;
+      DOC: ${safeText}
+    `;
 
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-flash",
+      generationConfig: { response_mime_type: "application/json" }
     });
 
     const result = await model.generateContent(prompt);
+    let raw = result.response.text().replace(/```json|```/g, "").trim();
 
-    let raw = result.response.text();
+    let aiConfig = JSON.parse(raw);
 
-    /* 🔥 CLEAN RESPONSE */
-    raw = raw.replace(/```json|```/g, "").trim();
-
-    let aiConfig;
-
-    try {
-      aiConfig = JSON.parse(raw);
-    } catch (e) {
-      console.error("AI JSON ERROR:", raw);
-      return res.status(400).json({
-        error: "AI returned invalid JSON",
-        raw,
-      });
-    }
-
-    /* 🔥 STEP DETECTION */
+    /* Aapka Original Step Detection Logic */
     const steps = aiConfig.steps || [];
-
     const sendStep = steps.find(s => ["send", "otp"].includes(s.type));
     const verifyStep = steps.find(s => ["verify", "validate"].includes(s.type));
     const checkStep = steps.find(s => ["check", "status"].includes(s.type));
-    const redirectStep = steps.find(s => ["redirect", "portal"].includes(s.type));
+    const redirectStep = steps.find(s => ["redirect", "portal", "product"].includes(s.type));
 
-    /* 🔥 UPDATE OFFER */
+    /* Aapka Original Update Logic + Auto-Flags */
     await pool.query(
       `UPDATE offers SET 
         pin_send_url = $1,
@@ -112,36 +87,33 @@ ${safeText}
         check_status_url = $3,
         portal_url = $4,
         has_antifraud = $5,
+        has_status_check = $6,
+        has_portal_step = $7,
         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $6`,
+       WHERE id = $8`,
       [
         sendStep?.url || null,
         verifyStep?.url || null,
         checkStep?.url || null,
         redirectStep?.url || null,
         !!aiConfig.has_antifraud,
+        !!checkStep,    // Auto-detect check status
+        !!redirectStep, // Auto-detect portal step
         offerId,
       ]
     );
 
-    /* 🔥 PARAMS MERGE */
+    /* Aapka Original Params Merge & Insertion Logic */
     let allParams = [];
-
     steps.forEach(s => {
-      if (Array.isArray(s.params)) {
-        allParams.push(...s.params);
-      }
+      if (Array.isArray(s.params)) allParams.push(...s.params);
     });
 
     const unique = {};
-
     allParams.forEach(p => {
       const key = p.key || p.param;
       if (!key) return;
-
-      if (!unique[key]) {
-        unique[key] = p.value || "";
-      }
+      if (!unique[key]) unique[key] = p.value || "";
     });
 
     for (const key in unique) {
@@ -156,17 +128,13 @@ ${safeText}
 
     return res.json({
       success: true,
-      message: "Auto Integration Complete",
+      message: "Universal Auto Integration Complete",
       data: aiConfig,
     });
 
   } catch (err) {
     console.error("AUTO INTEGRATE ERROR:", err);
-
-    return res.status(500).json({
-      error: "Integration Failed",
-      details: err.message,
-    });
+    return res.status(500).json({ error: "Integration Failed", details: err.message });
   }
 });
 
