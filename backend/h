@@ -1,0 +1,426 @@
+============= i-0f7c2af3f0b07d376 ==============
+----------------------------------------
+/var/log/eb-engine.log
+----------------------------------------
+2026/04/14 17:03:09.369216 [INFO] Cleaned ebextensions subdirectories from app staging directory.
+2026/04/14 17:03:09.369220 [INFO] Executing instruction: RunAppDeployPreDeployHooks
+2026/04/14 17:03:09.369240 [INFO] Executing platform hooks in .platform/hooks/predeploy/
+2026/04/14 17:03:09.369253 [INFO] The dir .platform/hooks/predeploy/ does not exist
+2026/04/14 17:03:09.369256 [INFO] Finished running scripts in /var/app/staging/.platform/hooks/predeploy
+2026/04/14 17:03:09.369261 [INFO] Executing instruction: stop X-Ray
+2026/04/14 17:03:09.369263 [INFO] stop X-Ray ...
+2026/04/14 17:03:09.369273 [INFO] Running command: systemctl show -p PartOf xray.service
+2026/04/14 17:03:09.382801 [WARN] stopProcess Warning: process xray is not registered 
+2026/04/14 17:03:09.382832 [INFO] Running command: systemctl stop xray.service
+2026/04/14 17:03:09.397625 [INFO] Executing instruction: stop proxy
+2026/04/14 17:03:09.397662 [INFO] Running command: systemctl show -p PartOf httpd.service
+2026/04/14 17:03:09.411264 [WARN] deregisterProcess Warning: process httpd is not registered, skipping...
+
+2026/04/14 17:03:09.411299 [INFO] Running command: systemctl show -p PartOf nginx.service
+2026/04/14 17:03:09.420776 [INFO] Running command: systemctl is-active nginx.service
+2026/04/14 17:03:09.428381 [INFO] Running command: systemctl show -p PartOf nginx.service
+2026/04/14 17:03:09.437318 [INFO] Running command: systemctl stop nginx.service
+2026/04/14 17:03:09.657664 [INFO] Running command: systemctl disable nginx.service
+2026/04/14 17:03:09.914808 [INFO] Running command: systemctl daemon-reload
+2026/04/14 17:03:10.161739 [INFO] Running command: systemctl reset-failed
+2026/04/14 17:03:10.169394 [INFO] Executing instruction: FlipApplication
+2026/04/14 17:03:10.169409 [INFO] Fetching environment variables...
+2026/04/14 17:03:10.169784 [INFO] Purge old process...
+2026/04/14 17:03:10.169809 [INFO] Running command: systemctl stop eb-app.target
+2026/04/14 17:03:10.180159 [INFO] Running command: systemctl show -p ConsistsOf eb-app.target | cut -d= -f2
+2026/04/14 17:03:10.193291 [INFO] web.service
+
+2026/04/14 17:03:10.193317 [INFO] deregistering process: web
+2026/04/14 17:03:10.193329 [INFO] Running command: systemctl show -p PartOf web.service
+2026/04/14 17:03:10.276141 [INFO] Running command: systemctl is-active web.service
+2026/04/14 17:03:10.284037 [INFO] Running command: systemctl disable web.service
+2026/04/14 17:03:10.530229 [INFO] Removed "/etc/systemd/system/multi-user.target.wants/web.service".
+
+2026/04/14 17:03:10.530308 [INFO] Running command: systemctl daemon-reload
+2026/04/14 17:03:10.801517 [INFO] Running command: systemctl reset-failed
+2026/04/14 17:03:10.809690 [INFO] Running command: systemctl is-active web.service
+2026/04/14 17:03:10.816719 [INFO] Process web has been fully terminated
+2026/04/14 17:03:10.816743 [INFO] All processes have been fully terminated
+2026/04/14 17:03:10.816747 [INFO] Removing /var/app/current/ if it exists
+2026/04/14 17:03:10.892665 [INFO] Renaming /var/app/staging/ to /var/app/current/
+2026/04/14 17:03:10.892695 [INFO] Register application processes...
+2026/04/14 17:03:10.892700 [INFO] Registering the proc: web
+
+2026/04/14 17:03:10.892710 [INFO] Running command: systemctl show -p PartOf web.service
+2026/04/14 17:03:10.915194 [INFO] Running command: systemctl daemon-reload
+2026/04/14 17:03:11.133282 [INFO] Running command: systemctl reset-failed
+2026/04/14 17:03:11.141757 [INFO] Running command: systemctl is-enabled eb-app.target
+2026/04/14 17:03:11.150004 [INFO] Running command: systemctl enable eb-app.target
+2026/04/14 17:03:11.425282 [INFO] Running command: systemctl start eb-app.target
+2026/04/14 17:03:11.434554 [INFO] Running command: systemctl enable web.service
+2026/04/14 17:03:11.685099 [INFO] Created symlink /etc/systemd/system/multi-user.target.wants/web.service → /etc/systemd/system/web.service.
+
+2026/04/14 17:03:11.685129 [INFO] Running command: systemctl show -p PartOf web.service
+2026/04/14 17:03:11.696021 [INFO] Running command: systemctl is-active web.service
+2026/04/14 17:03:11.703091 [INFO] Running command: systemctl start web.service
+2026/04/14 17:03:11.758188 [INFO] Executing instruction: start X-Ray
+2026/04/14 17:03:11.758206 [INFO] X-Ray is not enabled.
+2026/04/14 17:03:11.758210 [INFO] Executing instruction: start proxy with new configuration
+2026/04/14 17:03:11.758234 [INFO] Running command: /usr/sbin/nginx -t -c /var/proxy/staging/nginx/nginx.conf
+2026/04/14 17:03:11.778473 [INFO] nginx: [warn] could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+nginx: the configuration file /var/proxy/staging/nginx/nginx.conf syntax is ok
+nginx: configuration file /var/proxy/staging/nginx/nginx.conf test is successful
+
+2026/04/14 17:03:11.778706 [INFO] Running command: cp -rp /var/proxy/staging/nginx/* /etc/nginx
+2026/04/14 17:03:11.781728 [INFO] Running command: systemctl show -p PartOf nginx.service
+2026/04/14 17:03:11.799664 [INFO] Running command: systemctl daemon-reload
+2026/04/14 17:03:12.179474 [INFO] Running command: systemctl reset-failed
+2026/04/14 17:03:12.190573 [INFO] Running command: systemctl show -p PartOf nginx.service
+2026/04/14 17:03:12.210261 [INFO] Running command: systemctl is-active nginx.service
+2026/04/14 17:03:12.222505 [INFO] Running command: systemctl start nginx.service
+2026/04/14 17:03:12.367370 [INFO] Executing instruction: configureSqsd
+2026/04/14 17:03:12.367392 [INFO] This is a web server environment instance, skip configure sqsd daemon ...
+2026/04/14 17:03:12.367396 [INFO] Executing instruction: startSqsd
+2026/04/14 17:03:12.367399 [INFO] This is a web server environment instance, skip start sqsd daemon ...
+2026/04/14 17:03:12.367402 [INFO] Executing instruction: Track pids in healthd
+2026/04/14 17:03:12.367407 [INFO] This is basic health env, skipping tracking pid in healthd...
+2026/04/14 17:03:12.367410 [INFO] Executing instruction: RunAppDeployPostDeployHooks
+2026/04/14 17:03:12.367589 [INFO] Executing platform hooks in .platform/hooks/postdeploy/
+2026/04/14 17:03:12.367618 [INFO] The dir .platform/hooks/postdeploy/ does not exist
+2026/04/14 17:03:12.367622 [INFO] Finished running scripts in /var/app/current/.platform/hooks/postdeploy
+2026/04/14 17:03:12.367629 [INFO] Executing cleanup logic
+2026/04/14 17:03:12.367722 [INFO] CommandService Response: {"status":"SUCCESS","api_version":"1.0","results":[{"status":"SUCCESS","msg":"Engine execution has succeeded.","returncode":0,"events":[{"msg":"Instance deployment completed successfully.","timestamp":1776186192367,"severity":"INFO"}]}]}
+
+2026/04/14 17:03:12.367739 [INFO] Platform Engine finished execution on command: app-deploy
+
+2026/04/14 17:07:55.536535 [INFO] Starting...
+2026/04/14 17:07:55.536587 [INFO] Starting EBPlatform-PlatformEngine
+2026/04/14 17:07:55.536611 [INFO] reading event message file
+2026/04/14 17:07:55.536944 [INFO] Engine received EB command cfn-hup-exec
+
+2026/04/14 17:07:55.618618 [INFO] Running command: /opt/aws/bin/cfn-get-metadata -s arn:aws:cloudformation:ap-south-1:257394496678:stack/awseb-e-i3p2d2dk5f-stack/91ea83a0-b23d-11f0-b0e3-0ab9cf4836f3 -r AWSEBAutoScalingGroup --region ap-south-1
+2026/04/14 17:07:55.909233 [INFO] Running command: /opt/aws/bin/cfn-get-metadata -s arn:aws:cloudformation:ap-south-1:257394496678:stack/awseb-e-i3p2d2dk5f-stack/91ea83a0-b23d-11f0-b0e3-0ab9cf4836f3 -r AWSEBBeanstalkMetadata --region ap-south-1
+2026/04/14 17:07:56.193514 [INFO] checking whether command tail-log is applicable to this instance...
+2026/04/14 17:07:56.193529 [INFO] this command is applicable to the instance, thus instance should execute command
+2026/04/14 17:07:56.193531 [INFO] Engine command: (tail-log)
+
+2026/04/14 17:07:56.193596 [INFO] Executing instruction: GetTailLogs
+2026/04/14 17:07:56.193600 [INFO] Tail Logs...
+2026/04/14 17:07:56.194045 [INFO] Running command: tail -n 100 /var/log/eb-engine.log
+
+
+----------------------------------------
+/var/log/eb-hooks.log
+----------------------------------------
+
+
+----------------------------------------
+/var/log/nginx/access.log
+----------------------------------------
+43.159.140.236 - - [14/Apr/2026:14:23:41 +0000] "GET / HTTP/1.1" 404 139 "-" "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1" "-"
+172.70.108.175 - - [14/Apr/2026:14:44:25 +0000] "OPTIONS /api/auth/login HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.90 - - [14/Apr/2026:14:44:25 +0000] "POST /api/auth/login HTTP/1.1" 200 289 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.90 - - [14/Apr/2026:14:44:26 +0000] "OPTIONS /api/dashboard/report?from=2026-04-14&to=2026-04-14&view=summary HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.91 - - [14/Apr/2026:14:44:27 +0000] "OPTIONS /api/dashboard/filters HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.91 - - [14/Apr/2026:14:44:27 +0000] "OPTIONS /api/dashboard/realtime?from=2026-04-14&to=2026-04-14 HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.90 - - [14/Apr/2026:14:44:27 +0000] "GET /api/dashboard/report?from=2026-04-14&to=2026-04-14&view=summary HTTP/1.1" 200 794 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.91 - - [14/Apr/2026:14:44:27 +0000] "GET /api/dashboard/filters HTTP/1.1" 200 433 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.91 - - [14/Apr/2026:14:44:27 +0000] "GET /api/dashboard/realtime?from=2026-04-14&to=2026-04-14 HTTP/1.1" 200 108 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.175 - - [14/Apr/2026:14:44:31 +0000] "OPTIONS /api/advertisers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.174 - - [14/Apr/2026:14:44:31 +0000] "OPTIONS /api/offers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.175 - - [14/Apr/2026:14:44:32 +0000] "GET /api/advertisers HTTP/1.1" 200 428 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.174 - - [14/Apr/2026:14:44:32 +0000] "GET /api/offers HTTP/1.1" 200 2016 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.175 - - [14/Apr/2026:14:44:34 +0000] "OPTIONS /api/offers/3/parameters HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.174 - - [14/Apr/2026:14:44:35 +0000] "GET /api/offers/3/parameters HTTP/1.1" 200 1646 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.245.157.121 - - [14/Apr/2026:14:48:21 +0000] "GET /.env HTTP/1.1" 404 143 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.140 Safari/537.36" "-"
+172.245.157.121 - - [14/Apr/2026:14:48:22 +0000] "POST / HTTP/1.1" 404 140 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.140 Safari/537.36" "-"
+172.68.234.210 - - [14/Apr/2026:14:53:53 +0000] "OPTIONS /api/offers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.210 - - [14/Apr/2026:14:53:53 +0000] "OPTIONS /api/advertisers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.186 - - [14/Apr/2026:14:53:53 +0000] "GET /api/advertisers HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.187 - - [14/Apr/2026:14:53:53 +0000] "GET /api/offers HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.186 - - [14/Apr/2026:14:53:55 +0000] "OPTIONS /api/offers/3/parameters HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.187 - - [14/Apr/2026:14:53:56 +0000] "GET /api/offers/3/parameters HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.210 - - [14/Apr/2026:14:54:35 +0000] "OPTIONS /api/auto-integrate/3 HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.210 - - [14/Apr/2026:14:54:37 +0000] "POST /api/auto-integrate/3 HTTP/1.1" 413 578 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.210 - - [14/Apr/2026:14:54:44 +0000] "OPTIONS /api/offers/3 HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.210 - - [14/Apr/2026:14:54:44 +0000] "PATCH /api/offers/3 HTTP/1.1" 200 638 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.210 - - [14/Apr/2026:14:54:44 +0000] "OPTIONS /api/offers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.210 - - [14/Apr/2026:14:54:45 +0000] "PATCH /api/offers/3 HTTP/1.1" 200 639 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.210 - - [14/Apr/2026:14:54:45 +0000] "GET /api/offers HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.210 - - [14/Apr/2026:14:54:45 +0000] "GET /api/offers HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.211 - - [14/Apr/2026:15:01:22 +0000] "OPTIONS /api/offers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.210 - - [14/Apr/2026:15:01:22 +0000] "OPTIONS /api/advertisers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.211 - - [14/Apr/2026:15:01:22 +0000] "GET /api/offers HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.210 - - [14/Apr/2026:15:01:22 +0000] "GET /api/advertisers HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.211 - - [14/Apr/2026:15:01:24 +0000] "OPTIONS /api/offers/3/parameters HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.210 - - [14/Apr/2026:15:01:24 +0000] "GET /api/offers/3/parameters HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.211 - - [14/Apr/2026:15:01:47 +0000] "OPTIONS /api/auto-integrate/3 HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.210 - - [14/Apr/2026:15:01:49 +0000] "POST /api/auto-integrate/3 HTTP/1.1" 413 578 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+91.230.168.172 - - [14/Apr/2026:15:10:13 +0000] "\x16\x03\x03\x01\xA4\x01\x00\x01\xA0\x03\x03" 400 150 "-" "-" "-"
+91.230.168.168 - - [14/Apr/2026:15:10:17 +0000] "GET / HTTP/1.1" 404 139 "-" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:134.0) Gecko/20100101 Firefox/134.0" "-"
+172.70.108.174 - - [14/Apr/2026:15:15:17 +0000] "OPTIONS /api/offers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.174 - - [14/Apr/2026:15:15:17 +0000] "OPTIONS /api/advertisers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.174 - - [14/Apr/2026:15:15:17 +0000] "GET /api/advertisers HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.174 - - [14/Apr/2026:15:15:17 +0000] "GET /api/offers HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.174 - - [14/Apr/2026:15:15:19 +0000] "OPTIONS /api/offers/3/parameters HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.174 - - [14/Apr/2026:15:15:19 +0000] "GET /api/offers/3/parameters HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.174 - - [14/Apr/2026:15:15:41 +0000] "OPTIONS /api/auto-integrate/3 HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.70.108.174 - - [14/Apr/2026:15:15:43 +0000] "POST /api/auto-integrate/3 HTTP/1.1" 400 32 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+203.175.125.141 - - [14/Apr/2026:15:30:30 +0000] "GET /v2/ HTTP/1.1" 404 142 "-" "-" "-"
+34.40.254.247 - - [14/Apr/2026:15:35:04 +0000] "\x16\x03\x01\x00M\x01\x00\x00I\x03\x03\x9A\x94\x8A\x80\x8B\xADU\xCF\x15V \x5Cg||\x90\x85n<+\x98\xEF\x8A\x10\xA05\x07'\xBE&[\x1C \x9EK\xE5a\x1E\xD1.\xF4U`l\x93\xE5\x14\x18\x0B\xD8\x92@\x15\xC0" 400 150 "-" "-" "-"
+34.40.254.247 - - [14/Apr/2026:15:35:09 +0000] "GET /pdown HTTP/1.0" 404 144 "-" "-" "-"
+93.123.109.232 - - [14/Apr/2026:15:36:50 +0000] "GET / HTTP/1.1" 404 139 "-" "Mozilla/5.0 (Windows NT 6.2; Win64; x64; rv:16.0) Gecko/16.0 Firefox/16.0" "-"
+162.158.23.215 - - [14/Apr/2026:15:47:53 +0000] "OPTIONS /api/offers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+162.158.23.215 - - [14/Apr/2026:15:47:53 +0000] "OPTIONS /api/advertisers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+162.158.23.215 - - [14/Apr/2026:15:47:53 +0000] "GET /api/advertisers HTTP/1.1" 200 428 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+162.158.23.215 - - [14/Apr/2026:15:47:53 +0000] "GET /api/offers HTTP/1.1" 200 2016 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+162.158.23.215 - - [14/Apr/2026:15:47:55 +0000] "OPTIONS /api/offers/3/parameters HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+162.158.23.215 - - [14/Apr/2026:15:47:56 +0000] "GET /api/offers/3/parameters HTTP/1.1" 200 1646 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+162.158.23.215 - - [14/Apr/2026:15:48:21 +0000] "OPTIONS /api/auto-integrate/3 HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+162.158.23.215 - - [14/Apr/2026:15:48:23 +0000] "POST /api/auto-integrate/3 HTTP/1.1" 413 578 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+162.158.23.215 - - [14/Apr/2026:15:50:00 +0000] "OPTIONS /api/offers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+162.158.23.216 - - [14/Apr/2026:15:50:00 +0000] "OPTIONS /api/advertisers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+162.158.23.216 - - [14/Apr/2026:15:50:00 +0000] "GET /api/advertisers HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+162.158.23.215 - - [14/Apr/2026:15:50:00 +0000] "GET /api/offers HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+162.158.23.216 - - [14/Apr/2026:15:50:02 +0000] "OPTIONS /api/offers/3/parameters HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+162.158.23.215 - - [14/Apr/2026:15:50:02 +0000] "GET /api/offers/3/parameters HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+162.158.23.216 - - [14/Apr/2026:15:50:32 +0000] "OPTIONS /api/auto-integrate/3 HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+162.158.23.215 - - [14/Apr/2026:15:50:33 +0000] "POST /api/auto-integrate/3 HTTP/1.1" 413 578 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.175 - - [14/Apr/2026:15:56:41 +0000] "OPTIONS /api/advertisers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.174 - - [14/Apr/2026:15:56:41 +0000] "OPTIONS /api/offers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.175 - - [14/Apr/2026:15:56:41 +0000] "GET /api/advertisers HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.174 - - [14/Apr/2026:15:56:41 +0000] "GET /api/offers HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.175 - - [14/Apr/2026:15:56:44 +0000] "OPTIONS /api/offers/3/parameters HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.174 - - [14/Apr/2026:15:56:44 +0000] "GET /api/offers/3/parameters HTTP/1.1" 304 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.175 - - [14/Apr/2026:15:57:09 +0000] "OPTIONS /api/auto-integrate/3 HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+172.68.234.174 - - [14/Apr/2026:15:57:11 +0000] "POST /api/auto-integrate/3 HTTP/1.1" 413 578 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:1c52:9d7a:b58b:7243:b8c1:8e9c"
+45.148.10.51 - - [14/Apr/2026:16:45:33 +0000] "GET /.env.backup HTTP/1.1" 404 150 "-" "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/118.0" "-"
+45.148.10.51 - - [14/Apr/2026:16:45:33 +0000] "GET /.env HTTP/1.1" 404 143 "-" "Mozilla/5.0 (X11; Linux i686; rv:1.9.7.20) Gecko/ Firefox/3.6.7" "-"
+45.148.10.51 - - [14/Apr/2026:16:45:33 +0000] "GET /.env.local HTTP/1.1" 404 149 "-" "Mozilla/5.0 (X11; Linux i686; rv:1.9.6.20) Gecko/ Firefox/3.6.12" "-"
+45.148.10.51 - - [14/Apr/2026:16:45:33 +0000] "GET /.env.production HTTP/1.1" 404 154 "-" "Mozilla/5.0 (Kubuntu; Linux i686) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36" "-"
+45.148.10.51 - - [14/Apr/2026:16:45:33 +0000] "GET /.env.old HTTP/1.1" 404 147 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6.1 Mobile/15E148 Safari/604.1" "-"
+45.148.10.51 - - [14/Apr/2026:16:45:33 +0000] "GET /api/.env HTTP/1.1" 404 147 "-" "Mozilla/5.0 (Windows NT 6.3; Win64; x64; rv:109.0) Gecko/20100101 Firefox/112.0" "-"
+45.148.10.51 - - [14/Apr/2026:16:45:33 +0000] "GET /.env.bak HTTP/1.1" 404 147 "-" "Mozilla/5.0 (ZZ; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36" "-"
+45.148.10.51 - - [14/Apr/2026:16:45:33 +0000] "GET /admin/.env HTTP/1.1" 404 149 "-" "Mozilla/5.0 (X11; Linux x86_64; rv:1.9.5.20) Gecko/ Firefox/3.6.16" "-"
+45.148.10.51 - - [14/Apr/2026:16:45:34 +0000] "GET /app/.env HTTP/1.1" 404 147 "-" "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1" "-"
+45.148.10.51 - - [14/Apr/2026:16:45:34 +0000] "GET /backend/.env HTTP/1.1" 404 151 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:77.0) Gecko/20100101 Firefox/77.0" "-"
+45.148.10.51 - - [14/Apr/2026:16:45:34 +0000] "GET /config/.env HTTP/1.1" 404 150 "-" "Mozilla/5.0 (CentOS; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36" "-"
+43.166.250.187 - - [14/Apr/2026:16:54:45 +0000] "GET / HTTP/1.1" 404 139 "-" "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1" "-"
+2.57.31.95 - - [14/Apr/2026:17:00:45 +0000] "GET /.env HTTP/1.1" 404 143 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.140 Safari/537.36" "-"
+2.57.31.95 - - [14/Apr/2026:17:00:46 +0000] "POST / HTTP/1.1" 404 140 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.140 Safari/537.36" "-"
+172.68.234.209 - - [14/Apr/2026:17:06:13 +0000] "GET /health HTTP/1.1" 200 15 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:8842:16fa:905f:c23a:3989:95a4"
+162.158.23.216 - - [14/Apr/2026:17:06:32 +0000] "OPTIONS /api/advertisers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:8842:16fa:905f:c23a:3989:95a4"
+162.158.23.216 - - [14/Apr/2026:17:06:32 +0000] "OPTIONS /api/offers HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:8842:16fa:905f:c23a:3989:95a4"
+162.158.23.216 - - [14/Apr/2026:17:06:32 +0000] "GET /api/advertisers HTTP/1.1" 200 428 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:8842:16fa:905f:c23a:3989:95a4"
+162.158.23.216 - - [14/Apr/2026:17:06:32 +0000] "GET /api/offers HTTP/1.1" 200 2016 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:8842:16fa:905f:c23a:3989:95a4"
+162.158.23.216 - - [14/Apr/2026:17:06:43 +0000] "OPTIONS /api/offers/3/parameters HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:8842:16fa:905f:c23a:3989:95a4"
+162.158.23.216 - - [14/Apr/2026:17:06:44 +0000] "GET /api/offers/3/parameters HTTP/1.1" 200 1646 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:8842:16fa:905f:c23a:3989:95a4"
+162.158.23.216 - - [14/Apr/2026:17:07:05 +0000] "OPTIONS /api/auto-integrate/3 HTTP/1.1" 204 0 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:8842:16fa:905f:c23a:3989:95a4"
+162.158.23.216 - - [14/Apr/2026:17:07:08 +0000] "POST /api/auto-integrate/3 HTTP/1.1" 413 578 "https://dashboard.mob13r.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36" "2401:4900:8842:16fa:905f:c23a:3989:95a4"
+
+
+----------------------------------------
+/var/log/nginx/error.log
+----------------------------------------
+2026/04/12 18:01:27 [warn] 1911430#1911430: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:01:28 [warn] 1911480#1911480: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:01:28 [warn] 1911481#1911481: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:11:14 [warn] 1912122#1912122: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:11:15 [warn] 1912172#1912172: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:11:15 [warn] 1912173#1912173: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:22:06 [warn] 1912815#1912815: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:22:07 [warn] 1912865#1912865: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:22:07 [warn] 1912866#1912866: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:37:15 [warn] 1913964#1913964: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:37:15 [warn] 1914014#1914014: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:37:15 [warn] 1914015#1914015: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:49:24 [warn] 1914716#1914716: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:49:25 [warn] 1914766#1914766: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:49:25 [warn] 1914767#1914767: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:56:47 [warn] 1915335#1915335: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:56:47 [warn] 1915379#1915379: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 18:56:47 [warn] 1915380#1915380: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 19:27:07 [warn] 1916737#1916737: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 19:27:08 [warn] 1916787#1916787: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 19:27:08 [warn] 1916788#1916788: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 19:45:07 [warn] 1917684#1917684: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 19:45:08 [warn] 1917734#1917734: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/12 19:45:08 [warn] 1917735#1917735: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/13 11:28:07 [warn] 1950685#1950685: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/13 11:28:07 [warn] 1950734#1950734: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/13 11:28:07 [warn] 1950736#1950736: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/13 11:48:55 [warn] 1951729#1951729: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/13 11:48:56 [warn] 1951779#1951779: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/13 11:48:56 [warn] 1951780#1951780: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/13 12:27:19 [warn] 1953385#1953385: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/13 12:27:19 [warn] 1953434#1953434: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/13 12:27:19 [warn] 1953436#1953436: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 10:18:08 [warn] 1998519#1998519: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 10:18:09 [warn] 1998569#1998569: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 10:18:09 [warn] 1998570#1998570: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 11:47:17 [warn] 2002158#2002158: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 11:47:18 [warn] 2002209#2002209: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 11:47:18 [warn] 2002210#2002210: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 12:07:14 [error] 2002214#2002214: *91 client intended to send too large body: 1381567 bytes, client: 172.69.165.6, server: , request: "POST /api/auto-integrate/3 HTTP/1.1", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 12:14:24 [warn] 2003454#2003454: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 12:14:24 [warn] 2003504#2003504: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 12:14:24 [warn] 2003505#2003505: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 12:34:37 [error] 2003509#2003509: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 198.12.115.18, server: , request: "GET / HTTP/1.1", upstream: "http://127.0.0.1:8080/", host: "acgqyafzjvdyntw.top"
+2026/04/14 12:36:43 [error] 2003508#2003508: *3 connect() failed (111: Connection refused) while connecting to upstream, client: 172.69.176.16, server: , request: "OPTIONS /api/advertisers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/advertisers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 12:36:43 [error] 2003509#2003509: *5 connect() failed (111: Connection refused) while connecting to upstream, client: 172.69.176.16, server: , request: "OPTIONS /api/offers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/offers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 12:36:47 [error] 2003508#2003508: *3 connect() failed (111: Connection refused) while connecting to upstream, client: 172.69.176.16, server: , request: "OPTIONS /api/advertisers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/advertisers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 12:36:47 [error] 2003509#2003509: *5 connect() failed (111: Connection refused) while connecting to upstream, client: 172.69.176.16, server: , request: "OPTIONS /api/offers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/offers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 12:54:38 [error] 2003509#2003509: *9 connect() failed (111: Connection refused) while connecting to upstream, client: 162.158.88.52, server: , request: "OPTIONS /api/offers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/offers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 12:54:38 [error] 2003508#2003508: *11 connect() failed (111: Connection refused) while connecting to upstream, client: 162.158.88.53, server: , request: "OPTIONS /api/advertisers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/advertisers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 12:57:50 [warn] 2005539#2005539: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 12:57:50 [warn] 2005589#2005589: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 12:57:50 [warn] 2005590#2005590: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 13:04:03 [warn] 2006209#2006209: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 13:04:04 [warn] 2006258#2006258: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 13:04:04 [warn] 2006260#2006260: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 13:04:07 [error] 2006262#2006262: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 172.69.165.7, server: , request: "OPTIONS /api/advertisers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/advertisers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 13:04:07 [error] 2006263#2006263: *3 connect() failed (111: Connection refused) while connecting to upstream, client: 172.69.165.6, server: , request: "OPTIONS /api/offers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/offers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 13:04:10 [error] 2006262#2006262: *5 connect() failed (111: Connection refused) while connecting to upstream, client: 162.158.162.134, server: , request: "OPTIONS /api/advertisers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/advertisers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 13:04:10 [error] 2006262#2006262: *7 connect() failed (111: Connection refused) while connecting to upstream, client: 162.158.162.134, server: , request: "OPTIONS /api/offers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/offers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 13:06:09 [error] 2006262#2006262: *10 connect() failed (111: Connection refused) while connecting to upstream, client: 67.213.118.179, server: , request: "GET /assets/img/favicon.png HTTP/1.1", upstream: "http://127.0.0.1:8080/assets/img/favicon.png", host: "3.109.82.36"
+2026/04/14 13:09:34 [error] 2006262#2006262: *12 connect() failed (111: Connection refused) while connecting to upstream, client: 162.158.108.12, server: , request: "OPTIONS /api/offers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/offers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 13:09:34 [error] 2006263#2006263: *13 connect() failed (111: Connection refused) while connecting to upstream, client: 162.158.108.12, server: , request: "OPTIONS /api/advertisers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/advertisers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 13:09:37 [error] 2006262#2006262: *16 connect() failed (111: Connection refused) while connecting to upstream, client: 162.158.108.77, server: , request: "OPTIONS /api/offers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/offers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 13:09:37 [error] 2006262#2006262: *18 connect() failed (111: Connection refused) while connecting to upstream, client: 162.158.108.77, server: , request: "OPTIONS /api/advertisers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/advertisers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 13:09:38 [error] 2006262#2006262: *16 connect() failed (111: Connection refused) while connecting to upstream, client: 162.158.108.77, server: , request: "OPTIONS /api/advertisers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/advertisers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 13:09:38 [error] 2006262#2006262: *18 connect() failed (111: Connection refused) while connecting to upstream, client: 162.158.108.77, server: , request: "OPTIONS /api/offers HTTP/1.1", upstream: "http://127.0.0.1:8080/api/offers", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 13:14:33 [warn] 2007049#2007049: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 13:14:34 [warn] 2007099#2007099: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 13:14:34 [warn] 2007100#2007100: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 13:18:09 [error] 2007103#2007103: *22 client intended to send too large body: 1382506 bytes, client: 172.70.208.53, server: , request: "POST /api/auto-integrate/3 HTTP/1.1", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 13:22:07 [warn] 2007766#2007766: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 13:22:07 [warn] 2007816#2007816: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 13:22:07 [warn] 2007817#2007817: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 13:28:31 [error] 2007820#2007820: *48 client intended to send too large body: 1382506 bytes, client: 162.158.106.50, server: , request: "POST /api/auto-integrate/3 HTTP/1.1", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 14:51:00 [warn] 2011085#2011085: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 14:51:01 [warn] 2011134#2011134: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 14:51:01 [warn] 2011136#2011136: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 14:54:37 [error] 2011138#2011138: *3 client intended to send too large body: 1382506 bytes, client: 172.68.234.210, server: , request: "POST /api/auto-integrate/3 HTTP/1.1", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 15:01:49 [error] 2011139#2011139: *21 client intended to send too large body: 1382506 bytes, client: 172.68.234.210, server: , request: "POST /api/auto-integrate/3 HTTP/1.1", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 15:14:29 [warn] 2012299#2012299: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 15:14:29 [warn] 2012342#2012342: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 15:14:29 [warn] 2012343#2012343: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 15:15:42 [warn] 2012346#2012346: *1 a client request body is buffered to a temporary file /var/lib/nginx/tmp/client_body/0000000001, client: 172.70.108.174, server: , request: "POST /api/auto-integrate/3 HTTP/1.1", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 15:38:33 [warn] 2013610#2013610: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 15:38:33 [warn] 2013653#2013653: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 15:38:33 [warn] 2013655#2013655: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 15:46:18 [warn] 2014235#2014235: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 15:46:18 [warn] 2014284#2014284: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 15:46:19 [warn] 2014286#2014286: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 15:48:22 [error] 2014289#2014289: *16 client intended to send too large body: 1382506 bytes, client: 162.158.23.215, server: , request: "POST /api/auto-integrate/3 HTTP/1.1", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 15:50:33 [error] 2014289#2014289: *50 client intended to send too large body: 1382506 bytes, client: 162.158.23.215, server: , request: "POST /api/auto-integrate/3 HTTP/1.1", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 15:54:57 [warn] 2014868#2014868: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 15:54:57 [warn] 2014917#2014917: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 15:54:57 [warn] 2014919#2014919: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 15:57:10 [error] 2014921#2014921: *1 client intended to send too large body: 1382506 bytes, client: 172.68.234.174, server: , request: "POST /api/auto-integrate/3 HTTP/1.1", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+2026/04/14 17:03:11 [warn] 2017592#2017592: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 17:03:12 [warn] 2017635#2017635: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 17:03:12 [warn] 2017637#2017637: could not build optimal types_hash, you should increase either types_hash_max_size: 1024 or types_hash_bucket_size: 64; ignoring types_hash_bucket_size
+2026/04/14 17:07:07 [error] 2017640#2017640: *38 client intended to send too large body: 1382506 bytes, client: 162.158.23.216, server: , request: "POST /api/auto-integrate/3 HTTP/1.1", host: "backend.mob13r.com", referrer: "https://dashboard.mob13r.com/"
+
+
+----------------------------------------
+/var/log/web.stdout.log
+----------------------------------------
+Apr 14 12:57:56 ip-172-31-40-242 web[2005712]:    at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {
+Apr 14 12:57:56 ip-172-31-40-242 web[2005712]:  code: 'ERR_MODULE_NOT_FOUND'
+Apr 14 12:57:56 ip-172-31-40-242 web[2005712]: }
+Apr 14 12:57:56 ip-172-31-40-242 web[2005712]: Node.js v22.21.1
+Apr 14 13:04:04 ip-172-31-40-242 web[2006205]: > Mb13r-backend@1.0.0 start
+Apr 14 13:04:04 ip-172-31-40-242 web[2006205]: > node src/server.js
+Apr 14 13:04:05 ip-172-31-40-242 web[2006248]: file:///var/app/current/src/routes/auto-config.routes.js:5
+Apr 14 13:04:05 ip-172-31-40-242 web[2006248]: import pdf from "pdf-parse";
+Apr 14 13:04:05 ip-172-31-40-242 web[2006248]:       ^^^
+Apr 14 13:04:05 ip-172-31-40-242 web[2006248]: SyntaxError: The requested module 'pdf-parse' does not provide an export named 'default'
+Apr 14 13:04:05 ip-172-31-40-242 web[2006248]:    at ModuleJob._instantiate (node:internal/modules/esm/module_job:226:21)
+Apr 14 13:04:05 ip-172-31-40-242 web[2006248]:    at async ModuleJob.run (node:internal/modules/esm/module_job:335:5)
+Apr 14 13:04:05 ip-172-31-40-242 web[2006248]:    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+Apr 14 13:04:05 ip-172-31-40-242 web[2006248]:    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+Apr 14 13:04:05 ip-172-31-40-242 web[2006248]: Node.js v22.21.1
+Apr 14 13:04:05 ip-172-31-40-242 web[2006277]: > Mb13r-backend@1.0.0 start
+Apr 14 13:04:05 ip-172-31-40-242 web[2006277]: > node src/server.js
+Apr 14 13:04:06 ip-172-31-40-242 web[2006291]: file:///var/app/current/src/routes/auto-config.routes.js:5
+Apr 14 13:04:06 ip-172-31-40-242 web[2006291]: import pdf from "pdf-parse";
+Apr 14 13:04:06 ip-172-31-40-242 web[2006291]:       ^^^
+Apr 14 13:04:06 ip-172-31-40-242 web[2006291]: SyntaxError: The requested module 'pdf-parse' does not provide an export named 'default'
+Apr 14 13:04:06 ip-172-31-40-242 web[2006291]:    at ModuleJob._instantiate (node:internal/modules/esm/module_job:226:21)
+Apr 14 13:04:06 ip-172-31-40-242 web[2006291]:    at async ModuleJob.run (node:internal/modules/esm/module_job:335:5)
+Apr 14 13:04:06 ip-172-31-40-242 web[2006291]:    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+Apr 14 13:04:06 ip-172-31-40-242 web[2006291]:    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+Apr 14 13:04:06 ip-172-31-40-242 web[2006291]: Node.js v22.21.1
+Apr 14 13:04:06 ip-172-31-40-242 web[2006300]: > Mb13r-backend@1.0.0 start
+Apr 14 13:04:06 ip-172-31-40-242 web[2006300]: > node src/server.js
+Apr 14 13:04:07 ip-172-31-40-242 web[2006314]: file:///var/app/current/src/routes/auto-config.routes.js:5
+Apr 14 13:04:07 ip-172-31-40-242 web[2006314]: import pdf from "pdf-parse";
+Apr 14 13:04:07 ip-172-31-40-242 web[2006314]:       ^^^
+Apr 14 13:04:07 ip-172-31-40-242 web[2006314]: SyntaxError: The requested module 'pdf-parse' does not provide an export named 'default'
+Apr 14 13:04:07 ip-172-31-40-242 web[2006314]:    at ModuleJob._instantiate (node:internal/modules/esm/module_job:226:21)
+Apr 14 13:04:07 ip-172-31-40-242 web[2006314]:    at async ModuleJob.run (node:internal/modules/esm/module_job:335:5)
+Apr 14 13:04:07 ip-172-31-40-242 web[2006314]:    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+Apr 14 13:04:07 ip-172-31-40-242 web[2006314]:    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+Apr 14 13:04:07 ip-172-31-40-242 web[2006314]: Node.js v22.21.1
+Apr 14 13:04:07 ip-172-31-40-242 web[2006323]: > Mb13r-backend@1.0.0 start
+Apr 14 13:04:07 ip-172-31-40-242 web[2006323]: > node src/server.js
+Apr 14 13:04:08 ip-172-31-40-242 web[2006337]: file:///var/app/current/src/routes/auto-config.routes.js:5
+Apr 14 13:04:08 ip-172-31-40-242 web[2006337]: import pdf from "pdf-parse";
+Apr 14 13:04:08 ip-172-31-40-242 web[2006337]:       ^^^
+Apr 14 13:04:08 ip-172-31-40-242 web[2006337]: SyntaxError: The requested module 'pdf-parse' does not provide an export named 'default'
+Apr 14 13:04:08 ip-172-31-40-242 web[2006337]:    at ModuleJob._instantiate (node:internal/modules/esm/module_job:226:21)
+Apr 14 13:04:08 ip-172-31-40-242 web[2006337]:    at async ModuleJob.run (node:internal/modules/esm/module_job:335:5)
+Apr 14 13:04:08 ip-172-31-40-242 web[2006337]:    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+Apr 14 13:04:08 ip-172-31-40-242 web[2006337]:    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+Apr 14 13:04:08 ip-172-31-40-242 web[2006337]: Node.js v22.21.1
+Apr 14 13:04:08 ip-172-31-40-242 web[2006346]: > Mb13r-backend@1.0.0 start
+Apr 14 13:04:08 ip-172-31-40-242 web[2006346]: > node src/server.js
+Apr 14 13:04:09 ip-172-31-40-242 web[2006360]: file:///var/app/current/src/routes/auto-config.routes.js:5
+Apr 14 13:04:09 ip-172-31-40-242 web[2006360]: import pdf from "pdf-parse";
+Apr 14 13:04:09 ip-172-31-40-242 web[2006360]:       ^^^
+Apr 14 13:04:09 ip-172-31-40-242 web[2006360]: SyntaxError: The requested module 'pdf-parse' does not provide an export named 'default'
+Apr 14 13:04:09 ip-172-31-40-242 web[2006360]:    at ModuleJob._instantiate (node:internal/modules/esm/module_job:226:21)
+Apr 14 13:04:09 ip-172-31-40-242 web[2006360]:    at async ModuleJob.run (node:internal/modules/esm/module_job:335:5)
+Apr 14 13:04:09 ip-172-31-40-242 web[2006360]:    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+Apr 14 13:04:09 ip-172-31-40-242 web[2006360]:    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+Apr 14 13:04:09 ip-172-31-40-242 web[2006360]: Node.js v22.21.1
+Apr 14 13:04:09 ip-172-31-40-242 web[2006369]: > Mb13r-backend@1.0.0 start
+Apr 14 13:04:09 ip-172-31-40-242 web[2006369]: > node src/server.js
+Apr 14 13:04:10 ip-172-31-40-242 web[2006383]: file:///var/app/current/src/routes/auto-config.routes.js:5
+Apr 14 13:04:10 ip-172-31-40-242 web[2006383]: import pdf from "pdf-parse";
+Apr 14 13:04:10 ip-172-31-40-242 web[2006383]:       ^^^
+Apr 14 13:04:10 ip-172-31-40-242 web[2006383]: SyntaxError: The requested module 'pdf-parse' does not provide an export named 'default'
+Apr 14 13:04:10 ip-172-31-40-242 web[2006383]:    at ModuleJob._instantiate (node:internal/modules/esm/module_job:226:21)
+Apr 14 13:04:10 ip-172-31-40-242 web[2006383]:    at async ModuleJob.run (node:internal/modules/esm/module_job:335:5)
+Apr 14 13:04:10 ip-172-31-40-242 web[2006383]:    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+Apr 14 13:04:10 ip-172-31-40-242 web[2006383]:    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+Apr 14 13:04:10 ip-172-31-40-242 web[2006383]: Node.js v22.21.1
+Apr 14 13:14:34 ip-172-31-40-242 web[2007045]: > Mb13r-backend@1.0.0 start
+Apr 14 13:14:34 ip-172-31-40-242 web[2007045]: > node src/server.js
+Apr 14 13:14:35 ip-172-31-40-242 web[2007087]: Backend running on port 8080
+Apr 14 13:22:07 ip-172-31-40-242 web[2007762]: > Mb13r-backend@1.0.0 start
+Apr 14 13:22:07 ip-172-31-40-242 web[2007762]: > node src/server.js
+Apr 14 13:22:08 ip-172-31-40-242 web[2007805]: Backend running on port 8080
+Apr 14 14:51:01 ip-172-31-40-242 web[2011081]: > Mb13r-backend@1.0.0 start
+Apr 14 14:51:01 ip-172-31-40-242 web[2011081]: > node src/server.js
+Apr 14 14:51:02 ip-172-31-40-242 web[2011126]: 🚀 Backend running on port 8080
+Apr 14 15:14:31 ip-172-31-40-242 web[2012296]: npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+Apr 14 15:14:34 ip-172-31-40-242 web[2012296]: added 149 packages, and audited 150 packages in 5s
+Apr 14 15:14:34 ip-172-31-40-242 web[2012296]: 21 packages are looking for funding
+Apr 14 15:14:34 ip-172-31-40-242 web[2012296]:  run `npm fund` for details
+Apr 14 15:14:34 ip-172-31-40-242 web[2012296]: 4 vulnerabilities (2 moderate, 1 high, 1 critical)
+Apr 14 15:14:34 ip-172-31-40-242 web[2012296]: To address all issues, run:
+Apr 14 15:14:34 ip-172-31-40-242 web[2012296]:  npm audit fix
+Apr 14 15:14:34 ip-172-31-40-242 web[2012296]: Run `npm audit` for details.
+Apr 14 15:14:35 ip-172-31-40-242 web[2012294]: 🚀 Backend running on port 8080
+Apr 14 15:38:33 ip-172-31-40-242 web[2013606]: > Mb13r-backend@1.0.0 start
+Apr 14 15:38:33 ip-172-31-40-242 web[2013606]: > node src/server.js
+Apr 14 15:38:35 ip-172-31-40-242 web[2013654]: 🚀 Backend running on port 8080
+Apr 14 15:46:18 ip-172-31-40-242 web[2014231]: > Mb13r-backend@1.0.0 start
+Apr 14 15:46:18 ip-172-31-40-242 web[2014231]: > node src/server.js
+Apr 14 15:46:19 ip-172-31-40-242 web[2014275]: 🚀 Backend running on port 8080
+Apr 14 15:54:57 ip-172-31-40-242 web[2014864]: > Mb13r-backend@1.0.0 start
+Apr 14 15:54:57 ip-172-31-40-242 web[2014864]: > node src/server.js
+Apr 14 15:54:58 ip-172-31-40-242 web[2014911]: 🚀 Backend running on port 8080
+Apr 14 17:03:12 ip-172-31-40-242 web[2017588]: > Mb13r-backend@1.0.0 start
+Apr 14 17:03:12 ip-172-31-40-242 web[2017588]: > node src/server.js
+Apr 14 17:03:13 ip-172-31-40-242 web[2017636]: 🚀 Backend running on port 8080
+
+
