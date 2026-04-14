@@ -93,23 +93,33 @@ ${safeText}
 
     let raw = result.response.text();
 
-    console.log("🤖 RAW AI:", raw);
+console.log("🤖 RAW AI:", raw);
 
-    /* 🔥 CLEAN RESPONSE */
-    raw = raw.replace(/```json|```/g, "").trim();
+// 🔥 clean response
+raw = raw.replace(/```json|```/g, "").trim();
 
-    let aiConfig;
+// 🔥 extract only JSON part
+const jsonMatch = raw.match(/\{[\s\S]*\}/);
 
-    try {
-      aiConfig = JSON.parse(raw);
-    } catch (e) {
-      console.error("❌ AI JSON ERROR:", raw);
+if (!jsonMatch) {
+  return res.status(400).json({
+    error: "AI did not return valid JSON",
+    raw,
+  });
+}
 
-      return res.status(400).json({
-        error: "Invalid AI JSON",
-        raw,
-      });
-    }
+let aiConfig;
+
+try {
+  aiConfig = JSON.parse(jsonMatch[0]);
+} catch (e) {
+  console.error("❌ JSON PARSE ERROR:", jsonMatch[0]);
+
+  return res.status(400).json({
+    error: "Invalid JSON from AI",
+    raw: jsonMatch[0],
+  });
+}
 
     const steps = aiConfig.steps || [];
 
