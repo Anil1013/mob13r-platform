@@ -3,21 +3,20 @@ import pool from "../db.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import mammoth from "mammoth"; 
 
-// 🔥 Fix for pdf-parse (SyntaxError: does not provide export named 'default')
+// 🔥 Fix for SyntaxError: pdf-parse does not provide default export
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pdf = require('pdf-parse');
 
 const router = express.Router();
 
-// Gemini API Key (Make sure it's in your .env)
+// Gemini API Key from .env
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "YOUR_GEMINI_API_KEY");
 
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
 
-    // 1. Validation & File Handling
     if (!req.files || !req.files.doc) {
       return res.status(400).json({ error: "No document uploaded" });
     }
@@ -25,7 +24,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     const file = req.files.doc;
     let docText = "";
 
-    // 2. Text Extraction Logic
+    // 1. Precise Text Extraction
     if (file.mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
       const result = await mammoth.extractRawText({ buffer: file.data });
       docText = result.value;
@@ -33,45 +32,46 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       const data = await pdf(file.data);
       docText = data.text;
     } else {
-      // DOCX handle karne ke liye fallback check agar mammoth fail ho
-      const result = await mammoth.extractRawText({ buffer: file.data });
-      docText = result.value;
+      return res.status(400).json({ error: "Unsupported file type. Use PDF or DOCX." });
     }
 
-    // 3. Gemini AI Analysis (Improved for Shemaroo)
+    // 2. Gemini AI Analysis (Tailored for Shemaroo/VAS)
     const model = genAI.getGenerativeModel({ 
         model: "gemini-1.5-flash",
         generationConfig: { response_mime_type: "application/json" } 
     });
 
     const prompt = `
-      Analyze this VAS API documentation for Shemaroo/Collectcent. Extract details and return ONLY a JSON object.
+      Analyze this VAS API documentation. Extract all technical details and return ONLY a JSON object.
       
-      Instructions:
+      Mapping Instructions:
       1. URLs: Look for 'check-status', 'send-otp', 'verify-otp', and 'product-url'.
       2. Logic Flags: 
-         - has_status_check: true if check-status exists.
-         - has_portal_step: true if product-url is required after verify.
-         - has_antifraud: true if Evina/JS/Script mentioned.
-      3. Parameters: Map service_id, partner_id, transaction_id, etc.
-      4. Auth: Find full 'Authorization' value (e.g. Basic czJz...).
-      5. Values: Use {msisdn}, {transaction_id}, {otp} for dynamic fields.
+         - has_status_check: true if a check-status API is present (like Shemaroo).
+         - has_portal_step: true if a product/redirection URL is required after verify.
+         - has_antifraud: true if "Evina", "JS response", or scripts are mentioned.
+      3. Parameters: Extract keys (service_id, partner_id, transaction_id). Use {msisdn}, {transaction_id}, {otp} for values.
+      4. Auth: Find the full 'Authorization' header (e.g., "Basic czJzLWNvbGxlY3RjZW50OlNoZW1AcjAw").
+      5. Button: Capture 'confirmButtonId' (e.g., "Confirm").
 
+      JSON Schema:
+      {
+        "pin_send_url": "string",
+        "pin_verify_url": "string",
+        "check_status_url": "string",
+        "portal_url": "string",
+        "has_antifraud": boolean,
+        "has_status_check": boolean,
+        "has_portal_step": boolean,
+        "params": [ { "key": "string", "value": "string" } ]
+      }
       Doc Text: ${docText}
     `;
 
     const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
-    
-    let aiConfig;
-    try {
-        aiConfig = JSON.parse(responseText);
-    } catch (e) {
-        console.error("AI Response Error:", responseText);
-        return res.status(500).json({ error: "AI failed to parse document correctly." });
-    }
+    const aiConfig = JSON.parse(result.response.text());
 
-    // 4. Update Offers Table
+    // 3. Database Update (Offers Table)
     await pool.query(
       `UPDATE offers SET 
         pin_send_url = $1, pin_verify_url = $2, check_status_url = $3, portal_url = $4,
@@ -90,8 +90,8 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       ]
     );
 
-    // 5. Update Offer Parameters (Conflict check handled)
-    if (aiConfig.params && Array.isArray(aiConfig.params)) {
+    // 4. Database Update (Offer Parameters with Conflict handling)
+    if (aiConfig.params) {
       for (const p of aiConfig.params) {
         await pool.query(
           `INSERT INTO offer_parameters (offer_id, param_key, param_value) 
@@ -106,7 +106,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     res.json({ success: true, message: "AI Integration Successful", data: aiConfig });
 
   } catch (err) {
-    console.error("AUTO-CONFIG ERROR:", err);
+    console.error("AI CONFIG CRITICAL ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
