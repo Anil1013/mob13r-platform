@@ -1,113 +1,172 @@
 import express from "express";
 import pool from "../db.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import mammoth from "mammoth"; 
+import mammoth from "mammoth";
 
-// 🔥 Fix for SyntaxError: pdf-parse does not provide default export
-import { createRequire } from 'module';
+import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const pdf = require('pdf-parse');
+const pdf = require("pdf-parse");
 
 const router = express.Router();
 
-// Gemini API Key from .env
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "YOUR_GEMINI_API_KEY");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+/* ========================= */
+/* AUTO INTEGRATE GENERIC   */
+/* ========================= */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
 
-    if (!req.files || !req.files.doc) {
+    /* 🔥 FLEXIBLE FILE */
+    const file = req.files?.doc || req.files?.file;
+
+    if (!file) {
       return res.status(400).json({ error: "No document uploaded" });
     }
-    
-    const file = req.files.doc;
+
     let docText = "";
 
-    // 1. Precise Text Extraction
-    if (file.mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+    /* 🔥 TEXT EXTRACTION */
+    if (file.name.endsWith(".docx")) {
       const result = await mammoth.extractRawText({ buffer: file.data });
       docText = result.value;
-    } else if (file.mimetype === "application/pdf") {
+    } else if (file.name.endsWith(".pdf")) {
       const data = await pdf(file.data);
       docText = data.text;
     } else {
-      return res.status(400).json({ error: "Unsupported file type. Use PDF or DOCX." });
+      return res.status(400).json({ error: "Only PDF/DOCX allowed" });
     }
 
-    // 2. Gemini AI Analysis (Tailored for Shemaroo/VAS)
-    const model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash",
-        generationConfig: { response_mime_type: "application/json" } 
+    if (!docText || docText.length < 50) {
+      return res.status(400).json({ error: "Empty or invalid document" });
+    }
+
+    /* 🔥 LIMIT TEXT */
+    const safeText = docText.slice(0, 15000);
+
+    /* 🔥 GENERIC AI PROMPT */
+    const prompt = `
+You are an API parser.
+
+Analyze ANY API documentation and extract structured data.
+
+Return ONLY JSON.
+
+{
+  "flow_type": "otp | pin | subscription | api | unknown",
+  "steps": [
+    {
+      "name": "",
+      "url": "",
+      "method": "GET/POST",
+      "type": "send | verify | check | redirect | other",
+      "params": [
+        { "key": "", "value": "" }
+      ]
+    }
+  ],
+  "has_antifraud": true/false
+}
+
+DOC:
+${safeText}
+`;
+
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
     });
 
-    const prompt = `
-      Analyze this VAS API documentation. Extract all technical details and return ONLY a JSON object.
-      
-      Mapping Instructions:
-      1. URLs: Look for 'check-status', 'send-otp', 'verify-otp', and 'product-url'.
-      2. Logic Flags: 
-         - has_status_check: true if a check-status API is present (like Shemaroo).
-         - has_portal_step: true if a product/redirection URL is required after verify.
-         - has_antifraud: true if "Evina", "JS response", or scripts are mentioned.
-      3. Parameters: Extract keys (service_id, partner_id, transaction_id). Use {msisdn}, {transaction_id}, {otp} for values.
-      4. Auth: Find the full 'Authorization' header (e.g., "Basic czJzLWNvbGxlY3RjZW50OlNoZW1AcjAw").
-      5. Button: Capture 'confirmButtonId' (e.g., "Confirm").
-
-      JSON Schema:
-      {
-        "pin_send_url": "string",
-        "pin_verify_url": "string",
-        "check_status_url": "string",
-        "portal_url": "string",
-        "has_antifraud": boolean,
-        "has_status_check": boolean,
-        "has_portal_step": boolean,
-        "params": [ { "key": "string", "value": "string" } ]
-      }
-      Doc Text: ${docText}
-    `;
-
     const result = await model.generateContent(prompt);
-    const aiConfig = JSON.parse(result.response.text());
 
-    // 3. Database Update (Offers Table)
+    let raw = result.response.text();
+
+    /* 🔥 CLEAN RESPONSE */
+    raw = raw.replace(/```json|```/g, "").trim();
+
+    let aiConfig;
+
+    try {
+      aiConfig = JSON.parse(raw);
+    } catch (e) {
+      console.error("AI JSON ERROR:", raw);
+      return res.status(400).json({
+        error: "AI returned invalid JSON",
+        raw,
+      });
+    }
+
+    /* 🔥 STEP DETECTION */
+    const steps = aiConfig.steps || [];
+
+    const sendStep = steps.find(s => ["send", "otp"].includes(s.type));
+    const verifyStep = steps.find(s => ["verify", "validate"].includes(s.type));
+    const checkStep = steps.find(s => ["check", "status"].includes(s.type));
+    const redirectStep = steps.find(s => ["redirect", "portal"].includes(s.type));
+
+    /* 🔥 UPDATE OFFER */
     await pool.query(
       `UPDATE offers SET 
-        pin_send_url = $1, pin_verify_url = $2, check_status_url = $3, portal_url = $4,
-        has_antifraud = $5, has_status_check = $6, has_portal_step = $7, 
+        pin_send_url = $1,
+        pin_verify_url = $2,
+        check_status_url = $3,
+        portal_url = $4,
+        has_antifraud = $5,
         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $8`,
+       WHERE id = $6`,
       [
-        aiConfig.pin_send_url || null, 
-        aiConfig.pin_verify_url || null, 
-        aiConfig.check_status_url || null, 
-        aiConfig.portal_url || null, 
-        !!aiConfig.has_antifraud, 
-        !!aiConfig.has_status_check, 
-        !!aiConfig.has_portal_step,
-        offerId
+        sendStep?.url || null,
+        verifyStep?.url || null,
+        checkStep?.url || null,
+        redirectStep?.url || null,
+        !!aiConfig.has_antifraud,
+        offerId,
       ]
     );
 
-    // 4. Database Update (Offer Parameters with Conflict handling)
-    if (aiConfig.params) {
-      for (const p of aiConfig.params) {
-        await pool.query(
-          `INSERT INTO offer_parameters (offer_id, param_key, param_value) 
-           VALUES ($1, $2, $3) 
-           ON CONFLICT (offer_id, param_key) 
-           DO UPDATE SET param_value = EXCLUDED.param_value`, 
-          [offerId, p.key, p.value]
-        );
+    /* 🔥 PARAMS MERGE */
+    let allParams = [];
+
+    steps.forEach(s => {
+      if (Array.isArray(s.params)) {
+        allParams.push(...s.params);
       }
+    });
+
+    const unique = {};
+
+    allParams.forEach(p => {
+      const key = p.key || p.param;
+      if (!key) return;
+
+      if (!unique[key]) {
+        unique[key] = p.value || "";
+      }
+    });
+
+    for (const key in unique) {
+      await pool.query(
+        `INSERT INTO offer_parameters (offer_id, param_key, param_value)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (offer_id, param_key)
+         DO UPDATE SET param_value = EXCLUDED.param_value`,
+        [offerId, key, unique[key]]
+      );
     }
 
-    res.json({ success: true, message: "AI Integration Successful", data: aiConfig });
+    return res.json({
+      success: true,
+      message: "Auto Integration Complete",
+      data: aiConfig,
+    });
 
   } catch (err) {
-    console.error("AI CONFIG CRITICAL ERROR:", err);
-    res.status(500).json({ error: err.message });
+    console.error("AUTO INTEGRATE ERROR:", err);
+
+    return res.status(500).json({
+      error: "Integration Failed",
+      details: err.message,
+    });
   }
 });
 
