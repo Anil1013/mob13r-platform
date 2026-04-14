@@ -17,14 +17,13 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
 
-    /* 🔥 FILE DETECTION */
     const file = req.files?.doc || req.files?.file;
 
     if (!file) {
       return res.status(400).json({ error: "No document uploaded" });
     }
 
-    console.log("📄 FILE:", file.name, file.mimetype);
+    console.log("📄 FILE:", file.name);
 
     let docText = "";
 
@@ -43,43 +42,28 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       return res.status(400).json({ error: "Empty or invalid document" });
     }
 
-    /* 🔥 LIMIT TEXT (SAFE FOR AI) */
+    console.log("📄 DOC LENGTH:", docText.length);
+
     const safeText = docText.slice(0, 20000);
 
-    /* 🔥 UNIVERSAL AI PROMPT */
+    /* 🔥 AI PROMPT */
     const prompt = `
-You are an expert API integration parser.
-
-Analyze ANY API documentation and extract structured data.
-
-Return ONLY valid JSON. No explanation.
+Return ONLY valid JSON. No text.
 
 {
-  "flow_type": "otp | pin | subscription | api | unknown",
+  "flow_type": "string",
   "steps": [
     {
       "name": "string",
       "url": "string",
       "method": "GET | POST",
-      "type": "send | verify | check | redirect | subscribe | other",
-      "headers": {
-        "Authorization": "",
-        "api_key": ""
-      },
-      "params": [
-        { "key": "string", "value": "string" }
-      ]
+      "type": "send | verify | check | redirect",
+      "headers": {},
+      "params": []
     }
   ],
   "has_antifraud": true/false
 }
-
-Rules:
-- Extract ALL endpoints
-- Extract ALL params
-- Extract Authorization / API keys
-- Detect flow automatically
-- Use placeholders: {msisdn}, {otp}, {transaction_id}
 
 DOC:
 ${safeText}
@@ -95,21 +79,25 @@ ${safeText}
 
     console.log("🤖 RAW AI:", raw);
 
-    /* 🔥 REMOVE MARKDOWN */
+    /* 🔥 CLEAN RESPONSE */
     raw = raw.replace(/```json|```/g, "").trim();
 
-    /* 🔥 STRONG JSON EXTRACTION */
-    const start = raw.indexOf("{");
-    const end = raw.lastIndexOf("}");
+    /* 🔥 SAFE JSON EXTRACTION (ULTRA STRONG) */
+    let jsonString = "";
 
-    if (start === -1 || end === -1) {
+    try {
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (match) {
+        jsonString = match[0];
+      } else {
+        throw new Error("No JSON found");
+      }
+    } catch (e) {
       return res.status(400).json({
-        error: "No JSON found in AI response",
+        error: "AI JSON extraction failed",
         raw,
       });
     }
-
-    const jsonString = raw.substring(start, end + 1);
 
     let aiConfig;
 
@@ -124,33 +112,29 @@ ${safeText}
       });
     }
 
-    const steps = aiConfig.steps || [];
+    const steps = Array.isArray(aiConfig.steps) ? aiConfig.steps : [];
 
-    /* 🔥 STEP DETECTION */
-    const match = (types, s) =>
-      types.some(t => s?.type?.toLowerCase()?.includes(t));
+    /* 🔥 STEP DETECTION SAFE */
+    const matchType = (types, s) =>
+      types.some(t => (s?.type || "").toLowerCase().includes(t));
 
     const sendStep = steps.find(s =>
-      match(["send", "otp", "generate", "initiate", "subscribe"], s)
+      matchType(["send", "otp", "generate", "init"], s)
     );
 
     const verifyStep = steps.find(s =>
-      match(["verify", "validate", "confirm"], s)
+      matchType(["verify", "validate", "confirm"], s)
     );
 
     const checkStep = steps.find(s =>
-      match(["check", "status", "lookup"], s)
+      matchType(["check", "status"], s)
     );
 
     const redirectStep = steps.find(s =>
-      match(["redirect", "portal", "product", "success"], s)
+      matchType(["redirect", "portal", "product"], s)
     );
 
-    /* 🔥 SAFE URL PICK */
-    const getUrl = (step) => {
-      if (!step) return null;
-      return step.url || step.endpoint || null;
-    };
+    const getUrl = (step) => step?.url || null;
 
     /* 🔥 UPDATE OFFER */
     await pool.query(
@@ -176,7 +160,7 @@ ${safeText}
       ]
     );
 
-    /* 🔥 MERGE PARAMS + HEADERS */
+    /* 🔥 PARAMS MERGE SAFE */
     let allParams = [];
 
     steps.forEach(s => {
@@ -184,26 +168,22 @@ ${safeText}
         allParams.push(...s.params);
       }
 
-      if (s.headers) {
+      if (s.headers && typeof s.headers === "object") {
         Object.entries(s.headers).forEach(([k, v]) => {
           allParams.push({ key: k, value: v });
         });
       }
     });
 
-    /* 🔥 UNIQUE PARAMS */
     const unique = {};
 
     allParams.forEach(p => {
-      let key = (p.key || p.param || "").toLowerCase().trim();
+      const key = (p.key || "").toLowerCase().trim();
       if (!key) return;
 
-      if (!unique[key]) {
-        unique[key] = p.value || "";
-      }
+      if (!unique[key]) unique[key] = p.value || "";
     });
 
-    /* 🔥 INSERT PARAMS */
     for (const key in unique) {
       await pool.query(
         `INSERT INTO offer_parameters (offer_id, param_key, param_value)
@@ -216,7 +196,7 @@ ${safeText}
 
     return res.json({
       success: true,
-      message: "Universal Auto Integration Complete",
+      message: "Auto Integration Successful",
       data: aiConfig,
     });
 
