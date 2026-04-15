@@ -17,10 +17,15 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
 
-    const file = req.files?.doc || req.files?.file;
+    /* 🔥 UNIVERSAL FILE DETECTION (FIXED) */
+    const fileKeys = Object.keys(req.files || {});
+    const file = fileKeys.length ? req.files[fileKeys[0]] : null;
 
     if (!file) {
-      return res.status(400).json({ error: "No document uploaded" });
+      return res.status(400).json({
+        error: "No document uploaded",
+        receivedKeys: fileKeys
+      });
     }
 
     console.log("📄 FILE:", file.name);
@@ -48,7 +53,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
 
     /* 🔥 AI PROMPT */
     const prompt = `
-Return ONLY valid JSON. No text.
+Return ONLY valid JSON. No explanation.
 
 {
   "flow_type": "string",
@@ -82,39 +87,42 @@ ${safeText}
     /* 🔥 CLEAN RESPONSE */
     raw = raw.replace(/```json|```/g, "").trim();
 
-    /* 🔥 SAFE JSON EXTRACTION (ULTRA STRONG) */
+    /* 🔥 SAFE JSON EXTRACTION */
     let jsonString = "";
 
-    try {
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (match) {
-        jsonString = match[0];
-      } else {
-        throw new Error("No JSON found");
-      }
-    } catch (e) {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) {
       return res.status(400).json({
         error: "AI JSON extraction failed",
-        raw,
+        raw
       });
     }
+
+    jsonString = match[0];
 
     let aiConfig;
 
     try {
       aiConfig = JSON.parse(jsonString);
     } catch (e) {
-      console.error("❌ JSON PARSE ERROR:", jsonString);
-
       return res.status(400).json({
         error: "Invalid JSON from AI",
-        raw: jsonString,
+        raw: jsonString
+      });
+    }
+
+    /* 🔥 FALLBACK (CRASH PROTECTION) */
+    if (!aiConfig || typeof aiConfig !== "object") {
+      return res.json({
+        success: true,
+        message: "Fallback applied",
+        data: { flow_type: "unknown", steps: [] }
       });
     }
 
     const steps = Array.isArray(aiConfig.steps) ? aiConfig.steps : [];
 
-    /* 🔥 STEP DETECTION SAFE */
+    /* 🔥 STEP DETECTION */
     const matchType = (types, s) =>
       types.some(t => (s?.type || "").toLowerCase().includes(t));
 
@@ -160,7 +168,7 @@ ${safeText}
       ]
     );
 
-    /* 🔥 PARAMS MERGE SAFE */
+    /* 🔥 PARAMS MERGE */
     let allParams = [];
 
     steps.forEach(s => {
