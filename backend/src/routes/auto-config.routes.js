@@ -12,12 +12,12 @@ const pdf = require("pdf-parse");
 const router = express.Router();
 
 /**
- * --- 1. THE UNIVERSAL SCANNER (V7 - Semantic & Fuzzy Mapping) ---
+ * --- 1. THE UNIVERSAL SCANNER (V8 - Strict Dashboard Mapping) ---
  */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
-    console.log(`🚀 Mob13r-Robo V7: Deep Semantic Scan for ID: ${offerId}`);
+    console.log(`🚀 Mob13r-Robo V8: Dashboard Sync for ID: ${offerId}`);
 
     if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -40,42 +40,45 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     }
 
     const prompt = `
-      Expert AdTech Parser: Extract EVERY technical detail.
-      
-      MAPPING LOGIC:
-      - Recognize ANY term for Sending OTP: (pin_request, otp_send, pingen, init_sms, requestPinInApp).
-      - Recognize ANY term for Verification: (pin_verify, otp_validate, pinval, confirm_otp, verifyPinInApp).
-      - Recognize ANY term for Status: (check_status, action_check, subscription_status).
-      - Recognize ANY term for Redirection: (portal_url, success_redirect, access_url, product_url).
+      Expert AdTech Parser: Extract technical details.
+      You MUST use these exact keys for URLs to sync with the Dashboard UI:
+      - "pin_send_url" (For OTP Request/Init)
+      - "verify_pin_url" (For PIN Validate/Confirm)
+      - "check_status_url" (For Status Check)
+      - "portal_url" (For Success/Redirection)
 
-      PARAMETER LOGIC:
-      - Scan for: msisdn, ip, user_agent, pin/otp, click_id/pixel, transaction_id, partner_id, service_id, promoId, pubId, sessionKey/token.
-      - Extract Auth headers (Bearer, Basic).
-      - Capture Sub-parameters (sub1 to sub5).
+      Rules:
+      1. Capture ALL params: msisdn, click_id, transaction_id, promoId, pubId, token, bfId.
+      2. Identify Anti-Fraud (MCP, Evina, Opticks) and their prepare/script URLs.
+      3. Capture methods (GET/POST) and sub1-sub5 if mentioned.
 
       Return ONLY JSON:
       {
         "has_fraud": boolean,
-        "fraud": { "provider": "string", "url": "string", "prepare_url": "string" },
-        "steps": [
-          {
-            "target_column": "send | verify | check | redirect",
-            "url": "string",
-            "method": "GET | POST",
-            "data_type": "query | body",
-            "headers": { "Key": "Value" },
-            "params": [{ "key": "string", "value": "string" }]
-          }
-        ]
+        "fraud": { "af_provider": "string", "af_url": "string" },
+        "core_urls": {
+          "pin_send_url": "string",
+          "verify_pin_url": "string",
+          "check_status_url": "string",
+          "portal_url": "string"
+        },
+        "all_params": {
+           "method_send": "GET|POST",
+           "dtype_send": "query|body",
+           "method_verify": "GET|POST",
+           "dtype_verify": "query|body",
+           "service_id": "string",
+           "partner_id": "string",
+           "authorization": "string"
+        }
       }
       CONTENT: ${docText.slice(0, 19000)}`;
 
     const result = await model.generateContent(prompt);
     const aiConfig = JSON.parse((await result.response).text().replace(/```json|```/g, "").trim());
 
-    // --- Strict DB Update Logic ---
-    const findStep = (col) => aiConfig.steps.find(s => s.target_column === col);
-
+    // --- 🛠️ 1. Update Core Offer Table ---
+    const urls = aiConfig.core_urls || {};
     await pool.query(
       `UPDATE offers SET 
         pin_send_url = COALESCE($1, pin_send_url), 
@@ -85,30 +88,25 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
         has_antifraud = $5, 
         updated_at = NOW() 
        WHERE id = $6`,
-      [findStep("send")?.url, findStep("verify")?.url, findStep("check")?.url, findStep("redirect")?.url, !!aiConfig.has_fraud, offerId]
+      [urls.pin_send_url, urls.verify_pin_url, urls.check_status_url, urls.portal_url, !!aiConfig.has_fraud, offerId]
     );
 
+    // --- 🛠️ 2. Sync for Dashboard Display ---
     const paramsMap = new Map();
     
-    // Save Fraud Config
+    // Core URLs ko parameters mein bhi dalna hai taaki UI par dikhein
+    if (urls.pin_send_url) paramsMap.set("pin_send_url", urls.pin_send_url);
+    if (urls.verify_pin_url) paramsMap.set("verify_pin_url", urls.verify_pin_url);
+    if (urls.check_status_url) paramsMap.set("check_status_url", urls.check_status_url);
+    if (urls.portal_url) paramsMap.set("portal_url", urls.portal_url);
+
+    if (aiConfig.all_params) {
+      Object.entries(aiConfig.all_params).forEach(([k, v]) => paramsMap.set(k.toLowerCase(), v));
+    }
     if (aiConfig.fraud) {
-      Object.entries(aiConfig.fraud).forEach(([k, v]) => paramsMap.set(`af_${k}`, v));
+      Object.entries(aiConfig.fraud).forEach(([k, v]) => paramsMap.set(k.toLowerCase(), v));
     }
 
-    // Save All Meta & Params
-    aiConfig.steps.forEach(step => {
-      paramsMap.set(`method_${step.target_column}`, step.method);
-      paramsMap.set(`dtype_${step.target_column}`, step.data_type);
-      
-      if (step.headers) {
-        Object.entries(step.headers).forEach(([k, v]) => paramsMap.set(k.toLowerCase(), v));
-      }
-      if (step.params) {
-        step.params.forEach(p => paramsMap.set(p.key.toLowerCase(), p.value || `{${p.key}}`));
-      }
-    });
-
-    // Multi-Insert Batch
     for (const [key, val] of paramsMap.entries()) {
       await pool.query(
         `INSERT INTO offer_parameters (offer_id, param_key, param_value) VALUES ($1, $2, $3)
@@ -117,57 +115,28 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       );
     }
 
-    res.json({ success: true, message: "Mob13r-Robo: Semantic extraction success!", data: aiConfig });
+    res.json({ success: true, message: "Dashboard Display Synced!", data: aiConfig });
   } catch (err) {
-    console.error("Scanner Error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 /**
- * --- 2. THE UNIVERSAL RUNTIME ENGINE ---
+ * --- 2. RUNTIME ENGINE ---
  */
 router.get("/get-runtime-config/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
     const offerRes = await pool.query("SELECT * FROM offers WHERE id = $1", [offerId]);
     const paramsRes = await pool.query("SELECT param_key, param_value FROM offer_parameters WHERE offer_id = $1", [offerId]);
-    
     const config = {};
     paramsRes.rows.forEach(p => config[p.param_key] = p.param_value);
-
-    let fraudSnippet = null;
-    const transactionId = `m13r_${Date.now()}`;
-
-    if (offerRes.rows[0]?.has_antifraud) {
-       const provider = config['af_provider'];
-       const afUrl = config['af_url'] || config['af_prepare_url'] || config['antifraud_url'];
-
-       if (provider === 'mcp' && afUrl) {
-          try {
-            const mcpRes = await axios.get(afUrl.replace(/{click_id}|{transaction_id}/gi, transactionId), { 
-              headers: { 'user-agent': req.headers['user-agent'] } 
-            });
-            fraudSnippet = mcpRes.data.source || mcpRes.data;
-          } catch (e) { console.error("MCP Script Fetch Failed"); }
-       } else if (afUrl) {
-          fraudSnippet = `(function(){ var s=document.createElement('script'); s.src='${afUrl}'; document.head.appendChild(s); })();`;
-       }
-    }
 
     res.json({
       success: true,
       offer: offerRes.rows[0],
       params: config,
-      runtime: {
-        transaction_id: transactionId,
-        fraud_snippet: fraudSnippet,
-        methods: { 
-          send: config['method_send'] || 'POST', 
-          verify: config['method_verify'] || 'POST',
-          check: config['method_check'] || 'POST'
-        }
-      }
+      runtime: { transaction_id: `m13r_${Date.now()}` }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
