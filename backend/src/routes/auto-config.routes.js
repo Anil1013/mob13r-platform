@@ -10,78 +10,49 @@ const pdf = require("pdf-parse");
 
 const router = express.Router();
 
-/* ========================= */
-/* AUTO INTEGRATE UNIVERSAL  */
-/* ========================= */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
-    console.log(`🚀 Starting Universal AI Integration for Offer ID: ${offerId}`);
+    console.log(`🤖 Mob13r-Robo Logic Started for Offer: ${offerId}`);
 
-    // 1. Check AI Key
-    if (!process.env.GEMINI_API_KEY) {
-      console.error("❌ GEMINI_API_KEY is missing in Environment Variables");
-      return res.status(500).json({ error: "Server Configuration Error: Missing AI Key" });
-    }
-
+    // 1. Initialize AI with GEMINI-3-FLASH-PREVIEW
+    if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY in AWS Environment");
+    
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-3-flash-preview" 
+    });
 
-    // 2. File Detection
+    // 2. File Detection & Buffer Loading (AWS Safe)
     const fileKeys = Object.keys(req.files || {});
     const file = fileKeys.length ? req.files[fileKeys[0]] : null;
+    if (!file) return res.status(400).json({ error: "No document uploaded" });
 
-    if (!file) {
-      return res.status(400).json({ error: "No document uploaded" });
-    }
-
-    console.log("📄 Processing File:", file.name);
-
-    // 3. Robust Buffer Loading (AWS Fix)
-    let fileBuffer;
-    try {
-      if (file.tempFilePath) {
-        fileBuffer = await fs.readFile(file.tempFilePath);
-      } else {
-        fileBuffer = file.data;
-      }
-    } catch (fsErr) {
-      console.error("❌ File System Error:", fsErr);
-      return res.status(500).json({ error: "Failed to read uploaded file" });
-    }
-
-    // 4. Text Extraction
-    let docText = "";
-    const fileName = file.name.toLowerCase();
+    console.log(`📄 Processing: ${file.name}`);
+    let fileBuffer = file.tempFilePath ? await fs.readFile(file.tempFilePath) : file.data;
     
-    if (fileName.endsWith(".docx")) {
+    // 3. Text Extraction
+    let docText = "";
+    const ext = file.name.toLowerCase();
+    if (ext.endsWith(".docx")) {
       const result = await mammoth.extractRawText({ buffer: fileBuffer });
       docText = result.value;
-    } else if (fileName.endsWith(".pdf")) {
+    } else if (ext.endsWith(".pdf")) {
       const data = await pdf(fileBuffer);
       docText = data.text;
     } else {
-      return res.status(400).json({ error: "Unsupported format. Use PDF or DOCX" });
+      return res.status(400).json({ error: "Use PDF or DOCX only" });
     }
 
-    if (!docText || docText.trim().length < 50) {
-      return res.status(400).json({ error: "Document is too short or empty" });
-    }
-
-    // 5. AI Analysis
-    const model = genAI.getGenerativeModel({
-      model: "gemini-3-flash",
-      generationConfig: { response_mime_type: "application/json" }
-    });
-
+    // 4. AI Prompt (Optimized for Mob13r-Robo Style)
     const prompt = `
-      You are an expert API parser. Analyze the provided document and extract the integration flow.
-      Identify URLs for PIN sending, verification, and status checks. 
-      Identify Headers like Authorization, x-api-key, etc.
-      Use placeholders: {msisdn}, {otp}, {transaction_id}.
+      Extract API integration details from the provided document.
+      Return ONLY valid JSON.
+      Placeholders: {msisdn}, {otp}, {transaction_id}.
 
-      Return ONLY this JSON structure:
+      Structure:
       {
-        "flow_type": "otp | pin | subscription",
+        "flow_type": "string",
         "steps": [
           {
             "name": "string",
@@ -95,86 +66,64 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
         "has_antifraud": boolean
       }
 
-      DOC CONTENT:
-      ${docText.slice(0, 18000)}
+      CONTENT:
+      ${docText.slice(0, 16000)}
     `;
 
     const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
-    
-    let aiConfig;
-    try {
-      // Find JSON block in case AI adds markdown
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      aiConfig = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
-    } catch (parseErr) {
-      console.error("🤖 AI Response Parsing Error:", responseText);
-      return res.status(400).json({ error: "AI returned invalid data format" });
-    }
+    const response = await result.response;
+    let text = response.text().replace(/```json|```/g, "").trim();
+
+    // JSON Cleaning
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const aiConfig = JSON.parse(jsonMatch ? jsonMatch[0] : text);
 
     const steps = aiConfig.steps || [];
+    const getStep = (types) => steps.find(s => types.some(t => s.type?.toLowerCase().includes(t)));
 
-    // 6. Map Steps to Database Columns
-    const findStep = (types) => steps.find(s => types.some(t => s.type?.toLowerCase().includes(t)));
+    // 5. Update Offers Table
+    const sendS = getStep(["send", "otp", "init"]);
+    const verifyS = getStep(["verify", "confirm"]);
+    const checkS = getStep(["check", "status"]);
+    const redirectS = getStep(["redirect", "portal", "success"]);
 
-    const sendStep = findStep(["send", "otp", "init", "subscribe"]);
-    const verifyStep = findStep(["verify", "validate", "confirm"]);
-    const checkStep = findStep(["check", "status"]);
-    const redirectStep = findStep(["redirect", "portal", "product", "success"]);
-
-    // 7. Update Offers Table
     await pool.query(
       `UPDATE offers SET 
         pin_send_url = $1, pin_verify_url = $2, check_status_url = $3, portal_url = $4,
-        has_antifraud = $5, has_status_check = $6, has_portal_step = $7, updated_at = CURRENT_TIMESTAMP
+        has_antifraud = $5, has_status_check = $6, has_portal_step = $7, updated_at = NOW()
        WHERE id = $8`,
       [
-        sendStep?.url || null, verifyStep?.url || null, checkStep?.url || null, redirectStep?.url || null,
-        !!aiConfig.has_antifraud, !!checkStep, !!redirectStep, offerId
+        sendS?.url || null, verifyS?.url || null, checkS?.url || null, redirectS?.url || null,
+        !!aiConfig.has_antifraud, !!checkS, !!redirectS, offerId
       ]
     );
 
-    // 8. Extract and Save Parameters (Unique keys only)
+    // 6. Parameters & Headers Extraction (Merge into offer_parameters)
     const paramsMap = new Map();
-
     steps.forEach(step => {
-      // Process explicit params
       if (Array.isArray(step.params)) {
-        step.params.forEach(p => {
-          if (p.key) paramsMap.set(p.key.toLowerCase().trim(), p.value || "");
-        });
+        step.params.forEach(p => { if (p.key) paramsMap.set(p.key.toLowerCase().trim(), p.value || ""); });
       }
-      // Process headers as params
-      if (step.headers && typeof step.headers === 'object') {
-        Object.entries(step.headers).forEach(([k, v]) => {
-          paramsMap.set(k.toLowerCase().trim(), v || "");
-        });
+      if (step.headers) {
+        Object.entries(step.headers).forEach(([k, v]) => { paramsMap.set(k.toLowerCase().trim(), v || ""); });
       }
     });
 
-    for (const [key, value] of paramsMap.entries()) {
+    for (const [key, val] of paramsMap.entries()) {
       await pool.query(
         `INSERT INTO offer_parameters (offer_id, param_key, param_value)
          VALUES ($1, $2, $3)
          ON CONFLICT (offer_id, param_key)
          DO UPDATE SET param_value = EXCLUDED.param_value`,
-        [offerId, key, value]
+        [offerId, key, val]
       );
     }
 
-    console.log("✅ AI Integration Successful");
-    return res.json({
-      success: true,
-      message: "Universal Integration Successful",
-      data: aiConfig
-    });
+    res.json({ success: true, message: "Mob13r-Robo Integration Successful!", data: aiConfig });
 
   } catch (err) {
-    console.error("🔥 CRITICAL INTEGRATION ERROR:", err);
-    return res.status(500).json({ 
-      error: "Integration Engine Failed", 
-      details: err.message 
-    });
+    console.error("❌ Mob13r-Robo Error:", err.message);
+    res.status(500).json({ error: "Integration Failed", details: err.message });
   }
 });
 
