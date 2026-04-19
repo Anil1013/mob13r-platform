@@ -2,49 +2,57 @@ import express from "express";
 import pool from "../db.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import mammoth from "mammoth";
-import fs from "fs/promises"; // 🔥 Badi files read karne ke liye added
+import fs from "fs/promises"; 
 
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const pdf = require("pdf-parse");
 
 const router = express.Router();
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /* ========================= */
-/* AUTO INTEGRATE GENERIC    */
+/* AUTO INTEGRATE UNIVERSAL  */
 /* ========================= */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
+    console.log(`🚀 Starting Universal AI Integration for Offer ID: ${offerId}`);
 
-    /* 🔥 UNIVERSAL FILE DETECTION */
+    // 1. Check AI Key
+    if (!process.env.GEMINI_API_KEY) {
+      console.error("❌ GEMINI_API_KEY is missing in Environment Variables");
+      return res.status(500).json({ error: "Server Configuration Error: Missing AI Key" });
+    }
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+    // 2. File Detection
     const fileKeys = Object.keys(req.files || {});
     const file = fileKeys.length ? req.files[fileKeys[0]] : null;
 
     if (!file) {
-      return res.status(400).json({
-        error: "No document uploaded",
-        receivedKeys: fileKeys
-      });
+      return res.status(400).json({ error: "No document uploaded" });
     }
 
-    console.log("📄 FILE RECEIVED:", file.name);
+    console.log("📄 Processing File:", file.name);
 
-    let docText = "";
+    // 3. Robust Buffer Loading (AWS Fix)
     let fileBuffer;
-
-    /* 🔥 AWS TEMP FILE HANDLING (Fix for Corrupted Zip/Empty Data) */
-    if (file.tempFilePath) {
-      // Agar file badi hai (1MB+), AWS use temp path par rakhta hai
-      fileBuffer = await fs.readFile(file.tempFilePath);
-    } else {
-      // Choti files direct memory mein hoti hain
-      fileBuffer = file.data;
+    try {
+      if (file.tempFilePath) {
+        fileBuffer = await fs.readFile(file.tempFilePath);
+      } else {
+        fileBuffer = file.data;
+      }
+    } catch (fsErr) {
+      console.error("❌ File System Error:", fsErr);
+      return res.status(500).json({ error: "Failed to read uploaded file" });
     }
 
-    /* 🔥 TEXT EXTRACTION */
+    // 4. Text Extraction
+    let docText = "";
     const fileName = file.name.toLowerCase();
+    
     if (fileName.endsWith(".docx")) {
       const result = await mammoth.extractRawText({ buffer: fileBuffer });
       docText = result.value;
@@ -52,106 +60,121 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       const data = await pdf(fileBuffer);
       docText = data.text;
     } else {
-      return res.status(400).json({ error: "Only PDF/DOCX allowed" });
+      return res.status(400).json({ error: "Unsupported format. Use PDF or DOCX" });
     }
 
     if (!docText || docText.trim().length < 50) {
-      return res.status(400).json({ error: "Empty or invalid document" });
+      return res.status(400).json({ error: "Document is too short or empty" });
     }
 
-    console.log("📄 DOC EXTRACTED. LENGTH:", docText.length);
+    // 5. AI Analysis
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      generationConfig: { response_mime_type: "application/json" }
+    });
 
-    const safeText = docText.slice(0, 20000);
-
-    /* 🔥 AI PROMPT (Improved for Headers & Params) */
     const prompt = `
-      Return ONLY valid JSON. No explanation.
-      Extract API endpoints, Headers (Authorization), and Parameters.
+      You are an expert API parser. Analyze the provided document and extract the integration flow.
+      Identify URLs for PIN sending, verification, and status checks. 
+      Identify Headers like Authorization, x-api-key, etc.
       Use placeholders: {msisdn}, {otp}, {transaction_id}.
 
+      Return ONLY this JSON structure:
       {
-        "flow_type": "string",
+        "flow_type": "otp | pin | subscription",
         "steps": [
           {
             "name": "string",
             "url": "string",
             "method": "GET | POST",
             "type": "send | verify | check | redirect",
-            "headers": {},
+            "headers": { "Key": "Value" },
             "params": [{ "key": "string", "value": "string" }]
           }
         ],
         "has_antifraud": boolean
       }
 
-      DOC:
-      ${safeText}
+      DOC CONTENT:
+      ${docText.slice(0, 18000)}
     `;
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-      generationConfig: { response_mime_type: "application/json" }
-    });
-
     const result = await model.generateContent(prompt);
-    let raw = result.response.text().replace(/```json|```/g, "").trim();
+    const responseText = result.response.text();
+    
+    let aiConfig;
+    try {
+      // Find JSON block in case AI adds markdown
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      aiConfig = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
+    } catch (parseErr) {
+      console.error("🤖 AI Response Parsing Error:", responseText);
+      return res.status(400).json({ error: "AI returned invalid data format" });
+    }
 
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("AI JSON extraction failed");
+    const steps = aiConfig.steps || [];
 
-    const aiConfig = JSON.parse(jsonMatch[0]);
+    // 6. Map Steps to Database Columns
+    const findStep = (types) => steps.find(s => types.some(t => s.type?.toLowerCase().includes(t)));
 
-    const steps = Array.isArray(aiConfig.steps) ? aiConfig.steps : [];
+    const sendStep = findStep(["send", "otp", "init", "subscribe"]);
+    const verifyStep = findStep(["verify", "validate", "confirm"]);
+    const checkStep = findStep(["check", "status"]);
+    const redirectStep = findStep(["redirect", "portal", "product", "success"]);
 
-    /* 🔥 STEP DETECTION */
-    const matchType = (types, s) =>
-      types.some(t => (s?.type || "").toLowerCase().includes(t));
-
-    const sendStep = steps.find(s => matchType(["send", "otp", "init", "subscribe"], s));
-    const verifyStep = steps.find(s => matchType(["verify", "validate", "confirm"], s));
-    const checkStep = steps.find(s => matchType(["check", "status"], s));
-    const redirectStep = steps.find(s => matchType(["redirect", "portal", "product"], s));
-
-    const getUrl = (step) => step?.url || null;
-
-    /* 🔥 UPDATE OFFER */
+    // 7. Update Offers Table
     await pool.query(
       `UPDATE offers SET 
         pin_send_url = $1, pin_verify_url = $2, check_status_url = $3, portal_url = $4,
         has_antifraud = $5, has_status_check = $6, has_portal_step = $7, updated_at = CURRENT_TIMESTAMP
        WHERE id = $8`,
       [
-        getUrl(sendStep), getUrl(verifyStep), getUrl(checkStep), getUrl(redirectStep),
+        sendStep?.url || null, verifyStep?.url || null, checkStep?.url || null, redirectStep?.url || null,
         !!aiConfig.has_antifraud, !!checkStep, !!redirectStep, offerId
       ]
     );
 
-    /* 🔥 PARAMS MERGE (Headers + Params) */
-    const unique = {};
-    steps.forEach(s => {
-      if (Array.isArray(s.params)) {
-        s.params.forEach(p => { if (p.key) unique[p.key.toLowerCase().trim()] = p.value || ""; });
+    // 8. Extract and Save Parameters (Unique keys only)
+    const paramsMap = new Map();
+
+    steps.forEach(step => {
+      // Process explicit params
+      if (Array.isArray(step.params)) {
+        step.params.forEach(p => {
+          if (p.key) paramsMap.set(p.key.toLowerCase().trim(), p.value || "");
+        });
       }
-      if (s.headers && typeof s.headers === "object") {
-        Object.entries(s.headers).forEach(([k, v]) => { unique[k.toLowerCase().trim()] = v || ""; });
+      // Process headers as params
+      if (step.headers && typeof step.headers === 'object') {
+        Object.entries(step.headers).forEach(([k, v]) => {
+          paramsMap.set(k.toLowerCase().trim(), v || "");
+        });
       }
     });
 
-    for (const [key, val] of Object.entries(unique)) {
+    for (const [key, value] of paramsMap.entries()) {
       await pool.query(
         `INSERT INTO offer_parameters (offer_id, param_key, param_value)
          VALUES ($1, $2, $3)
          ON CONFLICT (offer_id, param_key)
          DO UPDATE SET param_value = EXCLUDED.param_value`,
-        [offerId, key, val]
+        [offerId, key, value]
       );
     }
 
-    res.json({ success: true, message: "Auto Integration Successful", data: aiConfig });
+    console.log("✅ AI Integration Successful");
+    return res.json({
+      success: true,
+      message: "Universal Integration Successful",
+      data: aiConfig
+    });
 
   } catch (err) {
-    console.error("🔥 AUTO INTEGRATE ERROR:", err);
-    res.status(500).json({ error: "Integration Failed", details: err.message });
+    console.error("🔥 CRITICAL INTEGRATION ERROR:", err);
+    return res.status(500).json({ 
+      error: "Integration Engine Failed", 
+      details: err.message 
+    });
   }
 });
 
