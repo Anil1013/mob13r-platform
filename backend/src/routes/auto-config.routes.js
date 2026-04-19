@@ -12,16 +12,23 @@ const pdf = require("pdf-parse");
 const router = express.Router();
 
 /**
- * --- 1. THE UNIVERSAL SCANNER (V8 - Strict Dashboard Mapping) ---
+ * --- 1. THE UNIVERSAL SCANNER (V9 - Hyper-Robust UI Sync) ---
  */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
-    console.log(`🚀 Mob13r-Robo V8: Dashboard Sync for ID: ${offerId}`);
+    console.log(`🚀 Mob13r-Robo V9: Hyper-Robust Sync for ID: ${offerId}`);
 
     if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+    
+    // 🛠️ FALLBACK MODEL SELECTION
+    let model;
+    try {
+      model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+    } catch (e) {
+      model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    }
 
     const fileKeys = Object.keys(req.files || {});
     const file = fileKeys.length ? req.files[fileKeys[0]] : null;
@@ -49,7 +56,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
 
       Rules:
       1. Capture ALL params: msisdn, click_id, transaction_id, promoId, pubId, token, bfId.
-      2. Identify Anti-Fraud (MCP, Evina, Opticks) and their prepare/script URLs.
+      2. Identify Anti-Fraud (MCP, Evina, Opticks) and their specific prepare/script URLs.
       3. Capture methods (GET/POST) and sub1-sub5 if mentioned.
 
       Return ONLY JSON:
@@ -74,27 +81,43 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       }
       CONTENT: ${docText.slice(0, 19000)}`;
 
-    const result = await model.generateContent(prompt);
+    let result;
+    try {
+      result = await model.generateContent(prompt);
+    } catch (err) {
+      if (err.message.includes("503")) {
+        const fallback = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        result = await fallback.generateContent(prompt);
+      } else { throw err; }
+    }
+
     const aiConfig = JSON.parse((await result.response).text().replace(/```json|```/g, "").trim());
 
-    // --- 🛠️ 1. Update Core Offer Table ---
+    // --- 🛠️ 1. FORCE UPDATE Core Offer Table (No COALESCE to avoid blank stickiness) ---
     const urls = aiConfig.core_urls || {};
     await pool.query(
       `UPDATE offers SET 
-        pin_send_url = COALESCE($1, pin_send_url), 
-        pin_verify_url = COALESCE($2, pin_verify_url), 
-        check_status_url = COALESCE($3, check_status_url), 
-        portal_url = COALESCE($4, portal_url),
+        pin_send_url = $1, 
+        pin_verify_url = $2, 
+        check_status_url = $3, 
+        portal_url = $4,
         has_antifraud = $5, 
         updated_at = NOW() 
        WHERE id = $6`,
-      [urls.pin_send_url, urls.verify_pin_url, urls.check_status_url, urls.portal_url, !!aiConfig.has_fraud, offerId]
+      [
+        urls.pin_send_url || null, 
+        urls.verify_pin_url || null, 
+        urls.check_status_url || null, 
+        urls.portal_url || null, 
+        !!aiConfig.has_fraud, 
+        offerId
+      ]
     );
 
-    // --- 🛠️ 2. Sync for Dashboard Display ---
+    // --- 🛠️ 2. MIRROR SYNC for Dashboard Display ---
     const paramsMap = new Map();
     
-    // Core URLs ko parameters mein bhi dalna hai taaki UI par dikhein
+    // Sabse pehle Core URLs ko params table mein bhi insert karein taaki UI par dikhein
     if (urls.pin_send_url) paramsMap.set("pin_send_url", urls.pin_send_url);
     if (urls.verify_pin_url) paramsMap.set("verify_pin_url", urls.verify_pin_url);
     if (urls.check_status_url) paramsMap.set("check_status_url", urls.check_status_url);
@@ -107,6 +130,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       Object.entries(aiConfig.fraud).forEach(([k, v]) => paramsMap.set(k.toLowerCase(), v));
     }
 
+    // Batch Insert/Update for the "Manage Params" list
     for (const [key, val] of paramsMap.entries()) {
       await pool.query(
         `INSERT INTO offer_parameters (offer_id, param_key, param_value) VALUES ($1, $2, $3)
@@ -115,7 +139,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       );
     }
 
-    res.json({ success: true, message: "Dashboard Display Synced!", data: aiConfig });
+    res.json({ success: true, message: "Mob13r-Robo: UI Mirror-Sync Successful!", data: aiConfig });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
