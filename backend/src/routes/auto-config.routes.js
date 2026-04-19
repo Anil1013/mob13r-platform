@@ -69,7 +69,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
 
     // 5. AI Analysis
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-3-flash",
       generationConfig: { response_mime_type: "application/json" }
     });
 
