@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import fileUpload from "express-fileupload"; // 🔥 MISSING IMPORT ADDED
 import appRoutes from "./app.js";
 
 dotenv.config();
@@ -27,15 +28,20 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
-/* ✅ PREFLIGHT HANDLING (VERY IMPORTANT) */
 app.options("*", cors(corsOptions));
 
-/* ✅ BODY SIZE FIX (413 ERROR FIX) */
+/* ✅ BODY SIZE FIX (413 ERROR FIX - Phase 1) */
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
 
-/* ✅ HEALTH CHECK (OPTIONAL BUT USEFUL) */
+/* ✅ FILE UPLOAD MIDDLEWARE (YE ZARURI HAI FILE PARSING KE LIYE) */
+app.use(fileUpload({
+  limits: { fileSize: 100 * 1024 * 1024 }, // 🔥 100MB limit for files
+  useTempFiles: true,
+  tempFileDir: '/tmp/'
+}));
+
+/* ✅ HEALTH CHECK */
 app.get("/health", (req, res) => {
   res.json({ status: "OK" });
 });
@@ -43,10 +49,9 @@ app.get("/health", (req, res) => {
 /* ROUTES */
 app.use(appRoutes);
 
-/* ✅ GLOBAL ERROR HANDLER (IMPORTANT) */
+/* ✅ GLOBAL ERROR HANDLER */
 app.use((err, req, res, next) => {
   console.error("GLOBAL ERROR:", err);
-
   res.status(err.status || 500).json({
     status: "FAILED",
     message: err.message || "Internal Server Error",
