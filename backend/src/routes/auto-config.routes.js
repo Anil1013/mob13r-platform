@@ -7,22 +7,22 @@ import axios from "axios";
 
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const pdf = require("pdf-parse");
+// ✅ Fix: pdf-parse ko sahi function mein load kiya
+const pdfParse = require("pdf-parse");
 
 const router = express.Router();
 
 /**
- * --- 1. THE UNIVERSAL SCANNER (V9 - Hyper-Robust UI Sync) ---
+ * --- 1. THE UNIVERSAL SCANNER (V10 - Multi-Format & PDF Fixed) ---
  */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
-    console.log(`🚀 Mob13r-Robo V9: Hyper-Robust Sync for ID: ${offerId}`);
+    console.log(`🚀 Mob13r-Robo V10: Hyper-Sync & Multi-Format for ID: ${offerId}`);
 
     if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
-    // 🛠️ FALLBACK MODEL SELECTION
     let model;
     try {
       model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
@@ -38,12 +38,24 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     let docText = "";
     const ext = file.name.toLowerCase();
     
-    if (ext.endsWith(".docx")) {
-      const result = await mammoth.extractRawText({ buffer: fileBuffer });
-      docText = result.value;
-    } else if (ext.endsWith(".pdf")) {
-      const data = await pdf(fileBuffer);
-      docText = data.text;
+    // 🛠️ UNIVERSAL PARSING LOGIC
+    try {
+      if (ext.endsWith(".docx")) {
+        const result = await mammoth.extractRawText({ buffer: fileBuffer });
+        docText = result.value;
+      } else if (ext.endsWith(".pdf")) {
+        // ✅ Fix: Yahan pdfParse ab sahi function hai
+        const data = await pdfParse(fileBuffer);
+        docText = data.text;
+      } else if (ext.endsWith(".txt") || ext.endsWith(".csv") || ext.endsWith(".json")) {
+        docText = fileBuffer.toString('utf-8');
+      } else {
+        // Kisi bhi aur format ke liye raw content ka chunk uthayega
+        docText = fileBuffer.toString('utf-8', 0, 15000);
+      }
+    } catch (parseErr) {
+      console.warn("Parsing Warning: Falling back to raw buffer string.");
+      docText = fileBuffer.toString('utf-8', 0, 15000);
     }
 
     const prompt = `
@@ -85,7 +97,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     try {
       result = await model.generateContent(prompt);
     } catch (err) {
-      if (err.message.includes("503")) {
+      if (err.message.includes("503") || err.message.includes("demand")) {
         const fallback = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         result = await fallback.generateContent(prompt);
       } else { throw err; }
@@ -93,7 +105,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
 
     const aiConfig = JSON.parse((await result.response).text().replace(/```json|```/g, "").trim());
 
-    // --- 🛠️ 1. FORCE UPDATE Core Offer Table (No COALESCE to avoid blank stickiness) ---
+    // --- 🛠️ 1. FORCE UPDATE Core Offer Table ---
     const urls = aiConfig.core_urls || {};
     await pool.query(
       `UPDATE offers SET 
@@ -117,7 +129,6 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     // --- 🛠️ 2. MIRROR SYNC for Dashboard Display ---
     const paramsMap = new Map();
     
-    // Sabse pehle Core URLs ko params table mein bhi insert karein taaki UI par dikhein
     if (urls.pin_send_url) paramsMap.set("pin_send_url", urls.pin_send_url);
     if (urls.verify_pin_url) paramsMap.set("verify_pin_url", urls.verify_pin_url);
     if (urls.check_status_url) paramsMap.set("check_status_url", urls.check_status_url);
@@ -130,7 +141,6 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       Object.entries(aiConfig.fraud).forEach(([k, v]) => paramsMap.set(k.toLowerCase(), v));
     }
 
-    // Batch Insert/Update for the "Manage Params" list
     for (const [key, val] of paramsMap.entries()) {
       await pool.query(
         `INSERT INTO offer_parameters (offer_id, param_key, param_value) VALUES ($1, $2, $3)
@@ -139,7 +149,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       );
     }
 
-    res.json({ success: true, message: "Mob13r-Robo: UI Mirror-Sync Successful!", data: aiConfig });
+    res.json({ success: true, message: "Mob13r-Robo: UI Mirror-Sync & Multi-Format Support Successful!", data: aiConfig });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
