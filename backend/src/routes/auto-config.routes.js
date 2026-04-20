@@ -7,18 +7,18 @@ import axios from "axios";
 
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-// ✅ Fix: pdf-parse ko sahi function mein load kiya
+// ✅ Fix: ESM module support for pdf-parse
 const pdfParse = require("pdf-parse");
 
 const router = express.Router();
 
 /**
- * --- 1. THE UNIVERSAL SCANNER (V10 - Multi-Format & PDF Fixed) ---
+ * --- 1. THE UNIVERSAL SCANNER (V12 - Master Integration) ---
  */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
-    console.log(`🚀 Mob13r-Robo V10: Hyper-Sync & Multi-Format for ID: ${offerId}`);
+    console.log(`🚀 Mob13r-Robo V12: Master Dashboard Sync for ID: ${offerId}`);
 
     if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -38,43 +38,36 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     let docText = "";
     const ext = file.name.toLowerCase();
     
-    // 🛠️ UNIVERSAL PARSING LOGIC
+    // UNIVERSAL PARSING (DOCX, PDF, TXT, etc.)
     try {
       if (ext.endsWith(".docx")) {
         const result = await mammoth.extractRawText({ buffer: fileBuffer });
         docText = result.value;
       } else if (ext.endsWith(".pdf")) {
-        // ✅ Fix: Yahan pdfParse ab sahi function hai
         const data = await pdfParse(fileBuffer);
         docText = data.text;
-      } else if (ext.endsWith(".txt") || ext.endsWith(".csv") || ext.endsWith(".json")) {
-        docText = fileBuffer.toString('utf-8');
       } else {
-        // Kisi bhi aur format ke liye raw content ka chunk uthayega
         docText = fileBuffer.toString('utf-8', 0, 15000);
       }
     } catch (parseErr) {
-      console.warn("Parsing Warning: Falling back to raw buffer string.");
       docText = fileBuffer.toString('utf-8', 0, 15000);
     }
 
     const prompt = `
       Expert AdTech Parser: Extract technical details.
-      You MUST use these exact keys for URLs to sync with the Dashboard UI:
-      - "pin_send_url" (For OTP Request/Init)
-      - "verify_pin_url" (For PIN Validate/Confirm)
-      - "check_status_url" (For Status Check)
-      - "portal_url" (For Success/Redirection)
+      Special Instructions:
+      - Match #MSISDN#, {msisdn}, #ANDROIDID# to: msisdn, transaction_id.
+      - Extract specific campaign keys: cmpid, pubid, refUrl, partner_id URI.
+      - Recognize patterns like "pingen.php" or "send-otp" as pin_send_url.
+      - Recognize "pinval.php" or "verify-otp" as verify_pin_url.
 
-      Rules:
-      1. Capture ALL params: msisdn, click_id, transaction_id, promoId, pubId, token, bfId.
-      2. Identify Anti-Fraud (MCP, Evina, Opticks) and their specific prepare/script URLs.
-      3. Capture methods (GET/POST) and sub1-sub5 if mentioned.
+      Dashboard UI Sync Requirement:
+      Use EXACT keys: "pin_send_url", "verify_pin_url", "check_status_url", "portal_url".
 
       Return ONLY JSON:
       {
         "has_fraud": boolean,
-        "fraud": { "af_provider": "string", "af_url": "string" },
+        "fraud": { "af_provider": "evina|alacrity|mcp|custom", "af_url": "string" },
         "core_urls": {
           "pin_send_url": "string",
           "verify_pin_url": "string",
@@ -85,22 +78,19 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
            "method_send": "GET|POST",
            "dtype_send": "query|body",
            "method_verify": "GET|POST",
-           "dtype_verify": "query|body",
            "service_id": "string",
-           "partner_id": "string",
-           "authorization": "string"
+           "cmpid": "string",
+           "partner_id": "string"
         }
       }
-      CONTENT: ${docText.slice(0, 19000)}`;
+      CONTENT: ${docText.slice(0, 19500)}`;
 
     let result;
     try {
       result = await model.generateContent(prompt);
     } catch (err) {
-      if (err.message.includes("503") || err.message.includes("demand")) {
-        const fallback = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        result = await fallback.generateContent(prompt);
-      } else { throw err; }
+      const fallback = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      result = await fallback.generateContent(prompt);
     }
 
     const aiConfig = JSON.parse((await result.response).text().replace(/```json|```/g, "").trim());
@@ -109,13 +99,8 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     const urls = aiConfig.core_urls || {};
     await pool.query(
       `UPDATE offers SET 
-        pin_send_url = $1, 
-        pin_verify_url = $2, 
-        check_status_url = $3, 
-        portal_url = $4,
-        has_antifraud = $5, 
-        updated_at = NOW() 
-       WHERE id = $6`,
+        pin_send_url = $1, pin_verify_url = $2, check_status_url = $3, portal_url = $4,
+        has_antifraud = $5, updated_at = NOW() WHERE id = $6`,
       [
         urls.pin_send_url || null, 
         urls.verify_pin_url || null, 
@@ -141,6 +126,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       Object.entries(aiConfig.fraud).forEach(([k, v]) => paramsMap.set(k.toLowerCase(), v));
     }
 
+    // Final Batch Update for UI inputs
     for (const [key, val] of paramsMap.entries()) {
       await pool.query(
         `INSERT INTO offer_parameters (offer_id, param_key, param_value) VALUES ($1, $2, $3)
@@ -149,7 +135,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       );
     }
 
-    res.json({ success: true, message: "Mob13r-Robo: UI Mirror-Sync & Multi-Format Support Successful!", data: aiConfig });
+    res.json({ success: true, message: "Master Robo: Dashboard Display Synced!", data: aiConfig });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
