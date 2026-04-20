@@ -13,20 +13,18 @@ const pdfParse = require("pdf-parse");
 const router = express.Router();
 
 /**
- * --- 1. THE UNIVERSAL SCANNER (V10 - Multi-Format & PDF Fixed) ---
+ * --- 1. THE UNIVERSAL SCANNER (V10 - Gemini 3 Only) ---
  */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
-    console.log(`🚀 Mob13r-Robo V10: Hyper-Sync & Multi-Format for ID: ${offerId}`);
+    console.log(`🚀 Mob13r-Robo V10: Running with Gemini 3 for ID: ${offerId}`);
 
     if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
-    let model;
-    try {
-      model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-    } 
+    // ✅ 1.5 Flash hata diya hai, ab sirf Gemini 3 Flash Preview hai
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
     const fileKeys = Object.keys(req.files || {});
     const file = fileKeys.length ? req.files[fileKeys[0]] : null;
@@ -36,19 +34,17 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     let docText = "";
     const ext = file.name.toLowerCase();
     
-    // 🛠️ UNIVERSAL PARSING LOGIC
+    // 🛠️ UNIVERSAL PARSING LOGIC (Fixed for PDF/DOCX)
     try {
       if (ext.endsWith(".docx")) {
         const result = await mammoth.extractRawText({ buffer: fileBuffer });
         docText = result.value;
       } else if (ext.endsWith(".pdf")) {
-        // ✅ Fix: Yahan pdfParse ab sahi function hai
         const data = await pdfParse(fileBuffer);
         docText = data.text;
       } else if (ext.endsWith(".txt") || ext.endsWith(".csv") || ext.endsWith(".json")) {
         docText = fileBuffer.toString('utf-8');
       } else {
-        // Kisi bhi aur format ke liye raw content ka chunk uthayega
         docText = fileBuffer.toString('utf-8', 0, 15000);
       }
     } catch (parseErr) {
@@ -56,25 +52,25 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       docText = fileBuffer.toString('utf-8', 0, 15000);
     }
 
-    // 🚀 UPDATED PROMPT: Supports SAV, Gameo, Alacrity & placeholders automatically
+    // 🚀 MASTER PROMPT: Added logic for SAV, Zain, Gameo & Anti-Fraud
     const prompt = `
       Expert AdTech Parser: Extract technical details.
       You MUST use these exact keys for URLs to sync with the Dashboard UI:
-      - "pin_send_url" (For OTP Request/Init/pingen.php)
-      - "verify_pin_url" (For PIN Validate/Confirm/verifypin)
+      - "pin_send_url" (For OTP Request/Init)
+      - "verify_pin_url" (For PIN Validate/Confirm)
       - "check_status_url" (For Status Check)
       - "portal_url" (For Success/Redirection)
 
       Rules:
-      1. Clean Placeholders: Convert #MSISDN#, {msisdn}, [msisdn] to {msisdn}. 
-      2. Convert #ANDROIDID#, #TXID# to {transaction_id}. 
-      3. Capture ALL params: msisdn, click_id, transaction_id, promoId, pubId, token, bfId, sessionKey, cmpid.
-      4. Identify Anti-Fraud: Capture script URLs (Evina, Alacrity, MCP) and Partner/Campaign IDs.
+      1. Clean Placeholders: Convert #MSISDN#, {msisdn}, [msisdn] to {msisdn}.
+      2. Identify Anti-Fraud (MCP, Evina, Alacrity) and their specific script URLs/Partner IDs.
+      3. Capture all params including: sessionKey, cmpid, pubId, click_id, and confirm_button_id.
+      4. Always extract FULL URLs (including https://).
 
       Return ONLY JSON:
       {
         "has_fraud": boolean,
-        "fraud": { "af_provider": "string", "af_url": "string", "partner_uri": "string", "campaign_uri": "string" },
+        "fraud": { "af_provider": "string", "af_url": "string", "partner_uri": "string" },
         "core_urls": {
           "pin_send_url": "string",
           "verify_pin_url": "string",
@@ -84,27 +80,15 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
         "all_params": {
            "method_send": "GET|POST",
            "dtype_send": "query|body",
-           "method_verify": "GET|POST",
-           "dtype_verify": "query|body",
            "service_id": "string",
-           "partner_id": "string",
-           "authorization": "string",
-           "confirm_button_id": "string",
-           "cmpid": "string"
+           "cmpid": "string",
+           "authorization": "string"
         }
       }
       CONTENT: ${docText.slice(0, 19000)}`;
 
-    let result;
-    try {
-      result = await model.generateContent(prompt);
-    } catch (err) {
-      if (err.message.includes("503") || err.message.includes("demand")) {
-        const fallback = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        result = await fallback.generateContent(prompt);
-      } else { throw err; }
-    }
-
+    // Gemini 3 Direct Call
+    const result = await model.generateContent(prompt);
     const aiConfig = JSON.parse((await result.response).text().replace(/```json|```/g, "").trim());
 
     // --- 🛠️ 1. FORCE UPDATE Core Offer Table ---
@@ -151,7 +135,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       );
     }
 
-    res.json({ success: true, message: "Mob13r-Robo: UI Mirror-Sync & Multi-Format Support Successful!", data: aiConfig });
+    res.json({ success: true, message: "Mob13r-Robo: Gemini 3 Sync Complete!", data: aiConfig });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
