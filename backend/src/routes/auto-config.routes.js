@@ -7,27 +7,27 @@ import axios from "axios";
 
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
+// ✅ Fix: pdf-parse ko sahi function mein load kiya
 const pdfParse = require("pdf-parse");
 
 const router = express.Router();
 
 /**
- * --- 1. THE MASTER SCANNER (V14 - Full Logic Merge & Placeholder Fix) ---
+ * --- 1. THE UNIVERSAL SCANNER (V10 - Multi-Format & PDF Fixed) ---
  */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
-    console.log(`🚀 Mob13r-Robo V14: Master Logic Merge for ID: ${offerId}`);
+    console.log(`🚀 Mob13r-Robo V10: Hyper-Sync & Multi-Format for ID: ${offerId}`);
 
     if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
-    // Model Selection (Using stable string format)
     let model;
     try {
-      model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
     } catch (e) {
-      model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     }
 
     const fileKeys = Object.keys(req.files || {});
@@ -38,35 +38,62 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     let docText = "";
     const ext = file.name.toLowerCase();
     
-    // Universal Parsing
+    // 🛠️ UNIVERSAL PARSING LOGIC
     try {
       if (ext.endsWith(".docx")) {
         const result = await mammoth.extractRawText({ buffer: fileBuffer });
         docText = result.value;
       } else if (ext.endsWith(".pdf")) {
+        // ✅ Fix: Yahan pdfParse ab sahi function hai
         const data = await pdfParse(fileBuffer);
         docText = data.text;
+      } else if (ext.endsWith(".txt") || ext.endsWith(".csv") || ext.endsWith(".json")) {
+        docText = fileBuffer.toString('utf-8');
       } else {
+        // Kisi bhi aur format ke liye raw content ka chunk uthayega
         docText = fileBuffer.toString('utf-8', 0, 15000);
       }
     } catch (parseErr) {
+      console.warn("Parsing Warning: Falling back to raw buffer string.");
       docText = fileBuffer.toString('utf-8', 0, 15000);
     }
 
+    // 🚀 UPDATED PROMPT: Supports SAV, Gameo, Alacrity & placeholders automatically
     const prompt = `
       Expert AdTech Parser: Extract technical details.
-      SYNC RULES:
-      - Clean all URLs: Convert #MSISDN# to {msisdn}, #ANDROIDID# to {transaction_id}, #OTP# to {otp}.
-      - Extract FULL URLs (not just filenames like pingen.php).
-      - Identify Anti-Fraud logic (Evina, Alacrity script URIs, Partner/Campaign IDs).
-      - Map exactly to: "pin_send_url", "verify_pin_url", "check_status_url", "portal_url".
+      You MUST use these exact keys for URLs to sync with the Dashboard UI:
+      - "pin_send_url" (For OTP Request/Init/pingen.php)
+      - "verify_pin_url" (For PIN Validate/Confirm/verifypin)
+      - "check_status_url" (For Status Check)
+      - "portal_url" (For Success/Redirection)
+
+      Rules:
+      1. Clean Placeholders: Convert #MSISDN#, {msisdn}, [msisdn] to {msisdn}. 
+      2. Convert #ANDROIDID#, #TXID# to {transaction_id}. 
+      3. Capture ALL params: msisdn, click_id, transaction_id, promoId, pubId, token, bfId, sessionKey, cmpid.
+      4. Identify Anti-Fraud: Capture script URLs (Evina, Alacrity, MCP) and Partner/Campaign IDs.
 
       Return ONLY JSON:
       {
         "has_fraud": boolean,
         "fraud": { "af_provider": "string", "af_url": "string", "partner_uri": "string", "campaign_uri": "string" },
-        "core_urls": { "pin_send_url": "string", "verify_pin_url": "string", "check_status_url": "string", "portal_url": "string" },
-        "all_params": { "method_send": "GET|POST", "cmpid": "string", "service_id": "string", "confirm_button_id": "string" }
+        "core_urls": {
+          "pin_send_url": "string",
+          "verify_pin_url": "string",
+          "check_status_url": "string",
+          "portal_url": "string"
+        },
+        "all_params": {
+           "method_send": "GET|POST",
+           "dtype_send": "query|body",
+           "method_verify": "GET|POST",
+           "dtype_verify": "query|body",
+           "service_id": "string",
+           "partner_id": "string",
+           "authorization": "string",
+           "confirm_button_id": "string",
+           "cmpid": "string"
+        }
       }
       CONTENT: ${docText.slice(0, 19000)}`;
 
@@ -74,25 +101,42 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     try {
       result = await model.generateContent(prompt);
     } catch (err) {
-      const fallback = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-      result = await fallback.generateContent(prompt);
+      if (err.message.includes("503") || err.message.includes("demand")) {
+        const fallback = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        result = await fallback.generateContent(prompt);
+      } else { throw err; }
     }
 
     const aiConfig = JSON.parse((await result.response).text().replace(/```json|```/g, "").trim());
 
-    // 🛠️ 1. FORCE UPDATE Core Offer Table
+    // --- 🛠️ 1. FORCE UPDATE Core Offer Table ---
     const urls = aiConfig.core_urls || {};
     await pool.query(
       `UPDATE offers SET 
-        pin_send_url = $1, pin_verify_url = $2, check_status_url = $3, portal_url = $4,
-        has_antifraud = $5, updated_at = NOW() WHERE id = $6`,
-      [urls.pin_send_url || null, urls.verify_pin_url || null, urls.check_status_url || null, urls.portal_url || null, !!aiConfig.has_fraud, offerId]
+        pin_send_url = $1, 
+        pin_verify_url = $2, 
+        check_status_url = $3, 
+        portal_url = $4,
+        has_antifraud = $5, 
+        updated_at = NOW() 
+       WHERE id = $6`,
+      [
+        urls.pin_send_url || null, 
+        urls.verify_pin_url || null, 
+        urls.check_status_url || null, 
+        urls.portal_url || null, 
+        !!aiConfig.has_fraud, 
+        offerId
+      ]
     );
 
-    // 🛠️ 2. MIRROR SYNC for Dashboard UI
+    // --- 🛠️ 2. MIRROR SYNC for Dashboard Display ---
     const paramsMap = new Map();
-    const uiCoreKeys = ['pin_send_url', 'verify_pin_url', 'check_status_url', 'portal_url'];
-    uiCoreKeys.forEach(k => { if(urls[k]) paramsMap.set(k, urls[k]); });
+    
+    if (urls.pin_send_url) paramsMap.set("pin_send_url", urls.pin_send_url);
+    if (urls.verify_pin_url) paramsMap.set("verify_pin_url", urls.verify_pin_url);
+    if (urls.check_status_url) paramsMap.set("check_status_url", urls.check_status_url);
+    if (urls.portal_url) paramsMap.set("portal_url", urls.portal_url);
 
     if (aiConfig.all_params) {
       Object.entries(aiConfig.all_params).forEach(([k, v]) => paramsMap.set(k.toLowerCase(), v));
@@ -101,7 +145,6 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       Object.entries(aiConfig.fraud).forEach(([k, v]) => paramsMap.set(k.toLowerCase(), v));
     }
 
-    // Final Batch Sync for UI
     for (const [key, val] of paramsMap.entries()) {
       await pool.query(
         `INSERT INTO offer_parameters (offer_id, param_key, param_value) VALUES ($1, $2, $3)
@@ -110,7 +153,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       );
     }
 
-    res.json({ success: true, message: "Mob13r-Robo V14: Master Logic Synced!", data: aiConfig });
+    res.json({ success: true, message: "Mob13r-Robo: UI Mirror-Sync & Multi-Format Support Successful!", data: aiConfig });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -126,7 +169,13 @@ router.get("/get-runtime-config/:offerId", async (req, res) => {
     const paramsRes = await pool.query("SELECT param_key, param_value FROM offer_parameters WHERE offer_id = $1", [offerId]);
     const config = {};
     paramsRes.rows.forEach(p => config[p.param_key] = p.param_value);
-    res.json({ success: true, offer: offerRes.rows[0], params: config });
+
+    res.json({
+      success: true,
+      offer: offerRes.rows[0],
+      params: config,
+      runtime: { transaction_id: `m13r_${Date.now()}` }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
