@@ -26,9 +26,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     let model;
     try {
       model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-    } catch (e) {
-      model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    }
+    } 
 
     const fileKeys = Object.keys(req.files || {});
     const file = fileKeys.length ? req.files[fileKeys[0]] : null;
