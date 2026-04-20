@@ -12,23 +12,22 @@ const pdfParse = require("pdf-parse");
 const router = express.Router();
 
 /**
- * --- 1. THE MASTER SCANNER (V13 - Gemini 3 Flash Primary + All Logic) ---
+ * --- 1. THE MASTER SCANNER (V14 - Full Logic Merge & Placeholder Fix) ---
  */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
-    console.log(`🚀 Mob13r-Robo V13: Running Master Sync with Gemini 3 for ID: ${offerId}`);
+    console.log(`🚀 Mob13r-Robo V14: Master Logic Merge for ID: ${offerId}`);
 
     if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
-    // 🛠️ PRIMARY MODEL: Gemini 3 Flash Preview (Jo pehle work kar raha tha)
+    // Model Selection (Using stable string format)
     let model;
     try {
-      model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+      model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     } catch (e) {
-      // Emergency Fallback
-      model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+      model = genAI.getGenerativeModel({ model: "gemini-pro" });
     }
 
     const fileKeys = Object.keys(req.files || {});
@@ -39,7 +38,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     let docText = "";
     const ext = file.name.toLowerCase();
     
-    // Universal Parser
+    // Universal Parsing
     try {
       if (ext.endsWith(".docx")) {
         const result = await mammoth.extractRawText({ buffer: fileBuffer });
@@ -55,35 +54,33 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     }
 
     const prompt = `
-      Expert AdTech Parser: Extract ALL technical details.
+      Expert AdTech Parser: Extract technical details.
       SYNC RULES:
-      - Match #MSISDN#, {msisdn}, [msisdn] -> "msisdn"
-      - Match #ANDROIDID#, #TXID#, {transaction_id} -> "transaction_id"
-      - Extract specific campaign keys: cmpid, pubid, partner_id URI, campaign_uri, confirm_button_id.
-      - Recognise URLs: pingen/send-otp -> pin_send_url, pinval/verify-otp -> verify_pin_url.
-      - Exact keys for UI: "pin_send_url", "verify_pin_url", "check_status_url", "portal_url".
+      - Clean all URLs: Convert #MSISDN# to {msisdn}, #ANDROIDID# to {transaction_id}, #OTP# to {otp}.
+      - Extract FULL URLs (not just filenames like pingen.php).
+      - Identify Anti-Fraud logic (Evina, Alacrity script URIs, Partner/Campaign IDs).
+      - Map exactly to: "pin_send_url", "verify_pin_url", "check_status_url", "portal_url".
 
       Return ONLY JSON:
       {
         "has_fraud": boolean,
         "fraud": { "af_provider": "string", "af_url": "string", "partner_uri": "string", "campaign_uri": "string" },
         "core_urls": { "pin_send_url": "string", "verify_pin_url": "string", "check_status_url": "string", "portal_url": "string" },
-        "all_params": { "method_send": "GET|POST", "cmpid": "string", "service_id": "string", "confirm_button_id": "string", "authorization": "string" }
+        "all_params": { "method_send": "GET|POST", "cmpid": "string", "service_id": "string", "confirm_button_id": "string" }
       }
-      CONTENT: ${docText.slice(0, 19500)}`;
+      CONTENT: ${docText.slice(0, 19000)}`;
 
     let result;
     try {
       result = await model.generateContent(prompt);
     } catch (err) {
-       // Demand handling logic
-       const fallback = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-       result = await fallback.generateContent(prompt);
+      const fallback = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+      result = await fallback.generateContent(prompt);
     }
 
     const aiConfig = JSON.parse((await result.response).text().replace(/```json|```/g, "").trim());
 
-    // 🛠️ 1. Force Sync Core URL Table
+    // 🛠️ 1. FORCE UPDATE Core Offer Table
     const urls = aiConfig.core_urls || {};
     await pool.query(
       `UPDATE offers SET 
@@ -92,7 +89,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       [urls.pin_send_url || null, urls.verify_pin_url || null, urls.check_status_url || null, urls.portal_url || null, !!aiConfig.has_fraud, offerId]
     );
 
-    // 🛠️ 2. Mirror Sync for Dashboard UI Display
+    // 🛠️ 2. MIRROR SYNC for Dashboard UI
     const paramsMap = new Map();
     const uiCoreKeys = ['pin_send_url', 'verify_pin_url', 'check_status_url', 'portal_url'];
     uiCoreKeys.forEach(k => { if(urls[k]) paramsMap.set(k, urls[k]); });
@@ -104,6 +101,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       Object.entries(aiConfig.fraud).forEach(([k, v]) => paramsMap.set(k.toLowerCase(), v));
     }
 
+    // Final Batch Sync for UI
     for (const [key, val] of paramsMap.entries()) {
       await pool.query(
         `INSERT INTO offer_parameters (offer_id, param_key, param_value) VALUES ($1, $2, $3)
@@ -112,7 +110,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       );
     }
 
-    res.json({ success: true, message: "Mob13r Master V13: All logic updated!", data: aiConfig });
+    res.json({ success: true, message: "Mob13r-Robo V14: Master Logic Synced!", data: aiConfig });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
