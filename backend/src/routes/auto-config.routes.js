@@ -7,13 +7,12 @@ import axios from "axios";
 
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-// ✅ Fix: pdf-parse ko sahi function mein load kiya
 const pdfParse = require("pdf-parse");
 
 const router = express.Router();
 
 /**
- * --- 1. THE UNIVERSAL SCANNER (V10 - Gemini 3 Only) ---
+ * --- 1. THE UNIVERSAL SCANNER (V10 - Gemini 3 Only - Constraint Fixed) ---
  */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
@@ -23,7 +22,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
-    // ✅ 1.5 Flash hata diya hai, ab sirf Gemini 3 Flash Preview hai
+    // Sirf Gemini 3 Flash Preview use ho raha hai
     const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
     const fileKeys = Object.keys(req.files || {});
@@ -34,7 +33,6 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     let docText = "";
     const ext = file.name.toLowerCase();
     
-    // 🛠️ UNIVERSAL PARSING LOGIC (Fixed for PDF/DOCX)
     try {
       if (ext.endsWith(".docx")) {
         const result = await mammoth.extractRawText({ buffer: fileBuffer });
@@ -42,17 +40,13 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       } else if (ext.endsWith(".pdf")) {
         const data = await pdfParse(fileBuffer);
         docText = data.text;
-      } else if (ext.endsWith(".txt") || ext.endsWith(".csv") || ext.endsWith(".json")) {
-        docText = fileBuffer.toString('utf-8');
       } else {
         docText = fileBuffer.toString('utf-8', 0, 15000);
       }
     } catch (parseErr) {
-      console.warn("Parsing Warning: Falling back to raw buffer string.");
       docText = fileBuffer.toString('utf-8', 0, 15000);
     }
 
-    // 🚀 MASTER PROMPT: Added logic for SAV, Zain, Gameo & Anti-Fraud
     const prompt = `
       Expert AdTech Parser: Extract technical details.
       You MUST use these exact keys for URLs to sync with the Dashboard UI:
@@ -87,12 +81,12 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       }
       CONTENT: ${docText.slice(0, 19000)}`;
 
-    // Gemini 3 Direct Call
     const result = await model.generateContent(prompt);
     const aiConfig = JSON.parse((await result.response).text().replace(/```json|```/g, "").trim());
 
-    // --- 🛠️ 1. FORCE UPDATE Core Offer Table ---
     const urls = aiConfig.core_urls || {};
+    
+    // --- 🛠️ 1. Main Offer Table Update ---
     await pool.query(
       `UPDATE offers SET 
         pin_send_url = $1, 
@@ -102,37 +96,39 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
         has_antifraud = $5, 
         updated_at = NOW() 
        WHERE id = $6`,
-      [
-        urls.pin_send_url || null, 
-        urls.verify_pin_url || null, 
-        urls.check_status_url || null, 
-        urls.portal_url || null, 
-        !!aiConfig.has_fraud, 
-        offerId
-      ]
+      [urls.pin_send_url || null, urls.verify_pin_url || null, urls.check_status_url || null, urls.portal_url || null, !!aiConfig.has_fraud, offerId]
     );
 
-    // --- 🛠️ 2. MIRROR SYNC for Dashboard Display ---
+    // --- 🛠️ 2. Parameters Table Sync (With Null Constraint Fix) ---
     const paramsMap = new Map();
     
+    // Core URLs Mirroring
     if (urls.pin_send_url) paramsMap.set("pin_send_url", urls.pin_send_url);
     if (urls.verify_pin_url) paramsMap.set("verify_pin_url", urls.verify_pin_url);
     if (urls.check_status_url) paramsMap.set("check_status_url", urls.check_status_url);
     if (urls.portal_url) paramsMap.set("portal_url", urls.portal_url);
 
     if (aiConfig.all_params) {
-      Object.entries(aiConfig.all_params).forEach(([k, v]) => paramsMap.set(k.toLowerCase(), v));
+      Object.entries(aiConfig.all_params).forEach(([k, v]) => {
+        if (v !== null && v !== undefined) paramsMap.set(k.toLowerCase(), v);
+      });
     }
     if (aiConfig.fraud) {
-      Object.entries(aiConfig.fraud).forEach(([k, v]) => paramsMap.set(k.toLowerCase(), v));
+      Object.entries(aiConfig.fraud).forEach(([k, v]) => {
+        if (v !== null && v !== undefined) paramsMap.set(k.toLowerCase(), v);
+      });
     }
 
+    // Final Batch Loop with Safety Check
     for (const [key, val] of paramsMap.entries()) {
-      await pool.query(
-        `INSERT INTO offer_parameters (offer_id, param_key, param_value) VALUES ($1, $2, $3)
-         ON CONFLICT (offer_id, param_key) DO UPDATE SET param_value = EXCLUDED.param_value`,
-        [offerId, key, val]
-      );
+      // ✅ Critical Fix: Sirf wahi data insert hoga jo null nahi hai
+      if (val !== null && val !== undefined) {
+        await pool.query(
+          `INSERT INTO offer_parameters (offer_id, param_key, param_value) VALUES ($1, $2, $3)
+           ON CONFLICT (offer_id, param_key) DO UPDATE SET param_value = EXCLUDED.param_value`,
+          [offerId, key, val]
+        );
+      }
     }
 
     res.json({ success: true, message: "Mob13r-Robo: Gemini 3 Sync Complete!", data: aiConfig });
@@ -141,9 +137,6 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
   }
 });
 
-/**
- * --- 2. RUNTIME ENGINE ---
- */
 router.get("/get-runtime-config/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
@@ -151,13 +144,7 @@ router.get("/get-runtime-config/:offerId", async (req, res) => {
     const paramsRes = await pool.query("SELECT param_key, param_value FROM offer_parameters WHERE offer_id = $1", [offerId]);
     const config = {};
     paramsRes.rows.forEach(p => config[p.param_key] = p.param_value);
-
-    res.json({
-      success: true,
-      offer: offerRes.rows[0],
-      params: config,
-      runtime: { transaction_id: `m13r_${Date.now()}` }
-    });
+    res.json({ success: true, offer: offerRes.rows[0], params: config });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
