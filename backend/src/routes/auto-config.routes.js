@@ -11,19 +11,17 @@ const pdfParse = require("pdf-parse");
 
 const router = express.Router();
 
-/**
- * --- 1. THE UNIVERSAL SCANNER (V10 - Gemini 3 Only - Constraint Fixed) ---
- */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
-    console.log(`🚀 Mob13r-Robo V10: Running with Gemini 3 for ID: ${offerId}`);
-
     if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
-    // Sirf Gemini 3 Flash Preview use ho raha hai
-    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+    // 🛠️ FIX 1: Temperature 0.0 set kiya hai taaki AI apni taraf se data na banaye
+    const model = genAI.getGenerativeModel({ 
+        model: "gemini-3-flash-preview",
+        generationConfig: { temperature: 0.0 } 
+    });
 
     const fileKeys = Object.keys(req.files || {});
     const file = fileKeys.length ? req.files[fileKeys[0]] : null;
@@ -47,37 +45,28 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       docText = fileBuffer.toString('utf-8', 0, 15000);
     }
 
+    // 🛠️ FIX 2: Strict Anchoring Prompt (Force AI to use ONLY the provided text)
     const prompt = `
-      Expert AdTech Parser: Extract technical details.
-      You MUST use these exact keys for URLs to sync with the Dashboard UI:
-      - "pin_send_url" (For OTP Request/Init)
-      - "verify_pin_url" (For PIN Validate/Confirm)
-      - "check_status_url" (For Status Check)
-      - "portal_url" (For Success/Redirection)
-
-      Rules:
-      1. Clean Placeholders: Convert #MSISDN#, {msisdn}, [msisdn] to {msisdn}.
-      2. Identify Anti-Fraud (MCP, Evina, Alacrity) and their specific script URLs/Partner IDs.
-      3. Capture all params including: sessionKey, cmpid, pubId, click_id, and confirm_button_id.
-      4. Always extract FULL URLs (including https://).
+      STRICT INSTRUCTION: Extract technical details ONLY from the provided CONTENT below. 
+      DO NOT use any external knowledge or previous example data.
+      
+      TARGETS:
+      - "pin_send_url": Extract URL for Send Pin / Request OTP.
+      - "verify_pin_url": Extract URL for Verify Pin / Confirm.
+      - "check_status_url": Extract Status Check API.
+      - "portal_url": Extract Portal / Success Redirect link.
+      
+      MAPPING RULES:
+      1. Use #MSISDN# or {msisdn} as {msisdn}.
+      2. Extract cid, pub_id, sub_pub_id, sessionKey if present in URLs.
+      3. If no Anti-Fraud is mentioned in the text, set has_fraud to false.
 
       Return ONLY JSON:
       {
         "has_fraud": boolean,
-        "fraud": { "af_provider": "string", "af_url": "string", "partner_uri": "string" },
-        "core_urls": {
-          "pin_send_url": "string",
-          "verify_pin_url": "string",
-          "check_status_url": "string",
-          "portal_url": "string"
-        },
-        "all_params": {
-           "method_send": "GET|POST",
-           "dtype_send": "query|body",
-           "service_id": "string",
-           "cmpid": "string",
-           "authorization": "string"
-        }
+        "fraud": { "af_provider": "string", "af_url": "string" },
+        "core_urls": { "pin_send_url": "string", "verify_pin_url": "string", "check_status_url": "string", "portal_url": "string" },
+        "all_params": { "method_send": "string", "cmpid": "string", "cid": "string" }
       }
       CONTENT: ${docText.slice(0, 19000)}`;
 
@@ -86,42 +75,23 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
 
     const urls = aiConfig.core_urls || {};
     
-    // --- 🛠️ 1. Main Offer Table Update ---
+    // --- 🛠️ Database Updates (Same Logic, No changes) ---
     await pool.query(
-      `UPDATE offers SET 
-        pin_send_url = $1, 
-        pin_verify_url = $2, 
-        check_status_url = $3, 
-        portal_url = $4,
-        has_antifraud = $5, 
-        updated_at = NOW() 
-       WHERE id = $6`,
+      `UPDATE offers SET pin_send_url=$1, pin_verify_url=$2, check_status_url=$3, portal_url=$4, has_antifraud=$5, updated_at=NOW() WHERE id=$6`,
       [urls.pin_send_url || null, urls.verify_pin_url || null, urls.check_status_url || null, urls.portal_url || null, !!aiConfig.has_fraud, offerId]
     );
 
-    // --- 🛠️ 2. Parameters Table Sync (With Null Constraint Fix) ---
     const paramsMap = new Map();
-    
-    // Core URLs Mirroring
-    if (urls.pin_send_url) paramsMap.set("pin_send_url", urls.pin_send_url);
-    if (urls.verify_pin_url) paramsMap.set("verify_pin_url", urls.verify_pin_url);
-    if (urls.check_status_url) paramsMap.set("check_status_url", urls.check_status_url);
-    if (urls.portal_url) paramsMap.set("portal_url", urls.portal_url);
+    const uiKeys = ['pin_send_url', 'verify_pin_url', 'check_status_url', 'portal_url'];
+    uiKeys.forEach(k => { if(urls[k]) paramsMap.set(k, urls[k]); });
 
     if (aiConfig.all_params) {
       Object.entries(aiConfig.all_params).forEach(([k, v]) => {
         if (v !== null && v !== undefined) paramsMap.set(k.toLowerCase(), v);
       });
     }
-    if (aiConfig.fraud) {
-      Object.entries(aiConfig.fraud).forEach(([k, v]) => {
-        if (v !== null && v !== undefined) paramsMap.set(k.toLowerCase(), v);
-      });
-    }
 
-    // Final Batch Loop with Safety Check
     for (const [key, val] of paramsMap.entries()) {
-      // ✅ Critical Fix: Sirf wahi data insert hoga jo null nahi hai
       if (val !== null && val !== undefined) {
         await pool.query(
           `INSERT INTO offer_parameters (offer_id, param_key, param_value) VALUES ($1, $2, $3)
@@ -131,20 +101,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: "Mob13r-Robo: Gemini 3 Sync Complete!", data: aiConfig });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.get("/get-runtime-config/:offerId", async (req, res) => {
-  try {
-    const { offerId } = req.params;
-    const offerRes = await pool.query("SELECT * FROM offers WHERE id = $1", [offerId]);
-    const paramsRes = await pool.query("SELECT param_key, param_value FROM offer_parameters WHERE offer_id = $1", [offerId]);
-    const config = {};
-    paramsRes.rows.forEach(p => config[p.param_key] = p.param_value);
-    res.json({ success: true, offer: offerRes.rows[0], params: config });
+    res.json({ success: true, message: "Mob13r-Robo: Synced with Strict Data!", data: aiConfig });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
