@@ -6,16 +6,17 @@ import fs from "fs/promises";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 
-// ✅ FIX: pdf-parse ko is tarah load karein taaki "is not a function" error na aaye
-const pdfParserLib = require("pdf-parse");
+// ✅ LOAD FIX: pdf-parse ko load karne ka sabse safe tareeka
+const rawPdfParse = require("pdf-parse");
+const pdfParse = typeof rawPdfParse === 'function' ? rawPdfParse : rawPdfParse.default;
 
 const router = express.Router();
 
 /**
- * --- THE MASTER SCANNER (Final V20 - Everything Fixed) ---
+ * --- THE MASTER SCANNER (V21 - Permanent PDF Fix) ---
  */
 router.post("/auto-integrate/:offerId", async (req, res) => {
-  // ✅ CORS Fix: Browser block ko rokne ke liye
+  // ✅ CORS FIX (Dashboard connection ke liye)
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type");
@@ -39,48 +40,47 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     let docText = "";
     const ext = file.name.toLowerCase();
     
-    // ✅ Universal Parsing Logic
+    // ✅ UNIVERSAL PARSING (With Function Safety)
     if (ext.endsWith(".docx")) {
       const result = await mammoth.extractRawText({ buffer: fileBuffer });
       docText = result.value;
     } else if (ext.endsWith(".pdf")) {
-      // ✅ FIX: Yahan hum 'pdfParserLib' call kar rahe hain jo seedha function hai
-      const data = await pdfParserLib(fileBuffer);
+      // ✅ Safety Check: Check if pdfParse is indeed a function before calling
+      if (typeof pdfParse !== 'function') {
+         throw new Error("PDF Library load failed. Please check npm install pdf-parse");
+      }
+      const data = await pdfParse(fileBuffer);
       docText = data.text;
     } else {
       docText = fileBuffer.toString('utf-8', 0, 10000);
     }
 
-    // ✅ Master Prompt for all your files (SAV, Zain, Gameo, etc.)
     const prompt = `
-      Extract technical details ONLY from the provided text. DO NOT hallucinate.
-      
-      RULES:
-      1. Convert #MSISDN# or {msisdn} to {msisdn}.
-      2. Convert #ANDROIDID# or #TXID# to {transaction_id}.
-      3. Fields: pin_send_url, verify_pin_url, check_status_url, portal_url, cid, sessionKey, pub_id, cmpid.
-
+      Extract technical details ONLY from the provided text.
+      Patterns:
+      - Convert #MSISDN#, {msisdn} to {msisdn}.
+      - Convert #ANDROIDID#, #TXID# to {transaction_id}.
+      - Required: pin_send_url, verify_pin_url, check_status_url, portal_url, cid, sessionKey, pub_id.
       Return JSON ONLY.
       CONTENT: ${docText.slice(0, 10000)}`;
 
     const result = await model.generateContent(prompt);
     let responseText = (await result.response).text();
     
-    // ✅ Safe JSON Extraction (Fixes "Unexpected token" error)
+    // ✅ JSON Safety (Fixes Unexpected Token Error)
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("AI did not return a valid JSON structure");
     const aiConfig = JSON.parse(jsonMatch[0]);
 
     const urls = aiConfig.core_urls || {};
     
-    // Update main table
+    // --- Database Sync ---
     await pool.query(
       `UPDATE offers SET pin_send_url=$1, pin_verify_url=$2, check_status_url=$3, portal_url=$4, has_antifraud=$5, updated_at=NOW() WHERE id=$6`,
       [urls.pin_send_url || null, urls.verify_pin_url || null, urls.check_status_url || null, urls.portal_url || null, !!aiConfig.has_fraud, offerId]
     );
 
     const paramsMap = new Map();
-    // Mirror Sync for Dashboard Display
     ['pin_send_url', 'verify_pin_url', 'check_status_url', 'portal_url'].forEach(k => {
         if(urls[k]) paramsMap.set(k, urls[k]);
     });
@@ -91,7 +91,6 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       });
     }
 
-    // ✅ Null safety loop for database
     for (const [key, val] of paramsMap.entries()) {
       if (val && val !== "") {
         await pool.query(
@@ -102,7 +101,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: "Mob13r-Robo: V20 Master Fixed!", data: aiConfig });
+    res.json({ success: true, message: "Mob13r-Robo: V21 Fixed & Stable!", data: aiConfig });
   } catch (err) {
     console.error("Sync Error:", err.message);
     res.status(500).json({ error: "Sync Failed", details: err.message });
