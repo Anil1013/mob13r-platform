@@ -5,12 +5,13 @@ import mammoth from "mammoth";
 import fs from "fs/promises";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
+// ✅ Fix 1: pdf-parse ko is tarah load karein taaki "is not a function" error na aaye
 const pdfParse = require("pdf-parse");
 
 const router = express.Router();
 
 router.post("/auto-integrate/:offerId", async (req, res) => {
-  // ✅ CORS Fix
+  // CORS Headers
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type");
@@ -20,7 +21,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
-    // ✅ Gemini 3 Flash Preview with Strict Temperature
+    // Gemini 3 Flash Preview with Strict Temperature
     const model = genAI.getGenerativeModel({ 
         model: "gemini-3-flash-preview",
         generationConfig: { temperature: 0.0, maxOutputTokens: 1000 } 
@@ -34,10 +35,12 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     let docText = "";
     const ext = file.name.toLowerCase();
     
+    // Parsing Logic
     if (ext.endsWith(".docx")) {
       const result = await mammoth.extractRawText({ buffer: fileBuffer });
       docText = result.value;
     } else if (ext.endsWith(".pdf")) {
+      // ✅ Fix 2: Calling pdfParse correctly
       const data = await pdfParse(fileBuffer);
       docText = data.text;
     } else {
@@ -45,31 +48,30 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     }
 
     const prompt = `
-      Extract technical details ONLY from the provided text. DO NOT use external knowledge.
+      Extract technical details ONLY from the provided text.
       Convert #MSISDN# or {msisdn} to {msisdn}. Convert #ANDROIDID# to {transaction_id}.
-      Required Fields: pin_send_url, verify_pin_url, check_status_url, portal_url, cid, sessionKey, pub_id.
-      
+      Required: pin_send_url, verify_pin_url, check_status_url, portal_url, cid, sessionKey, pub_id.
       Return ONLY valid JSON.
       CONTENT: ${docText.slice(0, 10000)}`;
 
     const result = await model.generateContent(prompt);
     let responseText = (await result.response).text();
     
-    // ✅ Fix: Safe JSON Extraction (Unexpected token solution)
+    // Safe JSON Extraction
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("AI did not return a valid JSON structure");
     const aiConfig = JSON.parse(jsonMatch[0]);
 
     const urls = aiConfig.core_urls || {};
     
-    // ✅ Update main table
+    // Update main table
     await pool.query(
       `UPDATE offers SET pin_send_url=$1, pin_verify_url=$2, check_status_url=$3, portal_url=$4, has_antifraud=$5, updated_at=NOW() WHERE id=$6`,
       [urls.pin_send_url || null, urls.verify_pin_url || null, urls.check_status_url || null, urls.portal_url || null, !!aiConfig.has_fraud, offerId]
     );
 
     const paramsMap = new Map();
-    // ✅ Mirror Sync for UI
+    // Mirror Sync for UI
     ['pin_send_url', 'verify_pin_url', 'check_status_url', 'portal_url'].forEach(k => {
         if(urls[k]) paramsMap.set(k, urls[k]);
     });
@@ -80,7 +82,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       });
     }
 
-    // ✅ Null safety loop for database parameters
+    // Null safety loop for database parameters
     for (const [key, val] of paramsMap.entries()) {
       if (val && val !== null && val !== "") {
         await pool.query(
