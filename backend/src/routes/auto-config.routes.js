@@ -3,8 +3,6 @@ import pool from "../db.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import mammoth from "mammoth";
 import fs from "fs/promises";
-import axios from "axios";
-
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const pdfParse = require("pdf-parse");
@@ -12,20 +10,18 @@ const pdfParse = require("pdf-parse");
 const router = express.Router();
 
 /**
- * --- 1. THE MASTER SCANNER (V17 - Gemini 3 Primary - No Logic Broken) ---
+ * --- 1. THE UNIVERSAL SCANNER (V18 - Strict Anchoring & Gemini 3 Only) ---
  */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
-    console.log(`🚀 Mob13r-Robo V17: Gemini 3 Master Sync for ID: ${offerId}`);
-
     if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
-    // ✅ Gemini 3 Flash Preview as Primary (as requested)
+    // ✅ Temperature 0.0 set kiya hai taaki AI sirf document ka text hi padhe
     const model = genAI.getGenerativeModel({ 
         model: "gemini-3-flash-preview",
-        generationConfig: { temperature: 0.1 } 
+        generationConfig: { temperature: 0.0 } 
     });
 
     const fileKeys = Object.keys(req.files || {});
@@ -36,7 +32,6 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     let docText = "";
     const ext = file.name.toLowerCase();
     
-    // Universal Parsing Logic (Safe & Fixed)
     try {
       if (ext.endsWith(".docx")) {
         const result = await mammoth.extractRawText({ buffer: fileBuffer });
@@ -51,39 +46,37 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       docText = fileBuffer.toString('utf-8', 0, 15000);
     }
 
+    // ✅ Strict Prompt: Force AI to extract ONLY from provided text
     const prompt = `
-      Expert AdTech Parser: Extract technical details.
-      RULES:
-      - Use exact keys: "pin_send_url", "verify_pin_url", "check_status_url", "portal_url".
-      - Extract FULL URLs with parameters.
-      - Convert #MSISDN#, {msisdn}, [msisdn] to {msisdn}.
-      - Convert #ANDROIDID#, #TXID#, {click_id} to {transaction_id}.
-      - Identify Anti-Fraud: Evina script source, Alacrity URI, or MCP details.
-      - Capture: cmpid, sessionKey, pubId, confirm_button_id.
+      STRICT INSTRUCTION: Extract technical details ONLY from the provided CONTENT below.
+      DO NOT USE EXTERNAL KNOWLEDGE. DO NOT USE PREVIOUS EXAMPLES.
+      
+      CORE URL MAPPING (Extract exact URLs from text):
+      - "pin_send_url": Extract Send Pin API.
+      - "verify_pin_url": Extract Verify Pin API.
+      - "check_status_url": Extract Check Status API.
+      - "portal_url": Extract Portal URL.
+
+      CLEANING RULES:
+      - Clean placeholders: Convert #MSISDN#, {msisdn}, [msisdn] to {msisdn}.
+      - Identify Anti-Fraud only if explicitly mentioned in the text.
+      - Capture all parameters found in the URLs (e.g., cid, pub_id, sessionKey).
 
       Return ONLY JSON:
       {
         "has_fraud": boolean,
-        "fraud": { "af_provider": "string", "af_url": "string", "partner_uri": "string" },
+        "fraud": { "af_provider": "string", "af_url": "string" },
         "core_urls": { "pin_send_url": "string", "verify_pin_url": "string", "check_status_url": "string", "portal_url": "string" },
-        "all_params": { "method_send": "GET|POST", "cmpid": "string", "sessionKey": "string" }
+        "all_params": { "method": "string", "cid": "string", "sessionKey": "string" }
       }
       CONTENT: ${docText.slice(0, 15000)}`;
 
-    // Gemini 3 Call with Emergency Fallback Only (to prevent 503 crash)
-    let result;
-    try {
-      result = await model.generateContent(prompt);
-    } catch (err) {
-       console.log("Gemini 3 Busy, using high-tier Pro model as safety...");
-       const safetyModel = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-       result = await safetyModel.generateContent(prompt);
-    }
-
+    const result = await model.generateContent(prompt);
     const aiConfig = JSON.parse((await result.response).text().replace(/```json|```/g, "").trim());
 
-    // --- 🛠️ 1. Database Offers Update ---
     const urls = aiConfig.core_urls || {};
+    
+    // --- 🛠️ 1. Sync Offers Table ---
     await pool.query(
       `UPDATE offers SET 
         pin_send_url = $1, pin_verify_url = $2, check_status_url = $3, portal_url = $4,
@@ -91,18 +84,14 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       [urls.pin_send_url || null, urls.verify_pin_url || null, urls.check_status_url || null, urls.portal_url || null, !!aiConfig.has_fraud, offerId]
     );
 
-    // --- 🛠️ 2. Dashboard Display Sync (Null-Safe) ---
+    // --- 🛠️ 2. Sync Parameters (Null-Safe Mirroring) ---
     const paramsMap = new Map();
-    const coreKeys = ['pin_send_url', 'verify_pin_url', 'check_status_url', 'portal_url'];
-    coreKeys.forEach(k => { if(urls[k]) paramsMap.set(k, urls[k]); });
+    ['pin_send_url', 'verify_pin_url', 'check_status_url', 'portal_url'].forEach(k => {
+        if(urls[k]) paramsMap.set(k, urls[k]);
+    });
 
     if (aiConfig.all_params) {
       Object.entries(aiConfig.all_params).forEach(([k, v]) => {
-        if (v !== null && v !== undefined) paramsMap.set(k.toLowerCase(), v);
-      });
-    }
-    if (aiConfig.fraud) {
-      Object.entries(aiConfig.fraud).forEach(([k, v]) => {
         if (v !== null && v !== undefined) paramsMap.set(k.toLowerCase(), v);
       });
     }
@@ -117,15 +106,13 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: "Master Robo V17: Gemini 3 Sync Complete!", data: aiConfig });
+    res.json({ success: true, message: "Mob13r-Robo: SAV Strict Sync Complete!", data: aiConfig });
   } catch (err) {
     res.status(500).json({ error: "Integration Failed", details: err.message });
   }
 });
 
-/**
- * --- 2. RUNTIME ENGINE ---
- */
+// Runtime config logic remains same...
 router.get("/get-runtime-config/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
