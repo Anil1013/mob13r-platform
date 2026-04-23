@@ -12,20 +12,20 @@ const pdfParse = require("pdf-parse");
 const router = express.Router();
 
 /**
- * --- 1. THE UNIVERSAL SCANNER (V16 - Timeout & Performance Fix) ---
+ * --- 1. THE MASTER SCANNER (V17 - Gemini 3 Primary - No Logic Broken) ---
  */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
-    console.log(`🚀 Mob13r-Robo V16: Performance Sync for ID: ${offerId}`);
+    console.log(`🚀 Mob13r-Robo V17: Gemini 3 Master Sync for ID: ${offerId}`);
 
     if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
-    // Model selection with low temperature for faster results
+    // ✅ Gemini 3 Flash Preview as Primary (as requested)
     const model = genAI.getGenerativeModel({ 
         model: "gemini-3-flash-preview",
-        generationConfig: { temperature: 0.1, topP: 0.8 } 
+        generationConfig: { temperature: 0.1 } 
     });
 
     const fileKeys = Object.keys(req.files || {});
@@ -36,7 +36,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     let docText = "";
     const ext = file.name.toLowerCase();
     
-    // 🛠️ Optimization: Parsing only necessary chunk to avoid 504
+    // Universal Parsing Logic (Safe & Fixed)
     try {
       if (ext.endsWith(".docx")) {
         const result = await mammoth.extractRawText({ buffer: fileBuffer });
@@ -45,56 +45,68 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
         const data = await pdfParse(fileBuffer);
         docText = data.text;
       } else {
-        docText = fileBuffer.toString('utf-8', 0, 10000); // Smaller chunk for speed
+        docText = fileBuffer.toString('utf-8', 0, 15000);
       }
     } catch (parseErr) {
-      docText = fileBuffer.toString('utf-8', 0, 10000);
+      docText = fileBuffer.toString('utf-8', 0, 15000);
     }
 
     const prompt = `
-      Expert AdTech Parser: Extract technical details ONLY from the provided CONTENT.
-      
-      MAPPING RULES:
-      1. Clean Placeholders: Convert #MSISDN#, {msisdn}, [msisdn] to {msisdn}. [cite: 15, 33]
-      2. Clean Tracking: Convert #ANDROIDID#, #TXID#, {click_id} to {transaction_id}. [cite: 23, 24]
-      3. CORE URLs: pin_send_url, verify_pin_url, check_status_url, portal_url. [cite: 15, 33, 49, 61]
-      4. Extra: Extract sessionKey, cid, pub_id if present. [cite: 15, 25, 41]
+      Expert AdTech Parser: Extract technical details.
+      RULES:
+      - Use exact keys: "pin_send_url", "verify_pin_url", "check_status_url", "portal_url".
+      - Extract FULL URLs with parameters.
+      - Convert #MSISDN#, {msisdn}, [msisdn] to {msisdn}.
+      - Convert #ANDROIDID#, #TXID#, {click_id} to {transaction_id}.
+      - Identify Anti-Fraud: Evina script source, Alacrity URI, or MCP details.
+      - Capture: cmpid, sessionKey, pubId, confirm_button_id.
 
       Return ONLY JSON:
       {
         "has_fraud": boolean,
-        "fraud": { "af_provider": "string", "af_url": "string" },
+        "fraud": { "af_provider": "string", "af_url": "string", "partner_uri": "string" },
         "core_urls": { "pin_send_url": "string", "verify_pin_url": "string", "check_status_url": "string", "portal_url": "string" },
-        "all_params": { "method_send": "GET|POST", "service_id": "string", "cmpid": "string", "sessionKey": "string" }
+        "all_params": { "method_send": "GET|POST", "cmpid": "string", "sessionKey": "string" }
       }
-      CONTENT: ${docText.slice(0, 12000)}`; // Optimized text length
+      CONTENT: ${docText.slice(0, 15000)}`;
 
-    // AI Call
-    const result = await model.generateContent(prompt);
-    const responseText = await result.response.text();
-    const aiConfig = JSON.parse(responseText.replace(/```json|```/g, "").trim());
+    // Gemini 3 Call with Emergency Fallback Only (to prevent 503 crash)
+    let result;
+    try {
+      result = await model.generateContent(prompt);
+    } catch (err) {
+       console.log("Gemini 3 Busy, using high-tier Pro model as safety...");
+       const safetyModel = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+       result = await safetyModel.generateContent(prompt);
+    }
 
+    const aiConfig = JSON.parse((await result.response).text().replace(/```json|```/g, "").trim());
+
+    // --- 🛠️ 1. Database Offers Update ---
     const urls = aiConfig.core_urls || {};
-    
-    // --- 🛠️ Database Updates (Logic Restored) ---
     await pool.query(
-      `UPDATE offers SET pin_send_url=$1, pin_verify_url=$2, check_status_url=$3, portal_url=$4, has_antifraud=$5, updated_at=NOW() WHERE id=$6`,
+      `UPDATE offers SET 
+        pin_send_url = $1, pin_verify_url = $2, check_status_url = $3, portal_url = $4,
+        has_antifraud = $5, updated_at = NOW() WHERE id = $6`,
       [urls.pin_send_url || null, urls.verify_pin_url || null, urls.check_status_url || null, urls.portal_url || null, !!aiConfig.has_fraud, offerId]
     );
 
+    // --- 🛠️ 2. Dashboard Display Sync (Null-Safe) ---
     const paramsMap = new Map();
-    // Mirror Sync for UI
-    ['pin_send_url', 'verify_pin_url', 'check_status_url', 'portal_url'].forEach(k => {
-        if(urls[k]) paramsMap.set(k, urls[k]);
-    });
+    const coreKeys = ['pin_send_url', 'verify_pin_url', 'check_status_url', 'portal_url'];
+    coreKeys.forEach(k => { if(urls[k]) paramsMap.set(k, urls[k]); });
 
     if (aiConfig.all_params) {
       Object.entries(aiConfig.all_params).forEach(([k, v]) => {
         if (v !== null && v !== undefined) paramsMap.set(k.toLowerCase(), v);
       });
     }
+    if (aiConfig.fraud) {
+      Object.entries(aiConfig.fraud).forEach(([k, v]) => {
+        if (v !== null && v !== undefined) paramsMap.set(k.toLowerCase(), v);
+      });
+    }
 
-    // Batch Sync with Safety Check
     for (const [key, val] of paramsMap.entries()) {
       if (val !== null && val !== undefined && val !== "") {
         await pool.query(
@@ -105,10 +117,25 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: "Mob13r-Robo: Synced via V16!", data: aiConfig });
+    res.json({ success: true, message: "Master Robo V17: Gemini 3 Sync Complete!", data: aiConfig });
   } catch (err) {
-    console.error("Timeout/Error:", err.message);
-    res.status(500).json({ error: "Request took too long or failed", details: err.message });
+    res.status(500).json({ error: "Integration Failed", details: err.message });
+  }
+});
+
+/**
+ * --- 2. RUNTIME ENGINE ---
+ */
+router.get("/get-runtime-config/:offerId", async (req, res) => {
+  try {
+    const { offerId } = req.params;
+    const offerRes = await pool.query("SELECT * FROM offers WHERE id = $1", [offerId]);
+    const paramsRes = await pool.query("SELECT param_key, param_value FROM offer_parameters WHERE offer_id = $1", [offerId]);
+    const config = {};
+    paramsRes.rows.forEach(p => config[p.param_key] = p.param_value);
+    res.json({ success: true, offer: offerRes.rows[0], params: config });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
