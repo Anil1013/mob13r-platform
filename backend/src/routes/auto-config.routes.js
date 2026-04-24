@@ -17,19 +17,25 @@ try {
 const router = express.Router();
 
 router.post("/auto-integrate/:offerId", async (req, res) => {
-  res.header("Access-Control-Allow-Origin", "*");
+  // ✅ 1. CORS Headers (Strictly needed for dashboard communication)
+  res.header("Access-Control-Allow-Origin", "https://dashboard.mob13r.com");
   res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.method === "OPTIONS") return res.sendStatus(200);
 
   try {
     const { offerId } = req.params;
     if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
-    // ✅ Gemini 3 with Strict Configuration
+    // ✅ 2. Gemini 3 Strict JSON Mode (Sabse Fast Response ke liye)
     const model = genAI.getGenerativeModel({ 
         model: "gemini-3-flash-preview",
-        generationConfig: { temperature: 0.0, responseMimeType: "application/json" } 
+        generationConfig: { 
+            temperature: 0.0, 
+            responseMimeType: "application/json" 
+        } 
     });
 
     const fileKeys = Object.keys(req.files || {});
@@ -40,6 +46,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     let docText = "";
     const ext = file.name.toLowerCase();
     
+    // ✅ 3. Ultra-Fast Parsing (Only first 7000 chars for core details)
     if (ext.endsWith(".docx")) {
       const result = await mammoth.extractRawText({ buffer: fileBuffer });
       docText = result.value;
@@ -47,52 +54,42 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       const data = await pdfParse(fileBuffer);
       docText = data.text;
     } else {
-      docText = fileBuffer.toString('utf-8', 0, 10000);
+      docText = fileBuffer.toString('utf-8', 0, 7000);
     }
 
-    // ✅ Strict Prompt: AI ko JSON ke bahar kuch bhi bolne se mana kiya hai
-    const prompt = `
-      Extract AdTech details ONLY from this text: ${docText.slice(0, 10000)}
-      Rules:
-      1. Map URLs: pin_send_url, verify_pin_url, check_status_url, portal_url.
-      2. Placeholders: Convert #MSISDN# or {msisdn} to {msisdn}.
-      3. Return ONLY a valid JSON object. No conversation, no markdown.`;
+    const prompt = `Extract AdTech integration details ONLY from this text: ${docText.slice(0, 7000)}.
+    Required Keys: pin_send_url, verify_pin_url, check_status_url, portal_url, cid, sessionKey, pub_id.
+    Convert all placeholders to {msisdn} and {transaction_id}.
+    Return JSON only.`;
 
+    // AI Call
     const result = await model.generateContent(prompt);
-    let responseText = (await result.response).text().trim();
-    
-    // ✅ Layer 1: Clean Markdown blocks if present
-    if (responseText.startsWith("```")) {
-        responseText = responseText.replace(/```json|```/g, "").trim();
-    }
+    const aiConfig = JSON.parse((await result.response).text());
 
-    // ✅ Layer 2: Regex extraction for extra safety
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("Invalid Response Format from AI");
-    
-    const aiConfig = JSON.parse(jsonMatch[0]);
     const urls = aiConfig.core_urls || {};
     
-    // Database Core Update
+    // ✅ 4. Atomic Database Update (Offers Table)
     await pool.query(
       `UPDATE offers SET pin_send_url=$1, pin_verify_url=$2, check_status_url=$3, portal_url=$4, has_antifraud=$5, updated_at=NOW() WHERE id=$6`,
       [urls.pin_send_url || null, urls.verify_pin_url || null, urls.check_status_url || null, urls.portal_url || null, !!aiConfig.has_fraud, offerId]
     );
 
+    // ✅ 5. Mirror Sync for Parameters (Safe from Nulls)
     const paramsMap = new Map();
+    // Core URL keys required by UI
     ['pin_send_url', 'verify_pin_url', 'check_status_url', 'portal_url'].forEach(k => {
         if(urls[k]) paramsMap.set(k, urls[k]);
     });
 
     if (aiConfig.all_params) {
       Object.entries(aiConfig.all_params).forEach(([k, v]) => {
-        if (v && v !== null && v !== "N/A") paramsMap.set(k.toLowerCase(), v);
+        if (v && v !== "N/A" && v !== null) paramsMap.set(k.toLowerCase(), v);
       });
     }
 
-    // Database Parameters Sync
+    // Single Batch Query for Params
     for (const [key, val] of paramsMap.entries()) {
-      if (val) {
+      if (val && val !== "") {
         await pool.query(
           `INSERT INTO offer_parameters (offer_id, param_key, param_value) VALUES ($1, $2, $3)
            ON CONFLICT (offer_id, param_key) DO UPDATE SET param_value = EXCLUDED.param_value`,
@@ -101,9 +98,10 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: "Mob13r-Robo Fixed!", data: aiConfig });
+    res.json({ success: true, message: "Mob13r-Robo V24: High-Speed Sync Complete!", data: aiConfig });
   } catch (err) {
-    res.status(500).json({ error: "Sync Failed", details: err.message });
+    console.error("Critical Sync Failure:", err.message);
+    res.status(500).json({ error: "Operation Timeout", details: err.message });
   }
 });
 
