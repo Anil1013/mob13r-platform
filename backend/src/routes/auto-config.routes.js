@@ -3,7 +3,6 @@ import pool from "../db.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import mammoth from "mammoth";
 import fs from "fs/promises";
-import Tesseract from "tesseract.js";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
@@ -13,7 +12,7 @@ try {
   const rawPdf = require("pdf-parse");
   pdfParse = typeof rawPdf === "function" ? rawPdf : rawPdf.default;
 } catch (e) {
-  console.warn("⚠️ pdf-parse load failed, OCR only mode");
+  console.warn("⚠️ pdf-parse load failed");
 }
 
 const router = express.Router();
@@ -35,14 +34,16 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
         model: "gemini-3-flash-preview",
         generationConfig: { temperature: 0 }
       });
-    } catch (e) {
+    } catch {
       model = genAI.getGenerativeModel({
         model: "gemini-1.5-flash",
         generationConfig: { temperature: 0 }
       });
     }
 
-    // ✅ File extract
+    // =========================
+    // 📄 FILE READ
+    // =========================
     const fileKeys = Object.keys(req.files || {});
     const file = fileKeys.length ? req.files[fileKeys[0]] : null;
 
@@ -57,9 +58,6 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     let docText = "";
     const ext = file.name.toLowerCase();
 
-    // =========================
-    // 📄 FILE PARSING
-    // =========================
     try {
       if (ext.endsWith(".docx")) {
         const result = await mammoth.extractRawText({ buffer });
@@ -73,14 +71,11 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
           if (data && data.text && data.text.trim().length > 50) {
             docText = data.text;
           } else {
-            console.log("⚠️ Using OCR for PDF...");
-            const ocr = await Tesseract.recognize(buffer, "eng");
-            docText = ocr.data.text;
+            // 🔥 fallback (important for SAV type PDF)
+            docText = buffer.toString("utf-8", 0, 15000);
           }
-        } catch (e) {
-          console.log("⚠️ PDF parse failed → OCR fallback");
-          const ocr = await Tesseract.recognize(buffer, "eng");
-          docText = ocr.data.text;
+        } catch {
+          docText = buffer.toString("utf-8", 0, 15000);
         }
       }
 
@@ -88,20 +83,19 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
         docText = buffer.toString("utf-8");
       }
 
-    } catch (err) {
-      console.log("⚠️ Parsing fallback");
-      docText = buffer.toString("utf-8");
+    } catch {
+      docText = buffer.toString("utf-8", 0, 15000);
     }
 
-    if (!docText || docText.length < 50) {
-      return res.status(400).json({ error: "Invalid document / empty text" });
+    if (!docText || docText.length < 30) {
+      return res.status(400).json({ error: "Invalid document content" });
     }
 
     // =========================
     // 🤖 GEMINI PROMPT
     // =========================
     const prompt = `
-You are an AdTech integration expert.
+You are an expert in telecom billing API integrations.
 
 Extract ONLY valid JSON:
 
@@ -114,9 +108,10 @@ Extract ONLY valid JSON:
 }
 
 Rules:
-- detect all URLs correctly
-- replace dynamic values with {msisdn}, {otp}, {transaction_id}
-- include query params
+- Detect correct URLs
+- Replace dynamic values with:
+  {msisdn}, {otp}, {transaction_id}
+- Extract query parameters correctly
 
 TEXT:
 ${docText.slice(0, 12000)}
@@ -125,7 +120,6 @@ ${docText.slice(0, 12000)}
     const result = await model.generateContent(prompt);
 
     let raw = result.response.text();
-
     console.log("🤖 RAW AI:", raw);
 
     // =========================
@@ -157,9 +151,9 @@ ${docText.slice(0, 12000)}
     // =========================
     await pool.query(
       `UPDATE offers 
-       SET pin_send_url=$1, 
-           pin_verify_url=$2, 
-           check_status_url=$3, 
+       SET pin_send_url=$1,
+           pin_verify_url=$2,
+           check_status_url=$3,
            portal_url=$4,
            updated_at=NOW()
        WHERE id=$5`,
