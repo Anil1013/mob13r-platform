@@ -1,6 +1,5 @@
 import express from "express";
 import pool from "../db.js";
-import { createWorker } from "tesseract.js";
 import fs from "fs/promises";
 import { createRequire } from "module";
 
@@ -10,82 +9,110 @@ const pdfParse = require("pdf-parse");
 const router = express.Router();
 
 /* =========================
-   OCR FUNCTION
+   SMART URL MATCHER
 ========================= */
-async function extractWithOCR(buffer) {
-  const worker = await createWorker("eng");
-  const { data } = await worker.recognize(buffer);
-  await worker.terminate();
-  return data.text;
+function findUrl(urls, keywords) {
+  return urls.find(u =>
+    keywords.some(k => u.toLowerCase().includes(k))
+  ) || null;
 }
 
 /* =========================
-   SAV HARD EXTRACTOR (🔥)
-========================= */
-function extractSAV(text) {
-  if (!text.toLowerCase().includes("savmvas")) return null;
-
-  return {
-    pin_send_url: "https://savmvas.com/cntwb/sendpin?cid=6&msisdn={msisdn}&pub_id={pub_id}&sub_pub_id={sub_pub_id}&user_ip={user_ip}&ua={user_agent}&sessionKey={sessionKey}",
-    verify_pin_url: "https://savmvas.com/cntwb/verifypin?cid=6&msisdn={msisdn}&otp={otp}&user_ip={user_ip}&ua={user_agent}&pub_id={pub_id}&sub_pub_id={sub_pub_id}&sessionKey={sessionKey}",
-    check_status_url: "https://savmvas.com/cntwb/checkstatus?cid=6&msisdn={msisdn}",
-    portal_url: "https://savmvas.com/cntwb/portal/redirect"
-  };
-}
-
-/* =========================
-   GENERIC URL EXTRACTOR
+   UNIVERSAL EXTRACTOR
 ========================= */
 function extractUrls(text) {
   const urls = text.match(/https?:\/\/[^\s]+/g) || [];
 
   return {
-    pin_send_url: urls.find(u => u.includes("send") || u.includes("otp")) || null,
-    verify_pin_url: urls.find(u => u.includes("verify")) || null,
-    check_status_url: urls.find(u => u.includes("status")) || null,
-    portal_url: urls.find(u => u.includes("portal") || u.includes("redirect")) || null
+    pin_send_url: findUrl(urls, ["send", "otp", "generate", "request"]),
+    pin_verify_url: findUrl(urls, ["verify", "validate", "confirm", "checkotp"]),
+    check_status_url: findUrl(urls, ["status", "check", "lookup"]),
+    portal_url: findUrl(urls, ["success", "redirect", "portal"]),
   };
 }
 
 /* =========================
-   MAIN ROUTE
+   PLACEHOLDER NORMALIZER
+========================= */
+function fixPlaceholders(url) {
+  if (!url) return null;
+
+  return url
+    .replace(/\{?msisdn\}?/gi, "{msisdn}")
+    .replace(/\{?otp\}?/gi, "{otp}")
+    .replace(/\{?transaction_id\}?/gi, "{transaction_id}")
+    .replace(/\{?sessionkey\}?/gi, "{sessionKey}")
+    .replace(/\{?userid\}?/gi, "{pub_id}");
+}
+
+/* =========================
+   ROUTE
 ========================= */
 router.post("/auto-integrate/:offerId", async (req, res) => {
-  try {
-    const { offerId } = req.params;
+  const { offerId } = req.params;
 
+  try {
     const file = req.files?.file || Object.values(req.files || {})[0];
     if (!file) return res.status(400).json({ error: "No file" });
 
-    const buffer = file.tempFilePath
-      ? await fs.readFile(file.tempFilePath)
-      : file.data;
+    const filePath = file.tempFilePath;
+
+    // instant response
+    res.json({
+      success: true,
+      message: "Processing started"
+    });
+
+    processFile(filePath, offerId);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Upload failed" });
+  }
+});
+
+/* =========================
+   BACKGROUND PROCESS
+========================= */
+async function processFile(filePath, offerId) {
+  try {
+    const buffer = await fs.readFile(filePath);
 
     let text = "";
 
-    // 1️⃣ Try pdf parse
     try {
       const data = await pdfParse(buffer);
-      text = data.text;
-    } catch {}
+      text = data.text || "";
+    } catch {
+      console.log("PDF parse failed");
+    }
 
-    // 2️⃣ If empty → OCR
+    console.log("TEXT LENGTH:", text.length);
+
+    let urls = extractUrls(text);
+
+    /* =========================
+       FALLBACK (NO TEXT)
+    ========================= */
     if (!text || text.length < 50) {
-      console.log("⚠️ Using OCR...");
-      text = await extractWithOCR(buffer);
+      console.log("⚠️ weak text → fallback");
+
+      urls = {
+        pin_send_url: null,
+        pin_verify_url: null,
+        check_status_url: null,
+        portal_url: null
+      };
     }
 
-    console.log("📄 TEXT LENGTH:", text.length);
+    /* =========================
+       NORMALIZE
+    ========================= */
+    Object.keys(urls).forEach(k => {
+      urls[k] = fixPlaceholders(urls[k]);
+    });
 
-    // 3️⃣ SAV SPECIAL FIX
-    let urls = extractSAV(text);
-
-    // 4️⃣ fallback generic
-    if (!urls) {
-      urls = extractUrls(text);
-    }
-
-    console.log("✅ EXTRACTED:", urls);
+    console.log("FINAL:", urls);
 
     /* =========================
        DB UPDATE
@@ -100,36 +127,18 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
        WHERE id=$5`,
       [
         urls.pin_send_url,
-        urls.verify_pin_url,
+        urls.pin_verify_url,
         urls.check_status_url,
         urls.portal_url,
         offerId
       ]
     );
 
-    /* PARAMS */
-    for (const [k, v] of Object.entries(urls)) {
-      if (!v) continue;
-
-      await pool.query(
-        `INSERT INTO offer_parameters (offer_id,param_key,param_value)
-         VALUES ($1,$2,$3)
-         ON CONFLICT (offer_id,param_key)
-         DO UPDATE SET param_value=EXCLUDED.param_value`,
-        [offerId, k, v]
-      );
-    }
-
-    res.json({
-      success: true,
-      message: "🔥 FINAL FIX WORKING",
-      data: urls
-    });
+    console.log("✅ DONE:", offerId);
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    console.error("ERROR:", err);
   }
-});
+}
 
 export default router;
