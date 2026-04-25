@@ -68,6 +68,7 @@ router.get("/publisher-offers", async (req, res) => {
   }
 });
 
+/* 🔥 CREATE LANDING */
 router.post("/", async (req, res) => {
   try {
     const body = req.body || {};
@@ -86,37 +87,29 @@ router.post("/", async (req, res) => {
       });
     }
 
-    let finalImage = image_url.trim();
+    let finalImage = (image_url || "").trim();
 
     /* ================= SAFE FILE HANDLING ================= */
-    try {
-      if (req.files && req.files.imageFile) {
-        const file = req.files.imageFile;
+    if (req.files && req.files.imageFile) {
+      const file = req.files.imageFile;
 
-        // ✅ VALID FILE CHECK
-        if (file && file.name && file.size > 0) {
-          // 🔥 allow ANY image format
-          const ext = path.extname(file.name) || ".jpg";
+      if (file && file.name && file.size > 0) {
+        const ext = path.extname(file.name) || ".jpg";
+        const fileName = `lp_${Date.now()}${ext}`;
+        const savePath = path.join(UPLOAD_DIR, fileName);
 
-          const fileName = `lp_${Date.now()}${ext}`;
-          const savePath = path.join(UPLOAD_DIR, fileName);
+        // ✅ Await the move process fully
+        await file.mv(savePath);
 
-          await file.mv(savePath);
-
-          finalImage = `/uploads/landings/${fileName}`;
-        }
+        // ✅ Store only the relative path for the frontend
+        finalImage = `/uploads/landings/${fileName}`;
       }
-    } catch (fileErr) {
-      console.error("FILE ERROR:", fileErr);
-
-      // ❌ DO NOT CRASH → fallback to image_url
-      finalImage = image_url || "";
     }
 
     /* ================= INSERT ================= */
     const result = await pool.query(
       `
-      INSERT INTO landing_pages
+      INSERT INTO landing_pages 
       (publisher_offer_id, title, description, image_url, button_text, disclaimer)
       VALUES ($1,$2,$3,$4,$5,$6)
       RETURNING id
@@ -132,9 +125,9 @@ router.post("/", async (req, res) => {
     );
 
     const id = result.rows[0].id;
-
     const url = `https://dashboard.mob13r.com/landing/${id}`;
 
+    // ✅ Generate the clean URL in database
     await pool.query(
       `UPDATE landing_pages SET landing_url=$1 WHERE id=$2`,
       [url, id]
@@ -148,8 +141,7 @@ router.post("/", async (req, res) => {
 
   } catch (err) {
     console.error("CREATE LANDING ERROR:", err);
-
-    // ✅ NEVER crash server
+    // ✅ Send a structured FAILED response instead of crashing with 500
     res.json({
       status: "FAILED",
       error: err.message,
