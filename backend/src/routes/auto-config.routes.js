@@ -25,12 +25,11 @@ function safeParse(text) {
 }
 
 /* =========================
-   🔥 VALUE NORMALIZER (NEW FIX)
+   VALUE NORMALIZER
 ========================= */
 function normalizeValue(key, val) {
   if (!val) return val;
 
-  // numeric mobile
   if (/^\d{8,15}$/.test(val)) {
     if (key.includes("msisdn")) return "{msisdn}";
     if (key.includes("otp")) return "{otp}";
@@ -40,13 +39,12 @@ function normalizeValue(key, val) {
 }
 
 /* =========================
-   FINAL SAFE URL FIX
+   SAFE URL FIX (NO PATH DAMAGE)
 ========================= */
 function fixUrl(url) {
   if (!url) return null;
 
   const [base, query] = url.split("?");
-
   if (!query) return url;
 
   let q = query;
@@ -78,7 +76,9 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     const { offerId } = req.params;
     console.log(`🚀 FINAL AI SYNC for ID: ${offerId}`);
 
-    if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("Missing GEMINI_API_KEY");
+    }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -93,7 +93,9 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     const fileKeys = Object.keys(req.files || {});
     const file = fileKeys.length ? req.files[fileKeys[0]] : null;
 
-    if (!file) return res.status(400).json({ error: "No document uploaded" });
+    if (!file) {
+      return res.status(400).json({ error: "No document uploaded" });
+    }
 
     let fileBuffer = file.tempFilePath
       ? await fs.readFile(file.tempFilePath)
@@ -102,6 +104,9 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     let docText = "";
     const ext = file.name.toLowerCase();
 
+    /* =========================
+       TEXT EXTRACTION
+    ========================= */
     try {
       if (ext.endsWith(".docx")) {
         const result = await mammoth.extractRawText({ buffer: fileBuffer });
@@ -116,8 +121,11 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       docText = fileBuffer.toString("utf-8", 0, 15000);
     }
 
-    console.log("📄 TEXT LENGTH:", docText.length);
+    console.log("📄 TEXT SAMPLE:", docText.slice(0, 500));
 
+    /* =========================
+       GEMINI AI
+    ========================= */
     let aiConfig = null;
 
     try {
@@ -128,7 +136,31 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
             data: fileBuffer.toString("base64")
           }
         },
-        `Extract AdTech API integration. Return JSON with core_urls and params.`
+        `
+You are an expert telecom API parser.
+
+Extract ALL API URLs.
+
+Return STRICT JSON:
+
+{
+  "has_fraud": false,
+  "core_urls": {
+    "pin_send_url": "",
+    "verify_pin_url": "",
+    "check_status_url": "",
+    "portal_url": ""
+  },
+  "all_params": {}
+}
+
+Rules:
+- send / generate / otp → pin_send_url
+- verify / validate → verify_pin_url
+- status → check_status_url
+- redirect → portal_url
+- NEVER return null if URL exists
+`
       ]);
 
       const rawText =
@@ -139,21 +171,26 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       aiConfig = safeParse(rawText);
 
     } catch (err) {
-      console.log("AI failed:", err.message);
+      console.log("❌ AI failed:", err.message);
     }
 
+    /* =========================
+       FALLBACK
+    ========================= */
     if (!aiConfig || !aiConfig.core_urls) {
-      console.log("⚠️ fallback extraction");
+      console.log("⚠️ USING FALLBACK");
 
-      const urls = docText.match(/https?:\/\/[^\s]+/g) || [];
+      const urls = docText.match(/https?:\/\/[^\s"']+/g) || [];
+
+      console.log("📡 FALLBACK URLS:", urls);
 
       aiConfig = {
         has_fraud: false,
         core_urls: {
-          pin_send_url: urls.find(u => /send|otp/i.test(u)) || null,
-          verify_pin_url: urls.find(u => /verify|validate/i.test(u)) || null,
-          check_status_url: urls.find(u => /status/i.test(u)) || null,
-          portal_url: urls.find(u => /portal|redirect/i.test(u)) || null,
+          pin_send_url: urls.find(u => /send|otp|generate|pin/i.test(u)) || null,
+          verify_pin_url: urls.find(u => /verify|validate|confirm/i.test(u)) || null,
+          check_status_url: urls.find(u => /status|check/i.test(u)) || null,
+          portal_url: urls.find(u => /portal|redirect|success/i.test(u)) || null,
         },
         all_params: {}
       };
@@ -166,6 +203,9 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     urls.check_status_url = fixUrl(urls.check_status_url);
     urls.portal_url = fixUrl(urls.portal_url);
 
+    /* =========================
+       DB UPDATE
+    ========================= */
     await pool.query(
       `UPDATE offers SET 
         pin_send_url=$1,
@@ -185,6 +225,9 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       ]
     );
 
+    /* =========================
+       PARAM SYNC
+    ========================= */
     const paramsMap = new Map();
 
     Object.entries(urls).forEach(([k, v]) => {
@@ -209,7 +252,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
 
     res.json({
       success: true,
-      message: "🔥 FINAL PERFECT WORKING",
+      message: "🔥 FINAL STABLE WORKING",
       data: aiConfig
     });
 
