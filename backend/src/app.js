@@ -32,8 +32,11 @@ app.use(fileUpload({
 }));
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // ✅ ADD THIS
 
 app.use('/uploads', express.static('public/uploads'));
+
+app.use(express.json());
 
 /* -------- HEALTH CHECK -------- */
 
