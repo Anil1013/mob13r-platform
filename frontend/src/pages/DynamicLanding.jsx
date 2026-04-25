@@ -1,199 +1,189 @@
-import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
+import Navbar from "../components/Navbar";
 
 const API_BASE = "https://backend.mob13r.com";
 
-export default function DynamicLanding() {
-  const { id } = useParams();
+export default function LandingBuilder() {
+  const [offers, setOffers] = useState([]);
+  const [landings, setLandings] = useState([]);
 
-  const [landing, setLanding] = useState(null);
-  const [msisdn, setMsisdn] = useState("");
-  const [otp, setOtp] = useState("");
-  const [sessionToken, setSessionToken] = useState("");
-  const [step, setStep] = useState("msisdn");
-  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({
+    publisher_offer_id: "",
+    title: "",
+    description: "",
+    image_url: "",
+    button_text: "",
+    disclaimer: "",
+  });
 
+  const [imageFile, setImageFile] = useState(null);
+  const [preview, setPreview] = useState("");
+
+  /* ================= LOAD ================= */
   useEffect(() => {
-    fetch(`${API_BASE}/api/landing/${id}`)
+    fetch(`${API_BASE}/api/landing/publisher-offers`)
       .then((res) => res.json())
-      .then((data) => {
-        if (data.status === "SUCCESS") {
-          setLanding(data.data);
-        }
-      });
-  }, [id]);
+      .then((data) => setOffers(data.data || []));
 
-  const sendPin = async () => {
-    setLoading(true);
+    loadLandings();
+  }, []);
 
-    try {
-      const res = await fetch(
-        `${API_BASE}/api/publisher/pin/send?offer_id=${landing.offer_id}&msisdn=${msisdn}&geo=IQ&carrier=Zain&x-api-key=${landing.api_key}`
-      );
-
-      const data = await res.json();
-
-      if (data.status === "OTP_SENT") {
-        setSessionToken(data.session_token);
-        setStep("otp");
-      } else {
-        alert("OTP failed");
-      }
-    } catch (e) {
-      alert("Error sending OTP");
-    }
-
-    setLoading(false);
+  const loadLandings = () => {
+    fetch(`${API_BASE}/api/landing`)
+      .then((res) => res.json())
+      .then((data) => setLandings(data.data || []));
   };
 
-  const verifyPin = async () => {
-    setLoading(true);
+  /* ================= FILE ================= */
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      setPreview(URL.createObjectURL(file));
+      setForm({ ...form, image_url: "" }); // Reset URL when file chosen
+    }
+  };
+
+  /* ================= URL ================= */
+  const handleUrlChange = (value) => {
+    setForm({ ...form, image_url: value });
+    setPreview(value);
+    setImageFile(null); // URL priority
+  };
+
+  /* ================= CREATE ================= */
+  const createLanding = async () => {
+    if (!form.publisher_offer_id) {
+      return alert("Select offer");
+    }
 
     try {
-      const res = await fetch(
-        `${API_BASE}/api/pin/verify?session_token=${sessionToken}&otp=${otp}&x-api-key=${landing.api_key}`
-      );
+      const fd = new FormData();
+      Object.keys(form).forEach((k) => {
+        if (form[k] !== undefined && form[k] !== null && form[k] !== "") {
+          fd.append(k, form[k]);
+        }
+      });
+
+      if (imageFile) {
+        fd.append("imageFile", imageFile);
+      }
+
+      const res = await fetch(`${API_BASE}/api/landing`, {
+        method: "POST",
+        body: fd,
+      });
 
       const data = await res.json();
 
       if (data.status === "SUCCESS") {
-        window.location.href =
-          landing?.redirect_url || "https://google.com";
+        alert("Landing Created ✅");
+        loadLandings();
+        setForm({
+          publisher_offer_id: "",
+          title: "",
+          description: "",
+          image_url: "",
+          button_text: "",
+          disclaimer: "",
+        });
+        setImageFile(null);
+        setPreview("");
       } else {
-        alert("Invalid OTP");
+        alert(data.error || "Error creating landing");
       }
-    } catch (e) {
-      alert("Error verifying OTP");
+    } catch (err) {
+      console.error(err);
+      alert("Server Error");
     }
-
-    setLoading(false);
   };
 
-  if (!landing)
-    return <div style={{ textAlign: "center" }}>Loading...</div>;
+  const copyUrl = (url) => {
+    navigator.clipboard.writeText(url);
+    alert("Copied ✅");
+  };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
+    <>
+      <Navbar />
+      <div style={styles.container}>
+        <h2 style={styles.heading}>Create Landing</h2>
 
-        {/* 🔥 IMAGE + TITLE FIXED (UPDATED LOGIC) */}
-        {landing.image_url && (
-          <>
-            <img
-              src={
-                landing.image_url.startsWith("http")
-                  ? landing.image_url
-                  : `${API_BASE}${landing.image_url}`
-              }
-              alt=""
-              style={styles.image}
-            />
+        <div style={styles.form}>
+          <select
+            style={styles.input}
+            value={form.publisher_offer_id}
+            onChange={(e) => setForm({ ...form, publisher_offer_id: e.target.value })}
+          >
+            <option value="">Select Offer</option>
+            {offers.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.service_name} - {o.publisher_name}
+              </option>
+            ))}
+          </select>
 
-            <div style={styles.title}>
-              {landing.title}
-            </div>
-          </>
-        )}
+          <input style={styles.input} placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+          <input style={styles.input} placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <input style={styles.input} placeholder="Image URL" value={form.image_url} onChange={(e) => handleUrlChange(e.target.value)} />
+          <input style={styles.input} type="file" accept="image/*" onChange={handleFileChange} />
+          <input style={styles.input} placeholder="Button Text" value={form.button_text} onChange={(e) => setForm({ ...form, button_text: e.target.value })} />
+          <input style={styles.input} placeholder="Disclaimer" value={form.disclaimer} onChange={(e) => setForm({ ...form, disclaimer: e.target.value })} />
 
-        {!landing.image_url && (
-          <div style={styles.title}>{landing.title}</div>
-        )}
+          <button style={styles.button} onClick={createLanding}>Save Landing</button>
+        </div>
 
-        {/* MSISDN STEP */}
-        {step === "msisdn" && (
-          <>
-            <input
-              style={styles.input}
-              placeholder="Enter Mobile Number"
-              value={msisdn}
-              onChange={(e) => setMsisdn(e.target.value)}
-            />
+        {/* PREVIEW BOX */}
+        <div style={styles.preview}>
+          {preview && <img src={preview} style={styles.previewImg} alt="Live Preview" />}
+          <h3>{form.title || "Landing Title"}</h3>
+          <button style={styles.greenBtn}>{form.button_text || "Subscribe"}</button>
+        </div>
 
-            <button style={styles.button} onClick={sendPin}>
-              {loading ? "Sending..." : landing.button_text || "Send OTP"}
-            </button>
-          </>
-        )}
-
-        {/* OTP STEP */}
-        {step === "otp" && (
-          <>
-            <input
-              style={styles.input}
-              placeholder="Enter OTP"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
-            />
-
-            <button style={styles.button} onClick={verifyPin}>
-              {loading ? "Verifying..." : "Verify OTP"}
-            </button>
-          </>
-        )}
-
-        <p style={styles.disclaimer}>{landing.disclaimer}</p>
+        {/* TABLE SECTION */}
+        <div style={styles.tableBox}>
+          <h3>Landing Pages</h3>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th>ID</th><th>Advertiser</th><th>Publisher</th><th>Offer</th><th>Landing URL</th><th style={{textAlign: 'center'}}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {landings.map((l) => (
+                <tr key={l.id}>
+                  <td>{l.id}</td>
+                  <td>{l.advertiser_name || "-"}</td>
+                  <td>{l.publisher_name}</td>
+                  <td>{l.offer_name}</td>
+                  <td style={{ wordBreak: "break-all" }}>{l.landing_url}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '5px' }}>
+                       <button style={styles.copyBtn} onClick={() => copyUrl(l.landing_url)}>Copy</button>
+                       <a href={l.landing_url} target="_blank" rel="noreferrer"><button style={styles.openBtn}>Open</button></a>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
 const styles = {
-  container: {
-    minHeight: "100vh",
-    background: "linear-gradient(135deg,#0f172a,#1e293b)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-
-  card: {
-    width: 360,
-    background: "#0f172a",
-    borderRadius: 16,
-    overflow: "hidden",
-    boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
-    color: "#fff",
-    textAlign: "center",
-    paddingBottom: 20,
-  },
-
-  image: {
-    width: "100%",
-    height: 200,
-    objectFit: "cover",
-  },
-
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    margin: "15px 0",
-    padding: "0 10px",
-  },
-
-  input: {
-    width: "85%",
-    padding: 12,
-    borderRadius: 8,
-    border: "none",
-    marginBottom: 15,
-    outline: "none",
-  },
-
-  button: {
-    width: "85%",
-    padding: 14,
-    background: "#22c55e",
-    border: "none",
-    borderRadius: 8,
-    color: "#fff",
-    fontWeight: "bold",
-    cursor: "pointer",
-  },
-
-  disclaimer: {
-    fontSize: 11,
-    color: "#9ca3af",
-    padding: 15,
-  },
+  container: { padding: "90px 30px", background: "#0f172a", minHeight: "100vh", color: "#fff" },
+  heading: { marginBottom: 20 },
+  form: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 20 },
+  input: { padding: 10, borderRadius: 6, border: "1px solid #334155", background: "#1e293b", color: "#fff" },
+  button: { gridColumn: "span 3", padding: 14, background: "#3b82f6", border: "none", color: "#fff", borderRadius: 6, cursor: "pointer" },
+  preview: { width: 260, padding: 20, background: "#1e293b", borderRadius: 10, marginBottom: 20, textAlign: 'center' },
+  previewImg: { width: "100%", height: 120, objectFit: "cover", marginBottom: 10, borderRadius: 5 },
+  greenBtn: { width: "100%", padding: 10, background: "#22c55e", border: "none", borderRadius: 6, color: "#fff" },
+  tableBox: { background: "#1e293b", padding: 20, borderRadius: 10, overflowX: 'auto' },
+  table: { width: "100%", borderCollapse: "collapse" },
+  copyBtn: { padding: "5px 10px", background: "#000", color: "#fff", border: "none", borderRadius: 4, cursor: 'pointer' },
+  openBtn: { padding: "5px 10px", background: "#22c55e", color: "#fff", border: "none", borderRadius: 4, cursor: 'pointer' },
 };
