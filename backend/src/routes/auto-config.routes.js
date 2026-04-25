@@ -17,56 +17,49 @@ try {
 
 const router = express.Router();
 
-/* =====================================================
-   🚀 MAIN ROUTE (FAST RESPONSE - NO TIMEOUT)
-===================================================== */
+/* =========================
+   🚀 MAIN ROUTE
+========================= */
 router.post("/auto-integrate/:offerId", async (req, res) => {
   const { offerId } = req.params;
 
-  // ✅ CORS headers
   res.header("Access-Control-Allow-Origin", "https://dashboard.mob13r.com");
   res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   if (req.method === "OPTIONS") return res.sendStatus(200);
 
-  try {
-    // ✅ instant response (NO 504)
-    res.json({
-      success: true,
-      message: "🚀 AI processing started in background"
-    });
+  console.log("📥 Request received for offer:", offerId);
 
-    // 🔥 background process
-    processIntegration(req, offerId);
+  // instant response
+  res.json({
+    success: true,
+    message: "🚀 AI processing started in background"
+  });
 
-  } catch (err) {
-    console.error("❌ Route Error:", err);
-  }
+  // background
+  processIntegration(req, offerId);
 });
 
-/* =====================================================
-   🧠 BACKGROUND PROCESS (HEAVY WORK)
-===================================================== */
+/* =========================
+   🧠 BACKGROUND PROCESS
+========================= */
 async function processIntegration(req, offerId) {
   try {
-    console.log("🚀 Processing offer:", offerId);
+    console.log("🚀 START processing:", offerId);
 
     if (!process.env.GEMINI_API_KEY) {
-      throw new Error("Missing GEMINI_API_KEY");
+      console.log("❌ Missing GEMINI_API_KEY");
+      return;
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-    // ✅ Gemini 3 + fallback
     let model;
     try {
       model = genAI.getGenerativeModel({
         model: "gemini-3-flash-preview",
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 1024
-        }
+        generationConfig: { temperature: 0 }
       });
     } catch {
       model = genAI.getGenerativeModel({
@@ -75,9 +68,7 @@ async function processIntegration(req, offerId) {
       });
     }
 
-    /* =========================
-       📄 FILE READ
-    ========================= */
+    /* ========= FILE ========= */
     const fileKeys = Object.keys(req.files || {});
     const file = fileKeys.length ? req.files[fileKeys[0]] : null;
 
@@ -85,6 +76,8 @@ async function processIntegration(req, offerId) {
       console.log("❌ No file found");
       return;
     }
+
+    console.log("📄 File received:", file.name);
 
     let buffer = file.tempFilePath
       ? await fs.readFile(file.tempFilePath)
@@ -97,43 +90,40 @@ async function processIntegration(req, offerId) {
       if (ext.endsWith(".docx")) {
         const result = await mammoth.extractRawText({ buffer });
         docText = result.value;
-      }
-
-      else if (ext.endsWith(".pdf")) {
+      } else if (ext.endsWith(".pdf")) {
         try {
           const data = pdfParse ? await pdfParse(buffer) : null;
 
           if (data && data.text && data.text.trim().length > 50) {
             docText = data.text;
           } else {
-            // fallback for scanned / broken PDF
+            console.log("⚠️ PDF weak text, fallback used");
             docText = buffer.toString("utf-8", 0, 15000);
           }
         } catch {
+          console.log("⚠️ PDF parse failed");
           docText = buffer.toString("utf-8", 0, 15000);
         }
-      }
-
-      else {
+      } else {
         docText = buffer.toString("utf-8");
       }
-
-    } catch {
+    } catch (e) {
+      console.log("⚠️ Parsing error:", e.message);
       docText = buffer.toString("utf-8", 0, 15000);
     }
 
+    console.log("📄 Extracted text preview:", docText.slice(0, 500));
+
     if (!docText || docText.length < 30) {
-      console.log("❌ Invalid document");
+      console.log("❌ Empty document");
       return;
     }
 
-    /* =========================
-       🤖 GEMINI PROMPT
-    ========================= */
+    /* ========= AI ========= */
     const prompt = `
-You are an expert in telecom billing API integrations.
+Extract telecom API URLs.
 
-Return ONLY valid JSON:
+Return JSON:
 
 {
   "pin_send_url": "",
@@ -143,42 +133,37 @@ Return ONLY valid JSON:
   "params": {}
 }
 
-Rules:
-- Detect correct URLs
-- Replace dynamic values with:
-  {msisdn}, {otp}, {transaction_id}
-- Extract query params correctly
-
 TEXT:
-${docText.slice(0, 12000)}
+${docText.slice(0, 10000)}
 `;
+
+    console.log("🤖 Calling Gemini...");
 
     const result = await model.generateContent(prompt);
 
     let raw = result.response.text();
     console.log("🤖 RAW AI:", raw);
 
-    // ✅ clean JSON
     raw = raw.replace(/```json|```/g, "").trim();
 
     const match = raw.match(/\{[\s\S]*\}/);
 
     if (!match) {
-      console.log("❌ Invalid AI response");
+      console.log("❌ AI JSON not found");
       return;
     }
 
     let aiConfig;
     try {
       aiConfig = JSON.parse(match[0]);
-    } catch {
-      console.log("❌ JSON parse error");
+    } catch (e) {
+      console.log("❌ JSON parse failed:", e.message);
       return;
     }
 
-    /* =========================
-       💾 DB UPDATE
-    ========================= */
+    console.log("✅ Parsed AI config:", aiConfig);
+
+    /* ========= DB ========= */
     await pool.query(
       `UPDATE offers 
        SET pin_send_url=$1,
@@ -196,9 +181,8 @@ ${docText.slice(0, 12000)}
       ]
     );
 
-    /* =========================
-       🔁 PARAMS INSERT
-    ========================= */
+    console.log("💾 DB updated for:", offerId);
+
     const params = aiConfig.params || {};
 
     for (const key in params) {
@@ -214,10 +198,10 @@ ${docText.slice(0, 12000)}
       );
     }
 
-    console.log("✅ Integration completed for:", offerId);
+    console.log("🎉 DONE:", offerId);
 
   } catch (err) {
-    console.error("❌ Background Error:", err.message);
+    console.error("❌ Background crash:", err);
   }
 }
 
