@@ -88,29 +88,44 @@ router.post("/", async (req, res) => {
       });
     }
 
-    let finalImage = image_url;
+    /* ✅ UNIVERSAL SAFE IMAGE HANDLING */
 
-    /* ✅ SAFE FILE CHECK (CRASH FIX) */
-    if (req.files && req.files.imageFile) {
-      const file = req.files.imageFile;
+let finalImage = (image_url || "").trim();
 
-      // 🔥 extra safety (empty file case)
-      if (file && file.name) {
-        const fileName = `lp_${Date.now()}_${file.name}`;
-        const savePath = path.join(UPLOAD_DIR, fileName);
+// 👉 CASE 1: FILE UPLOAD (priority)
+if (
+  req.files &&
+  Object.keys(req.files).length > 0 &&
+  req.files.imageFile
+) {
+  const file = req.files.imageFile;
 
-        try {
-          await file.mv(savePath);
-          finalImage = `/uploads/landings/${fileName}`;
-        } catch (err) {
-          console.error("FILE UPLOAD ERROR:", err);
-          return res.json({
-            status: "FAILED",
-            error: "Image upload failed",
-          });
-        }
-      }
+  // ✅ valid file check
+  if (file && file.name && file.size > 0) {
+    const fileName = `lp_${Date.now()}_${file.name}`;
+    const savePath = path.join(UPLOAD_DIR, fileName);
+
+    try {
+      await file.mv(savePath);
+
+      // 👉 file uploaded → override URL
+      finalImage = `/uploads/landings/${fileName}`;
+    } catch (err) {
+      console.error("FILE UPLOAD ERROR:", err);
+      return res.json({
+        status: "FAILED",
+        error: "Image upload failed",
+      });
     }
+  }
+}
+
+// 👉 CASE 2: NO FILE (fallback already handled by image_url)
+
+// 👉 CASE 3: BOTH EMPTY (optional default)
+if (!finalImage) {
+  finalImage = ""; // or set default image if you want
+}
 
     /* 🔥 INSERT */
     const result = await pool.query(
