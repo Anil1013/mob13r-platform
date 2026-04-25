@@ -7,7 +7,7 @@ const router = express.Router();
 
 const BASE_URL = "https://dashboard.mob13r.com";
 
-/* 🔥 UPLOAD DIR (NEW - SAFE ADD) */
+/* 🔥 UPLOAD DIR */
 const UPLOAD_DIR = path.join(process.cwd(), "public/uploads/landings");
 
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -44,7 +44,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-/* 🔥 GET OFFERS (FOR DROPDOWN) */
+/* 🔥 GET OFFERS */
 router.get("/publisher-offers", async (req, res) => {
   try {
     const result = await pool.query(`
@@ -68,40 +68,51 @@ router.get("/publisher-offers", async (req, res) => {
   }
 });
 
-/* 🔥 CREATE LANDING (UPDATED - IMAGE UPLOAD SUPPORT ADDED) */
+/* 🔥 CREATE LANDING (FULL SAFE FIX) */
 router.post("/", async (req, res) => {
   try {
-    const {
-      publisher_offer_id,
-      title,
-      description,
-      image_url,
-      button_text,
-      disclaimer,
-    } = req.body;
+    /* ✅ SAFE BODY (multipart + json दोनों handle) */
+    const body = req.body || {};
+
+    const publisher_offer_id = body.publisher_offer_id;
+    const title = body.title || "";
+    const description = body.description || "";
+    const image_url = body.image_url || "";
+    const button_text = body.button_text || "";
+    const disclaimer = body.disclaimer || "";
 
     if (!publisher_offer_id) {
-      return res.json({ status: "FAILED", message: "publisher_offer_id required" });
+      return res.json({
+        status: "FAILED",
+        message: "publisher_offer_id required",
+      });
     }
 
-    let finalImage = image_url || "";
+    let finalImage = image_url;
 
-    /* ✅ NEW: FILE UPLOAD SUPPORT */
+    /* ✅ SAFE FILE CHECK (CRASH FIX) */
     if (req.files && req.files.imageFile) {
       const file = req.files.imageFile;
 
-      const fileName = `lp_${Date.now()}${path.extname(file.name)}`;
-      const savePath = path.join(UPLOAD_DIR, fileName);
+      // 🔥 extra safety (empty file case)
+      if (file && file.name) {
+        const fileName = `lp_${Date.now()}_${file.name}`;
+        const savePath = path.join(UPLOAD_DIR, fileName);
 
-      try {
-        await file.mv(savePath);
-        finalImage = `/uploads/landings/${fileName}`;
-      } catch (err) {
-        console.error("FILE UPLOAD ERROR:", err);
-        return res.json({ status: "FAILED", error: "Image upload failed" });
+        try {
+          await file.mv(savePath);
+          finalImage = `/uploads/landings/${fileName}`;
+        } catch (err) {
+          console.error("FILE UPLOAD ERROR:", err);
+          return res.json({
+            status: "FAILED",
+            error: "Image upload failed",
+          });
+        }
       }
     }
 
+    /* 🔥 INSERT */
     const result = await pool.query(
       `
       INSERT INTO landing_pages
@@ -113,7 +124,7 @@ router.post("/", async (req, res) => {
         publisher_offer_id,
         title,
         description,
-        finalImage, // 🔥 updated
+        finalImage,
         button_text,
         disclaimer,
       ]
@@ -121,7 +132,7 @@ router.post("/", async (req, res) => {
 
     const id = result.rows[0].id;
 
-    /* 🔥 GENERATE CLEAN URL */
+    /* 🔥 URL */
     const url = `${BASE_URL}/landing/${id}`;
 
     await pool.query(
@@ -134,9 +145,14 @@ router.post("/", async (req, res) => {
       id,
       landing_url: url,
     });
+
   } catch (err) {
     console.error("CREATE LANDING ERROR:", err);
-    res.json({ status: "FAILED", error: err.message });
+
+    res.status(500).json({
+      status: "FAILED",
+      error: err.message,
+    });
   }
 });
 
@@ -173,6 +189,7 @@ router.get("/:id", async (req, res) => {
       status: "SUCCESS",
       data: result.rows[0],
     });
+
   } catch (err) {
     console.error("GET SINGLE LANDING ERROR:", err);
     res.json({ status: "FAILED", error: err.message });
