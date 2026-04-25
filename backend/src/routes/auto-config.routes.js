@@ -17,9 +17,40 @@ try {
 
 const router = express.Router();
 
+/* =====================================================
+   🚀 MAIN ROUTE (FAST RESPONSE - NO TIMEOUT)
+===================================================== */
 router.post("/auto-integrate/:offerId", async (req, res) => {
+  const { offerId } = req.params;
+
+  // ✅ CORS headers
+  res.header("Access-Control-Allow-Origin", "https://dashboard.mob13r.com");
+  res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.method === "OPTIONS") return res.sendStatus(200);
+
   try {
-    const { offerId } = req.params;
+    // ✅ instant response (NO 504)
+    res.json({
+      success: true,
+      message: "🚀 AI processing started in background"
+    });
+
+    // 🔥 background process
+    processIntegration(req, offerId);
+
+  } catch (err) {
+    console.error("❌ Route Error:", err);
+  }
+});
+
+/* =====================================================
+   🧠 BACKGROUND PROCESS (HEAVY WORK)
+===================================================== */
+async function processIntegration(req, offerId) {
+  try {
+    console.log("🚀 Processing offer:", offerId);
 
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("Missing GEMINI_API_KEY");
@@ -32,7 +63,10 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     try {
       model = genAI.getGenerativeModel({
         model: "gemini-3-flash-preview",
-        generationConfig: { temperature: 0 }
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: 1024
+        }
       });
     } catch {
       model = genAI.getGenerativeModel({
@@ -41,14 +75,15 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
       });
     }
 
-    // =========================
-    // 📄 FILE READ
-    // =========================
+    /* =========================
+       📄 FILE READ
+    ========================= */
     const fileKeys = Object.keys(req.files || {});
     const file = fileKeys.length ? req.files[fileKeys[0]] : null;
 
     if (!file) {
-      return res.status(400).json({ error: "No document uploaded" });
+      console.log("❌ No file found");
+      return;
     }
 
     let buffer = file.tempFilePath
@@ -71,7 +106,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
           if (data && data.text && data.text.trim().length > 50) {
             docText = data.text;
           } else {
-            // 🔥 fallback (important for SAV type PDF)
+            // fallback for scanned / broken PDF
             docText = buffer.toString("utf-8", 0, 15000);
           }
         } catch {
@@ -88,16 +123,17 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     }
 
     if (!docText || docText.length < 30) {
-      return res.status(400).json({ error: "Invalid document content" });
+      console.log("❌ Invalid document");
+      return;
     }
 
-    // =========================
-    // 🤖 GEMINI PROMPT
-    // =========================
+    /* =========================
+       🤖 GEMINI PROMPT
+    ========================= */
     const prompt = `
 You are an expert in telecom billing API integrations.
 
-Extract ONLY valid JSON:
+Return ONLY valid JSON:
 
 {
   "pin_send_url": "",
@@ -111,7 +147,7 @@ Rules:
 - Detect correct URLs
 - Replace dynamic values with:
   {msisdn}, {otp}, {transaction_id}
-- Extract query parameters correctly
+- Extract query params correctly
 
 TEXT:
 ${docText.slice(0, 12000)}
@@ -122,33 +158,27 @@ ${docText.slice(0, 12000)}
     let raw = result.response.text();
     console.log("🤖 RAW AI:", raw);
 
-    // =========================
-    // 🧹 CLEAN JSON
-    // =========================
+    // ✅ clean JSON
     raw = raw.replace(/```json|```/g, "").trim();
 
     const match = raw.match(/\{[\s\S]*\}/);
 
     if (!match) {
-      return res.status(400).json({
-        error: "AI did not return valid JSON",
-        raw
-      });
+      console.log("❌ Invalid AI response");
+      return;
     }
 
     let aiConfig;
     try {
       aiConfig = JSON.parse(match[0]);
-    } catch (e) {
-      return res.status(400).json({
-        error: "Invalid JSON from AI",
-        raw: match[0]
-      });
+    } catch {
+      console.log("❌ JSON parse error");
+      return;
     }
 
-    // =========================
-    // 💾 DB UPDATE
-    // =========================
+    /* =========================
+       💾 DB UPDATE
+    ========================= */
     await pool.query(
       `UPDATE offers 
        SET pin_send_url=$1,
@@ -166,9 +196,9 @@ ${docText.slice(0, 12000)}
       ]
     );
 
-    // =========================
-    // 🔁 PARAMS INSERT
-    // =========================
+    /* =========================
+       🔁 PARAMS INSERT
+    ========================= */
     const params = aiConfig.params || {};
 
     for (const key in params) {
@@ -184,20 +214,11 @@ ${docText.slice(0, 12000)}
       );
     }
 
-    return res.json({
-      success: true,
-      message: "✅ Auto Integration Complete",
-      data: aiConfig
-    });
+    console.log("✅ Integration completed for:", offerId);
 
   } catch (err) {
-    console.error("❌ ERROR:", err);
-
-    return res.status(500).json({
-      error: "Integration failed",
-      details: err.message
-    });
+    console.error("❌ Background Error:", err.message);
   }
-});
+}
 
 export default router;
