@@ -29,36 +29,43 @@ function safeParse(text) {
 function fixUrl(url) {
   if (!url) return null;
 
-  return url
-    // msisdn variations
-    .replace(/(\{)?(msisdn|mobile|phone|number)(\})?/gi, "{msisdn}")
+  const [base, query] = url.split("?");
 
-    // otp variations
-    .replace(/(\{)?(otp|pin|code)(\})?/gi, "{otp}")
+  if (!query) return url; // no params → no change
 
-    // transaction variations
-    .replace(/(\{)?(transaction_id|transid|txnid|tid|clickid)(\})?/gi, "{transaction_id}")
+  let fixedQuery = query;
+
+  fixedQuery = fixedQuery
+    // msisdn
+    .replace(/(msisdn|mobile|phone|number)=([^&]+)/gi, "msisdn={msisdn}")
+
+    // otp
+    .replace(/(otp|pin|code)=([^&]+)/gi, "otp={otp}")
+
+    // transaction
+    .replace(/(transaction_id|transid|txnid|tid|clickid)=([^&]+)/gi, "transaction_id={transaction_id}")
 
     // session
-    .replace(/(\{)?(sessionkey|session_key|session)(\})?/gi, "{sessionKey}")
+    .replace(/(sessionkey|session_key|session)=([^&]+)/gi, "sessionKey={sessionKey}")
 
-    // publisher
-    .replace(/(\{)?(pub_id|publisherid|partnerid|userid)(\})?/gi, "{pub_id}")
+    // pub
+    .replace(/(pub_id|publisherid|partnerid|userid)=([^&]*)/gi, "pub_id={pub_id}")
 
-    // sub publisher
-    .replace(/(\{)?(sub_pub_id|subid|sub_id)(\})?/gi, "{sub_pub_id}")
-
-    // user agent
-    .replace(/(\{)?(ua|user_agent)(\})?/gi, "{user_agent}")
+    // sub pub
+    .replace(/(sub_pub_id|subid|sub_id)=([^&]*)/gi, "sub_pub_id={sub_pub_id}")
 
     // ip
-    .replace(/(\{)?(ip|user_ip)(\})?/gi, "{user_ip}")
+    .replace(/(ip|user_ip)=([^&]*)/gi, "user_ip={user_ip}")
 
-    // fix masked values
+    // ua
+    .replace(/(ua|user_agent)=([^&]*)/gi, "user_agent={user_agent}")
+
+    // masked values
     .replace(/=XXXXXXXXXX/gi, "={msisdn}")
     .replace(/=XXXX/gi, "={otp}");
-}
 
+  return `${base}?${fixedQuery}`;
+}
 /**
  * --- 1. MAIN ROUTE ---
  */
