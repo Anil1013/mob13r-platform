@@ -29,97 +29,75 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
 
   if (req.method === "OPTIONS") return res.sendStatus(200);
 
-  console.log("📥 Request received for offer:", offerId);
+  console.log("📥 Request received:", offerId);
 
-  // instant response
-  res.json({
-    success: true,
-    message: "🚀 AI processing started in background"
-  });
+  try {
+    const fileKeys = Object.keys(req.files || {});
+    const file = fileKeys.length ? req.files[fileKeys[0]] : null;
 
-  // background
-  processIntegration(req, offerId);
+    if (!file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    // ✅ IMPORTANT: extract buffer BEFORE async
+    const buffer = file.tempFilePath
+      ? await fs.readFile(file.tempFilePath)
+      : file.data;
+
+    const fileName = file.name;
+
+    // instant response
+    res.json({
+      success: true,
+      message: "🚀 AI processing started"
+    });
+
+    // 🔥 background (SAFE DATA PASS)
+    processIntegration(buffer, fileName, offerId);
+
+  } catch (err) {
+    console.error("❌ Route error:", err);
+    res.status(500).json({ error: "Upload failed" });
+  }
 });
 
 /* =========================
    🧠 BACKGROUND PROCESS
 ========================= */
-async function processIntegration(req, offerId) {
+async function processIntegration(buffer, fileName, offerId) {
   try {
-    console.log("🚀 START processing:", offerId);
-
-    if (!process.env.GEMINI_API_KEY) {
-      console.log("❌ Missing GEMINI_API_KEY");
-      return;
-    }
+    console.log("🚀 START:", offerId);
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-    let model;
-    try {
-      model = genAI.getGenerativeModel({
-        model: "gemini-3-flash-preview",
-        generationConfig: { temperature: 0 }
-      });
-    } catch {
-      model = genAI.getGenerativeModel({
-        model: "gemini-1.5-flash",
-        generationConfig: { temperature: 0 }
-      });
-    }
-
-    /* ========= FILE ========= */
-    const fileKeys = Object.keys(req.files || {});
-    const file = fileKeys.length ? req.files[fileKeys[0]] : null;
-
-    if (!file) {
-      console.log("❌ No file found");
-      return;
-    }
-
-    console.log("📄 File received:", file.name);
-
-    let buffer = file.tempFilePath
-      ? await fs.readFile(file.tempFilePath)
-      : file.data;
+    const model = genAI.getGenerativeModel({
+      model: "gemini-3-flash-preview",
+      generationConfig: { temperature: 0 }
+    });
 
     let docText = "";
-    const ext = file.name.toLowerCase();
+    const ext = fileName.toLowerCase();
 
-    try {
-      if (ext.endsWith(".docx")) {
-        const result = await mammoth.extractRawText({ buffer });
-        docText = result.value;
-      } else if (ext.endsWith(".pdf")) {
-        try {
-          const data = pdfParse ? await pdfParse(buffer) : null;
+    if (ext.endsWith(".docx")) {
+      const result = await mammoth.extractRawText({ buffer });
+      docText = result.value;
+    }
 
-          if (data && data.text && data.text.trim().length > 50) {
-            docText = data.text;
-          } else {
-            console.log("⚠️ PDF weak text, fallback used");
-            docText = buffer.toString("utf-8", 0, 15000);
-          }
-        } catch {
-          console.log("⚠️ PDF parse failed");
-          docText = buffer.toString("utf-8", 0, 15000);
-        }
-      } else {
-        docText = buffer.toString("utf-8");
+    else if (ext.endsWith(".pdf")) {
+      try {
+        const data = pdfParse ? await pdfParse(buffer) : null;
+        docText = data?.text || buffer.toString("utf-8", 0, 15000);
+      } catch {
+        docText = buffer.toString("utf-8", 0, 15000);
       }
-    } catch (e) {
-      console.log("⚠️ Parsing error:", e.message);
-      docText = buffer.toString("utf-8", 0, 15000);
     }
 
-    console.log("📄 Extracted text preview:", docText.slice(0, 500));
-
-    if (!docText || docText.length < 30) {
-      console.log("❌ Empty document");
-      return;
+    else {
+      docText = buffer.toString("utf-8");
     }
 
-    /* ========= AI ========= */
+    console.log("📄 Text preview:", docText.slice(0, 300));
+
     const prompt = `
 Extract telecom API URLs.
 
@@ -137,8 +115,6 @@ TEXT:
 ${docText.slice(0, 10000)}
 `;
 
-    console.log("🤖 Calling Gemini...");
-
     const result = await model.generateContent(prompt);
 
     let raw = result.response.text();
@@ -147,30 +123,19 @@ ${docText.slice(0, 10000)}
     raw = raw.replace(/```json|```/g, "").trim();
 
     const match = raw.match(/\{[\s\S]*\}/);
-
     if (!match) {
-      console.log("❌ AI JSON not found");
+      console.log("❌ AI invalid");
       return;
     }
 
-    let aiConfig;
-    try {
-      aiConfig = JSON.parse(match[0]);
-    } catch (e) {
-      console.log("❌ JSON parse failed:", e.message);
-      return;
-    }
+    const aiConfig = JSON.parse(match[0]);
 
-    console.log("✅ Parsed AI config:", aiConfig);
-
-    /* ========= DB ========= */
     await pool.query(
       `UPDATE offers 
        SET pin_send_url=$1,
            pin_verify_url=$2,
            check_status_url=$3,
-           portal_url=$4,
-           updated_at=NOW()
+           portal_url=$4
        WHERE id=$5`,
       [
         aiConfig.pin_send_url || null,
@@ -181,27 +146,10 @@ ${docText.slice(0, 10000)}
       ]
     );
 
-    console.log("💾 DB updated for:", offerId);
-
-    const params = aiConfig.params || {};
-
-    for (const key in params) {
-      const val = params[key];
-      if (!val) continue;
-
-      await pool.query(
-        `INSERT INTO offer_parameters (offer_id, param_key, param_value)
-         VALUES ($1,$2,$3)
-         ON CONFLICT (offer_id, param_key)
-         DO UPDATE SET param_value = EXCLUDED.param_value`,
-        [offerId, key.toLowerCase(), val]
-      );
-    }
-
-    console.log("🎉 DONE:", offerId);
+    console.log("✅ DONE:", offerId);
 
   } catch (err) {
-    console.error("❌ Background crash:", err);
+    console.error("❌ Crash:", err);
   }
 }
 
