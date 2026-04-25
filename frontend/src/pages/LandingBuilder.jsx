@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import Navbar from "../components/Navbar"; // 👈 Navbar import kiya
+import Navbar from "../components/Navbar";
 
 const API_BASE = "https://backend.mob13r.com";
 
@@ -16,11 +16,10 @@ export default function LandingBuilder() {
     disclaimer: "",
   });
 
-  // ✅ NEW (ADDED - NO CHANGE TO OLD)
   const [imageFile, setImageFile] = useState(null);
   const [preview, setPreview] = useState("");
 
-  // 🔥 LOAD OFFERS + LANDINGS
+  /* ================= LOAD ================= */
   useEffect(() => {
     fetch(`${API_BASE}/api/landing/publisher-offers`)
       .then((res) => res.json())
@@ -35,33 +34,44 @@ export default function LandingBuilder() {
       .then((data) => setLandings(data.data || []));
   };
 
-  // ✅ NEW FILE HANDLER (ADDED)
+  /* ================= FILE ================= */
   const handleFileChange = (e) => {
     const file = e.target.files[0];
+
     if (file) {
       setImageFile(file);
       setPreview(URL.createObjectURL(file));
     }
   };
 
-  // ✅ NEW URL HANDLER (ADDED)
+  /* ================= URL ================= */
   const handleUrlChange = (value) => {
     setForm({ ...form, image_url: value });
     setPreview(value);
+    setImageFile(null); // URL priority
   };
 
-  // 🔥 CREATE LANDING (UPDATED WITHOUT BREAKING OLD FLOW)
+  /* ================= CREATE ================= */
   const createLanding = async () => {
     if (!form.publisher_offer_id) {
       return alert("Select offer");
     }
 
-    // ✅ SWITCH: अगर file है तो FormData use होगा
-    if (imageFile) {
+    try {
       const fd = new FormData();
 
-      Object.keys(form).forEach((k) => fd.append(k, form[k]));
-      fd.append("imageFile", imageFile);
+      // ✅ SAFE append
+      Object.keys(form).forEach((k) => {
+        if (form[k] !== undefined && form[k] !== null && form[k] !== "") {
+          fd.append(k, form[k]);
+        }
+      });
+
+      // ✅ file (optional)
+      if (imageFile) {
+        fd.append("imageFile", imageFile);
+        fd.delete("image_url"); // file override
+      }
 
       const res = await fetch(`${API_BASE}/api/landing`, {
         method: "POST",
@@ -72,85 +82,46 @@ export default function LandingBuilder() {
 
       if (data.status === "SUCCESS") {
         alert("Landing Created ✅");
+
         loadLandings();
-        setPreview("");
+
+        // reset
+        setForm({
+          publisher_offer_id: "",
+          title: "",
+          description: "",
+          image_url: "",
+          button_text: "",
+          disclaimer: "",
+        });
+
         setImageFile(null);
+        setPreview("");
+
       } else {
-        alert("Error creating landing");
+        alert(data.error || "Error creating landing");
       }
-
-      return; // 👈 IMPORTANT (old flow safe)
-    }
-
-    const createLanding = async () => {
-  if (!form.publisher_offer_id) {
-    return alert("Select offer");
-  }
-
-  const fd = new FormData();
-
-  // ✅ safe append
-  Object.keys(form).forEach((k) => {
-    if (form[k] !== undefined && form[k] !== null) {
-      fd.append(k, form[k]);
-    }
-  });
-
-  // ✅ file optional
-  if (imageFile) {
-    fd.append("imageFile", imageFile);
-  }
-
-  const res = await fetch(`${API_BASE}/api/landing`, {
-    method: "POST",
-    body: fd, // ✅ ALWAYS FormData
-  });
-
-  const data = await res.json();
-
-  if (data.status === "SUCCESS") {
-    alert("Landing Created ✅");
-    loadLandings();
-
-    // reset
-    setPreview("");
-    setImageFile(null);
-    setForm({
-      publisher_offer_id: "",
-      title: "",
-      description: "",
-      image_url: "",
-      button_text: "",
-      disclaimer: "",
-    });
-  } else {
-    alert("Error creating landing");
-  }
-};
-
-    const data = await res.json();
-
-    if (data.status === "SUCCESS") {
-      alert("Landing Created ✅");
-      loadLandings();
-    } else {
-      alert("Error creating landing");
+    } catch (err) {
+      console.error(err);
+      alert("Server Error");
     }
   };
 
-  // 🔥 COPY URL
+  /* ================= COPY ================= */
   const copyUrl = (url) => {
     navigator.clipboard.writeText(url);
     alert("Copied ✅");
   };
 
+  /* ================= UI ================= */
   return (
     <>
-      <Navbar /> {/* 👈 Navbar ko component ke top par add kiya */}
-      <div style={styles.container}>
-        <h2 style={{ marginBottom: 20 }}>Create Landing</h2>
+      <Navbar />
 
-        {/* FORM */}
+      <div style={styles.container}>
+        <h2 style={styles.heading}>Create Landing</h2>
+
+        {/* ================= FORM ================= */}
         <div style={styles.form}>
           <select
             style={styles.input}
@@ -170,23 +141,26 @@ export default function LandingBuilder() {
           <input
             style={styles.input}
             placeholder="Title"
+            value={form.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
           />
 
           <input
             style={styles.input}
             placeholder="Description"
+            value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
 
-          {/* 🔥 UPDATED (URL + PREVIEW) */}
+          {/* URL */}
           <input
             style={styles.input}
             placeholder="Image URL"
+            value={form.image_url}
             onChange={(e) => handleUrlChange(e.target.value)}
           />
 
-          {/* ✅ NEW FILE INPUT (ADDED) */}
+          {/* FILE */}
           <input
             style={styles.input}
             type="file"
@@ -197,13 +171,19 @@ export default function LandingBuilder() {
           <input
             style={styles.input}
             placeholder="Button Text"
-            onChange={(e) => setForm({ ...form, button_text: e.target.value })}
+            value={form.button_text}
+            onChange={(e) =>
+              setForm({ ...form, button_text: e.target.value })
+            }
           />
 
           <input
             style={styles.input}
             placeholder="Disclaimer"
-            onChange={(e) => setForm({ ...form, disclaimer: e.target.value })}
+            value={form.disclaimer}
+            onChange={(e) =>
+              setForm({ ...form, disclaimer: e.target.value })
+            }
           />
 
           <button style={styles.button} onClick={createLanding}>
@@ -211,21 +191,24 @@ export default function LandingBuilder() {
           </button>
         </div>
 
-        {/* 🔥 PREVIEW (UPDATED - OLD + NEW SAFE) */}
+        {/* ================= PREVIEW ================= */}
         <div style={styles.preview}>
           {preview && (
             <img
               src={preview}
-              style={{ width: "100%", height: 120, objectFit: "cover" }}
+              style={styles.previewImg}
+              alt=""
             />
           )}
+
           <h3>{form.title || "Landing Title"}</h3>
+
           <button style={styles.greenBtn}>
             {form.button_text || "Subscribe"}
           </button>
         </div>
 
-        {/* TABLE */}
+        {/* ================= TABLE ================= */}
         <div style={styles.tableBox}>
           <h3>Landing Pages</h3>
 
@@ -249,7 +232,7 @@ export default function LandingBuilder() {
                   <td>{l.publisher_name}</td>
                   <td>{l.offer_name}</td>
 
-                  <td style={{ maxWidth: 250, wordBreak: "break-all" }}>
+                  <td style={{ wordBreak: "break-all" }}>
                     {l.landing_url}
                   </td>
 
@@ -261,11 +244,7 @@ export default function LandingBuilder() {
                       Copy
                     </button>
 
-                    <a
-                      href={l.landing_url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
+                    <a href={l.landing_url} target="_blank" rel="noreferrer">
                       <button style={styles.openBtn}>Open</button>
                     </a>
                   </td>
@@ -279,11 +258,16 @@ export default function LandingBuilder() {
   );
 }
 
+/* ================= STYLES ================= */
 const styles = {
   container: {
-    padding: "80px 30px 30px 30px", // 👈 Navbar ke liye top padding (80px) badhayi
-    background: "#f5f6fa",
+    padding: "90px 30px",
+    background: "#0f172a",
     minHeight: "100vh",
+    color: "#fff",
+  },
+  heading: {
+    marginBottom: 20,
   },
   form: {
     display: "grid",
@@ -293,36 +277,43 @@ const styles = {
   },
   input: {
     padding: 10,
-    border: "1px solid #ccc",
-    borderRadius: 5,
+    borderRadius: 6,
+    border: "1px solid #334155",
+    background: "#1e293b",
+    color: "#fff",
   },
   button: {
     gridColumn: "span 3",
-    padding: 12,
-    background: "#007bff",
-    color: "#fff",
+    padding: 14,
+    background: "#3b82f6",
     border: "none",
-    borderRadius: 5,
+    color: "#fff",
+    borderRadius: 6,
     cursor: "pointer",
   },
   preview: {
-    width: 250,
+    width: 260,
     padding: 20,
-    background: "#fff",
+    background: "#1e293b",
     borderRadius: 10,
     marginBottom: 20,
-    boxShadow: "0 10px 20px rgba(0,0,0,0.1)",
+  },
+  previewImg: {
+    width: "100%",
+    height: 120,
+    objectFit: "cover",
+    marginBottom: 10,
   },
   greenBtn: {
     width: "100%",
     padding: 10,
-    background: "#28a745",
-    color: "#fff",
+    background: "#22c55e",
     border: "none",
-    borderRadius: 5,
+    borderRadius: 6,
+    color: "#fff",
   },
   tableBox: {
-    background: "#fff",
+    background: "#1e293b",
     padding: 20,
     borderRadius: 10,
   },
@@ -340,7 +331,7 @@ const styles = {
   },
   openBtn: {
     padding: "5px 10px",
-    background: "#28a745",
+    background: "#22c55e",
     color: "#fff",
     border: "none",
     borderRadius: 4,
