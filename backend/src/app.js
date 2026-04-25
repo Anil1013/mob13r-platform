@@ -8,6 +8,7 @@ import offersRoutes from "./routes/offers.routes.js";
 import pinRoutes from "./routes/pin.routes.js";
 import dumpRoutes from "./routes/dashboard.dump.routes.js";
 import landingRoutes from "./routes/landing.routes.js";
+import docsRoutes from "./routes/publisher.docs.routes.js";
 
 /* 👉 PUBLISHER ROUTES */
 import publisherRoutes from "./routes/publisher.routes.js";
@@ -76,5 +77,7 @@ app.use("/api/publisher", publisherRoutes);
 app.use("/api/publisher", publisherDashboardRoutes);
 
 app.use("/api/publishers", publishersRoutes);
+
+app.use("/api", docsRoutes);
 
 export default app;
