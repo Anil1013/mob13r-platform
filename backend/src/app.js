@@ -27,7 +27,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.use(fileUpload());
+app.use(fileUpload({
+  useTempFiles: true,
+  tempFileDir: "/tmp/",
+  limits: { fileSize: 50 * 1024 * 1024 },
+  abortOnLimit: true,
+}));
+
 app.use('/uploads', express.static('public/uploads'));
 
 /* -------- HEALTH CHECK -------- */
