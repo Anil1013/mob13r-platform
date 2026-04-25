@@ -68,10 +68,8 @@ router.get("/publisher-offers", async (req, res) => {
   }
 });
 
-/* 🔥 CREATE LANDING (FULL SAFE FIX) */
 router.post("/", async (req, res) => {
   try {
-    /* ✅ SAFE BODY (multipart + json दोनों handle) */
     const body = req.body || {};
 
     const publisher_offer_id = body.publisher_offer_id;
@@ -88,46 +86,34 @@ router.post("/", async (req, res) => {
       });
     }
 
-    /* ✅ UNIVERSAL SAFE IMAGE HANDLING */
+    let finalImage = image_url.trim();
 
-let finalImage = (image_url || "").trim();
-
-// 👉 CASE 1: FILE UPLOAD (priority)
-if (
-  req.files &&
-  Object.keys(req.files).length > 0 &&
-  req.files.imageFile
-) {
-  const file = req.files.imageFile;
-
-  // ✅ valid file check
-  if (file && file.name && file.size > 0) {
-    const fileName = `lp_${Date.now()}_${file.name}`;
-    const savePath = path.join(UPLOAD_DIR, fileName);
-
+    /* ================= SAFE FILE HANDLING ================= */
     try {
-      await file.mv(savePath);
+      if (req.files && req.files.imageFile) {
+        const file = req.files.imageFile;
 
-      // 👉 file uploaded → override URL
-      finalImage = `/uploads/landings/${fileName}`;
-    } catch (err) {
-      console.error("FILE UPLOAD ERROR:", err);
-      return res.json({
-        status: "FAILED",
-        error: "Image upload failed",
-      });
+        // ✅ VALID FILE CHECK
+        if (file && file.name && file.size > 0) {
+          // 🔥 allow ANY image format
+          const ext = path.extname(file.name) || ".jpg";
+
+          const fileName = `lp_${Date.now()}${ext}`;
+          const savePath = path.join(UPLOAD_DIR, fileName);
+
+          await file.mv(savePath);
+
+          finalImage = `/uploads/landings/${fileName}`;
+        }
+      }
+    } catch (fileErr) {
+      console.error("FILE ERROR:", fileErr);
+
+      // ❌ DO NOT CRASH → fallback to image_url
+      finalImage = image_url || "";
     }
-  }
-}
 
-// 👉 CASE 2: NO FILE (fallback already handled by image_url)
-
-// 👉 CASE 3: BOTH EMPTY (optional default)
-if (!finalImage) {
-  finalImage = ""; // or set default image if you want
-}
-
-    /* 🔥 INSERT */
+    /* ================= INSERT ================= */
     const result = await pool.query(
       `
       INSERT INTO landing_pages
@@ -147,8 +133,7 @@ if (!finalImage) {
 
     const id = result.rows[0].id;
 
-    /* 🔥 URL */
-    const url = `${BASE_URL}/landing/${id}`;
+    const url = `https://dashboard.mob13r.com/landing/${id}`;
 
     await pool.query(
       `UPDATE landing_pages SET landing_url=$1 WHERE id=$2`,
@@ -164,7 +149,8 @@ if (!finalImage) {
   } catch (err) {
     console.error("CREATE LANDING ERROR:", err);
 
-    res.status(500).json({
+    // ✅ NEVER crash server
+    res.json({
       status: "FAILED",
       error: err.message,
     });
