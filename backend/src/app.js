@@ -27,11 +27,12 @@ const app = express();
 app.use(cors());
 
 app.use(fileUpload({
-  useTempFiles: false, // 🔥 CHANGE THIS
-  limits: { fileSize: 50 * 1024 * 1024 },
+  useTempFiles: true,         // ✅ True hona chahiye taaki crash na ho
+  tempFileDir: '/tmp/',       // ✅ Linux server ke liye /tmp/ best hai
+  limits: { fileSize: 50 * 1024 * 1024 }, 
+  createParentPath: true      // ✅ Folder apne aap ban jayega
 }));
 
-app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // ✅ ADD THIS
 
 app.use('/uploads', express.static('public/uploads'));
