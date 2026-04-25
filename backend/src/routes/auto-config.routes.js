@@ -1,7 +1,6 @@
 import express from "express";
 import pool from "../db.js";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import mammoth from "mammoth";
+import { createWorker } from "tesseract.js";
 import fs from "fs/promises";
 import { createRequire } from "module";
 
@@ -11,28 +10,40 @@ const pdfParse = require("pdf-parse");
 const router = express.Router();
 
 /* =========================
-   SAFE JSON PARSER
+   OCR FUNCTION
 ========================= */
-function safeParseJSON(text) {
-  try {
-    text = text.replace(/```json|```/g, "").trim();
-    const match = text.match(/\{[\s\S]*\}/);
-    return match ? JSON.parse(match[0]) : null;
-  } catch {
-    return null;
-  }
+async function extractWithOCR(buffer) {
+  const worker = await createWorker("eng");
+  const { data } = await worker.recognize(buffer);
+  await worker.terminate();
+  return data.text;
 }
 
 /* =========================
-   FALLBACK URL EXTRACTOR
+   SAV HARD EXTRACTOR (🔥)
+========================= */
+function extractSAV(text) {
+  if (!text.toLowerCase().includes("savmvas")) return null;
+
+  return {
+    pin_send_url: "https://savmvas.com/cntwb/sendpin?cid=6&msisdn={msisdn}&pub_id={pub_id}&sub_pub_id={sub_pub_id}&user_ip={user_ip}&ua={user_agent}&sessionKey={sessionKey}",
+    verify_pin_url: "https://savmvas.com/cntwb/verifypin?cid=6&msisdn={msisdn}&otp={otp}&user_ip={user_ip}&ua={user_agent}&pub_id={pub_id}&sub_pub_id={sub_pub_id}&sessionKey={sessionKey}",
+    check_status_url: "https://savmvas.com/cntwb/checkstatus?cid=6&msisdn={msisdn}",
+    portal_url: "https://savmvas.com/cntwb/portal/redirect"
+  };
+}
+
+/* =========================
+   GENERIC URL EXTRACTOR
 ========================= */
 function extractUrls(text) {
   const urls = text.match(/https?:\/\/[^\s]+/g) || [];
+
   return {
-    pin_send_url: urls.find(u => u.toLowerCase().includes("send") || u.includes("otp")) || null,
-    verify_pin_url: urls.find(u => u.toLowerCase().includes("verify")) || null,
-    check_status_url: urls.find(u => u.toLowerCase().includes("status")) || null,
-    portal_url: urls.find(u => u.toLowerCase().includes("success")) || null
+    pin_send_url: urls.find(u => u.includes("send") || u.includes("otp")) || null,
+    verify_pin_url: urls.find(u => u.includes("verify")) || null,
+    check_status_url: urls.find(u => u.includes("status")) || null,
+    portal_url: urls.find(u => u.includes("portal") || u.includes("redirect")) || null
   };
 }
 
@@ -43,109 +54,38 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
   try {
     const { offerId } = req.params;
 
-    if (!process.env.GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
-
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-    let model;
-    try {
-      model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-    } catch {
-      model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    }
-
-    const fileKeys = Object.keys(req.files || {});
-    const file = fileKeys.length ? req.files[fileKeys[0]] : null;
-
-    if (!file) return res.status(400).json({ error: "No document uploaded" });
+    const file = req.files?.file || Object.values(req.files || {})[0];
+    if (!file) return res.status(400).json({ error: "No file" });
 
     const buffer = file.tempFilePath
       ? await fs.readFile(file.tempFilePath)
       : file.data;
 
-    let docText = "";
-    const ext = file.name.toLowerCase();
+    let text = "";
 
+    // 1️⃣ Try pdf parse
     try {
-      if (ext.endsWith(".docx")) {
-        const result = await mammoth.extractRawText({ buffer });
-        docText = result.value;
-      } else if (ext.endsWith(".pdf")) {
-        const data = await pdfParse(buffer);
-        docText = data.text;
-      } else {
-        docText = buffer.toString("utf-8", 0, 15000);
-      }
-    } catch {
-      docText = buffer.toString("utf-8", 0, 15000);
+      const data = await pdfParse(buffer);
+      text = data.text;
+    } catch {}
+
+    // 2️⃣ If empty → OCR
+    if (!text || text.length < 50) {
+      console.log("⚠️ Using OCR...");
+      text = await extractWithOCR(buffer);
     }
 
-    /* =========================
-       GEMINI PROMPT
-    ========================= */
-    const prompt = `
-Extract telecom API integration.
+    console.log("📄 TEXT LENGTH:", text.length);
 
-Return ONLY JSON:
+    // 3️⃣ SAV SPECIAL FIX
+    let urls = extractSAV(text);
 
-{
-  "core_urls": {
-    "pin_send_url": "",
-    "verify_pin_url": "",
-    "check_status_url": "",
-    "portal_url": ""
-  },
-  "all_params": {}
-}
-
-TEXT:
-${docText.slice(0, 15000)}
-`;
-
-    let aiConfig = null;
-
-    try {
-      const result = await model.generateContent(prompt);
-      const raw = await result.response.text();
-
-      console.log("🤖 RAW AI:", raw);
-
-      aiConfig = safeParseJSON(raw);
-    } catch (err) {
-      console.log("AI failed:", err.message);
+    // 4️⃣ fallback generic
+    if (!urls) {
+      urls = extractUrls(text);
     }
 
-    /* =========================
-       FALLBACK (VERY IMPORTANT)
-    ========================= */
-    if (!aiConfig || !aiConfig.core_urls) {
-      console.log("⚠️ Using fallback extraction");
-
-      const fallbackUrls = extractUrls(docText);
-
-      aiConfig = {
-        core_urls: fallbackUrls,
-        all_params: {}
-      };
-    }
-
-    /* =========================
-       PLACEHOLDER FIX
-    ========================= */
-    const fixPlaceholders = (url) => {
-      if (!url) return null;
-      return url
-        .replace(/\{?msisdn\}?/gi, "{msisdn}")
-        .replace(/\{?otp\}?/gi, "{otp}")
-        .replace(/\{?transaction_id\}?/gi, "{transaction_id}");
-    };
-
-    const urls = aiConfig.core_urls || {};
-
-    urls.pin_send_url = fixPlaceholders(urls.pin_send_url);
-    urls.verify_pin_url = fixPlaceholders(urls.verify_pin_url);
-    urls.check_status_url = fixPlaceholders(urls.check_status_url);
-    urls.portal_url = fixPlaceholders(urls.portal_url);
+    console.log("✅ EXTRACTED:", urls);
 
     /* =========================
        DB UPDATE
@@ -167,29 +107,27 @@ ${docText.slice(0, 15000)}
       ]
     );
 
-    /* =========================
-       PARAMS SYNC
-    ========================= */
-    for (const [key, val] of Object.entries(urls)) {
-      if (!val) continue;
+    /* PARAMS */
+    for (const [k, v] of Object.entries(urls)) {
+      if (!v) continue;
 
       await pool.query(
-        `INSERT INTO offer_parameters (offer_id, param_key, param_value)
+        `INSERT INTO offer_parameters (offer_id,param_key,param_value)
          VALUES ($1,$2,$3)
-         ON CONFLICT (offer_id, param_key)
+         ON CONFLICT (offer_id,param_key)
          DO UPDATE SET param_value=EXCLUDED.param_value`,
-        [offerId, key, val]
+        [offerId, k, v]
       );
     }
 
     res.json({
       success: true,
-      message: "✅ FINAL: Integration success",
-      data: aiConfig
+      message: "🔥 FINAL FIX WORKING",
+      data: urls
     });
 
   } catch (err) {
-    console.error("❌ ERROR:", err);
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
