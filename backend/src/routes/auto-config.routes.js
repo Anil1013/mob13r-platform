@@ -25,8 +25,22 @@ function safeParse(text) {
 }
 
 /* =========================
+   🔥 VALUE NORMALIZER (NEW FIX)
+========================= */
+function normalizeValue(key, val) {
+  if (!val) return val;
+
+  // numeric mobile
+  if (/^\d{8,15}$/.test(val)) {
+    if (key.includes("msisdn")) return "{msisdn}";
+    if (key.includes("otp")) return "{otp}";
+  }
+
+  return val;
+}
+
+/* =========================
    FINAL SAFE URL FIX
-   (NO PATH DAMAGE)
 ========================= */
 function fixUrl(url) {
   if (!url) return null;
@@ -47,8 +61,8 @@ function fixUrl(url) {
     .replace(/(ip|user_ip)=([^&]*)/gi, "user_ip={user_ip}")
     .replace(/(ua|user_agent)=([^&]*)/gi, "user_agent={user_agent}")
 
-    // masked values
-    .replace(/=XXXXXXXXXX/gi, "={msisdn}")
+    // numeric fallback
+    .replace(/=\d{8,15}/gi, "={msisdn}")
     .replace(/=XXXX/gi, "={otp}");
 
   return `${base}?${q}`;
@@ -88,9 +102,6 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
     let docText = "";
     const ext = file.name.toLowerCase();
 
-    /* =========================
-       TEXT PARSING (fallback)
-    ========================= */
     try {
       if (ext.endsWith(".docx")) {
         const result = await mammoth.extractRawText({ buffer: fileBuffer });
@@ -107,9 +118,6 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
 
     console.log("📄 TEXT LENGTH:", docText.length);
 
-    /* =========================
-       GEMINI OCR (REAL FIX)
-    ========================= */
     let aiConfig = null;
 
     try {
@@ -120,22 +128,7 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
             data: fileBuffer.toString("base64")
           }
         },
-        `
-Extract AdTech API integration details.
-
-Return ONLY JSON:
-
-{
-  "has_fraud": false,
-  "core_urls": {
-    "pin_send_url": "",
-    "verify_pin_url": "",
-    "check_status_url": "",
-    "portal_url": ""
-  },
-  "all_params": {}
-}
-`
+        `Extract AdTech API integration. Return JSON with core_urls and params.`
       ]);
 
       const rawText =
@@ -149,9 +142,6 @@ Return ONLY JSON:
       console.log("AI failed:", err.message);
     }
 
-    /* =========================
-       FALLBACK
-    ========================= */
     if (!aiConfig || !aiConfig.core_urls) {
       console.log("⚠️ fallback extraction");
 
@@ -171,17 +161,11 @@ Return ONLY JSON:
 
     const urls = aiConfig.core_urls || {};
 
-    /* =========================
-       APPLY FIX
-    ========================= */
     urls.pin_send_url = fixUrl(urls.pin_send_url);
     urls.verify_pin_url = fixUrl(urls.verify_pin_url);
     urls.check_status_url = fixUrl(urls.check_status_url);
     urls.portal_url = fixUrl(urls.portal_url);
 
-    /* =========================
-       DB UPDATE
-    ========================= */
     await pool.query(
       `UPDATE offers SET 
         pin_send_url=$1,
@@ -201,9 +185,6 @@ Return ONLY JSON:
       ]
     );
 
-    /* =========================
-       PARAM SYNC
-    ========================= */
     const paramsMap = new Map();
 
     Object.entries(urls).forEach(([k, v]) => {
@@ -212,7 +193,7 @@ Return ONLY JSON:
 
     if (aiConfig.all_params) {
       Object.entries(aiConfig.all_params).forEach(([k, v]) =>
-        paramsMap.set(k.toLowerCase(), v)
+        paramsMap.set(k.toLowerCase(), normalizeValue(k, v))
       );
     }
 
@@ -228,44 +209,12 @@ Return ONLY JSON:
 
     res.json({
       success: true,
-      message: "🔥 FINAL SUCCESS (Gemini 3 Working)",
+      message: "🔥 FINAL PERFECT WORKING",
       data: aiConfig
     });
 
   } catch (err) {
     console.error("❌ ERROR:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/**
- * =========================
- * RUNTIME CONFIG
- * =========================
- */
-router.get("/get-runtime-config/:offerId", async (req, res) => {
-  try {
-    const { offerId } = req.params;
-
-    const offerRes = await pool.query("SELECT * FROM offers WHERE id = $1", [offerId]);
-    const paramsRes = await pool.query(
-      "SELECT param_key, param_value FROM offer_parameters WHERE offer_id = $1",
-      [offerId]
-    );
-
-    const config = {};
-    paramsRes.rows.forEach(p => (config[p.param_key] = p.param_value));
-
-    res.json({
-      success: true,
-      offer: offerRes.rows[0],
-      params: config,
-      runtime: {
-        transaction_id: `m13r_${Date.now()}`
-      }
-    });
-
-  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
