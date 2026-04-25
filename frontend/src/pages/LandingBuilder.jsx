@@ -82,12 +82,51 @@ export default function LandingBuilder() {
       return; // 👈 IMPORTANT (old flow safe)
     }
 
-    // 🔥 OLD FLOW (UNCHANGED)
-    const res = await fetch(`${API_BASE}/api/landing`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+    const createLanding = async () => {
+  if (!form.publisher_offer_id) {
+    return alert("Select offer");
+  }
+
+  const fd = new FormData();
+
+  // ✅ safe append
+  Object.keys(form).forEach((k) => {
+    if (form[k] !== undefined && form[k] !== null) {
+      fd.append(k, form[k]);
+    }
+  });
+
+  // ✅ file optional
+  if (imageFile) {
+    fd.append("imageFile", imageFile);
+  }
+
+  const res = await fetch(`${API_BASE}/api/landing`, {
+    method: "POST",
+    body: fd, // ✅ ALWAYS FormData
+  });
+
+  const data = await res.json();
+
+  if (data.status === "SUCCESS") {
+    alert("Landing Created ✅");
+    loadLandings();
+
+    // reset
+    setPreview("");
+    setImageFile(null);
+    setForm({
+      publisher_offer_id: "",
+      title: "",
+      description: "",
+      image_url: "",
+      button_text: "",
+      disclaimer: "",
     });
+  } else {
+    alert("Error creating landing");
+  }
+};
 
     const data = await res.json();
 
