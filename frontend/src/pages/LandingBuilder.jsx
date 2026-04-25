@@ -239,3 +239,71 @@ export default function LandingBuilder() {
     </>
   );
 }
+
+const styles = {
+  container: {
+    padding: "80px 30px 30px 30px", // 👈 Navbar ke liye top padding (80px) badhayi
+    background: "#f5f6fa",
+    minHeight: "100vh",
+  },
+  form: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3,1fr)",
+    gap: 10,
+    marginBottom: 20,
+  },
+  input: {
+    padding: 10,
+    border: "1px solid #ccc",
+    borderRadius: 5,
+  },
+  button: {
+    gridColumn: "span 3",
+    padding: 12,
+    background: "#007bff",
+    color: "#fff",
+    border: "none",
+    borderRadius: 5,
+    cursor: "pointer",
+  },
+  preview: {
+    width: 250,
+    padding: 20,
+    background: "#fff",
+    borderRadius: 10,
+    marginBottom: 20,
+    boxShadow: "0 10px 20px rgba(0,0,0,0.1)",
+  },
+  greenBtn: {
+    width: "100%",
+    padding: 10,
+    background: "#28a745",
+    color: "#fff",
+    border: "none",
+    borderRadius: 5,
+  },
+  tableBox: {
+    background: "#fff",
+    padding: 20,
+    borderRadius: 10,
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  copyBtn: {
+    marginRight: 5,
+    padding: "5px 10px",
+    background: "#000",
+    color: "#fff",
+    border: "none",
+    borderRadius: 4,
+  },
+  openBtn: {
+    padding: "5px 10px",
+    background: "#28a745",
+    color: "#fff",
+    border: "none",
+    borderRadius: 4,
+  },
+};
