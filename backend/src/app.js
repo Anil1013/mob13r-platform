@@ -26,6 +26,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.use('/uploads', express.static('public/uploads'));
+
 /* -------- HEALTH CHECK -------- */
 
 app.get("/health", (req, res) => {
