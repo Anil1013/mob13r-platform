@@ -495,6 +495,9 @@ export default function PublisherAssignOffers() {
     📄 API Docs
   </button>
 </td>
+  </tr>  
+  ))}
+</tbody>
   </table>
 </div>
 </>
