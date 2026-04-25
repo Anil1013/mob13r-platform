@@ -460,30 +460,41 @@ export default function PublisherAssignOffers() {
                 </td>
 
                 <td style={td}>
-                  {editingId === a.id ? (
-                    <button onClick={() => saveEdit(a)}>Save</button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setEditingId(a.id);
-                        setEditRow(a);
-                      }}
-                    >
-                      Edit
-                    </button>
-                  )}
-                  <button onClick={() => toggleStatus(a)}>
-                    {a.status === "active" ? "Pause" : "Activate"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
-}
+  {editingId === a.id ? (
+    <button onClick={() => saveEdit(a)}>Save</button>
+  ) : (
+    <button
+      onClick={() => {
+        setEditingId(a.id);
+        setEditRow(a);
+      }}
+    >
+      Edit
+    </button>
+  )}
+
+  <button onClick={() => toggleStatus(a)}>
+    {a.status === "active" ? "Pause" : "Activate"}
+  </button>
+
+  {/* 🔥 NEW: API DOCS BUTTON */}
+  <button
+    style={{ marginLeft: 6 }}
+    onClick={() => {
+      if (!a.publisher_id || !a.offer_id) {
+        alert("Missing publisher or offer ID");
+        return;
+      }
+
+      window.open(
+        `${API_BASE}/api/publisher/${a.publisher_id}/offer/${a.offer_id}/docs`,
+        "_blank"
+      );
+    }}
+  >
+    📄 API Docs
+  </button>
+</td>
 
 /* ================= STYLES ================= */
 const th = {
