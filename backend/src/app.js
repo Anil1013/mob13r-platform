@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import fileUpload from "express-fileupload";
-import multer from "multer";
 
 /* -------- ROUTES -------- */
 import authRoutes from "./routes/auth.routes.js";
@@ -33,8 +32,6 @@ app.use(fileUpload({
   limits: { fileSize: 50 * 1024 * 1024 }, 
   createParentPath: true      // ✅ Folder apne aap ban jayega
 }));
-
-const upload = multer({ dest: '/tmp/' });
 
 app.use('/uploads', express.static('public/uploads'));
 
