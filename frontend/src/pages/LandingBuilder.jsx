@@ -6,180 +6,61 @@ const API_BASE = "https://backend.mob13r.com";
 export default function LandingBuilder() {
   const [offers, setOffers] = useState([]);
   const [landings, setLandings] = useState([]);
-
-  const [form, setForm] = useState({
-    publisher_offer_id: "",
-    title: "",
-    description: "",
-    image_url: "",
-    button_text: "",
-    disclaimer: "",
-  });
-
   const [imageFile, setImageFile] = useState(null);
-  const [preview, setPreview] = useState("");
+  const [form, setForm] = useState({ publisher_offer_id: "", title: "", description: "", image_url: "", button_text: "", disclaimer: "" });
 
-  /* ================= LOAD ================= */
   useEffect(() => {
-    fetch(`${API_BASE}/api/landing/publisher-offers`)
-      .then((res) => res.json())
-      .then((data) => setOffers(data.data || []));
-
+    fetch(`${API_BASE}/api/landing/publisher-offers`).then(res => res.json()).then(d => setOffers(d.data || []));
     loadLandings();
   }, []);
 
-  const loadLandings = () => {
-    fetch(`${API_BASE}/api/landing`)
-      .then((res) => res.json())
-      .then((data) => setLandings(data.data || []));
-  };
+  const loadLandings = () => { fetch(`${API_BASE}/api/landing`).then(res => res.json()).then(d => setLandings(d.data || [])); };
 
-  /* ================= FILE ================= */
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setImageFile(file);
-      setPreview(URL.createObjectURL(file));
-      // Reset text URL if file is selected
-      setForm((prev) => ({ ...prev, image_url: "" }));
-    }
-  };
-
-  /* ================= URL ================= */
-  const handleUrlChange = (value) => {
-    setForm({ ...form, image_url: value });
-    setPreview(value);
-    setImageFile(null); // URL priority logic
-  };
-
-  /* ================= CREATE ================= */
   const createLanding = async () => {
-    if (!form.publisher_offer_id) return alert("Please select an offer");
+    if (!form.publisher_offer_id) return alert("Select offer");
+    const fd = new FormData();
+    Object.keys(form).forEach(k => fd.append(k, form[k]));
+    if (imageFile) fd.append("imageFile", imageFile);
 
-    try {
-      const fd = new FormData();
-      
-      // ✅ Proper way to append data for Multipart/Form-Data
-      fd.append("publisher_offer_id", form.publisher_offer_id);
-      fd.append("title", form.title);
-      fd.append("description", form.description);
-      fd.append("button_text", form.button_text);
-      fd.append("disclaimer", form.disclaimer);
-      
-      // If file exists, send file, else send text URL
-      if (imageFile) {
-        fd.append("imageFile", imageFile);
-      } else {
-        fd.append("image_url", form.image_url);
-      }
-
-      const res = await fetch(`${API_BASE}/api/landing`, {
-        method: "POST",
-        body: fd, // Browser automatically sets Content-Type to multipart/form-data
-      });
-
-      const data = await res.json();
-
-      if (data.status === "SUCCESS") {
-        alert("Landing Created ✅");
-        loadLandings();
-        
-        // Full Reset
-        setForm({
-          publisher_offer_id: "",
-          title: "",
-          description: "",
-          image_url: "",
-          button_text: "",
-          disclaimer: "",
-        });
-        setImageFile(null);
-        setPreview("");
-      } else {
-        alert(data.error || "Server responded with error");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Critical Error: Please check if backend is running");
-    }
+    const res = await fetch(`${API_BASE}/api/landing`, { method: "POST", body: fd });
+    const data = await res.json();
+    if (data.status === "SUCCESS") { alert("Landing Created ✅"); loadLandings(); }
   };
 
-  const copyUrl = (url) => {
-    navigator.clipboard.writeText(url);
-    alert("Copied ✅");
-  };
+  const copyUrl = (url) => { navigator.clipboard.writeText(url); alert("Copied ✅"); };
 
   return (
     <>
       <Navbar />
       <div style={styles.container}>
-        <h2 style={styles.heading}>Create Landing</h2>
-
+        <h2>Create Landing Page</h2>
         <div style={styles.form}>
-          <select
-            style={styles.input}
-            value={form.publisher_offer_id}
-            onChange={(e) => setForm({ ...form, publisher_offer_id: e.target.value })}
-          >
+          <select style={styles.input} value={form.publisher_offer_id} onChange={(e) => setForm({ ...form, publisher_offer_id: e.target.value })}>
             <option value="">Select Offer</option>
-            {offers.map((o) => (
-              <option key={o.id} value={o.id}>{o.service_name} - {o.publisher_name}</option>
-            ))}
+            {offers.map((o) => ( <option key={o.id} value={o.id}>{o.service_name} - {o.publisher_name}</option> ))}
           </select>
-
           <input style={styles.input} placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           <input style={styles.input} placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-          <input style={styles.input} placeholder="Image URL (Manual)" value={form.image_url} onChange={(e) => handleUrlChange(e.target.value)} />
-          
-          <input style={{...styles.input, paddingTop: '8px'}} type="file" accept="image/*" onChange={handleFileChange} />
-          
+          <input style={styles.input} placeholder="Or Paste Image URL" value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} />
+          <div style={{gridColumn: "span 3", background: "#eee", padding: 10, borderRadius: 5}}>
+            <label>Upload New Image: </label>
+            <input type="file" onChange={(e) => setImageFile(e.target.files[0])} />
+          </div>
           <input style={styles.input} placeholder="Button Text" value={form.button_text} onChange={(e) => setForm({ ...form, button_text: e.target.value })} />
           <input style={styles.input} placeholder="Disclaimer" value={form.disclaimer} onChange={(e) => setForm({ ...form, disclaimer: e.target.value })} />
-
           <button style={styles.button} onClick={createLanding}>Save Landing</button>
         </div>
-
-        {/* PREVIEW BOX */}
-        <div style={styles.preview}>
-          <p style={{fontSize: '10px', color: '#64748b', margin: '0 0 10px 0'}}>Live Preview</p>
-          {preview ? (
-            <img src={preview} style={styles.previewImg} alt="Content Preview" />
-          ) : (
-            <div style={{height: 120, background: '#334155', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 12, marginBottom: 10}}>No Image Selected</div>
-          )}
-          <h3>{form.title || "Game Title"}</h3>
-          <button style={styles.greenBtn}>{form.button_text || "Continue"}</button>
-        </div>
-
-        {/* TABLE SECTION (CENTERED ACTION BUTTONS) */}
         <div style={styles.tableBox}>
           <table style={styles.table}>
-            <thead>
-              <tr style={{borderBottom: '2px solid #334155'}}>
-                <th style={styles.th}>ID</th>
-                <th style={styles.th}>Advertiser</th>
-                <th style={styles.th}>Publisher</th>
-                <th style={styles.th}>Offer</th>
-                <th style={styles.th}>URL</th>
-                <th style={styles.th}>Action</th>
-              </tr>
-            </thead>
+            <thead><tr><th>ID</th><th>Offer</th><th>Publisher</th><th>Landing URL</th><th>Action</th></tr></thead>
             <tbody>
               {landings.map((l) => (
-                <tr key={l.id} style={{borderBottom: '1px solid #334155'}}>
-                  <td style={styles.td}>{l.id}</td>
-                  <td style={styles.td}>{l.advertiser_name || "-"}</td>
-                  <td style={styles.td}>{l.publisher_name}</td>
-                  <td style={styles.td}>{l.offer_name}</td>
-                  <td style={{ ...styles.td, wordBreak: "break-all", maxWidth: 200, fontSize: 11 }}>{l.landing_url}</td>
-                  <td style={styles.td}>
-                    {/* ✅ CENTER ALIGNMENT FIX */}
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-                       <button style={styles.copyBtn} onClick={() => copyUrl(l.landing_url)}>Copy</button>
-                       <a href={l.landing_url} target="_blank" rel="noreferrer">
-                         <button style={styles.openBtn}>Open</button>
-                       </a>
-                    </div>
+                <tr key={l.id}>
+                  <td>{l.id}</td><td>{l.offer_name}</td><td>{l.publisher_name}</td>
+                  <td style={{maxWidth: 200, wordBreak: "break-all"}}>{l.landing_url}</td>
+                  <td>
+                    <button style={styles.copyBtn} onClick={() => copyUrl(l.landing_url)}>Copy</button>
+                    <a href={l.landing_url} target="_blank" rel="noreferrer"><button style={styles.openBtn}>Open</button></a>
                   </td>
                 </tr>
               ))}
