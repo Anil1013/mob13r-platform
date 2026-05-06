@@ -19,29 +19,35 @@ export default function LandingBuilder() {
   };
 
   const createLanding = async () => {
-    if (!form.publisher_offer_id || !form.title) return alert("Select offer and enter title");
-    
-    const fd = new FormData();
-    fd.append("publisher_offer_id", form.publisher_offer_id);
-    fd.append("title", form.title);
-    fd.append("description", form.description);
-    fd.append("button_text", form.button_text);
-    fd.append("disclaimer", form.disclaimer);
-    fd.append("image_url", form.image_url);
-    
-    if (imageFile) fd.append("imageFile", imageFile);
+  if (!form.publisher_offer_id || !form.title) return alert("Select offer and enter title");
+  
+  const fd = new FormData();
+  // Ensure numeric value is sent
+  fd.append("publisher_offer_id", form.publisher_offer_id);
+  fd.append("title", form.title || "");
+  fd.append("description", form.description || "");
+  fd.append("button_text", form.button_text || "");
+  fd.append("disclaimer", form.disclaimer || "");
+  fd.append("image_url", form.image_url || "");
+  
+  if (imageFile) fd.append("imageFile", imageFile);
 
-    try {
-      const res = await fetch(`${API_BASE}/api/landing`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (data.status === "SUCCESS") { 
-        alert("Landing Created ✅"); 
-        setForm({ publisher_offer_id: "", title: "", description: "", image_url: "", button_text: "", disclaimer: "" });
-        setImageFile(null);
-        loadLandings(); 
-      }
-    } catch (err) { alert("Create Failed"); }
-  };
+  try {
+    const res = await fetch(`${API_BASE}/api/landing`, { 
+      method: "POST", 
+      body: fd 
+    });
+    const data = await res.json();
+    if (data.status === "SUCCESS") { 
+      alert("Landing Created ✅"); 
+      loadLandings(); 
+    } else {
+      alert("Error: " + data.error);
+    }
+  } catch (err) { 
+    alert("Network Error: Request could not be completed."); 
+  }
+};
 
   const copyUrl = (url) => { navigator.clipboard.writeText(url); alert("Copied ✅"); };
 
