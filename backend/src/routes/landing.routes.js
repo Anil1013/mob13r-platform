@@ -1,13 +1,14 @@
 import express from "express";
 import pool from "../db.js";
 import path from "path";
-import fs from "fs"; // ✅ Added FS for directory safety
+import fs from "fs";
 
 const router = express.Router();
-const BASE_URL = "https://dashboard.mob13r.com";
+const FRONTEND_BASE_URL = "https://dashboard.mob13r.com"; // User will see this URL
+const BACKEND_URL = "https://backend.mob13r.com";
 const UPLOAD_DIR = "public/uploads/landings";
 
-// ✅ Safety Check: Create directory if it doesn't exist
+// Ensure upload directory exists
 if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
@@ -16,21 +17,20 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 router.get("/", async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT lp.*, o.service_name AS offer_name, pub.name AS publisher_name, adv.name AS advertiser_name
+      SELECT lp.*, o.service_name AS offer_name, pub.name AS publisher_name
       FROM landing_pages lp
       JOIN publisher_offers po ON po.id = lp.publisher_offer_id
       JOIN offers o ON o.id = po.offer_id
       JOIN publishers pub ON pub.id = po.publisher_id
-      JOIN advertisers adv ON adv.id = o.advertiser_id
       ORDER BY lp.id DESC
     `);
     res.json({ status: "SUCCESS", data: result.rows });
   } catch (err) {
-    res.json({ status: "FAILED", error: err.message });
+    res.status(500).json({ status: "FAILED", error: err.message });
   }
 });
 
-/* 🔥 GET OFFERS (FOR DROPDOWN) */
+/* 🔥 GET PUBLISHER OFFERS FOR DROPDOWN */
 router.get("/publisher-offers", async (req, res) => {
   try {
     const result = await pool.query(`
@@ -41,24 +41,21 @@ router.get("/publisher-offers", async (req, res) => {
     `);
     res.json({ status: "SUCCESS", data: result.rows });
   } catch (err) {
-    res.json({ status: "FAILED", error: err.message });
+    res.status(500).json({ status: "FAILED", error: err.message });
   }
 });
 
-/* 🔥 CREATE LANDING (Supports Image Upload) */
+/* 🔥 CREATE LANDING PAGE */
 router.post("/", async (req, res) => {
   try {
     const { publisher_offer_id, title, description, image_url, button_text, disclaimer } = req.body;
     let finalImg = image_url;
 
-    // ✅ Image File Handling
     if (req.files && req.files.imageFile) {
       const file = req.files.imageFile;
       const fName = `lp_${Date.now()}${path.extname(file.name)}`;
-      
-      // Using .mv() which is provided by express-fileupload
       await file.mv(`${UPLOAD_DIR}/${fName}`);
-      finalImg = `https://backend.mob13r.com/uploads/landings/${fName}`;
+      finalImg = `${BACKEND_URL}/uploads/landings/${fName}`;
     }
 
     const result = await pool.query(
@@ -68,16 +65,17 @@ router.post("/", async (req, res) => {
     );
 
     const id = result.rows[0].id;
-    const url = `${BASE_URL}/landing/${id}`;
-    await pool.query(`UPDATE landing_pages SET landing_url=$1 WHERE id=$2`, [url, id]);
+    const landingUrl = `${FRONTEND_BASE_URL}/landing/${id}`;
+    
+    await pool.query(`UPDATE landing_pages SET landing_url=$1 WHERE id=$2`, [landingUrl, id]);
 
-    res.json({ status: "SUCCESS", id, landing_url: url });
+    res.json({ status: "SUCCESS", id, landing_url: landingUrl });
   } catch (err) {
-    res.json({ status: "FAILED", error: err.message });
+    res.status(500).json({ status: "FAILED", error: err.message });
   }
 });
 
-/* 🔥 GET SINGLE LANDING */
+/* 🔥 GET SINGLE LANDING BY ID */
 router.get("/:id", async (req, res) => {
   try {
     const result = await pool.query(`
@@ -87,9 +85,12 @@ router.get("/:id", async (req, res) => {
       JOIN publishers p ON p.id = po.publisher_id
       JOIN offers o ON o.id = po.offer_id
       WHERE lp.id = $1`, [req.params.id]);
+      
+    if (result.rows.length === 0) return res.status(404).json({ status: "FAILED", message: "Not Found" });
+    
     res.json({ status: "SUCCESS", data: result.rows[0] });
   } catch (err) {
-    res.json({ status: "FAILED", error: err.message });
+    res.status(500).json({ status: "FAILED", error: err.message });
   }
 });
 
