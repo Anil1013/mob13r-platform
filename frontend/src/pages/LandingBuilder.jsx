@@ -14,17 +14,33 @@ export default function LandingBuilder() {
     loadLandings();
   }, []);
 
-  const loadLandings = () => { fetch(`${API_BASE}/api/landing`).then(res => res.json()).then(d => setLandings(d.data || [])); };
+  const loadLandings = () => { 
+    fetch(`${API_BASE}/api/landing`).then(res => res.json()).then(d => setLandings(d.data || [])); 
+  };
 
   const createLanding = async () => {
-    if (!form.publisher_offer_id) return alert("Select offer");
+    if (!form.publisher_offer_id || !form.title) return alert("Select offer and enter title");
+    
     const fd = new FormData();
-    Object.keys(form).forEach(k => fd.append(k, form[k]));
+    fd.append("publisher_offer_id", form.publisher_offer_id);
+    fd.append("title", form.title);
+    fd.append("description", form.description);
+    fd.append("button_text", form.button_text);
+    fd.append("disclaimer", form.disclaimer);
+    fd.append("image_url", form.image_url);
+    
     if (imageFile) fd.append("imageFile", imageFile);
 
-    const res = await fetch(`${API_BASE}/api/landing`, { method: "POST", body: fd });
-    const data = await res.json();
-    if (data.status === "SUCCESS") { alert("Landing Created ✅"); loadLandings(); }
+    try {
+      const res = await fetch(`${API_BASE}/api/landing`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.status === "SUCCESS") { 
+        alert("Landing Created ✅"); 
+        setForm({ publisher_offer_id: "", title: "", description: "", image_url: "", button_text: "", disclaimer: "" });
+        setImageFile(null);
+        loadLandings(); 
+      }
+    } catch (err) { alert("Create Failed"); }
   };
 
   const copyUrl = (url) => { navigator.clipboard.writeText(url); alert("Copied ✅"); };
@@ -41,10 +57,10 @@ export default function LandingBuilder() {
           </select>
           <input style={styles.input} placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           <input style={styles.input} placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-          <input style={styles.input} placeholder="Or Paste Image URL" value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} />
-          <div style={{gridColumn: "span 3", background: "#eee", padding: 10, borderRadius: 5}}>
-            <label>Upload New Image: </label>
-            <input type="file" onChange={(e) => setImageFile(e.target.files[0])} />
+          <input style={styles.input} placeholder="External Image URL (Optional)" value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} />
+          <div style={{gridColumn: "span 3", background: "#1e293b", padding: 10, borderRadius: 5, border: "1px solid #334155"}}>
+            <label>Upload Image File: </label>
+            <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files[0])} />
           </div>
           <input style={styles.input} placeholder="Button Text" value={form.button_text} onChange={(e) => setForm({ ...form, button_text: e.target.value })} />
           <input style={styles.input} placeholder="Disclaimer" value={form.disclaimer} onChange={(e) => setForm({ ...form, disclaimer: e.target.value })} />
@@ -52,12 +68,12 @@ export default function LandingBuilder() {
         </div>
         <div style={styles.tableBox}>
           <table style={styles.table}>
-            <thead><tr><th>ID</th><th>Offer</th><th>Publisher</th><th>Landing URL</th><th>Action</th></tr></thead>
+            <thead><tr><th>ID</th><th>Offer</th><th>Publisher</th><th>URL</th><th>Action</th></tr></thead>
             <tbody>
               {landings.map((l) => (
                 <tr key={l.id}>
                   <td>{l.id}</td><td>{l.offer_name}</td><td>{l.publisher_name}</td>
-                  <td style={{maxWidth: 200, wordBreak: "break-all"}}>{l.landing_url}</td>
+                  <td style={{maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis"}}>{l.landing_url}</td>
                   <td>
                     <button style={styles.copyBtn} onClick={() => copyUrl(l.landing_url)}>Copy</button>
                     <a href={l.landing_url} target="_blank" rel="noreferrer"><button style={styles.openBtn}>Open</button></a>
@@ -74,17 +90,11 @@ export default function LandingBuilder() {
 
 const styles = {
   container: { padding: "90px 30px", background: "#0f172a", minHeight: "100vh", color: "#fff" },
-  heading: { marginBottom: 20, textAlign: 'center' },
   form: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 30, background: "#1e293b", padding: 20, borderRadius: 12 },
   input: { padding: 12, borderRadius: 6, border: "1px solid #334155", background: "#0f172a", color: "#fff" },
   button: { gridColumn: "span 3", padding: 14, background: "#3b82f6", border: "none", color: "#fff", borderRadius: 6, cursor: "pointer", fontWeight: "bold" },
-  preview: { width: 260, padding: 20, background: "#1e293b", borderRadius: 10, marginBottom: 30, textAlign: 'center', border: '1px dashed #334155' },
-  previewImg: { width: "100%", height: 120, objectFit: "cover", marginBottom: 10, borderRadius: 5 },
-  greenBtn: { width: "100%", padding: 10, background: "#22c55e", border: "none", borderRadius: 6, color: "#fff", fontWeight: 'bold' },
-  tableBox: { background: "#1e293b", padding: 20, borderRadius: 12, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' },
+  tableBox: { background: "#1e293b", padding: 20, borderRadius: 12 },
   table: { width: "100%", borderCollapse: "collapse" },
-  th: { padding: 12, color: '#94a3b8', fontSize: 13, textAlign: 'center' },
-  td: { padding: 15, textAlign: 'center', verticalAlign: 'middle' },
-  copyBtn: { padding: "6px 12px", background: "#000", color: "#fff", border: "none", borderRadius: 4, cursor: 'pointer', fontSize: 12 },
-  openBtn: { padding: "6px 12px", background: "#22c55e", color: "#fff", border: "none", borderRadius: 4, cursor: 'pointer', fontSize: 12 },
+  copyBtn: { padding: "6px 12px", background: "#000", color: "#fff", border: "none", borderRadius: 4, marginRight: 5 },
+  openBtn: { padding: "6px 12px", background: "#22c55e", color: "#fff", border: "none", borderRadius: 4 }
 };
