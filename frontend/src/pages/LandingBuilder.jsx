@@ -9,6 +9,76 @@ import Navbar from "../components/Navbar";
 const API_BASE =
   "https://backend.mob13r.com";
 
+const DEFAULT_FORM = {
+  publisher_offer_id: "",
+
+  title: "",
+
+  subtitle: "",
+
+  description: "",
+
+  image_url: "",
+
+  logo_url: "",
+
+  background_url: "",
+
+  button_text: "Continue",
+
+  verify_button_text:
+    "Confirm",
+
+  disclaimer: "",
+
+  theme_color: "#22c55e",
+
+  text_color: "#ffffff",
+
+  card_color: "#ffffff",
+
+  success_redirect_url:
+    "",
+
+  show_timer: true,
+
+  timer_seconds: 30,
+
+  show_carrier_logo: true,
+
+  show_geo: true,
+
+  enable_resend_otp: true,
+
+  enable_success_screen:
+    true,
+
+  show_disclaimer: true,
+
+  success_title:
+    "Subscription Successful",
+
+  success_message:
+    "Your subscription has been activated successfully.",
+
+  redirect_delay_seconds: 3,
+
+  rtl_enabled: false,
+
+  language_code: "en",
+
+  button_radius: 12,
+
+  card_radius: 24,
+
+  background_overlay:
+    "rgba(0,0,0,0.45)",
+
+  otp_box_style: "boxed",
+
+  status: "active",
+};
+
 export default function LandingBuilder() {
   const [offers, setOffers] =
     useState([]);
@@ -31,78 +101,15 @@ export default function LandingBuilder() {
   ] = useState(null);
 
   const [form, setForm] =
-    useState({
-      publisher_offer_id: "",
+    useState(DEFAULT_FORM);
 
-      title: "",
-
-      subtitle: "",
-
-      description: "",
-
-      image_url: "",
-
-      logo_url: "",
-
-      background_url: "",
-
-      button_text: "Continue",
-
-      verify_button_text:
-        "Confirm",
-
-      disclaimer: "",
-
-      theme_color: "#22c55e",
-
-      text_color: "#ffffff",
-
-      card_color: "#ffffff",
-
-      success_redirect_url:
-        "",
-
-      show_timer: true,
-
-      timer_seconds: 30,
-
-      show_carrier_logo: true,
-
-      show_geo: true,
-
-      enable_resend_otp: true,
-
-      enable_success_screen:
-        true,
-
-      show_disclaimer: true,
-
-      success_title:
-        "Subscription Successful",
-
-      success_message:
-        "Your subscription has been activated successfully.",
-
-      redirect_delay_seconds: 3,
-
-      rtl_enabled: false,
-
-      language_code: "en",
-
-      button_radius: 12,
-
-      card_radius: 24,
-
-      background_overlay:
-        "rgba(0,0,0,0.45)",
-
-      otp_box_style: "boxed",
-
-      status: "active",
-    });
+  const [isMobile, setIsMobile] =
+    useState(
+      window.innerWidth < 900
+    );
 
   /* =========================
-     LOAD DATA
+     LOAD
   ========================= */
 
   useEffect(() => {
@@ -111,43 +118,112 @@ export default function LandingBuilder() {
     loadLandings();
   }, []);
 
+  /* =========================
+     RESPONSIVE
+  ========================= */
+
+  useEffect(() => {
+    const resize = () => {
+      setIsMobile(
+        window.innerWidth <
+          900
+      );
+    };
+
+    window.addEventListener(
+      "resize",
+      resize
+    );
+
+    return () =>
+      window.removeEventListener(
+        "resize",
+        resize
+      );
+  }, []);
+
+  /* =========================
+     CLEANUP OBJECT URLS
+  ========================= */
+
+  useEffect(() => {
+    return () => {
+      if (heroFile) {
+        URL.revokeObjectURL(
+          heroFile
+        );
+      }
+
+      if (logoFile) {
+        URL.revokeObjectURL(
+          logoFile
+        );
+      }
+
+      if (backgroundFile) {
+        URL.revokeObjectURL(
+          backgroundFile
+        );
+      }
+    };
+  }, [
+    heroFile,
+    logoFile,
+    backgroundFile,
+  ]);
+
+  /* =========================
+     API LOADERS
+  ========================= */
+
   const loadOffers = async () => {
     try {
-      const res = await fetch(
-        `${API_BASE}/api/landing/publisher-offers`
-      );
+      const res =
+        await fetch(
+          `${API_BASE}/api/landing/publisher-offers`
+        );
 
-      const d = await res.json();
+      const data =
+        await res.json();
 
-      if (!res.ok) {
-        console.error(d);
-        return;
+      if (
+        res.ok &&
+        data.status ===
+          "SUCCESS"
+      ) {
+        setOffers(
+          data.data || []
+        );
       }
-
-      setOffers(d.data || []);
     } catch (err) {
       console.error(err);
     }
   };
 
-  const loadLandings = async () => {
-    try {
-      const res = await fetch(
-        `${API_BASE}/api/landing`
-      );
+  const loadLandings =
+    async () => {
+      try {
+        const res =
+          await fetch(
+            `${API_BASE}/api/landing`
+          );
 
-      const d = await res.json();
+        const data =
+          await res.json();
 
-      if (!res.ok) {
-        console.error(d);
-        return;
+        if (
+          res.ok &&
+          data.status ===
+            "SUCCESS"
+        ) {
+          setLandings(
+            data.data || []
+          );
+        }
+      } catch (err) {
+        console.error(err);
       }
-
-      setLandings(d.data || []);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+    };
 
   /* =========================
      CHANGE
@@ -164,6 +240,49 @@ export default function LandingBuilder() {
   };
 
   /* =========================
+     FILE VALIDATION
+  ========================= */
+
+  const validateFile = (
+    file
+  ) => {
+    if (!file) return true;
+
+    const allowed = [
+      "image/png",
+      "image/jpeg",
+      "image/jpg",
+      "image/webp",
+      "image/svg+xml",
+    ];
+
+    if (
+      !allowed.includes(
+        file.type
+      )
+    ) {
+      alert(
+        "Invalid image format"
+      );
+
+      return false;
+    }
+
+    if (
+      file.size >
+      10 * 1024 * 1024
+    ) {
+      alert(
+        "Image must be below 10MB"
+      );
+
+      return false;
+    }
+
+    return true;
+  };
+
+  /* =========================
      CREATE
   ========================= */
 
@@ -176,6 +295,20 @@ export default function LandingBuilder() {
         return alert(
           "Select offer and enter title"
         );
+      }
+
+      if (
+        !validateFile(
+          heroFile
+        ) ||
+        !validateFile(
+          logoFile
+        ) ||
+        !validateFile(
+          backgroundFile
+        )
+      ) {
+        return;
       }
 
       setLoading(true);
@@ -226,7 +359,9 @@ export default function LandingBuilder() {
           );
         }
 
-        if (backgroundFile) {
+        if (
+          backgroundFile
+        ) {
           fd.append(
             "backgroundFile",
             backgroundFile
@@ -238,7 +373,6 @@ export default function LandingBuilder() {
             `${API_BASE}/api/landing`,
             {
               method: "POST",
-
               body: fd,
             }
           );
@@ -247,14 +381,15 @@ export default function LandingBuilder() {
           await res.json();
 
         if (
+          res.ok &&
           data.status ===
-          "SUCCESS"
+            "SUCCESS"
         ) {
           alert(
             "Landing Created Successfully ✅"
           );
 
-          loadLandings();
+          await loadLandings();
 
           resetForm();
 
@@ -263,12 +398,14 @@ export default function LandingBuilder() {
               document.body
                 .scrollHeight,
 
-            behavior: "smooth",
+            behavior:
+              "smooth",
           });
         } else {
           alert(
             data.error ||
-              "Failed"
+              data.message ||
+              "Landing creation failed"
           );
         }
       } catch (err) {
@@ -293,27 +430,27 @@ export default function LandingBuilder() {
 
     setBackgroundFile(null);
 
-    setForm((prev) => ({
-      ...prev,
-
-      title: "",
-
-      subtitle: "",
-
-      description: "",
-    }));
+    setForm(DEFAULT_FORM);
   };
 
   /* =========================
-     COPY
+     COPY URL
   ========================= */
 
-  const copyUrl = (url) => {
-    navigator.clipboard.writeText(
-      url
-    );
+  const copyUrl = async (
+    url
+  ) => {
+    try {
+      await navigator.clipboard.writeText(
+        url
+      );
 
-    alert("Copied ✅");
+      alert("Copied ✅");
+    } catch {
+      alert(
+        "Copy failed"
+      );
+    }
   };
 
   /* =========================
@@ -401,13 +538,14 @@ export default function LandingBuilder() {
             ...styles.layout,
 
             gridTemplateColumns:
-              window.innerWidth <
-              900
+              isMobile
                 ? "1fr"
                 : "1.2fr 0.8fr",
           }}
         >
-          {/* LEFT */}
+          {/* ======================
+              BUILDER
+          ====================== */}
 
           <div
             style={
@@ -568,7 +706,9 @@ export default function LandingBuilder() {
               />
             </div>
 
-            {/* COLORS */}
+            {/* ======================
+                COLORS
+            ====================== */}
 
             <div
               style={
@@ -629,7 +769,9 @@ export default function LandingBuilder() {
               />
             </div>
 
-            {/* UPLOADS */}
+            {/* ======================
+                UPLOADS
+            ====================== */}
 
             <div
               style={
@@ -666,7 +808,9 @@ export default function LandingBuilder() {
               />
             </div>
 
-            {/* TOGGLES */}
+            {/* ======================
+                FEATURES
+            ====================== */}
 
             <div
               style={
@@ -797,9 +941,87 @@ export default function LandingBuilder() {
                 ? "Creating..."
                 : "Create Landing"}
             </button>
+
+            {/* ======================
+                CREATED LANDINGS
+            ====================== */}
+
+            {landings.length >
+              0 && (
+              <>
+                <div
+                  style={{
+                    ...styles.sectionTitle,
+                    marginTop: 40,
+                  }}
+                >
+                  Created
+                  Landings
+                </div>
+
+                <div
+                  style={
+                    styles.landingList
+                  }
+                >
+                  {landings.map(
+                    (
+                      item
+                    ) => (
+                      <div
+                        key={
+                          item.id
+                        }
+                        style={
+                          styles.landingItem
+                        }
+                      >
+                        <div>
+                          <div
+                            style={{
+                              fontWeight: 700,
+                            }}
+                          >
+                            {
+                              item.title
+                            }
+                          </div>
+
+                          <div
+                            style={{
+                              opacity: 0.7,
+                              fontSize: 12,
+                            }}
+                          >
+                            {
+                              item.landing_url
+                            }
+                          </div>
+                        </div>
+
+                        <button
+                          style={
+                            styles.copyButton
+                          }
+                          onClick={() =>
+                            copyUrl(
+                              item.landing_url
+                            )
+                          }
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    )
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
-          {/* PREVIEW */}
+          {/* ======================
+              PREVIEW
+          ====================== */}
 
           <div
             style={
@@ -833,10 +1055,11 @@ export default function LandingBuilder() {
                   ...styles.previewContent,
 
                   background:
+                    form.card_color &&
                     form.card_color.startsWith(
                       "#"
                     )
-                      ? `${form.card_color}15`
+                      ? `${form.card_color}20`
                       : "rgba(255,255,255,0.08)",
 
                   borderRadius:
@@ -958,9 +1181,8 @@ function ColorInput({
       <input
         type="color"
         value={
-          value.startsWith(
-            "#"
-          )
+          value &&
+          value.startsWith("#")
             ? value
             : "#ffffff"
         }
@@ -984,10 +1206,12 @@ function UploadBox({
     e.preventDefault();
 
     if (
-      e.dataTransfer.files[0]
+      e.dataTransfer
+        .files?.[0]
     ) {
       onFile(
-        e.dataTransfer.files[0]
+        e.dataTransfer
+          .files[0]
       );
     }
   };
@@ -1011,17 +1235,21 @@ function UploadBox({
       <input
         type="file"
         accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
-        onChange={(e) =>
-          onFile(
-            e.target.files[0]
-          )
-        }
+        onChange={(e) => {
+          if (
+            e.target.files?.[0]
+          ) {
+            onFile(
+              e.target
+                .files[0]
+            );
+          }
+        }}
       />
 
       <div
         style={{
           marginTop: 10,
-
           opacity: 0.6,
         }}
       >
@@ -1320,5 +1548,45 @@ const styles = {
     fontWeight: 700,
 
     fontSize: 16,
+  },
+
+  landingList: {
+    display: "grid",
+    gap: 12,
+  },
+
+  landingItem: {
+    display: "flex",
+
+    justifyContent:
+      "space-between",
+
+    alignItems:
+      "center",
+
+    background:
+      "rgba(255,255,255,0.04)",
+
+    padding: 14,
+
+    borderRadius: 14,
+  },
+
+  copyButton: {
+    border: "none",
+
+    background:
+      "#22c55e",
+
+    color: "#fff",
+
+    padding:
+      "10px 14px",
+
+    borderRadius: 10,
+
+    cursor: "pointer",
+
+    fontWeight: 700,
   },
 };
