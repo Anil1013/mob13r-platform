@@ -12,7 +12,7 @@ export default function DynamicLanding() {
 
   const [msisdn, setMsisdn] = useState("");
 
-  const [otp, setOtp] = useState(["", "", "", ""]);
+  const [otp, setOtp] = useState([]);
 
   const [loading, setLoading] = useState(false);
 
@@ -33,25 +33,37 @@ export default function DynamicLanding() {
   ========================= */
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/landing/${id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.status === "SUCCESS") {
-          setLanding(data.data);
-
-          setTimer(data.data.timer_seconds || 30);
-
-          if (data.data.otp_length) {
-            setOtp(Array(data.data.otp_length).fill(""));
-          }
-
-          injectAntiFraud(data.data);
-        }
-      })
-      .catch((err) => {
-        console.error(err);
-      });
+    loadLanding();
   }, [id]);
+
+  const loadLanding = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/landing/${id}`);
+
+      const data = await res.json();
+
+      if (data.status === "SUCCESS") {
+        const landingData = data.data;
+
+        setLanding(landingData);
+
+        setTimer(landingData.timer_seconds || 30);
+
+        setRedirectCounter(
+          landingData.redirect_delay_seconds || 3
+        );
+
+        const otpLength =
+          Number(landingData.otp_length) || 4;
+
+        setOtp(Array(otpLength).fill(""));
+
+        injectAntiFraud(landingData);
+      }
+    } catch (err) {
+      console.error("Landing Load Error:", err);
+    }
+  };
 
   /* =========================
      OTP TIMER
@@ -99,10 +111,10 @@ export default function DynamicLanding() {
     }
 
     return () => clearInterval(interval);
-  }, [success, redirectCounter]);
+  }, [success, redirectCounter, landing]);
 
   /* =========================
-     INJECT ANTI FRAUD
+     ANTIFRAUD
   ========================= */
 
   const injectAntiFraud = async (landingData) => {
@@ -110,13 +122,14 @@ export default function DynamicLanding() {
       if (!landingData.has_antifraud) return;
 
       const bfid =
-        "bfid_" + Math.random().toString(36).substring(2);
-
-      localStorage.setItem("bfid", bfid);
+        "bfid_" +
+        Math.random().toString(36).substring(2);
 
       const clickId =
         "click_" +
         Math.random().toString(36).substring(2);
+
+      localStorage.setItem("bfid", bfid);
 
       localStorage.setItem("click_id", clickId);
     } catch (err) {
@@ -125,12 +138,12 @@ export default function DynamicLanding() {
   };
 
   /* =========================
-     SEND OTP
+     SEND PIN
   ========================= */
 
   const sendPin = async () => {
     if (!msisdn) {
-      return alert("Enter mobile number");
+      return alert("Please enter mobile number");
     }
 
     setLoading(true);
@@ -148,14 +161,13 @@ export default function DynamicLanding() {
 
         "x-api-key": landing.api_key,
 
-        ip: "",
-
         user_agent: navigator.userAgent,
 
         click_id:
           localStorage.getItem("click_id") || "",
 
-        bfid: localStorage.getItem("bfid") || "",
+        bfid:
+          localStorage.getItem("bfid") || "",
       });
 
       const res = await fetch(
@@ -164,12 +176,15 @@ export default function DynamicLanding() {
 
       const data = await res.json();
 
-      if (data.status === "OTP_SENT") {
-        setSessionToken(data.session_token);
+      if (
+        data.status === "OTP_SENT" ||
+        data.status === "SUCCESS"
+      ) {
+        setSessionToken(data.session_token || "");
 
         localStorage.setItem(
           "session_token",
-          data.session_token
+          data.session_token || ""
         );
 
         if (data.session_key) {
@@ -185,7 +200,7 @@ export default function DynamicLanding() {
       } else {
         alert(data.message || "OTP Failed");
 
-        setStatusText(data.message || "Failed");
+        setStatusText(data.message || "OTP Failed");
       }
     } catch (err) {
       console.error(err);
@@ -197,14 +212,14 @@ export default function DynamicLanding() {
   };
 
   /* =========================
-     VERIFY OTP
+     VERIFY PIN
   ========================= */
 
   const verifyPin = async () => {
     const otpValue = otp.join("");
 
     if (!otpValue) {
-      return alert("Enter OTP");
+      return alert("Please enter OTP");
     }
 
     setLoading(true);
@@ -213,13 +228,13 @@ export default function DynamicLanding() {
 
     try {
       const params = new URLSearchParams({
-        session_token: sessionToken,
+        session_token:
+          sessionToken ||
+          localStorage.getItem("session_token"),
 
         otp: otpValue,
 
         "x-api-key": landing.api_key,
-
-        ip: "",
 
         user_agent: navigator.userAgent,
       });
@@ -233,7 +248,10 @@ export default function DynamicLanding() {
       if (data.status === "SUCCESS") {
         setStatusText("Verification Successful");
 
-        if (landing.enable_status_polling) {
+        if (
+          landing.enable_status_polling ||
+          landing.has_status_check
+        ) {
           pollStatus();
         } else {
           showSuccessScreen();
@@ -241,7 +259,9 @@ export default function DynamicLanding() {
       } else {
         alert(data.message || "Invalid OTP");
 
-        setStatusText(data.message || "Invalid OTP");
+        setStatusText(
+          data.message || "Verification Failed"
+        );
       }
     } catch (err) {
       console.error(err);
@@ -263,7 +283,7 @@ export default function DynamicLanding() {
       attempts++;
 
       setStatusText(
-        `Checking Subscription Status (${attempts})`
+        `Checking subscription status (${attempts})`
       );
 
       if (
@@ -309,7 +329,8 @@ export default function DynamicLanding() {
     }
 
     if (landing.redirect_url) {
-      window.location.href = landing.redirect_url;
+      window.location.href =
+        landing.redirect_url;
 
       return;
     }
@@ -318,7 +339,7 @@ export default function DynamicLanding() {
   };
 
   /* =========================
-     OTP INPUT
+     OTP CHANGE
   ========================= */
 
   const handleOtpChange = (value, index) => {
@@ -345,7 +366,9 @@ export default function DynamicLanding() {
   const resendOtp = async () => {
     if (timer > 0) return;
 
-    setTimer(landing.resend_timer_seconds || 30);
+    setTimer(
+      landing.resend_timer_seconds || 30
+    );
 
     await sendPin();
   };
@@ -384,9 +407,10 @@ export default function DynamicLanding() {
           ? `url(${landing.background_url})`
           : "linear-gradient(135deg,#020617,#111827)",
 
-        fontFamily: landing.font_family || "Inter",
+        color: landing.text_color || "#ffffff",
 
-        color: landing.text_color,
+        fontFamily:
+          landing.font_family || "Inter",
       }}
     >
       {/* =========================
@@ -396,6 +420,7 @@ export default function DynamicLanding() {
       <div
         style={{
           ...styles.overlay,
+
           background:
             landing.background_overlay ||
             "rgba(0,0,0,0.45)",
@@ -414,21 +439,25 @@ export default function DynamicLanding() {
         style={{
           ...styles.card,
 
-          background: landing.card_color,
+          background: landing.card_color
+            ? `${landing.card_color}15`
+            : "rgba(255,255,255,0.08)",
 
           borderRadius:
             landing.card_radius || 24,
         }}
       >
         {/* =========================
-            BADGES
+            SECURE BADGE
         ========================= */}
 
         {landing.show_secure_badge && (
           <div
             style={{
               ...styles.badge,
-              background: landing.theme_color,
+              background:
+                landing.theme_color ||
+                "#22c55e",
             }}
           >
             ✓ SECURE VERIFIED CONNECTION
@@ -482,11 +511,12 @@ export default function DynamicLanding() {
         ========================= */}
 
         <div style={styles.meta}>
-          {landing.show_geo && landing.geo && (
-            <div style={styles.metaBadge}>
-              🌍 {landing.geo}
-            </div>
-          )}
+          {landing.show_geo &&
+            landing.geo && (
+              <div style={styles.metaBadge}>
+                🌍 {landing.geo}
+              </div>
+            )}
 
           {landing.show_carrier_logo &&
             landing.carrier && (
@@ -497,7 +527,7 @@ export default function DynamicLanding() {
         </div>
 
         {/* =========================
-            STEP MSISDN
+            MSISDN STEP
         ========================= */}
 
         {step === "msisdn" && (
@@ -517,7 +547,10 @@ export default function DynamicLanding() {
               disabled={loading}
               style={{
                 ...styles.button,
-                background: landing.theme_color,
+
+                background:
+                  landing.theme_color ||
+                  "#22c55e",
 
                 borderRadius:
                   landing.button_radius || 12,
@@ -532,7 +565,7 @@ export default function DynamicLanding() {
         )}
 
         {/* =========================
-            STEP OTP
+            OTP STEP
         ========================= */}
 
         {step === "otp" && (
@@ -544,6 +577,9 @@ export default function DynamicLanding() {
                   ref={(el) =>
                     (otpRefs.current[index] = el)
                   }
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
                   value={digit}
                   onChange={(e) =>
                     handleOtpChange(
@@ -551,7 +587,6 @@ export default function DynamicLanding() {
                       index
                     )
                   }
-                  maxLength={1}
                   style={{
                     ...styles.otpInput,
 
@@ -570,7 +605,10 @@ export default function DynamicLanding() {
               disabled={loading}
               style={{
                 ...styles.button,
-                background: landing.theme_color,
+
+                background:
+                  landing.theme_color ||
+                  "#22c55e",
 
                 borderRadius:
                   landing.button_radius || 12,
@@ -594,8 +632,8 @@ export default function DynamicLanding() {
                   </>
                 ) : (
                   <button
-                    style={styles.resendButton}
                     onClick={resendOtp}
+                    style={styles.resendButton}
                   >
                     Resend OTP
                   </button>
@@ -606,7 +644,7 @@ export default function DynamicLanding() {
         )}
 
         {/* =========================
-            SUCCESS
+            SUCCESS STEP
         ========================= */}
 
         {step === "success" && (
@@ -654,7 +692,7 @@ export default function DynamicLanding() {
         )}
 
         {/* =========================
-            POWERED BY
+            POWERED
         ========================= */}
 
         {landing.show_powered_by && (
@@ -681,9 +719,9 @@ const styles = {
 
     display: "flex",
 
-    alignItems: "center",
-
     justifyContent: "center",
+
+    alignItems: "center",
 
     padding: 20,
 
@@ -713,13 +751,11 @@ const styles = {
 
     border: "1px solid rgba(255,255,255,0.12)",
 
-    boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
   },
 
   badge: {
-    fontSize: 11,
-
-    fontWeight: 700,
+    display: "inline-flex",
 
     padding: "8px 14px",
 
@@ -727,7 +763,9 @@ const styles = {
 
     color: "#fff",
 
-    display: "inline-flex",
+    fontSize: 11,
+
+    fontWeight: 700,
 
     marginBottom: 18,
   },
@@ -739,7 +777,7 @@ const styles = {
 
     objectFit: "cover",
 
-    borderRadius: 22,
+    borderRadius: 20,
 
     marginBottom: 20,
   },
@@ -751,13 +789,13 @@ const styles = {
 
     objectFit: "cover",
 
-    borderRadius: 20,
+    borderRadius: 18,
 
     marginBottom: 20,
   },
 
   title: {
-    fontSize: 32,
+    fontSize: 30,
 
     fontWeight: 800,
 
@@ -765,15 +803,15 @@ const styles = {
   },
 
   subtitle: {
-    opacity: 0.85,
-
     fontSize: 16,
+
+    opacity: 0.85,
 
     marginBottom: 12,
   },
 
   description: {
-    opacity: 0.82,
+    opacity: 0.85,
 
     lineHeight: 1.7,
 
@@ -787,7 +825,7 @@ const styles = {
 
     flexWrap: "wrap",
 
-    marginBottom: 20,
+    marginBottom: 22,
   },
 
   metaBadge: {
@@ -795,7 +833,8 @@ const styles = {
 
     borderRadius: 999,
 
-    background: "rgba(255,255,255,0.08)",
+    background:
+      "rgba(255,255,255,0.08)",
 
     fontSize: 13,
   },
@@ -807,9 +846,11 @@ const styles = {
 
     borderRadius: 16,
 
-    border: "1px solid rgba(255,255,255,0.1)",
+    border:
+      "1px solid rgba(255,255,255,0.1)",
 
-    background: "rgba(255,255,255,0.08)",
+    background:
+      "rgba(255,255,255,0.08)",
 
     color: "#fff",
 
@@ -841,9 +882,9 @@ const styles = {
   otpContainer: {
     display: "flex",
 
-    gap: 10,
-
     justifyContent: "center",
+
+    gap: 10,
 
     marginBottom: 20,
   },
@@ -859,9 +900,11 @@ const styles = {
 
     fontWeight: 700,
 
-    border: "1px solid rgba(255,255,255,0.12)",
+    border:
+      "1px solid rgba(255,255,255,0.12)",
 
-    background: "rgba(255,255,255,0.08)",
+    background:
+      "rgba(255,255,255,0.08)",
 
     color: "#fff",
 
@@ -883,9 +926,9 @@ const styles = {
 
     color: "#22c55e",
 
-    cursor: "pointer",
-
     fontWeight: 700,
+
+    cursor: "pointer",
   },
 
   successBox: {
@@ -959,9 +1002,9 @@ const styles = {
 
     display: "flex",
 
-    alignItems: "center",
-
     justifyContent: "center",
+
+    alignItems: "center",
 
     color: "#fff",
 
