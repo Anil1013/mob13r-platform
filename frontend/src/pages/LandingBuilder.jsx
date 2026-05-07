@@ -1,384 +1,754 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import Navbar from "../components/Navbar";
 
-const API_BASE = "https://backend.mob13r.com";
+const API_BASE =
+  "https://backend.mob13r.com";
 
 export default function LandingBuilder() {
-  const [offers, setOffers] = useState([]);
-  const [landings, setLandings] = useState([]);
+  const [offers, setOffers] =
+    useState([]);
 
-  const [loading, setLoading] = useState(false);
+  const [landings, setLandings] =
+    useState([]);
 
-  const [heroFile, setHeroFile] = useState(null);
-  const [logoFile, setLogoFile] = useState(null);
-  const [backgroundFile, setBackgroundFile] = useState(null);
+  const [loading, setLoading] =
+    useState(false);
 
-  const [form, setForm] = useState({
-    publisher_offer_id: "",
+  const [heroFile, setHeroFile] =
+    useState(null);
 
-    title: "",
-    subtitle: "",
-    description: "",
+  const [logoFile, setLogoFile] =
+    useState(null);
 
-    image_url: "",
-    logo_url: "",
-    background_url: "",
+  const [
+    backgroundFile,
+    setBackgroundFile,
+  ] = useState(null);
 
-    button_text: "Continue",
-    verify_button_text: "Confirm",
+  const [form, setForm] =
+    useState({
+      publisher_offer_id: "",
 
-    disclaimer: "",
+      title: "",
 
-    theme_color: "#22c55e",
-    text_color: "#ffffff",
-    card_color: "rgba(255,255,255,0.08)",
+      subtitle: "",
 
-    success_redirect_url: "",
+      description: "",
 
-    show_timer: true,
-    timer_seconds: 30,
+      image_url: "",
 
-    show_carrier_logo: true,
-    show_geo: true,
+      logo_url: "",
 
-    enable_resend_otp: true,
+      background_url: "",
 
-    enable_success_screen: true,
+      button_text: "Continue",
 
-    success_title: "Subscription Successful",
+      verify_button_text:
+        "Confirm",
 
-    success_message:
-      "Your subscription has been activated successfully.",
+      disclaimer: "",
 
-    redirect_delay_seconds: 3,
+      theme_color: "#22c55e",
 
-    rtl_enabled: false,
+      text_color: "#ffffff",
 
-    language_code: "en",
+      card_color: "#ffffff",
 
-    button_radius: 12,
+      success_redirect_url:
+        "",
 
-    card_radius: 24,
+      show_timer: true,
 
-    background_overlay: "rgba(0,0,0,0.45)",
+      timer_seconds: 30,
 
-    otp_box_style: "boxed",
+      show_carrier_logo: true,
 
-    status: "active",
-  });
+      show_geo: true,
+
+      enable_resend_otp: true,
+
+      enable_success_screen:
+        true,
+
+      show_disclaimer: true,
+
+      success_title:
+        "Subscription Successful",
+
+      success_message:
+        "Your subscription has been activated successfully.",
+
+      redirect_delay_seconds: 3,
+
+      rtl_enabled: false,
+
+      language_code: "en",
+
+      button_radius: 12,
+
+      card_radius: 24,
+
+      background_overlay:
+        "rgba(0,0,0,0.45)",
+
+      otp_box_style: "boxed",
+
+      status: "active",
+    });
+
+  /* =========================
+     LOAD DATA
+  ========================= */
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/landing/publisher-offers`)
-      .then((res) => res.json())
-      .then((d) => setOffers(d.data || []));
+    loadOffers();
 
     loadLandings();
   }, []);
 
-  const loadLandings = () => {
-    fetch(`${API_BASE}/api/landing`)
-      .then((res) => res.json())
-      .then((d) => setLandings(d.data || []));
+  const loadOffers = async () => {
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/landing/publisher-offers`
+      );
+
+      const d = await res.json();
+
+      if (!res.ok) {
+        console.error(d);
+        return;
+      }
+
+      setOffers(d.data || []);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleChange = (key, value) => {
+  const loadLandings = async () => {
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/landing`
+      );
+
+      const d = await res.json();
+
+      if (!res.ok) {
+        console.error(d);
+        return;
+      }
+
+      setLandings(d.data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  /* =========================
+     CHANGE
+  ========================= */
+
+  const handleChange = (
+    key,
+    value
+  ) => {
     setForm((prev) => ({
       ...prev,
       [key]: value,
     }));
   };
 
-  const createLanding = async () => {
-    if (!form.publisher_offer_id || !form.title) {
-      return alert("Select offer and enter title");
-    }
+  /* =========================
+     CREATE
+  ========================= */
 
-    setLoading(true);
-
-    try {
-      const fd = new FormData();
-
-      Object.keys(form).forEach((key) => {
-        fd.append(key, form[key]);
-      });
-
-      if (heroFile) {
-        fd.append("heroFile", heroFile);
+  const createLanding =
+    async () => {
+      if (
+        !form.publisher_offer_id ||
+        !form.title
+      ) {
+        return alert(
+          "Select offer and enter title"
+        );
       }
 
-      if (logoFile) {
-        fd.append("logoFile", logoFile);
+      setLoading(true);
+
+      try {
+        const fd =
+          new FormData();
+
+        Object.keys(form).forEach(
+          (key) => {
+            let value =
+              form[key];
+
+            if (
+              typeof value ===
+              "boolean"
+            ) {
+              value = value
+                ? "true"
+                : "false";
+            }
+
+            if (
+              value === null ||
+              value === undefined
+            ) {
+              value = "";
+            }
+
+            fd.append(
+              key,
+              value
+            );
+          }
+        );
+
+        if (heroFile) {
+          fd.append(
+            "heroFile",
+            heroFile
+          );
+        }
+
+        if (logoFile) {
+          fd.append(
+            "logoFile",
+            logoFile
+          );
+        }
+
+        if (backgroundFile) {
+          fd.append(
+            "backgroundFile",
+            backgroundFile
+          );
+        }
+
+        const res =
+          await fetch(
+            `${API_BASE}/api/landing`,
+            {
+              method: "POST",
+
+              body: fd,
+            }
+          );
+
+        const data =
+          await res.json();
+
+        if (
+          data.status ===
+          "SUCCESS"
+        ) {
+          alert(
+            "Landing Created Successfully ✅"
+          );
+
+          loadLandings();
+
+          resetForm();
+
+          window.scrollTo({
+            top:
+              document.body
+                .scrollHeight,
+
+            behavior: "smooth",
+          });
+        } else {
+          alert(
+            data.error ||
+              "Failed"
+          );
+        }
+      } catch (err) {
+        console.error(err);
+
+        alert(
+          "Network Error"
+        );
       }
 
-      if (backgroundFile) {
-        fd.append("backgroundFile", backgroundFile);
-      }
+      setLoading(false);
+    };
 
-      const res = await fetch(`${API_BASE}/api/landing`, {
-        method: "POST",
-        body: fd,
-      });
+  /* =========================
+     RESET
+  ========================= */
 
-      const data = await res.json();
+  const resetForm = () => {
+    setHeroFile(null);
 
-      if (data.status === "SUCCESS") {
-        alert("Landing Created Successfully ✅");
+    setLogoFile(null);
 
-        loadLandings();
+    setBackgroundFile(null);
 
-        window.scrollTo({
-          top: document.body.scrollHeight,
-          behavior: "smooth",
-        });
-      } else {
-        alert(data.error || "Failed");
-      }
-    } catch (err) {
-      alert("Network Error");
-    }
+    setForm((prev) => ({
+      ...prev,
 
-    setLoading(false);
+      title: "",
+
+      subtitle: "",
+
+      description: "",
+    }));
   };
 
+  /* =========================
+     COPY
+  ========================= */
+
   const copyUrl = (url) => {
-    navigator.clipboard.writeText(url);
+    navigator.clipboard.writeText(
+      url
+    );
+
     alert("Copied ✅");
   };
 
-  const previewBackground = useMemo(() => {
-    if (backgroundFile) {
-      return URL.createObjectURL(backgroundFile);
-    }
+  /* =========================
+     PREVIEWS
+  ========================= */
 
-    return form.background_url || "";
-  }, [backgroundFile, form.background_url]);
+  const previewBackground =
+    useMemo(() => {
+      if (
+        backgroundFile
+      ) {
+        return URL.createObjectURL(
+          backgroundFile
+        );
+      }
 
-  const previewLogo = useMemo(() => {
-    if (logoFile) {
-      return URL.createObjectURL(logoFile);
-    }
+      return (
+        form.background_url ||
+        ""
+      );
+    }, [
+      backgroundFile,
+      form.background_url,
+    ]);
 
-    return form.logo_url || "";
-  }, [logoFile, form.logo_url]);
+  const previewLogo =
+    useMemo(() => {
+      if (logoFile) {
+        return URL.createObjectURL(
+          logoFile
+        );
+      }
 
-  const previewHero = useMemo(() => {
-    if (heroFile) {
-      return URL.createObjectURL(heroFile);
-    }
+      return (
+        form.logo_url || ""
+      );
+    }, [
+      logoFile,
+      form.logo_url,
+    ]);
 
-    return form.image_url || "";
-  }, [heroFile, form.image_url]);
+  const previewHero =
+    useMemo(() => {
+      if (heroFile) {
+        return URL.createObjectURL(
+          heroFile
+        );
+      }
+
+      return (
+        form.image_url || ""
+      );
+    }, [
+      heroFile,
+      form.image_url,
+    ]);
 
   return (
     <>
       <Navbar />
 
       <div style={styles.page}>
-        <div style={styles.header}>
-          <h1 style={styles.heading}>Landing Builder</h1>
+        <div
+          style={styles.header}
+        >
+          <h1
+            style={styles.heading}
+          >
+            Landing Builder
+          </h1>
 
-          <p style={styles.subheading}>
-            Create premium carrier-grade dynamic landing pages
+          <p
+            style={
+              styles.subheading
+            }
+          >
+            Create premium
+            dynamic carrier
+            landing pages
           </p>
         </div>
 
-        <div style={styles.layout}>
-          {/* =========================
-              LEFT PANEL
-          ========================= */}
+        <div
+          style={{
+            ...styles.layout,
 
-          <div style={styles.builderCard}>
-            <div style={styles.sectionTitle}>Landing Settings</div>
+            gridTemplateColumns:
+              window.innerWidth <
+              900
+                ? "1fr"
+                : "1.2fr 0.8fr",
+          }}
+        >
+          {/* LEFT */}
 
-            <div style={styles.grid}>
+          <div
+            style={
+              styles.builderCard
+            }
+          >
+            <div
+              style={
+                styles.sectionTitle
+              }
+            >
+              Landing Settings
+            </div>
+
+            <div
+              style={
+                styles.grid
+              }
+            >
               <select
-                style={styles.input}
-                value={form.publisher_offer_id}
-                onChange={(e) =>
-                  handleChange("publisher_offer_id", e.target.value)
+                style={
+                  styles.input
+                }
+                value={
+                  form.publisher_offer_id
+                }
+                onChange={(
+                  e
+                ) =>
+                  handleChange(
+                    "publisher_offer_id",
+                    e.target
+                      .value
+                  )
                 }
               >
-                <option value="">Select Publisher Offer</option>
+                <option value="">
+                  Select
+                  Publisher
+                  Offer
+                </option>
 
-                {offers.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.service_name} - {o.publisher_name}
-                  </option>
-                ))}
+                {offers.map(
+                  (o) => (
+                    <option
+                      key={
+                        o.id
+                      }
+                      value={
+                        o.id
+                      }
+                    >
+                      {
+                        o.service_name
+                      }{" "}
+                      -{" "}
+                      {
+                        o.publisher_name
+                      }
+                    </option>
+                  )
+                )}
               </select>
 
               <input
-                style={styles.input}
+                style={
+                  styles.input
+                }
                 placeholder="Title"
-                value={form.title}
-                onChange={(e) => handleChange("title", e.target.value)}
+                value={
+                  form.title
+                }
+                onChange={(
+                  e
+                ) =>
+                  handleChange(
+                    "title",
+                    e.target
+                      .value
+                  )
+                }
               />
 
               <input
-                style={styles.input}
+                style={
+                  styles.input
+                }
                 placeholder="Subtitle"
-                value={form.subtitle}
-                onChange={(e) => handleChange("subtitle", e.target.value)}
+                value={
+                  form.subtitle
+                }
+                onChange={(
+                  e
+                ) =>
+                  handleChange(
+                    "subtitle",
+                    e.target
+                      .value
+                  )
+                }
               />
 
               <textarea
-                style={styles.textarea}
+                style={
+                  styles.textarea
+                }
                 placeholder="Description"
-                value={form.description}
-                onChange={(e) =>
-                  handleChange("description", e.target.value)
+                value={
+                  form.description
+                }
+                onChange={(
+                  e
+                ) =>
+                  handleChange(
+                    "description",
+                    e.target
+                      .value
+                  )
                 }
               />
 
               <input
-                style={styles.input}
+                style={
+                  styles.input
+                }
                 placeholder="Button Text"
-                value={form.button_text}
-                onChange={(e) =>
-                  handleChange("button_text", e.target.value)
+                value={
+                  form.button_text
+                }
+                onChange={(
+                  e
+                ) =>
+                  handleChange(
+                    "button_text",
+                    e.target
+                      .value
+                  )
                 }
               />
 
               <input
-                style={styles.input}
+                style={
+                  styles.input
+                }
                 placeholder="Verify Button Text"
-                value={form.verify_button_text}
-                onChange={(e) =>
+                value={
+                  form.verify_button_text
+                }
+                onChange={(
+                  e
+                ) =>
                   handleChange(
                     "verify_button_text",
-                    e.target.value
+                    e.target
+                      .value
                   )
                 }
               />
+            </div>
 
-              <textarea
-                style={styles.textarea}
-                placeholder="Disclaimer"
-                value={form.disclaimer}
-                onChange={(e) =>
-                  handleChange("disclaimer", e.target.value)
+            {/* COLORS */}
+
+            <div
+              style={
+                styles.sectionTitle
+              }
+            >
+              Theme
+            </div>
+
+            <div
+              style={
+                styles.grid3
+              }
+            >
+              <ColorInput
+                label="Theme"
+                value={
+                  form.theme_color
                 }
-              />
-
-              <input
-                style={styles.input}
-                placeholder="Success Redirect URL"
-                value={form.success_redirect_url}
-                onChange={(e) =>
+                onChange={(
+                  v
+                ) =>
                   handleChange(
-                    "success_redirect_url",
-                    e.target.value
+                    "theme_color",
+                    v
+                  )
+                }
+              />
+
+              <ColorInput
+                label="Text"
+                value={
+                  form.text_color
+                }
+                onChange={(
+                  v
+                ) =>
+                  handleChange(
+                    "text_color",
+                    v
+                  )
+                }
+              />
+
+              <ColorInput
+                label="Card"
+                value={
+                  form.card_color
+                }
+                onChange={(
+                  v
+                ) =>
+                  handleChange(
+                    "card_color",
+                    v
                   )
                 }
               />
             </div>
 
-            {/* =========================
-                COLORS
-            ========================= */}
+            {/* UPLOADS */}
 
-            <div style={styles.sectionTitle}>Theme</div>
-
-            <div style={styles.grid3}>
-              <div style={styles.colorBox}>
-                <label>Theme</label>
-
-                <input
-                  type="color"
-                  value={form.theme_color}
-                  onChange={(e) =>
-                    handleChange("theme_color", e.target.value)
-                  }
-                />
-              </div>
-
-              <div style={styles.colorBox}>
-                <label>Text</label>
-
-                <input
-                  type="color"
-                  value={form.text_color}
-                  onChange={(e) =>
-                    handleChange("text_color", e.target.value)
-                  }
-                />
-              </div>
-
-              <div style={styles.colorBox}>
-                <label>Card</label>
-
-                <input
-                  type="color"
-                  value={form.card_color}
-                  onChange={(e) =>
-                    handleChange("card_color", e.target.value)
-                  }
-                />
-              </div>
+            <div
+              style={
+                styles.sectionTitle
+              }
+            >
+              Assets
             </div>
 
-            {/* =========================
-                FILE UPLOADS
-            ========================= */}
-
-            <div style={styles.sectionTitle}>Assets</div>
-
-            <div style={styles.uploadGrid}>
+            <div
+              style={
+                styles.uploadGrid
+              }
+            >
               <UploadBox
                 title="Hero Image"
-                onFile={setHeroFile}
+                onFile={
+                  setHeroFile
+                }
               />
 
               <UploadBox
                 title="Logo"
-                onFile={setLogoFile}
+                onFile={
+                  setLogoFile
+                }
               />
 
               <UploadBox
                 title="Background"
-                onFile={setBackgroundFile}
+                onFile={
+                  setBackgroundFile
+                }
               />
             </div>
 
-            {/* =========================
-                TOGGLES
-            ========================= */}
+            {/* TOGGLES */}
 
-            <div style={styles.sectionTitle}>Features</div>
+            <div
+              style={
+                styles.sectionTitle
+              }
+            >
+              Features
+            </div>
 
-            <div style={styles.toggleGrid}>
+            <div
+              style={
+                styles.toggleGrid
+              }
+            >
               <Toggle
                 label="Show Timer"
-                checked={form.show_timer}
-                onChange={(v) => handleChange("show_timer", v)}
+                checked={
+                  form.show_timer
+                }
+                onChange={(
+                  v
+                ) =>
+                  handleChange(
+                    "show_timer",
+                    v
+                  )
+                }
               />
 
               <Toggle
                 label="Carrier Logo"
-                checked={form.show_carrier_logo}
-                onChange={(v) =>
-                  handleChange("show_carrier_logo", v)
+                checked={
+                  form.show_carrier_logo
+                }
+                onChange={(
+                  v
+                ) =>
+                  handleChange(
+                    "show_carrier_logo",
+                    v
+                  )
                 }
               />
 
               <Toggle
                 label="Show Geo"
-                checked={form.show_geo}
-                onChange={(v) => handleChange("show_geo", v)}
+                checked={
+                  form.show_geo
+                }
+                onChange={(
+                  v
+                ) =>
+                  handleChange(
+                    "show_geo",
+                    v
+                  )
+                }
               />
 
               <Toggle
                 label="Resend OTP"
-                checked={form.enable_resend_otp}
-                onChange={(v) =>
-                  handleChange("enable_resend_otp", v)
+                checked={
+                  form.enable_resend_otp
+                }
+                onChange={(
+                  v
+                ) =>
+                  handleChange(
+                    "enable_resend_otp",
+                    v
+                  )
                 }
               />
 
               <Toggle
                 label="Success Screen"
-                checked={form.enable_success_screen}
-                onChange={(v) =>
+                checked={
+                  form.enable_success_screen
+                }
+                onChange={(
+                  v
+                ) =>
                   handleChange(
                     "enable_success_screen",
                     v
@@ -388,42 +758,73 @@ export default function LandingBuilder() {
 
               <Toggle
                 label="RTL Mode"
-                checked={form.rtl_enabled}
-                onChange={(v) =>
-                  handleChange("rtl_enabled", v)
+                checked={
+                  form.rtl_enabled
+                }
+                onChange={(
+                  v
+                ) =>
+                  handleChange(
+                    "rtl_enabled",
+                    v
+                  )
                 }
               />
             </div>
 
             <button
-              style={styles.createButton}
-              onClick={createLanding}
-              disabled={loading}
+              style={{
+                ...styles.createButton,
+
+                opacity:
+                  loading
+                    ? 0.7
+                    : 1,
+
+                cursor:
+                  loading
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+              onClick={
+                createLanding
+              }
+              disabled={
+                loading
+              }
             >
-              {loading ? "Creating..." : "Create Landing"}
+              {loading
+                ? "Creating..."
+                : "Create Landing"}
             </button>
           </div>
 
-          {/* =========================
-              PREVIEW
-          ========================= */}
+          {/* PREVIEW */}
 
-          <div style={styles.previewPanel}>
+          <div
+            style={
+              styles.previewPanel
+            }
+          >
             <div
               style={{
                 ...styles.previewCard,
 
-                backgroundImage: previewBackground
-                  ? `url(${previewBackground})`
-                  : "none",
+                backgroundImage:
+                  previewBackground
+                    ? `url(${previewBackground})`
+                    : "none",
 
-                color: form.text_color,
+                color:
+                  form.text_color,
               }}
             >
               <div
                 style={{
                   ...styles.overlay,
-                  background: form.background_overlay,
+
+                  background:
+                    form.background_overlay,
                 }}
               />
 
@@ -431,34 +832,60 @@ export default function LandingBuilder() {
                 style={{
                   ...styles.previewContent,
 
-                  background: form.card_color,
+                  background:
+                    form.card_color.startsWith(
+                      "#"
+                    )
+                      ? `${form.card_color}15`
+                      : "rgba(255,255,255,0.08)",
 
-                  borderRadius: form.card_radius,
+                  borderRadius:
+                    form.card_radius,
                 }}
               >
                 {previewLogo && (
                   <img
-                    src={previewLogo}
+                    src={
+                      previewLogo
+                    }
                     alt=""
-                    style={styles.logo}
+                    style={
+                      styles.logo
+                    }
                   />
                 )}
 
                 {previewHero && (
                   <img
-                    src={previewHero}
+                    src={
+                      previewHero
+                    }
                     alt=""
-                    style={styles.hero}
+                    style={
+                      styles.hero
+                    }
                   />
                 )}
 
-                <h2>{form.title || "Landing Title"}</h2>
+                <h2>
+                  {form.title ||
+                    "Landing Title"}
+                </h2>
 
-                <p style={{ opacity: 0.8 }}>
-                  {form.subtitle || "Landing Subtitle"}
+                <p
+                  style={{
+                    opacity: 0.8,
+                  }}
+                >
+                  {form.subtitle ||
+                    "Landing Subtitle"}
                 </p>
 
-                <p style={styles.previewDescription}>
+                <p
+                  style={
+                    styles.previewDescription
+                  }
+                >
                   {form.description ||
                     "Premium subscription landing preview"}
                 </p>
@@ -466,90 +893,21 @@ export default function LandingBuilder() {
                 <button
                   style={{
                     ...styles.previewButton,
-                    background: form.theme_color,
-                    borderRadius: form.button_radius,
+
+                    background:
+                      form.theme_color,
+
+                    borderRadius:
+                      form.button_radius,
                   }}
                 >
-                  {form.button_text}
+                  {
+                    form.button_text
+                  }
                 </button>
-
-                {form.show_disclaimer && (
-                  <div style={styles.previewDisclaimer}>
-                    {form.disclaimer ||
-                      "By continuing you agree to the subscription terms."}
-                  </div>
-                )}
               </div>
             </div>
           </div>
-        </div>
-
-        {/* =========================
-            LANDINGS TABLE
-        ========================= */}
-
-        <div style={styles.tableCard}>
-          <div style={styles.sectionTitle}>
-            Existing Landings
-          </div>
-
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Offer</th>
-                <th>Publisher</th>
-                <th>Status</th>
-                <th>Landing URL</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {landings.map((l) => (
-                <tr key={l.id}>
-                  <td>{l.id}</td>
-
-                  <td>{l.offer_name}</td>
-
-                  <td>{l.publisher_name}</td>
-
-                  <td>
-                    <span style={styles.statusBadge}>
-                      {l.status}
-                    </span>
-                  </td>
-
-                  <td style={styles.urlCell}>
-                    {l.landing_url}
-                  </td>
-
-                  <td>
-                    <div style={styles.actions}>
-                      <button
-                        style={styles.copyBtn}
-                        onClick={() =>
-                          copyUrl(l.landing_url)
-                        }
-                      >
-                        Copy
-                      </button>
-
-                      <a
-                        href={l.landing_url}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <button style={styles.openBtn}>
-                          Open
-                        </button>
-                      </a>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </>
@@ -557,33 +915,80 @@ export default function LandingBuilder() {
 }
 
 /* =========================
-   TOGGLE
+   COMPONENTS
 ========================= */
 
-function Toggle({ label, checked, onChange }) {
+function Toggle({
+  label,
+  checked,
+  onChange,
+}) {
   return (
-    <div style={styles.toggleItem}>
+    <div
+      style={
+        styles.toggleItem
+      }
+    >
       <span>{label}</span>
 
       <input
         type="checkbox"
         checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
+        onChange={(e) =>
+          onChange(
+            e.target.checked
+          )
+        }
       />
     </div>
   );
 }
 
-/* =========================
-   UPLOAD BOX
-========================= */
+function ColorInput({
+  label,
+  value,
+  onChange,
+}) {
+  return (
+    <div
+      style={styles.colorBox}
+    >
+      <label>{label}</label>
 
-function UploadBox({ title, onFile }) {
-  const handleDrop = (e) => {
+      <input
+        type="color"
+        value={
+          value.startsWith(
+            "#"
+          )
+            ? value
+            : "#ffffff"
+        }
+        onChange={(e) =>
+          onChange(
+            e.target.value
+          )
+        }
+      />
+    </div>
+  );
+}
+
+function UploadBox({
+  title,
+  onFile,
+}) {
+  const handleDrop = (
+    e
+  ) => {
     e.preventDefault();
 
-    if (e.dataTransfer.files[0]) {
-      onFile(e.dataTransfer.files[0]);
+    if (
+      e.dataTransfer.files[0]
+    ) {
+      onFile(
+        e.dataTransfer.files[0]
+      );
     }
   };
 
@@ -591,15 +996,38 @@ function UploadBox({ title, onFile }) {
     <div
       style={styles.uploadBox}
       onDrop={handleDrop}
-      onDragOver={(e) => e.preventDefault()}
+      onDragOver={(e) =>
+        e.preventDefault()
+      }
     >
-      <div>{title}</div>
+      <div
+        style={{
+          marginBottom: 10,
+        }}
+      >
+        {title}
+      </div>
 
       <input
         type="file"
         accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
-        onChange={(e) => onFile(e.target.files[0])}
+        onChange={(e) =>
+          onFile(
+            e.target.files[0]
+          )
+        }
       />
+
+      <div
+        style={{
+          marginTop: 10,
+
+          opacity: 0.6,
+        }}
+      >
+        Drag & Drop or
+        Upload
+      </div>
     </div>
   );
 }
@@ -611,8 +1039,13 @@ function UploadBox({ title, onFile }) {
 const styles = {
   page: {
     minHeight: "100vh",
-    padding: "100px 20px",
-    background: "#020617",
+
+    padding:
+      "100px 20px",
+
+    background:
+      "#020617",
+
     color: "#fff",
   },
 
@@ -622,6 +1055,7 @@ const styles = {
 
   heading: {
     fontSize: 34,
+
     fontWeight: 700,
   },
 
@@ -631,227 +1065,260 @@ const styles = {
 
   layout: {
     display: "grid",
-    gridTemplateColumns: "1.2fr 0.8fr",
+
     gap: 20,
+
     alignItems: "start",
   },
 
   builderCard: {
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.1)",
+    background:
+      "rgba(255,255,255,0.05)",
+
+    border:
+      "1px solid rgba(255,255,255,0.1)",
+
     borderRadius: 24,
+
     padding: 24,
-    backdropFilter: "blur(20px)",
+
+    backdropFilter:
+      "blur(20px)",
   },
 
   previewPanel: {
     position: "sticky",
+
     top: 100,
   },
 
   previewCard: {
     minHeight: 760,
+
     borderRadius: 30,
+
     overflow: "hidden",
+
     position: "relative",
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-    border: "1px solid rgba(255,255,255,0.1)",
+
+    backgroundSize:
+      "cover",
+
+    backgroundPosition:
+      "center",
   },
 
   overlay: {
     position: "absolute",
+
     inset: 0,
   },
 
   previewContent: {
     position: "relative",
+
     zIndex: 5,
+
     margin: 30,
+
     padding: 30,
-    backdropFilter: "blur(20px)",
-    border: "1px solid rgba(255,255,255,0.1)",
+
+    backdropFilter:
+      "blur(20px)",
   },
 
   logo: {
     width: 90,
+
     height: 90,
+
     borderRadius: 20,
+
     objectFit: "cover",
+
     marginBottom: 20,
   },
 
   hero: {
     width: "100%",
+
     height: 220,
+
     objectFit: "cover",
+
     borderRadius: 18,
+
     marginBottom: 20,
   },
 
   previewDescription: {
     opacity: 0.85,
+
     lineHeight: 1.7,
+
     marginTop: 12,
   },
 
   previewButton: {
     width: "100%",
-    padding: 16,
-    border: "none",
-    marginTop: 24,
-    color: "#fff",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
 
-  previewDisclaimer: {
-    marginTop: 20,
-    fontSize: 12,
-    opacity: 0.7,
+    padding: 16,
+
+    border: "none",
+
+    marginTop: 24,
+
+    color: "#fff",
+
+    fontWeight: 700,
   },
 
   sectionTitle: {
     fontSize: 18,
+
     fontWeight: 700,
+
     marginBottom: 18,
+
     marginTop: 10,
   },
 
   grid: {
     display: "grid",
+
     gap: 14,
   },
 
   grid3: {
     display: "grid",
-    gridTemplateColumns: "repeat(3,1fr)",
+
+    gridTemplateColumns:
+      "repeat(3,1fr)",
+
     gap: 12,
   },
 
   colorBox: {
     display: "flex",
-    flexDirection: "column",
+
+    flexDirection:
+      "column",
+
     gap: 10,
-    background: "rgba(255,255,255,0.04)",
+
+    background:
+      "rgba(255,255,255,0.04)",
+
     padding: 14,
+
     borderRadius: 16,
   },
 
   input: {
     width: "100%",
+
     padding: 14,
+
     borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.1)",
-    background: "rgba(255,255,255,0.04)",
+
+    border:
+      "1px solid rgba(255,255,255,0.1)",
+
+    background:
+      "rgba(255,255,255,0.04)",
+
     color: "#fff",
+
     outline: "none",
-    boxSizing: "border-box",
   },
 
   textarea: {
     width: "100%",
+
     minHeight: 120,
+
     padding: 14,
+
     borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.1)",
-    background: "rgba(255,255,255,0.04)",
+
+    border:
+      "1px solid rgba(255,255,255,0.1)",
+
+    background:
+      "rgba(255,255,255,0.04)",
+
     color: "#fff",
+
     outline: "none",
-    resize: "vertical",
-    boxSizing: "border-box",
   },
 
   uploadGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3,1fr)",
+
+    gridTemplateColumns:
+      "repeat(3,1fr)",
+
     gap: 14,
   },
 
   uploadBox: {
-    border: "2px dashed rgba(255,255,255,0.15)",
+    border:
+      "2px dashed rgba(255,255,255,0.15)",
+
     borderRadius: 20,
+
     padding: 20,
+
     textAlign: "center",
-    background: "rgba(255,255,255,0.03)",
+
+    background:
+      "rgba(255,255,255,0.03)",
   },
 
   toggleGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2,1fr)",
+
+    gridTemplateColumns:
+      "repeat(2,1fr)",
+
     gap: 12,
   },
 
   toggleItem: {
     display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    background: "rgba(255,255,255,0.04)",
+
+    justifyContent:
+      "space-between",
+
+    alignItems:
+      "center",
+
+    background:
+      "rgba(255,255,255,0.04)",
+
     padding: 14,
+
     borderRadius: 14,
   },
 
   createButton: {
     width: "100%",
+
     padding: 18,
+
     marginTop: 30,
+
     borderRadius: 18,
+
     border: "none",
-    background: "#22c55e",
+
+    background:
+      "#22c55e",
+
     color: "#fff",
+
     fontWeight: 700,
-    cursor: "pointer",
+
     fontSize: 16,
-  },
-
-  tableCard: {
-    marginTop: 30,
-    background: "rgba(255,255,255,0.05)",
-    borderRadius: 24,
-    padding: 24,
-    overflowX: "auto",
-  },
-
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-  },
-
-  statusBadge: {
-    padding: "6px 12px",
-    borderRadius: 999,
-    background: "#22c55e",
-    fontSize: 12,
-    fontWeight: 700,
-  },
-
-  urlCell: {
-    maxWidth: 280,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-
-  actions: {
-    display: "flex",
-    gap: 10,
-  },
-
-  copyBtn: {
-    padding: "10px 14px",
-    borderRadius: 12,
-    border: "none",
-    background: "#111827",
-    color: "#fff",
-    cursor: "pointer",
-  },
-
-  openBtn: {
-    padding: "10px 14px",
-    borderRadius: 12,
-    border: "none",
-    background: "#22c55e",
-    color: "#fff",
-    cursor: "pointer",
   },
 };
