@@ -122,12 +122,18 @@ router.get(
         SELECT
           po.id,
           po.offer_id,
+          po.publisher_cpa,
 
           p.name AS publisher_name,
 
           o.service_name,
           o.geo,
-          o.carrier
+          o.carrier,
+          o.portal_url,
+
+          o.has_antifraud,
+          o.has_status_check,
+          o.has_portal_step
 
         FROM publisher_offers po
 
@@ -168,11 +174,6 @@ router.post(
   "/",
   async (req, res) => {
     try {
-      console.log(
-        "BODY:",
-        req.body
-      );
-
       const body =
         req.body || {};
 
@@ -384,7 +385,7 @@ router.post(
           "#ffffff",
 
         card_color ||
-          "#ffffff",
+          "rgba(255,255,255,0.08)",
 
         success_redirect_url ||
           "",
@@ -646,14 +647,15 @@ router.post(
 
       res.status(500).json({
         status: "FAILED",
-        error: err.message,
+        error:
+          err.message,
       });
     }
   }
 );
 
 /* =========================================
-   GET ALL
+   GET ALL LANDINGS
 ========================================= */
 
 router.get(
@@ -667,6 +669,12 @@ router.get(
           lp.*,
 
           o.service_name AS offer_name,
+
+          o.portal_url,
+
+          o.has_antifraud,
+          o.has_status_check,
+          o.has_portal_step,
 
           p.name AS publisher_name
 
@@ -689,18 +697,22 @@ router.get(
         data: result.rows,
       });
     } catch (err) {
-      console.error(err);
+      console.error(
+        "Get All Landings Error:",
+        err
+      );
 
       res.status(500).json({
         status: "FAILED",
-        error: err.message,
+        error:
+          err.message,
       });
     }
   }
 );
 
 /* =========================================
-   GET SINGLE
+   GET SINGLE LANDING
 ========================================= */
 
 router.get(
@@ -715,18 +727,33 @@ router.get(
           lp.*,
 
           po.offer_id,
+          po.publisher_id,
+          po.publisher_cpa,
 
           o.service_name,
           o.geo,
           o.carrier,
-          o.redirect_url,
+
+          o.portal_url,
           o.otp_length,
 
           o.has_antifraud,
           o.has_status_check,
           o.has_portal_step,
 
-          p.api_key
+          o.af_trigger_point,
+          o.af_prepare_url,
+
+          o.check_status_url,
+
+          o.pin_send_url,
+          o.pin_verify_url,
+
+          o.encode_headers_base64,
+          o.encode_ip_base64,
+
+          p.api_key,
+          p.name AS publisher_name
 
         FROM landing_pages lp
 
@@ -739,7 +766,7 @@ router.get(
         LEFT JOIN publishers p
           ON p.id = po.publisher_id
 
-        WHERE lp.id=$1
+        WHERE lp.id = $1
 
         LIMIT 1
       `,
@@ -759,23 +786,69 @@ router.get(
           });
       }
 
+      const landing =
+        result.rows[0];
+
+      /* =====================================
+         FINAL RESPONSE
+      ===================================== */
+
       res.json({
         status: "SUCCESS",
-        data: result.rows[0],
+
+        data: {
+          ...landing,
+
+          redirect_url:
+            landing.success_redirect_url ||
+            landing.portal_url ||
+            "",
+
+          antifraud: {
+            enabled:
+              landing.has_antifraud,
+
+            trigger_point:
+              landing.af_trigger_point,
+
+            prepare_url:
+              landing.af_prepare_url,
+          },
+
+          status_check: {
+            enabled:
+              landing.has_status_check,
+
+            url:
+              landing.check_status_url,
+          },
+
+          portal: {
+            enabled:
+              landing.has_portal_step,
+
+            url:
+              landing.portal_url,
+          },
+        },
       });
     } catch (err) {
-      console.error(err);
+      console.error(
+        "GET SINGLE LANDING ERROR:",
+        err
+      );
 
       res.status(500).json({
         status: "FAILED",
-        error: err.message,
+        error:
+          err.message,
       });
     }
   }
 );
 
 /* =========================================
-   DELETE
+   DELETE LANDING
 ========================================= */
 
 router.delete(
@@ -796,11 +869,15 @@ router.delete(
           "Landing deleted",
       });
     } catch (err) {
-      console.error(err);
+      console.error(
+        "Delete Landing Error:",
+        err
+      );
 
       res.status(500).json({
         status: "FAILED",
-        error: err.message,
+        error:
+          err.message,
       });
     }
   }
