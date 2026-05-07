@@ -11,9 +11,9 @@ const FRONTEND_BASE_URL =
 const BACKEND_BASE_URL =
   "https://backend.mob13r.com";
 
-/* =========================
+/* =========================================
    DIRECTORIES
-========================= */
+========================================= */
 
 const UPLOAD_BASE = path.join(
   process.cwd(),
@@ -21,25 +21,35 @@ const UPLOAD_BASE = path.join(
 );
 
 const DIRS = {
-  logos: path.join(UPLOAD_BASE, "logos"),
+  logos: path.join(
+    UPLOAD_BASE,
+    "logos"
+  ),
 
   backgrounds: path.join(
     UPLOAD_BASE,
     "backgrounds"
   ),
 
-  heroes: path.join(UPLOAD_BASE, "heroes"),
+  heroes: path.join(
+    UPLOAD_BASE,
+    "heroes"
+  ),
 };
 
-Object.values(DIRS).forEach((dir) => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+Object.values(DIRS).forEach(
+  (dir) => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, {
+        recursive: true,
+      });
+    }
   }
-});
+);
 
-/* =========================
+/* =========================================
    HELPERS
-========================= */
+========================================= */
 
 const allowedMimeTypes = [
   "image/png",
@@ -52,65 +62,85 @@ const allowedMimeTypes = [
 const parseBool = (v) =>
   v === true || v === "true";
 
-const validateImage = (file) => {
-  if (!allowedMimeTypes.includes(file.mimetype)) {
+const validateImage = (
+  file
+) => {
+  if (!file) return null;
+
+  if (
+    !allowedMimeTypes.includes(
+      file.mimetype
+    )
+  ) {
     return "Invalid image format";
   }
 
-  if (file.size > 5 * 1024 * 1024) {
-    return "Image exceeds 5MB";
+  if (
+    file.size >
+    10 * 1024 * 1024
+  ) {
+    return "Image exceeds 10MB";
   }
 
   return null;
 };
 
-const saveFile = async (file, folder) => {
-  const ext = path.extname(file.name);
+const saveFile = async (
+  file,
+  folder
+) => {
+  const ext =
+    path.extname(file.name);
 
   const fileName =
     `${folder}_${Date.now()}_${Math.floor(
-      Math.random() * 999999
+      Math.random() *
+        999999
     )}${ext}`;
 
-  const savePath = path.join(
-    DIRS[folder],
-    fileName
-  );
+  const savePath =
+    path.join(
+      DIRS[folder],
+      fileName
+    );
 
   await file.mv(savePath);
 
   return `${BACKEND_BASE_URL}/uploads/landings/${folder}/${fileName}`;
 };
 
-/* =========================
+/* =========================================
    GET PUBLISHER OFFERS
-========================= */
+========================================= */
 
 router.get(
   "/publisher-offers",
   async (req, res) => {
     try {
-      const result = await pool.query(`
-      SELECT
-        po.id,
-        po.offer_id,
-        p.name AS publisher_name,
-        o.service_name,
-        o.geo,
-        o.carrier
+      const result =
+        await pool.query(`
+        SELECT
+          po.id,
+          po.offer_id,
 
-      FROM publisher_offers po
+          p.name AS publisher_name,
 
-      LEFT JOIN publishers p
-        ON p.id = po.publisher_id
+          o.service_name,
+          o.geo,
+          o.carrier
 
-      LEFT JOIN offers o
-        ON o.id = po.offer_id
+        FROM publisher_offers po
 
-      WHERE po.status='active'
+        LEFT JOIN publishers p
+          ON p.id = po.publisher_id
 
-      ORDER BY po.id DESC
-    `);
+        LEFT JOIN offers o
+          ON o.id = po.offer_id
+
+        WHERE po.status='active'
+
+        ORDER BY po.id DESC
+      `);
 
       res.json({
         status: "SUCCESS",
@@ -130,266 +160,23 @@ router.get(
   }
 );
 
-/* =========================
+/* =========================================
    CREATE LANDING
-========================= */
+========================================= */
 
-router.post("/", async (req, res) => {
-  try {
-    console.log("BODY:", req.body);
-
-    const body = req.body || {};
-
-    const {
-      publisher_offer_id,
-
-      title,
-      subtitle,
-      description,
-
-      image_url,
-      logo_url,
-      background_url,
-
-      button_text,
-      verify_button_text,
-
-      disclaimer,
-
-      theme_color,
-      text_color,
-      card_color,
-
-      success_redirect_url,
-
-      timer_seconds,
-
-      custom_css,
-
-      status,
-
-      logo_alt,
-
-      resend_timer_seconds,
-
-      success_title,
-      success_message,
-
-      redirect_delay_seconds,
-
-      polling_interval_seconds,
-      max_polling_attempts,
-
-      language_code,
-
-      font_family,
-
-      button_radius,
-      card_radius,
-
-      background_overlay,
-
-      otp_box_style,
-
-      maintenance_message,
-
-      priority,
-    } = body;
-
-    if (!publisher_offer_id || !title) {
-      return res.status(400).json({
-        status: "FAILED",
-        error:
-          "publisher_offer_id and title required",
-      });
-    }
-
-    let finalHero = image_url || "";
-
-    let finalLogo = logo_url || "";
-
-    let finalBackground =
-      background_url || "";
-
-    /* =========================
-       HERO FILE
-    ========================= */
-
-    if (req.files?.heroFile) {
-      const err = validateImage(
-        req.files.heroFile
+router.post(
+  "/",
+  async (req, res) => {
+    try {
+      console.log(
+        "BODY:",
+        req.body
       );
 
-      if (err) {
-        return res.status(400).json({
-          status: "FAILED",
-          error: err,
-        });
-      }
+      const body =
+        req.body || {};
 
-      finalHero = await saveFile(
-        req.files.heroFile,
-        "heroes"
-      );
-    }
-
-    /* =========================
-       LOGO FILE
-    ========================= */
-
-    if (req.files?.logoFile) {
-      const err = validateImage(
-        req.files.logoFile
-      );
-
-      if (err) {
-        return res.status(400).json({
-          status: "FAILED",
-          error: err,
-        });
-      }
-
-      finalLogo = await saveFile(
-        req.files.logoFile,
-        "logos"
-      );
-    }
-
-    /* =========================
-       BACKGROUND FILE
-    ========================= */
-
-    if (req.files?.backgroundFile) {
-      const err = validateImage(
-        req.files.backgroundFile
-      );
-
-      if (err) {
-        return res.status(400).json({
-          status: "FAILED",
-          error: err,
-        });
-      }
-
-      finalBackground = await saveFile(
-        req.files.backgroundFile,
-        "backgrounds"
-      );
-    }
-
-    /* =========================
-       INSERT
-    ========================= */
-
-    const values = [
-      publisher_offer_id,
-
-      title || "",
-      subtitle || "",
-      description || "",
-
-      finalHero,
-      finalLogo,
-      finalBackground,
-
-      button_text || "Continue",
-
-      verify_button_text || "Confirm",
-
-      disclaimer || "",
-
-      theme_color || "#22c55e",
-
-      text_color || "#ffffff",
-
-      card_color || "#ffffff",
-
-      success_redirect_url || "",
-
-      parseBool(body.show_timer),
-
-      Number(timer_seconds) || 30,
-
-      parseBool(body.show_carrier_logo),
-
-      parseBool(body.show_geo),
-
-      custom_css || "",
-
-      status || "active",
-
-      logo_alt || "",
-
-      parseBool(body.background_blur),
-
-      parseBool(body.show_disclaimer),
-
-      parseBool(body.show_secure_badge),
-
-      parseBool(body.show_powered_by),
-
-      parseBool(body.enable_resend_otp),
-
-      Number(resend_timer_seconds) || 30,
-
-      parseBool(body.enable_success_screen),
-
-      success_title ||
-        "Subscription Successful",
-
-      success_message ||
-        "Your subscription has been activated successfully.",
-
-      Number(redirect_delay_seconds) || 3,
-
-      parseBool(body.enable_redirect),
-
-      parseBool(
-        body.enable_status_polling
-      ),
-
-      Number(polling_interval_seconds) ||
-        5,
-
-      Number(max_polling_attempts) || 6,
-
-      parseBool(
-        body.enable_portal_redirect
-      ),
-
-      parseBool(body.rtl_enabled),
-
-      language_code || "en",
-
-      font_family || "Inter",
-
-      Number(button_radius) || 12,
-
-      Number(card_radius) || 24,
-
-      background_overlay ||
-        "rgba(0,0,0,0.45)",
-
-      parseBool(body.animation_enabled),
-
-      otp_box_style || "boxed",
-
-      parseBool(body.maintenance_mode),
-
-      maintenance_message ||
-        "Service temporarily unavailable",
-
-      Number(priority) || 0,
-    ];
-
-    const placeholders = values
-      .map((_, i) => `$${i + 1}`)
-      .join(",");
-
-    const result = await pool.query(
-      `
-      INSERT INTO landing_pages (
-
+      const {
         publisher_offer_id,
 
         title,
@@ -411,11 +198,7 @@ router.post("/", async (req, res) => {
 
         success_redirect_url,
 
-        show_timer,
         timer_seconds,
-
-        show_carrier_logo,
-        show_geo,
 
         custom_css,
 
@@ -423,30 +206,16 @@ router.post("/", async (req, res) => {
 
         logo_alt,
 
-        background_blur,
-
-        show_disclaimer,
-        show_secure_badge,
-        show_powered_by,
-
-        enable_resend_otp,
         resend_timer_seconds,
-
-        enable_success_screen,
 
         success_title,
         success_message,
 
         redirect_delay_seconds,
-        enable_redirect,
 
-        enable_status_polling,
         polling_interval_seconds,
         max_polling_attempts,
 
-        enable_portal_redirect,
-
-        rtl_enabled,
         language_code,
 
         font_family,
@@ -456,194 +225,585 @@ router.post("/", async (req, res) => {
 
         background_overlay,
 
-        animation_enabled,
-
         otp_box_style,
 
-        maintenance_mode,
         maintenance_message,
 
-        priority
+        priority,
+      } = body;
 
-      )
+      if (
+        !publisher_offer_id ||
+        !title
+      ) {
+        return res
+          .status(400)
+          .json({
+            status:
+              "FAILED",
+            error:
+              "publisher_offer_id and title required",
+          });
+      }
 
-      VALUES (${placeholders})
+      /* =====================================
+         FILES
+      ===================================== */
 
-      RETURNING *
-    `,
-      values
-    );
+      const heroFile =
+        req.files
+          ?.heroFile;
 
-    const landing = result.rows[0];
+      const logoFile =
+        req.files
+          ?.logoFile;
 
-    const landingUrl =
-      `${FRONTEND_BASE_URL}/landing/${landing.id}`;
+      const backgroundFile =
+        req.files
+          ?.backgroundFile;
 
-    await pool.query(
-      `
-      UPDATE landing_pages
-      SET landing_url=$1
-      WHERE id=$2
-    `,
-      [landingUrl, landing.id]
-    );
+      /* =====================================
+         VALIDATION
+      ===================================== */
 
-    res.json({
-      status: "SUCCESS",
+      const heroError =
+        validateImage(
+          heroFile
+        );
 
-      data: {
-        ...landing,
+      if (heroError) {
+        return res
+          .status(400)
+          .json({
+            status:
+              "FAILED",
+            error:
+              heroError,
+          });
+      }
 
-        landing_url: landingUrl,
-      },
-    });
-  } catch (err) {
-    console.error(
-      "Create Landing Error:",
-      err
-    );
+      const logoError =
+        validateImage(
+          logoFile
+        );
 
-    res.status(500).json({
-      status: "FAILED",
-      error: err.message,
-    });
-  }
-});
+      if (logoError) {
+        return res
+          .status(400)
+          .json({
+            status:
+              "FAILED",
+            error:
+              logoError,
+          });
+      }
 
-/* =========================
-   GET ALL
-========================= */
+      const bgError =
+        validateImage(
+          backgroundFile
+        );
 
-router.get("/", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT
+      if (bgError) {
+        return res
+          .status(400)
+          .json({
+            status:
+              "FAILED",
+            error:
+              bgError,
+          });
+      }
 
-        lp.*,
+      /* =====================================
+         UPLOADS
+      ===================================== */
 
-        o.service_name AS offer_name,
+      let finalHero =
+        image_url || "";
 
-        p.name AS publisher_name
+      let finalLogo =
+        logo_url || "";
 
-      FROM landing_pages lp
+      let finalBackground =
+        background_url ||
+        "";
 
-      LEFT JOIN publisher_offers po
-        ON po.id = lp.publisher_offer_id
+      if (heroFile) {
+        finalHero =
+          await saveFile(
+            heroFile,
+            "heroes"
+          );
+      }
 
-      LEFT JOIN offers o
-        ON o.id = po.offer_id
+      if (logoFile) {
+        finalLogo =
+          await saveFile(
+            logoFile,
+            "logos"
+          );
+      }
 
-      LEFT JOIN publishers p
-        ON p.id = po.publisher_id
+      if (
+        backgroundFile
+      ) {
+        finalBackground =
+          await saveFile(
+            backgroundFile,
+            "backgrounds"
+          );
+      }
 
-      ORDER BY lp.id DESC
-    `);
+      /* =====================================
+         VALUES
+      ===================================== */
 
-    res.json({
-      status: "SUCCESS",
-      data: result.rows,
-    });
-  } catch (err) {
-    console.error(err);
+      const values = [
+        publisher_offer_id,
 
-    res.status(500).json({
-      status: "FAILED",
-      error: err.message,
-    });
-  }
-});
+        title || "",
+        subtitle || "",
+        description || "",
 
-/* =========================
-   GET SINGLE
-========================= */
+        finalHero,
+        finalLogo,
+        finalBackground,
 
-router.get("/:id", async (req, res) => {
-  try {
-    const result = await pool.query(
-      `
-      SELECT
+        button_text ||
+          "Continue",
 
-        lp.*,
+        verify_button_text ||
+          "Confirm",
 
-        po.offer_id,
+        disclaimer || "",
 
-        o.service_name,
-        o.geo,
-        o.carrier,
-        o.redirect_url,
-        o.otp_length,
+        theme_color ||
+          "#22c55e",
 
-        o.has_antifraud,
-        o.has_status_check,
-        o.has_portal_step,
+        text_color ||
+          "#ffffff",
 
-        p.api_key
+        card_color ||
+          "#ffffff",
 
-      FROM landing_pages lp
+        success_redirect_url ||
+          "",
 
-      LEFT JOIN publisher_offers po
-        ON po.id = lp.publisher_offer_id
+        parseBool(
+          body.show_timer
+        ),
 
-      LEFT JOIN offers o
-        ON o.id = po.offer_id
+        Number(
+          timer_seconds
+        ) || 30,
 
-      LEFT JOIN publishers p
-        ON p.id = po.publisher_id
+        parseBool(
+          body.show_carrier_logo
+        ),
 
-      WHERE lp.id=$1
+        parseBool(
+          body.show_geo
+        ),
 
-      LIMIT 1
-    `,
-      [req.params.id]
-    );
+        custom_css || "",
 
-    if (!result.rows.length) {
-      return res.status(404).json({
+        status ||
+          "active",
+
+        logo_alt || "",
+
+        parseBool(
+          body.background_blur
+        ),
+
+        parseBool(
+          body.show_disclaimer
+        ),
+
+        parseBool(
+          body.show_secure_badge
+        ),
+
+        parseBool(
+          body.show_powered_by
+        ),
+
+        parseBool(
+          body.enable_resend_otp
+        ),
+
+        Number(
+          resend_timer_seconds
+        ) || 30,
+
+        parseBool(
+          body.enable_success_screen
+        ),
+
+        success_title ||
+          "Subscription Successful",
+
+        success_message ||
+          "Your subscription has been activated successfully.",
+
+        Number(
+          redirect_delay_seconds
+        ) || 3,
+
+        parseBool(
+          body.enable_redirect
+        ),
+
+        parseBool(
+          body.enable_status_polling
+        ),
+
+        Number(
+          polling_interval_seconds
+        ) || 5,
+
+        Number(
+          max_polling_attempts
+        ) || 6,
+
+        parseBool(
+          body.enable_portal_redirect
+        ),
+
+        parseBool(
+          body.rtl_enabled
+        ),
+
+        language_code ||
+          "en",
+
+        font_family ||
+          "Inter",
+
+        Number(
+          button_radius
+        ) || 12,
+
+        Number(
+          card_radius
+        ) || 24,
+
+        background_overlay ||
+          "rgba(0,0,0,0.45)",
+
+        parseBool(
+          body.animation_enabled
+        ),
+
+        otp_box_style ||
+          "boxed",
+
+        parseBool(
+          body.maintenance_mode
+        ),
+
+        maintenance_message ||
+          "Service temporarily unavailable",
+
+        Number(priority) ||
+          0,
+      ];
+
+      const placeholders =
+        values
+          .map(
+            (_, i) =>
+              `$${i + 1}`
+          )
+          .join(",");
+
+      /* =====================================
+         INSERT
+      ===================================== */
+
+      const result =
+        await pool.query(
+          `
+        INSERT INTO landing_pages (
+
+          publisher_offer_id,
+
+          title,
+          subtitle,
+          description,
+
+          image_url,
+          logo_url,
+          background_url,
+
+          button_text,
+          verify_button_text,
+
+          disclaimer,
+
+          theme_color,
+          text_color,
+          card_color,
+
+          success_redirect_url,
+
+          show_timer,
+          timer_seconds,
+
+          show_carrier_logo,
+          show_geo,
+
+          custom_css,
+
+          status,
+
+          logo_alt,
+
+          background_blur,
+
+          show_disclaimer,
+          show_secure_badge,
+          show_powered_by,
+
+          enable_resend_otp,
+          resend_timer_seconds,
+
+          enable_success_screen,
+
+          success_title,
+          success_message,
+
+          redirect_delay_seconds,
+          enable_redirect,
+
+          enable_status_polling,
+          polling_interval_seconds,
+          max_polling_attempts,
+
+          enable_portal_redirect,
+
+          rtl_enabled,
+          language_code,
+
+          font_family,
+
+          button_radius,
+          card_radius,
+
+          background_overlay,
+
+          animation_enabled,
+
+          otp_box_style,
+
+          maintenance_mode,
+          maintenance_message,
+
+          priority
+
+        )
+
+        VALUES (${placeholders})
+
+        RETURNING *
+      `,
+          values
+        );
+
+      const landing =
+        result.rows[0];
+
+      const landingUrl =
+        `${FRONTEND_BASE_URL}/landing/${landing.id}`;
+
+      await pool.query(
+        `
+        UPDATE landing_pages
+        SET landing_url=$1
+        WHERE id=$2
+      `,
+        [
+          landingUrl,
+          landing.id,
+        ]
+      );
+
+      res.json({
+        status: "SUCCESS",
+
+        data: {
+          ...landing,
+
+          landing_url:
+            landingUrl,
+        },
+      });
+    } catch (err) {
+      console.error(
+        "Create Landing Error:",
+        err
+      );
+
+      res.status(500).json({
         status: "FAILED",
-        error: "Landing not found",
+        error: err.message,
       });
     }
-
-    res.json({
-      status: "SUCCESS",
-      data: result.rows[0],
-    });
-  } catch (err) {
-    console.error(err);
-
-    res.status(500).json({
-      status: "FAILED",
-      error: err.message,
-    });
   }
-});
+);
 
-/* =========================
+/* =========================================
+   GET ALL
+========================================= */
+
+router.get(
+  "/",
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(`
+        SELECT
+
+          lp.*,
+
+          o.service_name AS offer_name,
+
+          p.name AS publisher_name
+
+        FROM landing_pages lp
+
+        LEFT JOIN publisher_offers po
+          ON po.id = lp.publisher_offer_id
+
+        LEFT JOIN offers o
+          ON o.id = po.offer_id
+
+        LEFT JOIN publishers p
+          ON p.id = po.publisher_id
+
+        ORDER BY lp.id DESC
+      `);
+
+      res.json({
+        status: "SUCCESS",
+        data: result.rows,
+      });
+    } catch (err) {
+      console.error(err);
+
+      res.status(500).json({
+        status: "FAILED",
+        error: err.message,
+      });
+    }
+  }
+);
+
+/* =========================================
+   GET SINGLE
+========================================= */
+
+router.get(
+  "/:id",
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(
+          `
+        SELECT
+
+          lp.*,
+
+          po.offer_id,
+
+          o.service_name,
+          o.geo,
+          o.carrier,
+          o.redirect_url,
+          o.otp_length,
+
+          o.has_antifraud,
+          o.has_status_check,
+          o.has_portal_step,
+
+          p.api_key
+
+        FROM landing_pages lp
+
+        LEFT JOIN publisher_offers po
+          ON po.id = lp.publisher_offer_id
+
+        LEFT JOIN offers o
+          ON o.id = po.offer_id
+
+        LEFT JOIN publishers p
+          ON p.id = po.publisher_id
+
+        WHERE lp.id=$1
+
+        LIMIT 1
+      `,
+          [req.params.id]
+        );
+
+      if (
+        !result.rows.length
+      ) {
+        return res
+          .status(404)
+          .json({
+            status:
+              "FAILED",
+            error:
+              "Landing not found",
+          });
+      }
+
+      res.json({
+        status: "SUCCESS",
+        data: result.rows[0],
+      });
+    } catch (err) {
+      console.error(err);
+
+      res.status(500).json({
+        status: "FAILED",
+        error: err.message,
+      });
+    }
+  }
+);
+
+/* =========================================
    DELETE
-========================= */
+========================================= */
 
-router.delete("/:id", async (req, res) => {
-  try {
-    await pool.query(
-      `
-      DELETE FROM landing_pages
-      WHERE id=$1
-    `,
-      [req.params.id]
-    );
+router.delete(
+  "/:id",
+  async (req, res) => {
+    try {
+      await pool.query(
+        `
+        DELETE FROM landing_pages
+        WHERE id=$1
+      `,
+        [req.params.id]
+      );
 
-    res.json({
-      status: "SUCCESS",
-      message: "Landing deleted",
-    });
-  } catch (err) {
-    console.error(err);
+      res.json({
+        status: "SUCCESS",
+        message:
+          "Landing deleted",
+      });
+    } catch (err) {
+      console.error(err);
 
-    res.status(500).json({
-      status: "FAILED",
-      error: err.message,
-    });
+      res.status(500).json({
+        status: "FAILED",
+        error: err.message,
+      });
+    }
   }
-});
+);
 
 export default router;
