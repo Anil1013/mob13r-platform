@@ -25,13 +25,11 @@ const app = express();
 /* =========================================
    TRUST PROXY
 ========================================= */
-
 app.set("trust proxy", 1);
 
 /* =========================================
    CORS
 ========================================= */
-
 app.use(
   cors({
     origin: [
@@ -40,40 +38,26 @@ app.use(
       "http://localhost:5173",
       "http://localhost:3000",
     ],
-
     credentials: true,
   })
 );
 
 /* =========================================
    FILE UPLOAD
-   IMPORTANT:
-   MUST COME BEFORE express.json()
+   IMPORTANT: MUST COME BEFORE express.json()
 ========================================= */
-
 app.use(
   fileUpload({
     useTempFiles: true,
-
     tempFileDir: "/tmp/",
-
     createParentPath: true,
-
     abortOnLimit: true,
-
     safeFileNames: true,
-
     preserveExtension: true,
-
     parseNested: true,
-
-    debug:
-      process.env.NODE_ENV !==
-      "production",
-
+    debug: process.env.NODE_ENV !== "production",
     limits: {
-      fileSize:
-        50 * 1024 * 1024,
+      fileSize: 50 * 1024 * 1024, // 50MB
     },
   })
 );
@@ -81,240 +65,96 @@ app.use(
 /* =========================================
    STATIC FILES
 ========================================= */
-
-app.use(
-  "/uploads",
-  express.static(
-    "public/uploads"
-  )
-);
+app.use("/uploads", express.static("public/uploads"));
 
 /* =========================================
    BODY PARSER
 ========================================= */
-
-app.use(
-  express.json({
-    limit: "50mb",
-  })
-);
-
-app.use(
-  express.urlencoded({
-    extended: true,
-
-    limit: "50mb",
-  })
-);
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 /* =========================================
    REQUEST LOGGER
 ========================================= */
-
-app.use(
-  (req, res, next) => {
-    console.log(
-      `${req.method} ${req.originalUrl}`
-    );
-
-    next();
-  }
-);
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.originalUrl}`);
+  next();
+});
 
 /* =========================================
    HEALTH CHECK
 ========================================= */
-
-app.get(
-  "/health",
-  (req, res) => {
-    res.json({
-      status: "OK",
-    });
-  }
-);
+app.get("/health", (req, res) => {
+  res.json({ status: "OK" });
+});
 
 /* =========================================
    CORE APIs
 ========================================= */
-
-app.use(
-  "/api/auth",
-  authRoutes
-);
-
-app.use(
-  "/api/advertisers",
-  advertisersRoutes
-);
-
-app.use(
-  "/api/offers",
-  offersRoutes
-);
-
-app.use(
-  "/api",
-  pinRoutes
-);
-
-app.use(
-  "/api",
-  dumpRoutes
-);
-
-app.use(
-  "/api",
-  autoConfigRoutes
-);
-
-app.use(
-  "/api/landing",
-  landingRoutes
-);
+app.use("/api/auth", authRoutes);
+app.use("/api/advertisers", advertisersRoutes);
+app.use("/api/offers", offersRoutes);
+app.use("/api", pinRoutes);
+app.use("/api", dumpRoutes);
+app.use("/api", autoConfigRoutes);
+app.use("/api/landing", landingRoutes);
 
 /* =========================================
    DASHBOARD APIs
 ========================================= */
-
-/**
- * Dashboard reporting
- * → /api/dashboard/report
- * → /api/dashboard/realtime
- */
-
-app.use(
-  "/api",
-  dashboardReportRoutes
-);
+app.use("/api", dashboardReportRoutes);
 
 /* =========================================
    PUBLISHER APIs
 ========================================= */
-
-/**
- * PIN SEND / VERIFY
- * → /api/publisher/pin/send
- * → /api/publisher/pin/verify
- */
-
-app.use(
-  "/api/publisher",
-  publisherRoutes
-);
-
-/**
- * DASHBOARD
- * → /api/publisher/dashboard/summary
- * → /api/publisher/dashboard/offers
- */
-
-app.use(
-  "/api/publisher",
-  publisherDashboardRoutes
-);
-
-app.use(
-  "/api/publishers",
-  publishersRoutes
-);
-
-app.use(
-  "/api",
-  docsRoutes
-);
+app.use("/api/publisher", publisherRoutes);
+app.use("/api/publisher", publisherDashboardRoutes);
+app.use("/api/publishers", publishersRoutes);
+app.use("/api", docsRoutes);
 
 /* =========================================
    404 HANDLER
 ========================================= */
-
-app.use(
-  (req, res) => {
-    res.status(404).json({
-      status: "FAILED",
-
-      error:
-        "Route not found",
-    });
-  }
-);
+app.use((req, res) => {
+  res.status(404).json({
+    status: "FAILED",
+    error: "Route not found",
+  });
+});
 
 /* =========================================
    GLOBAL ERROR HANDLER
 ========================================= */
+app.use((err, req, res, next) => {
+  console.error("GLOBAL ERROR:", err);
 
-app.use(
-  (
-    err,
-    req,
-    res,
-    next
-  ) => {
-    console.error(
-      "GLOBAL ERROR:",
-      err
-    );
-
-    /* MULTIPART FORM ERROR */
-
-    if (
-      err?.message ===
-      "Unexpected end of form"
-    ) {
-      return res
-        .status(400)
-        .json({
-          status:
-            "FAILED",
-
-          error:
-            "Multipart upload interrupted. Please retry.",
-        });
-    }
-
-    /* FILE TOO LARGE */
-
-    if (
-      err?.code ===
-      "LIMIT_FILE_SIZE"
-    ) {
-      return res
-        .status(400)
-        .json({
-          status:
-            "FAILED",
-
-          error:
-            "File size too large",
-        });
-    }
-
-    /* FILEUPLOAD LIMIT */
-
-    if (
-      err?.message?.includes(
-        "File too large"
-      )
-    ) {
-      return res
-        .status(400)
-        .json({
-          status:
-            "FAILED",
-
-          error:
-            "Uploaded file exceeds allowed limit",
-        });
-    }
-
-    res.status(500).json({
+  /* MULTIPART FORM ERROR */
+  if (err?.message === "Unexpected end of form") {
+    return res.status(400).json({
       status: "FAILED",
-
-      error:
-        err?.message ||
-        "Internal Server Error",
+      error: "Multipart upload interrupted. Please retry.",
     });
   }
-);
+
+  /* FILE TOO LARGE */
+  if (err?.code === "LIMIT_FILE_SIZE") {
+    return res.status(400).json({
+      status: "FAILED",
+      error: "File size too large",
+    });
+  }
+
+  if (err?.message?.includes("File too large")) {
+    return res.status(400).json({
+      status: "FAILED",
+      error: "Uploaded file exceeds allowed limit",
+    });
+  }
+
+  res.status(500).json({
+    status: "FAILED",
+    error: err?.message || "Internal Server Error",
+  });
+});
 
 export default app;
