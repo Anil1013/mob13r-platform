@@ -1,35 +1,66 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
 import { useParams } from "react-router-dom";
 
-const API_BASE = "https://backend.mob13r.com";
+const API_BASE =
+  "https://backend.mob13r.com";
 
 export default function DynamicLanding() {
   const { id } = useParams();
 
-  const [landing, setLanding] = useState(null);
+  const [landing, setLanding] =
+    useState(null);
 
-  const [step, setStep] = useState("msisdn");
+  const [step, setStep] =
+    useState("msisdn");
 
-  const [msisdn, setMsisdn] = useState("");
+  const [msisdn, setMsisdn] =
+    useState("");
 
-  const [otp, setOtp] = useState([]);
+  const [otp, setOtp] =
+    useState([]);
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] =
+    useState(false);
 
-  const [sessionToken, setSessionToken] = useState("");
+  const [
+    sessionToken,
+    setSessionToken,
+  ] = useState("");
 
-  const [timer, setTimer] = useState(30);
+  const [timer, setTimer] =
+    useState(30);
 
-  const [statusText, setStatusText] = useState("");
+  const [
+    statusText,
+    setStatusText,
+  ] = useState("");
 
-  const [redirectCounter, setRedirectCounter] =
-    useState(3);
+  const [
+    redirectCounter,
+    setRedirectCounter,
+  ] = useState(3);
 
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] =
+    useState(false);
 
   const otpRefs = useRef([]);
 
-  const pollingRef = useRef(null);
+  const pollingRef =
+    useRef(null);
+
+  const loadingRef =
+    useRef(false);
+
+  const redirectRef =
+    useRef(false);
+
+  const abortRef =
+    useRef(null);
 
   /* =========================
      LOAD LANDING
@@ -40,62 +71,85 @@ export default function DynamicLanding() {
 
     return () => {
       if (pollingRef.current) {
-        clearInterval(pollingRef.current);
+        clearInterval(
+          pollingRef.current
+        );
       }
+
+      abortRef.current?.abort();
     };
   }, [id]);
 
-  const loadLanding = async () => {
-    try {
-      const res = await fetch(
-        `${API_BASE}/api/landing/${id}`
-      );
+  const loadLanding =
+    async () => {
+      try {
+        abortRef.current =
+          new AbortController();
 
-      if (!res.ok) {
-        throw new Error(
-          "Failed to load landing"
+        const res =
+          await fetch(
+            `${API_BASE}/api/landing/${id}`,
+            {
+              signal:
+                abortRef.current
+                  .signal,
+            }
+          );
+
+        if (!res.ok) {
+          throw new Error(
+            "Failed to load landing"
+          );
+        }
+
+        const data =
+          await res.json();
+
+        if (
+          data.status ===
+          "SUCCESS"
+        ) {
+          const landingData =
+            data.data;
+
+          setLanding(
+            landingData
+          );
+
+          setTimer(
+            Number(
+              landingData.timer_seconds
+            ) || 30
+          );
+
+          setRedirectCounter(
+            Number(
+              landingData.redirect_delay_seconds
+            ) || 3
+          );
+
+          const otpLength =
+            Number(
+              landingData.otp_length
+            ) || 4;
+
+          setOtp(
+            Array(
+              otpLength
+            ).fill("")
+          );
+
+          injectAntiFraud(
+            landingData
+          );
+        }
+      } catch (err) {
+        console.error(
+          "Landing Load Error:",
+          err
         );
       }
-
-      const data = await res.json();
-
-      if (data.status === "SUCCESS") {
-        const landingData = data.data;
-
-        setLanding(landingData);
-
-        setTimer(
-          Number(
-            landingData.timer_seconds
-          ) || 30
-        );
-
-        setRedirectCounter(
-          Number(
-            landingData.redirect_delay_seconds
-          ) || 3
-        );
-
-        const otpLength =
-          Number(
-            landingData.otp_length
-          ) || 4;
-
-        setOtp(
-          Array(otpLength).fill("")
-        );
-
-        injectAntiFraud(
-          landingData
-        );
-      }
-    } catch (err) {
-      console.error(
-        "Landing Load Error:",
-        err
-      );
-    }
-  };
+    };
 
   /* =========================
      OTP TIMER
@@ -109,18 +163,28 @@ export default function DynamicLanding() {
       timer > 0 &&
       landing?.show_timer
     ) {
-      interval = setInterval(() => {
-        setTimer((prev) => prev - 1);
-      }, 1000);
+      interval =
+        setInterval(() => {
+          setTimer(
+            (prev) =>
+              prev - 1
+          );
+        }, 1000);
     }
 
     return () => {
-      clearInterval(interval);
+      clearInterval(
+        interval
+      );
     };
-  }, [timer, step, landing]);
+  }, [
+    timer,
+    step,
+    landing,
+  ]);
 
   /* =========================
-     AUTO FOCUS OTP
+     OTP FOCUS
   ========================= */
 
   useEffect(() => {
@@ -141,23 +205,31 @@ export default function DynamicLanding() {
       landing?.enable_redirect &&
       redirectCounter > 0
     ) {
-      interval = setInterval(() => {
-        setRedirectCounter(
-          (prev) => prev - 1
-        );
-      }, 1000);
+      interval =
+        setInterval(() => {
+          setRedirectCounter(
+            (prev) =>
+              prev - 1
+          );
+        }, 1000);
     }
 
     if (
       success &&
       landing?.enable_redirect &&
-      redirectCounter <= 0
+      redirectCounter <= 0 &&
+      !redirectRef.current
     ) {
+      redirectRef.current =
+        true;
+
       handleRedirect();
     }
 
     return () => {
-      clearInterval(interval);
+      clearInterval(
+        interval
+      );
     };
   }, [
     success,
@@ -169,284 +241,337 @@ export default function DynamicLanding() {
      ANTIFRAUD
   ========================= */
 
-  const injectAntiFraud = (
-    landingData
-  ) => {
-    try {
-      if (
-        !landingData.has_antifraud
-      )
-        return;
+  const injectAntiFraud =
+    (landingData) => {
+      try {
+        if (
+          !landingData.has_antifraud
+        ) {
+          return;
+        }
 
-      const bfid =
-        "bfid_" +
-        Math.random()
-          .toString(36)
-          .substring(2);
+        const bfid =
+          "bfid_" +
+          Math.random()
+            .toString(36)
+            .substring(2);
 
-      const clickId =
-        "click_" +
-        Math.random()
-          .toString(36)
-          .substring(2);
+        const clickId =
+          "click_" +
+          Math.random()
+            .toString(36)
+            .substring(2);
 
-      localStorage.setItem(
-        "bfid",
-        bfid
-      );
+        localStorage.setItem(
+          "bfid",
+          bfid
+        );
 
-      localStorage.setItem(
-        "click_id",
-        clickId
-      );
-    } catch (err) {
-      console.error(err);
-    }
-  };
+        localStorage.setItem(
+          "click_id",
+          clickId
+        );
+      } catch (err) {
+        console.error(err);
+      }
+    };
 
   /* =========================
      SEND PIN
   ========================= */
 
-  const sendPin = async () => {
-    if (!msisdn) {
-      return alert(
-        "Please enter mobile number"
-      );
-    }
-
-    if (loading) return;
-
-    setLoading(true);
-
-    setStatusText(
-      "Sending OTP..."
-    );
-
-    try {
-      const params =
-        new URLSearchParams({
-          offer_id:
-            landing.offer_id,
-
-          msisdn,
-
-          geo:
-            landing.geo || "",
-
-          carrier:
-            landing.carrier ||
-            "",
-
-          "x-api-key":
-            landing.api_key,
-
-          user_agent:
-            navigator.userAgent,
-
-          click_id:
-            localStorage.getItem(
-              "click_id"
-            ) || "",
-
-          bfid:
-            localStorage.getItem(
-              "bfid"
-            ) || "",
-        });
-
-      const res = await fetch(
-        `${API_BASE}/api/publisher/pin/send?${params}`
-      );
-
-      const data =
-        await res.json();
-
-      if (
-        data.status ===
-          "OTP_SENT" ||
-        data.status ===
-          "SUCCESS"
-      ) {
-        setSessionToken(
-          data.session_token ||
-            ""
-        );
-
-        localStorage.setItem(
-          "session_token",
-          data.session_token ||
-            ""
-        );
-
-        if (
-          data.session_key
-        ) {
-          localStorage.setItem(
-            "sessionKey",
-            data.session_key
-          );
-        }
-
-        setStep("otp");
-
-        setStatusText(
-          "OTP Sent Successfully"
-        );
-      } else {
-        alert(
-          data.message ||
-            "OTP Failed"
-        );
-
-        setStatusText(
-          data.message ||
-            "OTP Failed"
+  const sendPin =
+    async () => {
+      if (!msisdn) {
+        return alert(
+          "Please enter mobile number"
         );
       }
-    } catch (err) {
-      console.error(err);
 
-      alert("Server Error");
-    }
+      if (
+        loadingRef.current
+      )
+        return;
 
-    setLoading(false);
-  };
+      loadingRef.current =
+        true;
+
+      setLoading(true);
+
+      setStatusText(
+        "Sending OTP..."
+      );
+
+      try {
+        const params =
+          new URLSearchParams(
+            {
+              offer_id:
+                landing.offer_id,
+
+              msisdn,
+
+              geo:
+                landing.geo ||
+                "",
+
+              carrier:
+                landing.carrier ||
+                "",
+
+              "x-api-key":
+                landing.api_key,
+
+              user_agent:
+                navigator.userAgent,
+
+              click_id:
+                localStorage.getItem(
+                  "click_id"
+                ) || "",
+
+              bfid:
+                localStorage.getItem(
+                  "bfid"
+                ) || "",
+            }
+          );
+
+        const res =
+          await fetch(
+            `${API_BASE}/api/publisher/pin/send?${params}`
+          );
+
+        const data =
+          await res.json();
+
+        if (
+          data.status ===
+            "OTP_SENT" ||
+          data.status ===
+            "SUCCESS"
+        ) {
+          setSessionToken(
+            data.session_token ||
+              ""
+          );
+
+          localStorage.setItem(
+            "session_token",
+            data.session_token ||
+              ""
+          );
+
+          if (
+            data.session_key
+          ) {
+            localStorage.setItem(
+              "sessionKey",
+              data.session_key
+            );
+          }
+
+          setStep("otp");
+
+          setStatusText(
+            "OTP Sent Successfully"
+          );
+        } else {
+          alert(
+            data.message ||
+              "OTP Failed"
+          );
+
+          setStatusText(
+            data.message ||
+              "OTP Failed"
+          );
+        }
+      } catch (err) {
+        console.error(err);
+
+        alert(
+          "Server Error"
+        );
+      }
+
+      loadingRef.current =
+        false;
+
+      setLoading(false);
+    };
 
   /* =========================
      VERIFY OTP
   ========================= */
 
-  const verifyPin = async () => {
-    const otpValue =
-      otp.join("");
-
-    if (
-      otpValue.length !==
-      otp.length
-    ) {
-      return alert(
-        "Please enter complete OTP"
-      );
-    }
-
-    if (loading) return;
-
-    setLoading(true);
-
-    setStatusText(
-      "Verifying OTP..."
-    );
-
-    try {
-      const params =
-        new URLSearchParams({
-          session_token:
-            sessionToken ||
-            localStorage.getItem(
-              "session_token"
-            ),
-
-          otp: otpValue,
-
-          "x-api-key":
-            landing.api_key,
-
-          user_agent:
-            navigator.userAgent,
-        });
-
-      const res = await fetch(
-        `${API_BASE}/api/publisher/pin/verify?${params}`
-      );
-
-      const data =
-        await res.json();
+  const verifyPin =
+    async () => {
+      const otpValue =
+        otp.join("");
 
       if (
-        data.status ===
-        "SUCCESS"
+        otpValue.length !==
+        otp.length
       ) {
-        setStatusText(
-          "Verification Successful"
-        );
-
-        if (
-          landing.enable_status_polling ||
-          landing.has_status_check
-        ) {
-          pollStatus();
-        } else {
-          showSuccessScreen();
-        }
-      } else {
-        alert(
-          data.message ||
-            "Invalid OTP"
-        );
-
-        setStatusText(
-          data.message ||
-            "Verification Failed"
+        return alert(
+          "Please enter complete OTP"
         );
       }
-    } catch (err) {
-      console.error(err);
 
-      alert(
-        "Verification Error"
+      if (
+        loadingRef.current
+      )
+        return;
+
+      loadingRef.current =
+        true;
+
+      setLoading(true);
+
+      setStatusText(
+        "Verifying OTP..."
       );
-    }
 
-    setLoading(false);
-  };
+      try {
+        const params =
+          new URLSearchParams(
+            {
+              session_token:
+                sessionToken ||
+                localStorage.getItem(
+                  "session_token"
+                ),
+
+              otp: otpValue,
+
+              "x-api-key":
+                landing.api_key,
+
+              user_agent:
+                navigator.userAgent,
+            }
+          );
+
+        const res =
+          await fetch(
+            `${API_BASE}/api/publisher/pin/verify?${params}`
+          );
+
+        const data =
+          await res.json();
+
+        if (
+          data.status ===
+          "SUCCESS"
+        ) {
+          setStatusText(
+            "Verification Successful"
+          );
+
+          if (
+            landing.enable_status_polling ||
+            landing.has_status_check
+          ) {
+            pollStatus();
+          } else {
+            showSuccessScreen();
+          }
+        } else {
+          alert(
+            data.message ||
+              "Invalid OTP"
+          );
+
+          setStatusText(
+            data.message ||
+              "Verification Failed"
+          );
+        }
+      } catch (err) {
+        console.error(err);
+
+        alert(
+          "Verification Error"
+        );
+      }
+
+      loadingRef.current =
+        false;
+
+      setLoading(false);
+    };
 
   /* =========================
      STATUS POLLING
   ========================= */
 
-  const pollStatus = async () => {
-    let attempts = 0;
+  const pollStatus =
+    async () => {
+      let attempts = 0;
 
-    const maxAttempts =
-      landing.max_polling_attempts ||
-      6;
+      const maxAttempts =
+        landing.max_polling_attempts ||
+        6;
 
-    const intervalMs =
-      (landing.polling_interval_seconds ||
-        5) * 1000;
+      const intervalMs =
+        (landing.polling_interval_seconds ||
+          5) *
+        1000;
 
-    pollingRef.current =
-      setInterval(async () => {
-        attempts++;
+      pollingRef.current =
+        setInterval(
+          async () => {
+            attempts++;
 
-        setStatusText(
-          `Checking subscription status (${attempts})`
+            try {
+              const res =
+                await fetch(
+                  `${API_BASE}/api/publisher/status/check?session_token=${sessionToken}`
+                );
+
+              const data =
+                await res.json();
+
+              if (
+                data.status ===
+                "SUCCESS"
+              ) {
+                clearInterval(
+                  pollingRef.current
+                );
+
+                showSuccessScreen();
+
+                return;
+              }
+
+              if (
+                attempts >=
+                maxAttempts
+              ) {
+                clearInterval(
+                  pollingRef.current
+                );
+
+                showSuccessScreen();
+              }
+            } catch (err) {
+              clearInterval(
+                pollingRef.current
+              );
+
+              console.error(
+                err
+              );
+            }
+          },
+          intervalMs
         );
-
-        try {
-          if (
-            attempts >=
-            maxAttempts
-          ) {
-            clearInterval(
-              pollingRef.current
-            );
-
-            showSuccessScreen();
-          }
-        } catch (err) {
-          clearInterval(
-            pollingRef.current
-          );
-
-          console.error(err);
-        }
-      }, intervalMs);
-  };
+    };
 
   /* =========================
-     SUCCESS SCREEN
+     SUCCESS
   ========================= */
 
   const showSuccessScreen =
@@ -466,33 +591,44 @@ export default function DynamicLanding() {
      REDIRECT
   ========================= */
 
-  const handleRedirect = () => {
-    if (
-      landing.success_redirect_url &&
-      landing.success_redirect_url !==
-        ""
-    ) {
-      window.location.assign(
-        landing.success_redirect_url
-      );
+  const handleRedirect =
+    () => {
+      if (
+        landing.success_redirect_url &&
+        landing.success_redirect_url !==
+          ""
+      ) {
+        window.location.assign(
+          landing.success_redirect_url
+        );
 
-      return;
-    }
+        return;
+      }
 
-    if (
-      landing.redirect_url
-    ) {
-      window.location.assign(
+      if (
         landing.redirect_url
+      ) {
+        window.location.assign(
+          landing.redirect_url
+        );
+
+        return;
+      }
+
+      if (
+        landing.portal_url
+      ) {
+        window.location.assign(
+          landing.portal_url
+        );
+
+        return;
+      }
+
+      window.location.assign(
+        "https://google.com"
       );
-
-      return;
-    }
-
-    window.location.assign(
-      "https://google.com"
-    );
-  };
+    };
 
   /* =========================
      OTP CHANGE
@@ -502,8 +638,15 @@ export default function DynamicLanding() {
     value,
     index
   ) => {
+    const clean =
+      value.replace(
+        /[^0-9]/g,
+        ""
+      );
+
     if (
-      !/^[0-9]?$/.test(value)
+      !clean &&
+      value
     )
       return;
 
@@ -511,26 +654,18 @@ export default function DynamicLanding() {
       ...otp,
     ];
 
-    updated[index] = value;
+    updated[index] =
+      clean;
 
     setOtp(updated);
 
     if (
-      value &&
+      clean &&
       index <
         otp.length - 1
     ) {
       otpRefs.current[
         index + 1
-      ]?.focus();
-    }
-
-    if (
-      !value &&
-      index > 0
-    ) {
-      otpRefs.current[
-        index - 1
       ]?.focus();
     }
   };
@@ -541,7 +676,10 @@ export default function DynamicLanding() {
 
   const resendOtp =
     async () => {
-      if (loading) return;
+      if (
+        loadingRef.current
+      )
+        return;
 
       if (timer > 0)
         return;
@@ -565,7 +703,8 @@ export default function DynamicLanding() {
           styles.loadingScreen
         }
       >
-        Loading Landing...
+        Loading
+        Landing...
       </div>
     );
   }
@@ -642,7 +781,7 @@ export default function DynamicLanding() {
             landing.card_color.startsWith(
               "#"
             )
-              ? `${landing.card_color}15`
+              ? `${landing.card_color}20`
               : "rgba(255,255,255,0.08)",
 
           borderRadius:
@@ -700,7 +839,11 @@ export default function DynamicLanding() {
 
         {/* TITLE */}
 
-        <h1 style={styles.title}>
+        <h1
+          style={
+            styles.title
+          }
+        >
           {landing.title}
         </h1>
 
@@ -728,7 +871,9 @@ export default function DynamicLanding() {
 
         {/* META */}
 
-        <div style={styles.meta}>
+        <div
+          style={styles.meta}
+        >
           {landing.show_geo &&
             landing.geo && (
               <div
@@ -767,9 +912,14 @@ export default function DynamicLanding() {
               autoComplete="tel"
               placeholder="Enter Mobile Number"
               value={msisdn}
-              onChange={(e) =>
+              onChange={(
+                e
+              ) =>
                 setMsisdn(
-                  e.target.value
+                  e.target.value.replace(
+                    /[^0-9]/g,
+                    ""
+                  )
                 )
               }
               style={
@@ -804,6 +954,9 @@ export default function DynamicLanding() {
                   loading
                     ? 0.7
                     : 1,
+
+                transition:
+                  "all 0.2s ease",
               }}
             >
               {loading
@@ -816,7 +969,8 @@ export default function DynamicLanding() {
 
         {/* OTP */}
 
-        {step === "otp" && (
+        {step ===
+          "otp" && (
           <>
             <div
               style={
@@ -841,6 +995,7 @@ export default function DynamicLanding() {
                     }
                     type="text"
                     inputMode="numeric"
+                    autoComplete="one-time-code"
                     maxLength={
                       1
                     }
@@ -856,6 +1011,73 @@ export default function DynamicLanding() {
                         index
                       )
                     }
+                    onKeyDown={(
+                      e
+                    ) => {
+                      if (
+                        e.key ===
+                          "Backspace" &&
+                        !otp[
+                          index
+                        ] &&
+                        index >
+                          0
+                      ) {
+                        otpRefs.current[
+                          index -
+                            1
+                        ]?.focus();
+                      }
+                    }}
+                    onPaste={(
+                      e
+                    ) => {
+                      const pasted =
+                        e.clipboardData
+                          .getData(
+                            "text"
+                          )
+                          .replace(
+                            /[^0-9]/g,
+                            ""
+                          );
+
+                      if (
+                        !pasted
+                      )
+                        return;
+
+                      const updated =
+                        [
+                          ...otp,
+                        ];
+
+                      pasted
+                        .split(
+                          ""
+                        )
+                        .slice(
+                          0,
+                          otp.length
+                        )
+                        .forEach(
+                          (
+                            digit,
+                            i
+                          ) => {
+                            updated[
+                              i
+                            ] =
+                              digit;
+                          }
+                        );
+
+                      setOtp(
+                        updated
+                      );
+
+                      e.preventDefault();
+                    }}
                     style={{
                       ...styles.otpInput,
 
@@ -897,6 +1119,9 @@ export default function DynamicLanding() {
                   loading
                     ? 0.7
                     : 1,
+
+                transition:
+                  "all 0.2s ease",
               }}
             >
               {loading
@@ -1033,7 +1258,8 @@ const styles = {
   page: {
     minHeight: "100vh",
 
-    backgroundSize: "cover",
+    backgroundSize:
+      "cover",
 
     backgroundPosition:
       "center",
@@ -1085,9 +1311,11 @@ const styles = {
   },
 
   badge: {
-    display: "inline-flex",
+    display:
+      "inline-flex",
 
-    padding: "8px 14px",
+    padding:
+      "8px 14px",
 
     borderRadius: 999,
 
@@ -1105,7 +1333,8 @@ const styles = {
 
     height: 90,
 
-    objectFit: "cover",
+    objectFit:
+      "cover",
 
     borderRadius: 20,
 
@@ -1117,7 +1346,8 @@ const styles = {
 
     height: 220,
 
-    objectFit: "cover",
+    objectFit:
+      "cover",
 
     borderRadius: 18,
 
@@ -1153,13 +1383,15 @@ const styles = {
 
     gap: 10,
 
-    flexWrap: "wrap",
+    flexWrap:
+      "wrap",
 
     marginBottom: 22,
   },
 
   metaBadge: {
-    padding: "8px 14px",
+    padding:
+      "8px 14px",
 
     borderRadius: 999,
 
@@ -1224,7 +1456,8 @@ const styles = {
 
     height: 58,
 
-    textAlign: "center",
+    textAlign:
+      "center",
 
     fontSize: 24,
 
@@ -1244,7 +1477,8 @@ const styles = {
   timer: {
     marginTop: 16,
 
-    textAlign: "center",
+    textAlign:
+      "center",
 
     opacity: 0.8,
   },
@@ -1273,14 +1507,16 @@ const styles = {
 
     height: 90,
 
-    borderRadius: "50%",
+    borderRadius:
+      "50%",
 
     background:
       "#22c55e",
 
     display: "flex",
 
-    alignItems: "center",
+    alignItems:
+      "center",
 
     justifyContent:
       "center",
@@ -1306,7 +1542,8 @@ const styles = {
 
     opacity: 0.75,
 
-    textAlign: "center",
+    textAlign:
+      "center",
   },
 
   disclaimer: {
@@ -1322,7 +1559,8 @@ const styles = {
   powered: {
     marginTop: 16,
 
-    textAlign: "center",
+    textAlign:
+      "center",
 
     fontSize: 12,
 
@@ -1340,7 +1578,8 @@ const styles = {
     justifyContent:
       "center",
 
-    alignItems: "center",
+    alignItems:
+      "center",
 
     color: "#fff",
 
