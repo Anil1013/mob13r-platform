@@ -22,46 +22,137 @@ import dashboardReportRoutes from "./routes/dashboard.report.routes.js";
 
 const app = express();
 
-/* -------- MIDDLEWARE -------- */
+/* =========================================
+   TRUST PROXY
+========================================= */
 
-app.use(cors());
+app.set("trust proxy", 1);
 
-app.use(fileUpload({
-  useTempFiles: true,         // ✅ True hona chahiye taaki crash na ho
-  tempFileDir: '/tmp/',       // ✅ Linux server ke liye /tmp/ best hai
-  limits: { fileSize: 50 * 1024 * 1024 }, 
-  createParentPath: true      // ✅ Folder apne aap ban jayega
-}));
+/* =========================================
+   CORS
+========================================= */
 
-app.use('/uploads', express.static('public/uploads'));
+app.use(
+  cors({
+    origin: "*",
+    credentials: true,
+  })
+);
 
-app.use(express.json());
+/* =========================================
+   FILE UPLOAD
+   IMPORTANT:
+   MUST COME BEFORE express.json()
+========================================= */
 
-app.use(express.urlencoded({ extended: true })); // ✅ ADD THIS
+app.use(
+  fileUpload({
+    useTempFiles: true,
 
-/* -------- HEALTH CHECK -------- */
+    tempFileDir: "/tmp/",
 
-app.get("/health", (req, res) => {
-  res.json({ status: "OK" });
-});
+    createParentPath: true,
 
-/* -------- CORE APIs -------- */
+    abortOnLimit: true,
 
-app.use("/api/auth", authRoutes);
+    safeFileNames: true,
 
-app.use("/api/advertisers", advertisersRoutes);
+    preserveExtension: true,
 
-app.use("/api/offers", offersRoutes);
+    parseNested: true,
 
-app.use("/api", pinRoutes);
+    debug: false,
 
-app.use("/api", dumpRoutes);
+    limits: {
+      fileSize:
+        50 * 1024 * 1024,
+    },
+  })
+);
 
-app.use("/api", autoConfigRoutes);
+/* =========================================
+   STATIC FILES
+========================================= */
 
-app.use("/api/landing", landingRoutes);
+app.use(
+  "/uploads",
+  express.static(
+    "public/uploads"
+  )
+);
 
-/* -------- DASHBOARD APIs -------- */
+/* =========================================
+   BODY PARSER
+========================================= */
+
+app.use(
+  express.json({
+    limit: "50mb",
+  })
+);
+
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: "50mb",
+  })
+);
+
+/* =========================================
+   HEALTH CHECK
+========================================= */
+
+app.get(
+  "/health",
+  (req, res) => {
+    res.json({
+      status: "OK",
+    });
+  }
+);
+
+/* =========================================
+   CORE APIs
+========================================= */
+
+app.use(
+  "/api/auth",
+  authRoutes
+);
+
+app.use(
+  "/api/advertisers",
+  advertisersRoutes
+);
+
+app.use(
+  "/api/offers",
+  offersRoutes
+);
+
+app.use(
+  "/api",
+  pinRoutes
+);
+
+app.use(
+  "/api",
+  dumpRoutes
+);
+
+app.use(
+  "/api",
+  autoConfigRoutes
+);
+
+app.use(
+  "/api/landing",
+  landingRoutes
+);
+
+/* =========================================
+   DASHBOARD APIs
+========================================= */
 
 /**
  * Dashboard reporting
@@ -69,9 +160,14 @@ app.use("/api/landing", landingRoutes);
  * → /api/dashboard/realtime
  */
 
-app.use("/api", dashboardReportRoutes);
+app.use(
+  "/api",
+  dashboardReportRoutes
+);
 
-/* -------- PUBLISHER APIs -------- */
+/* =========================================
+   PUBLISHER APIs
+========================================= */
 
 /**
  * PIN SEND / VERIFY
@@ -79,7 +175,10 @@ app.use("/api", dashboardReportRoutes);
  * → /api/publisher/pin/verify
  */
 
-app.use("/api/publisher", publisherRoutes);
+app.use(
+  "/api/publisher",
+  publisherRoutes
+);
 
 /**
  * DASHBOARD
@@ -87,10 +186,44 @@ app.use("/api/publisher", publisherRoutes);
  * → /api/publisher/dashboard/offers
  */
 
-app.use("/api/publisher", publisherDashboardRoutes);
+app.use(
+  "/api/publisher",
+  publisherDashboardRoutes
+);
 
-app.use("/api/publishers", publishersRoutes);
+app.use(
+  "/api/publishers",
+  publishersRoutes
+);
 
-app.use("/api", docsRoutes);
+app.use(
+  "/api",
+  docsRoutes
+);
+
+/* =========================================
+   GLOBAL ERROR HANDLER
+========================================= */
+
+app.use(
+  (
+    err,
+    req,
+    res,
+    next
+  ) => {
+    console.error(
+      "GLOBAL ERROR:",
+      err
+    );
+
+    res.status(500).json({
+      status: "FAILED",
+      error:
+        err.message ||
+        "Internal Server Error",
+    });
+  }
+);
 
 export default app;
