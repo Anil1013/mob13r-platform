@@ -34,7 +34,13 @@ app.set("trust proxy", 1);
 
 app.use(
   cors({
-    origin: "*",
+    origin: [
+      "https://dashboard.mob13r.com",
+      "https://backend.mob13r.com",
+      "http://localhost:5173",
+      "http://localhost:3000",
+    ],
+
     credentials: true,
   })
 );
@@ -61,7 +67,9 @@ app.use(
 
     parseNested: true,
 
-    debug: false,
+    debug:
+      process.env.NODE_ENV !==
+      "production",
 
     limits: {
       fileSize:
@@ -94,8 +102,23 @@ app.use(
 app.use(
   express.urlencoded({
     extended: true,
+
     limit: "50mb",
   })
+);
+
+/* =========================================
+   REQUEST LOGGER
+========================================= */
+
+app.use(
+  (req, res, next) => {
+    console.log(
+      `${req.method} ${req.originalUrl}`
+    );
+
+    next();
+  }
 );
 
 /* =========================================
@@ -202,6 +225,21 @@ app.use(
 );
 
 /* =========================================
+   404 HANDLER
+========================================= */
+
+app.use(
+  (req, res) => {
+    res.status(404).json({
+      status: "FAILED",
+
+      error:
+        "Route not found",
+    });
+  }
+);
+
+/* =========================================
    GLOBAL ERROR HANDLER
 ========================================= */
 
@@ -217,10 +255,63 @@ app.use(
       err
     );
 
+    /* MULTIPART FORM ERROR */
+
+    if (
+      err?.message ===
+      "Unexpected end of form"
+    ) {
+      return res
+        .status(400)
+        .json({
+          status:
+            "FAILED",
+
+          error:
+            "Multipart upload interrupted. Please retry.",
+        });
+    }
+
+    /* FILE TOO LARGE */
+
+    if (
+      err?.code ===
+      "LIMIT_FILE_SIZE"
+    ) {
+      return res
+        .status(400)
+        .json({
+          status:
+            "FAILED",
+
+          error:
+            "File size too large",
+        });
+    }
+
+    /* FILEUPLOAD LIMIT */
+
+    if (
+      err?.message?.includes(
+        "File too large"
+      )
+    ) {
+      return res
+        .status(400)
+        .json({
+          status:
+            "FAILED",
+
+          error:
+            "Uploaded file exceeds allowed limit",
+        });
+    }
+
     res.status(500).json({
       status: "FAILED",
+
       error:
-        err.message ||
+        err?.message ||
         "Internal Server Error",
     });
   }
