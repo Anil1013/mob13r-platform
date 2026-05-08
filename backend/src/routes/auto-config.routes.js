@@ -66,6 +66,63 @@ function fixUrl(url) {
   return `${base}?${q}`;
 }
 
+/* =========================
+   OTP LENGTH DETECTOR
+   (fallback if AI misses it)
+========================= */
+function detectOtpLength(docText) {
+  // 6-digit check
+  if (
+    /6[\s-]?digit/i.test(docText) ||
+    /pin.{0,20}6/i.test(docText) ||
+    /otp.{0,20}6/i.test(docText) ||
+    /6.{0,20}digit.{0,20}(pin|otp|code)/i.test(docText) ||
+    /XXXXXX/.test(docText)
+  ) {
+    return 6;
+  }
+  // 5-digit check
+  if (
+    /5[\s-]?digit/i.test(docText) ||
+    /XXXXX/.test(docText)
+  ) {
+    return 5;
+  }
+  // default 4
+  return 4;
+}
+
+/* =========================
+   ANTIFRAUD TYPE DETECTOR
+   (fallback if AI misses it)
+========================= */
+function detectAntifraudType(docText) {
+  if (
+    /uniqid/i.test(docText) ||
+    /DCBProtectRun/i.test(docText) ||
+    /dns-prefetch.*dcbprotect/i.test(docText) ||
+    /mcpuniqid/i.test(docText)
+  ) {
+    return "MCP";
+  }
+  if (
+    /partnerId/i.test(docText) ||
+    /sessionId/i.test(docText) ||
+    /ua\.od-integrations/i.test(docText) ||
+    /one97/i.test(docText)
+  ) {
+    return "ONE97";
+  }
+  if (
+    /antifraud/i.test(docText) ||
+    /anti.fraud/i.test(docText) ||
+    /af_prepare/i.test(docText)
+  ) {
+    return "GENERIC";
+  }
+  return "NONE";
+}
+
 /**
  * =========================
  * MAIN ROUTE
@@ -139,12 +196,16 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
         `
 You are an expert telecom API parser.
 
-Extract ALL API URLs.
+Extract ALL API URLs and integration details.
 
-Return STRICT JSON:
+Return STRICT JSON only, no extra text:
 
 {
   "has_fraud": false,
+  "otp_length": 4,
+  "antifraud_type": "NONE",
+  "af_prepare_url": "",
+  "has_status_check": false,
   "core_urls": {
     "pin_send_url": "",
     "verify_pin_url": "",
@@ -155,11 +216,20 @@ Return STRICT JSON:
 }
 
 Rules:
-- send / generate / otp → pin_send_url
-- verify / validate → verify_pin_url
-- status → check_status_url
-- redirect → portal_url
+- send / generate / otp / pin_request → pin_send_url
+- verify / validate / confirm → verify_pin_url
+- status / check → check_status_url
+- redirect / portal / success → portal_url
 - NEVER return null if URL exists
+- otp_length: look for "4-digit", "5-digit", "6-digit" mentions. Count X's in XXXX/XXXXX/XXXXXX placeholders. Default 4
+- antifraud_type: 
+    "MCP" if uniqid / DCBProtectRun / mcpuniqid / dns-prefetch dcbprotect found
+    "ONE97" if partnerId / sessionId / ua.od-integrations / one97 found
+    "GENERIC" if antifraud / af_prepare mentioned but no specific type
+    "NONE" if no antifraud
+- has_fraud: true if any antifraud/MCP/fraud script mentioned
+- has_status_check: true if a status check URL exists
+- af_prepare_url: URL used for antifraud preparation step if any
 `
       ]);
 
@@ -186,8 +256,12 @@ Rules:
 
       aiConfig = {
         has_fraud: false,
+        otp_length: detectOtpLength(docText),
+        antifraud_type: detectAntifraudType(docText),
+        af_prepare_url: null,
+        has_status_check: false,
         core_urls: {
-          pin_send_url: urls.find(u => /send|otp|generate|pin/i.test(u)) || null,
+          pin_send_url: urls.find(u => /send|otp|generate|pin|request/i.test(u)) || null,
           verify_pin_url: urls.find(u => /verify|validate|confirm/i.test(u)) || null,
           check_status_url: urls.find(u => /status|check/i.test(u)) || null,
           portal_url: urls.find(u => /portal|redirect|success/i.test(u)) || null,
@@ -196,31 +270,54 @@ Rules:
       };
     }
 
+    /* =========================
+       FALLBACK SAFETY NET
+       (AI return kiya but fields miss ho sakti hain)
+    ========================= */
+    if (!aiConfig.otp_length) {
+      aiConfig.otp_length = detectOtpLength(docText);
+    }
+    if (!aiConfig.antifraud_type) {
+      aiConfig.antifraud_type = detectAntifraudType(docText);
+    }
+    if (aiConfig.has_fraud === undefined) {
+      aiConfig.has_fraud = aiConfig.antifraud_type !== "NONE";
+    }
+    if (aiConfig.has_status_check === undefined) {
+      aiConfig.has_status_check = !!(aiConfig.core_urls?.check_status_url);
+    }
+
     const urls = aiConfig.core_urls || {};
 
-    urls.pin_send_url = fixUrl(urls.pin_send_url);
-    urls.verify_pin_url = fixUrl(urls.verify_pin_url);
+    urls.pin_send_url    = fixUrl(urls.pin_send_url);
+    urls.verify_pin_url  = fixUrl(urls.verify_pin_url);
     urls.check_status_url = fixUrl(urls.check_status_url);
-    urls.portal_url = fixUrl(urls.portal_url);
+    urls.portal_url      = fixUrl(urls.portal_url);
 
     /* =========================
        DB UPDATE
     ========================= */
     await pool.query(
-      `UPDATE offers SET 
+      `UPDATE offers SET
         pin_send_url=$1,
         pin_verify_url=$2,
         check_status_url=$3,
         portal_url=$4,
         has_antifraud=$5,
+        otp_length=$6,
+        has_status_check=$7,
+        af_prepare_url=$8,
         updated_at=NOW()
-       WHERE id=$6`,
+       WHERE id=$9`,
       [
         urls.pin_send_url,
         urls.verify_pin_url,
         urls.check_status_url,
         urls.portal_url,
         !!aiConfig.has_fraud,
+        aiConfig.otp_length || 4,
+        !!aiConfig.has_status_check,
+        aiConfig.af_prepare_url || null,
         offerId
       ]
     );
@@ -253,7 +350,13 @@ Rules:
     res.json({
       success: true,
       message: "🔥 FINAL STABLE WORKING",
-      data: aiConfig
+      data: {
+        ...aiConfig,
+        otp_length: aiConfig.otp_length,
+        antifraud_type: aiConfig.antifraud_type,
+        has_status_check: aiConfig.has_status_check,
+        urls
+      }
     });
 
   } catch (err) {
