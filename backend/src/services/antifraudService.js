@@ -1,62 +1,128 @@
 import axios from "axios";
 
-/**
- * Universal Antifraud Service
- * Is file mein saara naya logic rahega taaki pin.routes.js untouched rahe.
- */
-
-// 1. Headers to Base64 (Asiacell Requirement)
 export const encodeHeadersB64 = (headers) => {
   try {
-    const jsonHeader = JSON.stringify(headers);
-    return Buffer.from(jsonHeader).toString('base64');
+    return Buffer.from(JSON.stringify(headers)).toString("base64");
   } catch (e) { return ""; }
 };
 
-// 2. Placeholder Resolver (#MSISDN#, #AF_ID#)
 export const resolveWorkflowUrl = (url, runtime) => {
   if (!url) return null;
-  const map = {
+  const hashMap = {
     "#MSISDN#": runtime.msisdn || "",
-    "#TXID#": runtime.txid || "",
+    "#TXID#": runtime.txid || runtime.transaction_id || "",
     "#ANDROIDID#": runtime.txid || "",
     "#HEADERS_B64#": runtime.headers_b64 || "",
-    "#IP_B64#": runtime.ip ? Buffer.from(runtime.ip).toString('base64') : "",
+    "#IP_B64#": runtime.ip ? Buffer.from(runtime.ip).toString("base64") : "",
     "#AF_ID#": runtime.af_id || "",
-    "#OTP#": runtime.otp || ""
+    "#OTP#": runtime.otp || "",
+    "#UNIQID#": runtime.uniqid || "",
+    "#SESSION_KEY#": runtime.sessionKey || "",
   };
   let updatedUrl = url;
-  Object.entries(map).forEach(([key, value]) => {
+  Object.entries(hashMap).forEach(([key, value]) => {
     updatedUrl = updatedUrl.split(key).join(encodeURIComponent(value));
+  });
+  updatedUrl = updatedUrl.replace(/\{(.*?)\}/g, (_, key) => {
+    return encodeURIComponent(runtime[key] ?? "");
   });
   return updatedUrl;
 };
 
-// 3. Workflow Engine: Status Check aur AF Calls handle karna
+async function handleMCPAntifraud(offer, runtime) {
+  if (!offer.af_prepare_url) return { injectedScript: null, afId: null };
+  try {
+    const afUrl = resolveWorkflowUrl(offer.af_prepare_url, runtime);
+    const afR = await axios.get(afUrl, { timeout: 10000 });
+    const afId =
+      afR.headers["mcpuniqid"] ||
+      afR.headers["antifrauduniqid"] ||
+      afR.headers["x-uniqid"] ||
+      afR.data?.uniqid ||
+      afR.data?.uniqueId ||
+      null;
+    const injectedScript =
+      typeof afR.data === "string" ? afR.data : afR.data?.script || afR.data?.js || null;
+    return { injectedScript, afId };
+  } catch (e) {
+    console.error("MCP Antifraud Error:", e.message);
+    return { injectedScript: null, afId: null };
+  }
+}
+
+async function handleONE97Antifraud(offer, runtime) {
+  if (!offer.af_prepare_url) return { injectedScript: null, afId: null };
+  try {
+    const afUrl = resolveWorkflowUrl(offer.af_prepare_url, runtime);
+    const afR = await axios.post(afUrl, {
+      partnerId: runtime.partner_id || "",
+      sessionId: runtime.session_id || runtime.transaction_id || "",
+      operatorId: runtime.operator_id || "",
+      msisdn: runtime.msisdn || "",
+      additionalData: "{}",
+    }, { timeout: 10000 });
+    const afId = afR.data?.sessionId || afR.data?.afId || null;
+    const injectedScript = afR.data?.script || afR.data?.js || null;
+    return { injectedScript, afId };
+  } catch (e) {
+    console.error("ONE97 Antifraud Error:", e.message);
+    return { injectedScript: null, afId: null };
+  }
+}
+
+async function handleGenericAntifraud(offer, runtime) {
+  if (!offer.af_prepare_url) return { injectedScript: null, afId: null };
+  try {
+    const afUrl = resolveWorkflowUrl(offer.af_prepare_url, runtime);
+    const afR = await axios.get(afUrl, { timeout: 10000 });
+    const afId =
+      afR.headers["antifrauduniqid"] ||
+      afR.headers["x-af-id"] ||
+      afR.data?.afId ||
+      afR.data?.id ||
+      null;
+    const injectedScript =
+      typeof afR.data === "string" ? afR.data : afR.data?.script || null;
+    return { injectedScript, afId };
+  } catch (e) {
+    console.error("Generic Antifraud Error:", e.message);
+    return { injectedScript: null, afId: null };
+  }
+}
+
 export const executeWorkflowSteps = async (offer, runtime) => {
   let result = { injectedScript: null, afId: null, block: false };
-
   try {
-    // Shemaroo Style: Check Status first
     if (offer.has_status_check && offer.check_status_url) {
       const sUrl = resolveWorkflowUrl(offer.check_status_url, runtime);
       const sCheck = await axios.get(sUrl, { timeout: 10000 });
-      if (sCheck.data.message?.includes("Already")) {
+      const body = sCheck.data;
+      const bodyStr = JSON.stringify(body).toLowerCase();
+      if (
+        bodyStr.includes("already") ||
+        bodyStr.includes("subscribed") ||
+        body?.status === "active" ||
+        body?.subscribed === true
+      ) {
         result.block = true;
         return result;
       }
     }
-
-    // One97/Asiacell Style: AF Prep
-    if (offer.has_antifraud && offer.af_trigger_point === 'BEFORE_SEND') {
-      const afUrl = resolveWorkflowUrl(offer.af_prepare_url, runtime);
-      const afR = await axios.get(afUrl, { timeout: 10000 });
-      result.injectedScript = afR.data;
-      result.afId = afR.headers['antifrauduniqid'] || afR.headers['mcpuniqid'];
+    if (offer.has_antifraud && offer.af_trigger_point === "BEFORE_SEND") {
+      const antifraudType = offer.antifraud_type || "GENERIC";
+      let afResult = { injectedScript: null, afId: null };
+      if (antifraudType === "MCP") {
+        afResult = await handleMCPAntifraud(offer, runtime);
+      } else if (antifraudType === "ONE97") {
+        afResult = await handleONE97Antifraud(offer, runtime);
+      } else {
+        afResult = await handleGenericAntifraud(offer, runtime);
+      }
+      result.injectedScript = afResult.injectedScript;
+      result.afId = afResult.afId;
     }
   } catch (e) {
-    console.error("Antifraud Engine Error:", e.message);
+    console.error("Workflow Engine Error:", e.message);
   }
-
   return result;
 };

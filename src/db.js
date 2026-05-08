@@ -9,16 +9,7 @@ const pool = new Pool({
   port: 5432,
   ssl: process.env.NODE_ENV === "production"
     ? { rejectUnauthorized: false }
-    : false,
-  max: 20,
-  min: 2,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-  statement_timeout: 30000,
-});
-
-pool.on("error", (err) => {
-  console.error("❌ DB Pool Error:", err.message);
+    : false
 });
 
 export default pool;
