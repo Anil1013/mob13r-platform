@@ -42,7 +42,7 @@ export default function Login() {
 
   return (
     <div style={{ maxWidth: 400, margin: "80px auto", textAlign: "center" }}>
-      <img src="/logo.png" alt="Mob13r" width="120" />
+      <img src={logoImg} alt="Mob13r" width="120" />
       <h2>Admin Login</h2>
 
       {error && <p style={{ color: "red" }}>{error}</p>}
