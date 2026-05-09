@@ -567,7 +567,7 @@ export default function LandingBuilder() {
             >
               <select
                 style={
-                  styles.input
+                  styles.select
                 }
                 value={
                   form.publisher_offer_id
@@ -977,25 +977,15 @@ export default function LandingBuilder() {
                         }
                       >
                         <div>
-                          <div
-                            style={{
-                              fontWeight: 700,
-                            }}
-                          >
-                            {
-                              item.title
-                            }
+                          <div style={{ fontWeight: 700 }}>
+                            {item.title}
                           </div>
-
-                          <div
-                            style={{
-                              opacity: 0.7,
-                              fontSize: 12,
-                            }}
-                          >
-                            {
-                              item.landing_url
-                            }
+                          <div style={{ opacity: 0.8, fontSize: 12, marginTop: 4, color: "#22c55e" }}>
+                            {item.offer_name && `Offer: ${item.offer_name}`}
+                            {item.publisher_name && ` | Publisher: ${item.publisher_name}`}
+                          </div>
+                          <div style={{ opacity: 0.6, fontSize: 11, marginTop: 2 }}>
+                            {item.landing_url}
                           </div>
                         </div>
 
@@ -1457,6 +1447,16 @@ const styles = {
 
     color: "#fff",
 
+    outline: "none",
+  },
+
+  select: {
+    width: "100%",
+    padding: 14,
+    borderRadius: 14,
+    border: "1px solid rgba(255,255,255,0.1)",
+    background: "#1e293b",
+    color: "#fff",
     outline: "none",
   },
 
