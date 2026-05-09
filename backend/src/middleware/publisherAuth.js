@@ -1,11 +1,8 @@
 import pool from "../db.js";
+import jwt from "jsonwebtoken";
 
 export default async function publisherAuth(req, res, next) {
   try {
-    /* =====================================================
-       ✅ READ API KEY (HEADER + BEARER + QUERY SUPPORT)
-       ===================================================== */
-
     let apiKey =
       req.headers["x-publisher-key"] ||
       req.headers["x-api-key"] ||
@@ -13,22 +10,10 @@ export default async function publisherAuth(req, res, next) {
         ? req.headers.authorization.replace(/^Bearer\s+/i, "").trim()
         : null);
 
-    /* ✅ Browser Testing Support */
     if (!apiKey && req.query["x-api-key"]) {
       apiKey = req.query["x-api-key"];
     }
 
-    /* =====================================================
-       DEBUG LOG (AUTO DISABLED IN PRODUCTION)
-       ===================================================== */
-    if (process.env.NODE_ENV !== "production") {
-      console.log("Publisher Auth Headers:", req.headers);
-      console.log("Resolved API Key:", apiKey);
-    }
-
-    /* =====================================================
-       API KEY REQUIRED
-       ===================================================== */
     if (!apiKey) {
       return res.status(401).json({
         status: "UNAUTHORIZED",
@@ -37,16 +22,38 @@ export default async function publisherAuth(req, res, next) {
     }
 
     /* =====================================================
-       VERIFY PUBLISHER
-       ===================================================== */
+       CHECK 1: JWT Token (Admin viewing publisher dashboard)
+    ===================================================== */
+    try {
+      const decoded = jwt.verify(apiKey, process.env.JWT_SECRET || "mob13r_secret");
+      if (decoded?.role === "admin") {
+        const publisherId = req.query.publisher_id || req.body.publisher_id || 1;
+        const result = await pool.query(
+          "SELECT id, name FROM publishers WHERE id = $1 LIMIT 1",
+          [publisherId]
+        );
+        if (result.rows.length) {
+          req.publisher = {
+            id: result.rows[0].id,
+            name: result.rows[0].name,
+            api_key: apiKey,
+            is_admin: true,
+          };
+          return next();
+        }
+      }
+    } catch {
+      // Not a JWT - continue to API key check
+    }
+
+    /* =====================================================
+       CHECK 2: Publisher API Key
+    ===================================================== */
     const result = await pool.query(
-      `
-      SELECT id, name, status
-      FROM publishers
-      WHERE api_key = $1
-        AND status = 'active'
-      LIMIT 1
-      `,
+      `SELECT id, name, status
+       FROM publishers
+       WHERE api_key = $1 AND status = 'active'
+       LIMIT 1`,
       [apiKey]
     );
 
@@ -57,9 +64,6 @@ export default async function publisherAuth(req, res, next) {
       });
     }
 
-    /* =====================================================
-       ATTACH PUBLISHER CONTEXT
-       ===================================================== */
     req.publisher = {
       id: result.rows[0].id,
       name: result.rows[0].name,
@@ -67,10 +71,8 @@ export default async function publisherAuth(req, res, next) {
     };
 
     next();
-
   } catch (err) {
     console.error("PUBLISHER AUTH ERROR:", err);
-
     return res.status(500).json({
       status: "FAILED",
       message: "Publisher authentication failed",
