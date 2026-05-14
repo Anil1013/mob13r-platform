@@ -847,6 +847,77 @@ router.get(
   }
 );
 
+
+/* =========================================
+   UPDATE LANDING (PATCH)
+========================================= */
+router.patch("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body || {};
+
+    const heroFile = req.files?.heroFile;
+    const logoFile = req.files?.logoFile;
+    const backgroundFile = req.files?.backgroundFile;
+
+    let finalHero = body.image_url || "";
+    let finalLogo = body.logo_url || "";
+    let finalBackground = body.background_url || "";
+
+    if (heroFile) finalHero = await saveFile(heroFile, "heroes");
+    if (logoFile) finalLogo = await saveFile(logoFile, "logos");
+    if (backgroundFile) finalBackground = await saveFile(backgroundFile, "backgrounds");
+
+    const result = await pool.query(
+      `UPDATE landing_pages SET
+        publisher_offer_id = COALESCE($1, publisher_offer_id),
+        title = COALESCE($2, title),
+        subtitle = COALESCE($3, subtitle),
+        description = COALESCE($4, description),
+        image_url = $5,
+        logo_url = $6,
+        background_url = $7,
+        button_text = COALESCE($8, button_text),
+        verify_button_text = COALESCE($9, verify_button_text),
+        theme_color = COALESCE($10, theme_color),
+        text_color = COALESCE($11, text_color),
+        show_timer = COALESCE($12, show_timer),
+        rtl_enabled = COALESCE($13, rtl_enabled),
+        language_code = COALESCE($14, language_code),
+        status = COALESCE($15, status)
+       WHERE id = $16
+       RETURNING *`,
+      [
+        body.publisher_offer_id || null,
+        body.title || null,
+        body.subtitle || null,
+        body.description || null,
+        finalHero || null,
+        finalLogo || null,
+        finalBackground || null,
+        body.button_text || null,
+        body.verify_button_text || null,
+        body.theme_color || null,
+        body.text_color || null,
+        body.show_timer === "true" ? true : body.show_timer === "false" ? false : null,
+        body.rtl_enabled === "true" ? true : body.rtl_enabled === "false" ? false : null,
+        body.language_code || null,
+        body.status || null,
+        id,
+      ]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ status: "FAILED", error: "Landing not found" });
+    }
+
+    res.json({ status: "SUCCESS", data: result.rows[0] });
+  } catch (err) {
+    console.error("UPDATE LANDING ERROR:", err);
+    res.status(500).json({ status: "FAILED", error: err.message });
+  }
+});
+
 /* =========================================
    DELETE LANDING
 ========================================= */
