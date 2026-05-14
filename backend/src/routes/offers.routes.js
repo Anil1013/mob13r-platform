@@ -4,7 +4,7 @@ import pool from "../db.js";
 const router = express.Router();
 
 /* =====================================================
-   DEFAULT UNIVERSAL PARAMETERS
+    DEFAULT UNIVERSAL PARAMETERS
    ===================================================== */
 
 const DEFAULT_PARAMS = [
@@ -47,7 +47,7 @@ const DEFAULT_PARAMS = [
 ];
 
 /* =====================================================
-   INSERT DEFAULT PARAMETERS WHEN OFFER CREATED
+    INSERT DEFAULT PARAMETERS WHEN OFFER CREATED
    ===================================================== */
 
 async function insertDefaultParams(offerId) {
@@ -72,7 +72,7 @@ async function insertDefaultParams(offerId) {
 }
 
 /* =====================================================
-   GET ALL OFFERS (With Advertiser Join)
+    GET ALL OFFERS (With Advertiser Join)
    ===================================================== */
 
 router.get("/", async (req, res) => {
@@ -116,7 +116,7 @@ router.get("/", async (req, res) => {
 });
 
 /* =====================================================
-   CREATE NEW OFFER (Universal Support)
+    CREATE NEW OFFER (Universal Support)
    ===================================================== */
 
 router.post("/", async (req, res) => {
@@ -135,7 +135,8 @@ router.post("/", async (req, res) => {
       has_antifraud,
       has_status_check,
       af_trigger_point,
-      encode_headers_base64
+      encode_headers_base64,
+      otp_length // Added this line
     } = req.body;
 
     if (!advertiser_id || !service_name) {
@@ -164,10 +165,11 @@ router.post("/", async (req, res) => {
         has_antifraud,
         has_status_check,
         af_trigger_point,
-        encode_headers_base64
+        encode_headers_base64,
+        otp_length -- Added this line
       )
       VALUES
-      ($1, $2, $3, $4, $5, $6, $7, 0, CURRENT_DATE, 'active', $8, $9, $10, $11)
+      ($1, $2, $3, $4, $5, $6, $7, 0, CURRENT_DATE, 'active', $8, $9, $10, $11, $12) -- Added $12
       RETURNING *
       `,
       [
@@ -181,7 +183,8 @@ router.post("/", async (req, res) => {
         has_antifraud || false,
         has_status_check || false,
         af_trigger_point || 'BEFORE_SEND',
-        encode_headers_base64 || false
+        encode_headers_base64 || false,
+        otp_length || 4 // Added this line (defaults to 4)
       ]
     );
 
@@ -206,7 +209,7 @@ router.post("/", async (req, res) => {
 });
 
 /* =====================================================
-   GET PARAMETERS FOR SPECIFIC OFFER
+    GET PARAMETERS FOR SPECIFIC OFFER
    ===================================================== */
 
 router.get("/:offerId/parameters", async (req, res) => {
@@ -245,7 +248,7 @@ router.get("/:offerId/parameters", async (req, res) => {
 });
 
 /* =====================================================
-   UPDATE SPECIFIC PARAMETER VALUE
+    UPDATE SPECIFIC PARAMETER VALUE
    ===================================================== */
 
 router.patch("/parameters/:id", async (req, res) => {
@@ -285,7 +288,7 @@ router.patch("/parameters/:id", async (req, res) => {
 });
 
 /* =====================================================
-   ADD CUSTOM PARAMETER TO OFFER
+    ADD CUSTOM PARAMETER TO OFFER
    ===================================================== */
 
 router.post("/:offerId/parameters", async (req, res) => {
@@ -338,7 +341,7 @@ router.post("/:offerId/parameters", async (req, res) => {
 });
 
 /* =====================================================
-   DELETE PARAMETER
+    DELETE PARAMETER
    ===================================================== */
 
 router.delete("/parameters/:id", async (req, res) => {
@@ -376,7 +379,7 @@ router.delete("/parameters/:id", async (req, res) => {
 });
 
 /* =====================================================
-   TOGGLE SERVICE TYPE (NORMAL / FALLBACK)
+    TOGGLE SERVICE TYPE (NORMAL / FALLBACK)
    ===================================================== */
 
 router.patch("/:offerId/service-type", async (req, res) => {
@@ -411,7 +414,7 @@ router.patch("/:offerId/service-type", async (req, res) => {
 });
 
 /* =====================================================
-   UPDATE OFFER DATA (MAIN - Universal Support)
+    UPDATE OFFER DATA (MAIN - Universal Support)
    ===================================================== */
 
 router.patch("/:id", async (req, res) => {
@@ -435,7 +438,8 @@ router.patch("/:id", async (req, res) => {
       pin_send_url,
       pin_verify_url,
       encode_headers_base64,
-      af_trigger_point
+      af_trigger_point,
+      otp_length // Added this line
     } = req.body;
 
     const result = await pool.query(
@@ -455,8 +459,9 @@ router.patch("/:id", async (req, res) => {
         pin_send_url = COALESCE($11, pin_send_url),
         pin_verify_url = COALESCE($12, pin_verify_url),
         encode_headers_base64 = COALESCE($13, encode_headers_base64),
-        af_trigger_point = COALESCE($14, af_trigger_point)
-      WHERE id = $15
+        af_trigger_point = COALESCE($14, af_trigger_point),
+        otp_length = COALESCE($15, otp_length) -- Added this line
+      WHERE id = $16 -- Updated index from $15 to $16
       RETURNING *
       `,
       [
@@ -474,6 +479,7 @@ router.patch("/:id", async (req, res) => {
         pin_verify_url,
         encode_headers_base64,
         af_trigger_point,
+        otp_length, // Added this line
         offerId
       ]
     );
