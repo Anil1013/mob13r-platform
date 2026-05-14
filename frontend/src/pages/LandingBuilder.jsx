@@ -108,6 +108,89 @@ export default function LandingBuilder() {
       window.innerWidth < 900
     );
 
+  const [editingId, setEditingId] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (msg, type="success") => {
+    setToast({msg,type});
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const startEdit = (item) => {
+    setEditingId(item.id);
+    setForm({
+      publisher_offer_id: item.publisher_offer_id || "",
+      title: item.title || "",
+      subtitle: item.subtitle || "",
+      description: item.description || "",
+      image_url: item.image_url || "",
+      logo_url: item.logo_url || "",
+      background_url: item.background_url || "",
+      button_text: item.button_text || "Continue",
+      verify_button_text: item.verify_button_text || "Confirm",
+      disclaimer: item.disclaimer || "",
+      theme_color: item.theme_color || "#22c55e",
+      text_color: item.text_color || "#ffffff",
+      card_color: item.card_color || "#ffffff",
+      success_redirect_url: item.success_redirect_url || "",
+      show_timer: item.show_timer ?? true,
+      timer_seconds: item.timer_seconds || 30,
+      show_carrier_logo: item.show_carrier_logo ?? true,
+      show_geo: item.show_geo ?? true,
+      enable_resend_otp: item.enable_resend_otp ?? true,
+      enable_success_screen: item.enable_success_screen ?? true,
+      show_disclaimer: item.show_disclaimer ?? true,
+      success_title: item.success_title || "Subscription Successful",
+      success_message: item.success_message || "Your subscription has been activated successfully.",
+      redirect_delay_seconds: item.redirect_delay_seconds || 3,
+      rtl_enabled: item.rtl_enabled ?? false,
+      language_code: item.language_code || "en",
+      button_radius: item.button_radius || 12,
+      card_radius: item.card_radius || 24,
+      background_overlay: item.background_overlay || "rgba(0,0,0,0.45)",
+      otp_box_style: item.otp_box_style || "boxed",
+      status: item.status || "active",
+    });
+    setHeroFile(null); setLogoFile(null); setBackgroundFile(null);
+    window.scrollTo({ top:0, behavior:"smooth" });
+    showToast("Editing: " + item.title, "info");
+  };
+
+  const cancelEdit = () => { setEditingId(null); resetForm(); };
+
+  const deleteLanding = async (id, title) => {
+    if (!confirm("Delete '" + title + "'?")) return;
+    const res = await fetch(`${API_BASE}/api/landing/${id}`, { method:"DELETE" });
+    const data = await res.json();
+    if (data.status === "SUCCESS") { showToast("Deleted!"); loadLandings(); }
+    else showToast("Delete failed", "error");
+  };
+
+  const updateLanding = async () => {
+    if (!form.title) return alert("Enter title");
+    setLoading(true);
+    try {
+      const fd = new FormData();
+      Object.keys(form).forEach(key => {
+        let value = form[key];
+        if (typeof value === "boolean") value = value ? "true" : "false";
+        if (value === null || value === undefined) value = "";
+        fd.append(key, value);
+      });
+      if (heroFile) fd.append("heroFile", heroFile);
+      if (logoFile) fd.append("logoFile", logoFile);
+      if (backgroundFile) fd.append("backgroundFile", backgroundFile);
+      const res = await fetch(`${API_BASE}/api/landing/${editingId}`, { method:"PATCH", body:fd });
+      const data = await res.json();
+      if (res.ok && (data.status === "SUCCESS" || data.id)) {
+        showToast("Updated!");
+        await loadLandings();
+        cancelEdit();
+      } else { showToast(data.error || "Update failed", "error"); }
+    } catch { showToast("Network Error", "error"); }
+    setLoading(false);
+  };
+
   /* =========================
      LOAD
   ========================= */
@@ -916,31 +999,36 @@ export default function LandingBuilder() {
               />
             </div>
 
-            <button
-              style={{
-                ...styles.createButton,
+            {/* EDIT BANNER */}
+            {editingId && (
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(59,130,246,0.1)", border:"1px solid rgba(59,130,246,0.3)", borderRadius:12, padding:"12px 16px", marginBottom:16 }}>
+                <span style={{ color:"#3b82f6", fontWeight:600 }}>✏️ Editing Landing #{editingId}</span>
+                <button style={{ border:"none", background:"rgba(239,68,68,0.1)", color:"#ef4444", padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600 }} onClick={cancelEdit}>✕ Cancel</button>
+              </div>
+            )}
 
-                opacity:
-                  loading
-                    ? 0.7
-                    : 1,
+            {/* TOAST */}
+            {toast && (
+              <div style={{ background:toast.type==="error"?"rgba(239,68,68,0.15)":toast.type==="info"?"rgba(59,130,246,0.15)":"rgba(34,197,94,0.15)", border:`1px solid ${toast.type==="error"?"rgba(239,68,68,0.3)":toast.type==="info"?"rgba(59,130,246,0.3)":"rgba(34,197,94,0.3)"}`, color:toast.type==="error"?"#ef4444":toast.type==="info"?"#3b82f6":"#22c55e", padding:"10px 16px", borderRadius:12, marginBottom:16, fontSize:13, fontWeight:500 }}>{toast.msg}</div>
+            )}
 
-                cursor:
-                  loading
-                    ? "not-allowed"
-                    : "pointer",
-              }}
-              onClick={
-                createLanding
-              }
-              disabled={
-                loading
-              }
-            >
-              {loading
-                ? "Creating..."
-                : "Create Landing"}
-            </button>
+            <div style={{ display:"flex", gap:12, marginTop:30 }}>
+              {editingId ? (
+                <>
+                  <button style={{ ...styles.createButton, flex:1, marginTop:0, opacity:loading?0.7:1, cursor:loading?"not-allowed":"pointer" }}
+                    onClick={updateLanding} disabled={loading}>
+                    {loading ? "Updating..." : "✅ Update Landing"}
+                  </button>
+                  <button style={{ ...styles.createButton, flex:0.4, marginTop:0, background:"rgba(239,68,68,0.15)", border:"1px solid rgba(239,68,68,0.3)", color:"#ef4444" }}
+                    onClick={cancelEdit}>Cancel</button>
+                </>
+              ) : (
+                <button style={{ ...styles.createButton, flex:1, marginTop:0, opacity:loading?0.7:1, cursor:loading?"not-allowed":"pointer" }}
+                  onClick={createLanding} disabled={loading}>
+                  {loading ? "Creating..." : "Create Landing"}
+                </button>
+              )}
+            </div>
 
             {/* ======================
                 CREATED LANDINGS
@@ -989,18 +1077,26 @@ export default function LandingBuilder() {
                           </div>
                         </div>
 
-                        <button
-                          style={
-                            styles.copyButton
-                          }
-                          onClick={() =>
-                            copyUrl(
-                              item.landing_url
-                            )
-                          }
-                        >
-                          Copy
-                        </button>
+                        <div style={{ display:"flex", gap:8 }}>
+                          <button
+                            style={styles.copyButton}
+                            onClick={() => copyUrl(item.landing_url)}
+                          >
+                            Copy
+                          </button>
+                          <button
+                            style={{ border:"none", background:"rgba(59,130,246,0.15)", color:"#3b82f6", padding:"10px 14px", borderRadius:10, cursor:"pointer", fontWeight:700 }}
+                            onClick={() => startEdit(item)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            style={{ border:"none", background:"rgba(239,68,68,0.1)", color:"#ef4444", padding:"10px 10px", borderRadius:10, cursor:"pointer" }}
+                            onClick={() => deleteLanding(item.id, item.title)}
+                          >
+                            🗑
+                          </button>
+                        </div>
                       </div>
                     )
                   )}
