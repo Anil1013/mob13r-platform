@@ -256,7 +256,7 @@ export default function Offers() {
               <tr>
                 {[
                   "ID","Advertiser","Service","CPA ($)",
-                  "Geo","Carrier","Cap","Used","Remain",
+                  "Geo","Carrier","OTP Len","Cap","Used","Remain",
                   "Revenue ($)","Route","Control","Params"
                 ].map(h => (
                   <th key={h} style={styles.th}>{h}</th>
@@ -305,6 +305,18 @@ export default function Offers() {
                       defaultValue={o.carrier || ""}
                       onBlur={(e) =>
                         updateOffer(o.id, { carrier: e.target.value })
+                      }
+                    />
+                  </td>
+
+                  <td style={styles.td}>
+                    <input
+                      style={{...styles.input, width:50}}
+                      type="number"
+                      min="4" max="6"
+                      defaultValue={o.otp_length || 4}
+                      onBlur={(e) =>
+                        updateOffer(o.id, { otp_length: Number(e.target.value) })
                       }
                     />
                   </td>
