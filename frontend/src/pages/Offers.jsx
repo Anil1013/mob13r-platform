@@ -13,6 +13,7 @@ export default function Offers() {
   const [parameters, setParameters] = useState([]);
 
   const [offerForm, setOfferForm] = useState({
+    otp_length: 4,
     advertiser_id: "",
     service_name: "",
     cpa: "",
