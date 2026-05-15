@@ -1357,7 +1357,7 @@ const styles = {
     padding:
       "100px 20px",
 
-    background: background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+    background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
 
     color: "#fff",
   },
@@ -1550,7 +1550,7 @@ const styles = {
     padding: 14,
     borderRadius: 14,
     border: "1px solid rgba(255,255,255,0.1)",
-    background: background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+    background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
     color: "#fff",
     outline: "none",
   },
@@ -1635,7 +1635,7 @@ const styles = {
 
     border: "none",
 
-    background: background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+    background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
 
     color: "#fff",
 
@@ -1669,7 +1669,7 @@ const styles = {
   copyButton: {
     border: "none",
 
-    background: background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+    background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
 
     color: "#fff",
 
