@@ -3,8 +3,9 @@ export default function Navbar() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
   const user = JSON.parse(localStorage.getItem("user")) || { email: "Admin" };
+  const org = JSON.parse(localStorage.getItem("org")) || {};
   const logout = () => {
-    ["token","token_expiry","user","publisher_key","publisher_id","publisher_name"].forEach(k=>localStorage.removeItem(k));
+    ["token","token_expiry","user","publisher_key","publisher_id","publisher_name","org"].forEach(k=>localStorage.removeItem(k));
     navigate("/login", { replace: true });
   };
   if (!token) { navigate("/login", { replace: true }); return null; }
@@ -17,6 +18,8 @@ export default function Navbar() {
     { to:"/landing-builder", label:"Landing Builder" },
     { to:"/dashboard/dump", label:"Dump Logs" },
     { to:"/publisher/dashboard", label:"Pub Dashboard" },
+    { to:"/plans", label:"📦 Plans" },
+    { to:"/super-admin", label:"⚙️ Super Admin" },
   ];
   return (
     <>
@@ -33,6 +36,7 @@ export default function Navbar() {
             ))}
           </div>
           <div style={S.right}>
+            {org.name && <span style={S.orgBadge}>{org.name}</span>}
             <span style={S.email}>{user.email}</span>
             <button style={S.logout} onClick={logout}>Logout</button>
           </div>
@@ -52,6 +56,7 @@ const S = {
   link:{ padding:"6px 12px",borderRadius:8,fontSize:13,fontWeight:500,color:"#94a3b8",whiteSpace:"nowrap",textDecoration:"none" },
   active:{ color:"#f1f5f9",background:"rgba(59,130,246,0.12)" },
   right:{ display:"flex",alignItems:"center",gap:12,marginLeft:"auto" },
+  orgBadge:{ fontSize:11,color:"#22c55e",background:"rgba(34,197,94,0.1)",border:"1px solid rgba(34,197,94,0.2)",padding:"3px 10px",borderRadius:20,whiteSpace:"nowrap" },
   email:{ fontSize:12,color:"#475569",whiteSpace:"nowrap" },
   logout:{ padding:"7px 16px",borderRadius:8,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.08)",color:"#ef4444",cursor:"pointer",fontSize:13,fontWeight:500 },
 };
