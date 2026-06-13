@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Advertisers from "./pages/Advertisers";
@@ -11,17 +10,20 @@ import LandingBuilder from "./pages/LandingBuilder";
 import DynamicLanding from "./pages/DynamicLanding";
 import DumpDashboard from "./pages/DumpDashboard";
 import ProtectedRoute from "./auth/ProtectedRoute";
+import Signup from "./pages/saas/Signup";
+import Plans from "./pages/saas/Plans";
+import SuperAdmin from "./pages/saas/SuperAdmin";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-
-        {/* 🔓 PUBLIC */}
+        {/* PUBLIC */}
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
         <Route path="/landing/:id" element={<DynamicLanding />} />
 
-        {/* 🔐 PRIVATE */}
+        {/* PRIVATE */}
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/advertisers" element={<Advertisers />} />
@@ -31,12 +33,13 @@ export default function App() {
           <Route path="/landing-builder" element={<LandingBuilder />} />
           <Route path="/dashboard/dump" element={<DumpDashboard />} />
           <Route path="/publisher/dashboard" element={<PublisherDashboard />} />
+          <Route path="/plans" element={<Plans />} />
+          <Route path="/super-admin" element={<SuperAdmin />} />
         </Route>
 
         {/* Default */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
-
       </Routes>
     </BrowserRouter>
   );
