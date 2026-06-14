@@ -34,7 +34,7 @@ router.get("/admin/orgs", isSuperAdmin, async (req, res) => {
   }
 });
 
-// PATCH org (plan, status, limits)
+// PATCH org
 router.patch("/admin/orgs/:id", isSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -55,7 +55,43 @@ router.patch("/admin/orgs/:id", isSuperAdmin, async (req, res) => {
   }
 });
 
-// FREE APPROVE - one click
+// DELETE org - full cleanup
+router.delete("/admin/orgs/:id", isSuperAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    // Default org delete nahi hogi
+    if (Number(id) === 1) {
+      return res.status(400).json({ success: false, error: "Cannot delete default organization" });
+    }
+
+    await client.query("BEGIN");
+
+    // Delete all related data in order
+    await client.query(`DELETE FROM pin_sessions WHERE org_id = $1`, [id]);
+    await client.query(`DELETE FROM offer_parameters WHERE offer_id IN (SELECT id FROM offers WHERE org_id = $1)`, [id]);
+    await client.query(`DELETE FROM publisher_offers WHERE org_id = $1`, [id]);
+    await client.query(`DELETE FROM landing_pages WHERE org_id = $1`, [id]);
+    await client.query(`DELETE FROM offers WHERE org_id = $1`, [id]);
+    await client.query(`DELETE FROM publishers WHERE org_id = $1`, [id]);
+    await client.query(`DELETE FROM advertisers WHERE org_id = $1`, [id]);
+    await client.query(`DELETE FROM users WHERE org_id = $1`, [id]);
+    await client.query(`DELETE FROM organizations WHERE id = $1`, [id]);
+
+    await client.query("COMMIT");
+
+    res.json({ success: true, message: "Organization and all data deleted successfully" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("DELETE ORG ERROR:", err);
+    res.status(500).json({ success: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// FREE APPROVE
 router.post("/admin/orgs/:id/approve", isSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -68,11 +104,8 @@ router.post("/admin/orgs/:id/approve", isSuperAdmin, async (req, res) => {
     const l = limits[plan] || limits.pro;
     const result = await pool.query(`
       UPDATE organizations SET
-        status = 'active',
-        plan = $1,
-        max_publishers = $2,
-        max_offers = $3,
-        monthly_conversions = $4
+        status = 'active', plan = $1,
+        max_publishers = $2, max_offers = $3, monthly_conversions = $4
       WHERE id = $5 RETURNING *`,
       [plan, l.max_publishers, l.max_offers, l.monthly_conversions, id]
     );
