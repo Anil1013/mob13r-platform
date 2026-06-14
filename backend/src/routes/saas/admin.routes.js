@@ -1,6 +1,7 @@
 import express from "express";
 import pool from "../../db.js";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 
 const router = express.Router();
 
@@ -18,11 +19,25 @@ const isSuperAdmin = (req, res, next) => {
   }
 };
 
-// GET all orgs
+// GET all orgs with users
 router.get("/admin/orgs", isSuperAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT o.*, COUNT(u.id) as user_count
+      SELECT 
+        o.*,
+        COUNT(DISTINCT u.id) as user_count,
+        json_agg(json_build_object(
+          'id', u.id,
+          'email', u.email,
+          'role', u.role,
+          'status', u.status,
+          'created_at', u.created_at
+        )) as users,
+        (SELECT COUNT(*) FROM advertisers WHERE org_id = o.id) as total_advertisers,
+        (SELECT COUNT(*) FROM publishers WHERE org_id = o.id) as total_publishers,
+        (SELECT COUNT(*) FROM offers WHERE org_id = o.id) as total_offers,
+        (SELECT COUNT(*) FROM pin_sessions WHERE org_id = o.id) as total_sessions,
+        (SELECT COUNT(*) FROM pin_sessions WHERE org_id = o.id AND status = 'VERIFIED') as total_conversions
       FROM organizations o
       LEFT JOIN users u ON u.org_id = o.id
       GROUP BY o.id
@@ -55,20 +70,34 @@ router.patch("/admin/orgs/:id", isSuperAdmin, async (req, res) => {
   }
 });
 
-// DELETE org - full cleanup
+// RESET PASSWORD
+router.patch("/admin/users/:userId/reset-password", isSuperAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { new_password } = req.body;
+    if (!new_password || new_password.length < 6) {
+      return res.status(400).json({ error: "Password min 6 characters" });
+    }
+    const password_hash = await bcrypt.hash(new_password, 10);
+    await pool.query(
+      `UPDATE users SET password_hash = $1 WHERE id = $2`,
+      [password_hash, userId]
+    );
+    res.json({ success: true, message: "Password reset successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE org
 router.delete("/admin/orgs/:id", isSuperAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-
-    // Default org delete nahi hogi
     if (Number(id) === 1) {
       return res.status(400).json({ success: false, error: "Cannot delete default organization" });
     }
-
     await client.query("BEGIN");
-
-    // Delete all related data in order
     await client.query(`DELETE FROM pin_sessions WHERE org_id = $1`, [id]);
     await client.query(`DELETE FROM offer_parameters WHERE offer_id IN (SELECT id FROM offers WHERE org_id = $1)`, [id]);
     await client.query(`DELETE FROM publisher_offers WHERE org_id = $1`, [id]);
@@ -78,13 +107,10 @@ router.delete("/admin/orgs/:id", isSuperAdmin, async (req, res) => {
     await client.query(`DELETE FROM advertisers WHERE org_id = $1`, [id]);
     await client.query(`DELETE FROM users WHERE org_id = $1`, [id]);
     await client.query(`DELETE FROM organizations WHERE id = $1`, [id]);
-
     await client.query("COMMIT");
-
-    res.json({ success: true, message: "Organization and all data deleted successfully" });
+    res.json({ success: true, message: "Organization deleted successfully" });
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("DELETE ORG ERROR:", err);
     res.status(500).json({ success: false, error: err.message });
   } finally {
     client.release();
@@ -103,10 +129,9 @@ router.post("/admin/orgs/:id/approve", isSuperAdmin, async (req, res) => {
     };
     const l = limits[plan] || limits.pro;
     const result = await pool.query(`
-      UPDATE organizations SET
-        status = 'active', plan = $1,
-        max_publishers = $2, max_offers = $3, monthly_conversions = $4
-      WHERE id = $5 RETURNING *`,
+      UPDATE organizations SET status='active', plan=$1,
+        max_publishers=$2, max_offers=$3, monthly_conversions=$4
+      WHERE id=$5 RETURNING *`,
       [plan, l.max_publishers, l.max_offers, l.monthly_conversions, id]
     );
     res.json({ success: true, data: result.rows[0] });
