@@ -1,15 +1,14 @@
 import express from "express";
 import pool from "../db.js";
+import orgAuth from "../middleware/orgAuth.js";
 
 const router = express.Router();
 
-/**
- * GET all advertisers
- */
-router.get("/", async (req, res) => {
+router.get("/", orgAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM advertisers ORDER BY created_at DESC"
+      "SELECT * FROM advertisers WHERE org_id = $1 ORDER BY created_at DESC",
+      [req.orgId]
     );
     res.json(result.rows);
   } catch (err) {
@@ -17,44 +16,27 @@ router.get("/", async (req, res) => {
   }
 });
 
-/**
- * POST create advertiser
- */
-router.post("/", async (req, res) => {
+router.post("/", orgAuth, async (req, res) => {
   const { name, email } = req.body;
-
   try {
     const result = await pool.query(
-      `INSERT INTO advertisers (name, email)
-       VALUES ($1, $2)
-       RETURNING *`,
-      [name, email]
+      `INSERT INTO advertisers (name, email, org_id) VALUES ($1, $2, $3) RETURNING *`,
+      [name, email, req.orgId]
     );
-
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
 });
 
-/**
- * PATCH toggle advertiser status
- */
-router.patch("/:id/toggle", async (req, res) => {
+router.patch("/:id/toggle", orgAuth, async (req, res) => {
   const { id } = req.params;
-
   try {
     const result = await pool.query(
-      `UPDATE advertisers
-       SET status = CASE
-         WHEN status = 'active' THEN 'inactive'
-         ELSE 'active'
-       END
-       WHERE id = $1
-       RETURNING *`,
-      [id]
+      `UPDATE advertisers SET status = CASE WHEN status = 'active' THEN 'inactive' ELSE 'active' END
+       WHERE id = $1 AND org_id = $2 RETURNING *`,
+      [id, req.orgId]
     );
-
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ message: "Server error" });
