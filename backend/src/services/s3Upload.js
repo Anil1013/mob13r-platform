@@ -6,7 +6,7 @@ import fs from "fs/promises";
 
 const BUCKET = process.env.S3_BUCKET || "dashboard.mob13r.com";
 const REGION = process.env.AWS_REGION || "ap-south-1";
-const S3_BASE_URL = `https://${BUCKET}.s3.${REGION}.amazonaws.com`;
+const S3_BASE_URL = `https://s3.${REGION}.amazonaws.com/${BUCKET}`;
 
 const getS3Client = () => {
   // Agar environment variables hain toh use karein (Local development ke liye)
