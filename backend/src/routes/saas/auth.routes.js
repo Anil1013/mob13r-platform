@@ -17,8 +17,8 @@ router.post("/signup", async (req, res) => {
       return res.status(400).json({ success: false, message: "Email already registered" });
     const slug = company_name.toLowerCase().replace(/[^a-z0-9]/g, "-") + "-" + Date.now();
     const orgResult = await pool.query(
-      `INSERT INTO organizations (name, slug, plan, status, max_publishers, max_offers, monthly_conversions)
-       VALUES ($1, $2, 'starter', 'active', 5, 10, 1000) RETURNING *`,
+      `INSERT INTO organizations (name, slug, plan, status, max_publishers, max_offers, monthly_conversions, trial_ends_at)
+       VALUES ($1, $2, 'starter', 'active', 5, 15, 2500, NOW() + INTERVAL '7 days') RETURNING *`,
       [company_name, slug]
     );
     const org = orgResult.rows[0];

@@ -37,7 +37,7 @@ router.get("/admin/orgs", isSuperAdmin, async (req, res) => {
         (SELECT COUNT(*) FROM publishers WHERE org_id = o.id) as total_publishers,
         (SELECT COUNT(*) FROM offers WHERE org_id = o.id) as total_offers,
         (SELECT COUNT(*) FROM pin_sessions WHERE org_id = o.id) as total_sessions,
-        (SELECT COUNT(*) FROM pin_sessions WHERE org_id = o.id AND status = 'VERIFIED') as total_conversions
+        (SELECT COUNT(*) FROM pin_sessions WHERE org_id = o.id AND status IN ('VERIFIED','SCRUBBED','CAP_REACHED') AND parent_session_token IS NOT NULL) as total_conversions
       FROM organizations o
       LEFT JOIN users u ON u.org_id = o.id
       GROUP BY o.id
@@ -53,7 +53,20 @@ router.get("/admin/orgs", isSuperAdmin, async (req, res) => {
 router.patch("/admin/orgs/:id", isSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { plan, status, max_publishers, max_offers, monthly_conversions } = req.body;
+    let { plan, status, max_publishers, max_offers, monthly_conversions } = req.body;
+
+    // Auto-apply plan limits when plan changes
+    const planLimits = {
+      starter: { max_publishers: 5, max_offers: 15, monthly_conversions: 2500 },
+      growth:  { max_publishers: 25, max_offers: 50, monthly_conversions: 7500 },
+      pro:     { max_publishers: 999, max_offers: 999, monthly_conversions: 999999 },
+    };
+    if (plan && planLimits[plan]) {
+      max_publishers = planLimits[plan].max_publishers;
+      max_offers = planLimits[plan].max_offers;
+      monthly_conversions = planLimits[plan].monthly_conversions;
+    }
+
     const result = await pool.query(`
       UPDATE organizations SET
         plan = COALESCE($1, plan),
