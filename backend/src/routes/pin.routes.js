@@ -401,6 +401,28 @@ router.all("/pin/verify", async (req, res) => {
     }
 
     let finalStatus = advMapped.isSuccess ? "VERIFIED" : "OTP_FAILED";
+    // Monthly conversion limit check (plan-based, via publisher org)
+    if (advMapped.isSuccess && publisher && publisher.org_id) {
+      const orgLimitRes = await pool.query(
+        `SELECT monthly_conversions FROM organizations WHERE id = $1`,
+        [publisher.org_id]
+      );
+      if (orgLimitRes.rows.length > 0) {
+        const monthCountRes = await pool.query(
+          `SELECT COUNT(*)::int AS count FROM pin_sessions
+           WHERE org_id = $1
+           AND status IN ('VERIFIED','SCRUBBED','CAP_REACHED')
+           AND parent_session_token IS NOT NULL
+           AND created_at >= date_trunc('month', NOW())`,
+          [publisher.org_id]
+        );
+        if (monthCountRes.rows[0].count >= orgLimitRes.rows[0].monthly_conversions) {
+          finalStatus = "CAP_REACHED";
+          advMapped.isSuccess = false;
+        }
+      }
+    }
+
     let isCredited = false;
     let creditedAt = null;
     let triggerHold = false;

@@ -59,6 +59,18 @@ router.post("/", orgAuth, async (req, res) => {
     if (!advertiser_id || !service_name) {
       return res.status(400).json({ status: "FAILED", message: "Missing required fields" });
     }
+
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS count FROM offers WHERE org_id = $1`,
+      [req.orgId]
+    );
+    if (countRes.rows[0].count >= req.org.max_offers) {
+      return res.status(403).json({
+        status: "LIMIT_REACHED",
+        message: `Offer limit reached (${req.org.max_offers}). Upgrade your plan to add more.`
+      });
+    }
+
     const result = await pool.query(
       `INSERT INTO offers (advertiser_id, service_name, cpa, daily_cap, geo, carrier, service_type,
         today_hits, last_reset_date, status, has_antifraud, has_status_check, af_trigger_point,

@@ -27,6 +27,18 @@ router.post("/", orgAuth, async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ status: "FAILED", message: "Publisher name required" });
+
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS count FROM publishers WHERE org_id = $1`,
+      [req.orgId]
+    );
+    if (countRes.rows[0].count >= req.org.max_publishers) {
+      return res.status(403).json({
+        status: "LIMIT_REACHED",
+        message: `Publisher limit reached (${req.org.max_publishers}). Upgrade your plan to add more.`
+      });
+    }
+
     const apiKey = generatePublisherKey();
     const result = await pool.query(
       `INSERT INTO publishers (name, api_key, status, org_id) VALUES ($1, $2, 'active', $3) RETURNING *`,
