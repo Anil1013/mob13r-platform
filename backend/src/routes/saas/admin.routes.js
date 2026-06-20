@@ -143,7 +143,8 @@ router.post("/admin/orgs/:id/approve", isSuperAdmin, async (req, res) => {
     const l = limits[plan] || limits.pro;
     const result = await pool.query(`
       UPDATE organizations SET status='active', plan=$1,
-        max_publishers=$2, max_offers=$3, monthly_conversions=$4
+        max_publishers=$2, max_offers=$3, monthly_conversions=$4,
+        plan_started_at=NOW(), notified_5day=FALSE, notified_2day=FALSE
       WHERE id=$5 RETURNING *`,
       [plan, l.max_publishers, l.max_offers, l.monthly_conversions, id]
     );

@@ -11,7 +11,7 @@ export default async function orgAuth(req, res, next) {
     req.orgId = decoded.org_id || 1;
     if (decoded.org_id) {
       const org = await pool.query(
-        "SELECT * FROM organizations WHERE id = $1 AND status = 'active'",
+        "SELECT * FROM organizations WHERE id = $1",
         [decoded.org_id]
       );
       if (!org.rows.length) {
