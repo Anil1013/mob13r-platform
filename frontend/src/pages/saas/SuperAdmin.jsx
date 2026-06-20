@@ -159,6 +159,16 @@ export default function SuperAdmin() {
                   <div style={{color:"#475569"}}>Max Offers: <span style={{color:"#f1f5f9"}}>{selectedOrg.max_offers}</span></div>
                   <div style={{color:"#475569"}}>Conversions/mo: <span style={{color:"#f1f5f9"}}>{selectedOrg.monthly_conversions}</span></div>
                   <div style={{color:"#475569"}}>Created: <span style={{color:"#f1f5f9"}}>{new Date(selectedOrg.created_at).toLocaleDateString()}</span></div>
+                  {selectedOrg.plan === "starter" && selectedOrg.trial_ends_at && (
+                    <div style={{color:"#475569"}}>
+                      Trial: {(() => {
+                        const daysLeft = Math.ceil((new Date(selectedOrg.trial_ends_at) - new Date()) / (1000*60*60*24));
+                        return daysLeft > 0
+                          ? <span style={{color:"#22c55e"}}>{daysLeft} days left</span>
+                          : <span style={{color:"#ef4444"}}>Expired</span>;
+                      })()}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -181,7 +191,7 @@ export default function SuperAdmin() {
         <div style={S.tableWrap}>
           <table style={S.table}>
             <thead>
-              <tr>{["ID","Org Name","Email","Plan","Status","Publishers","Offers","Conversions/mo","Total Sessions","Actions"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr>
+              <tr>{["ID","Org Name","Email","Plan","Trial","Status","Publishers","Offers","Conversions/mo","Total Sessions","Actions"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {loading ? (
@@ -204,6 +214,18 @@ export default function SuperAdmin() {
                         <option value="growth">Growth</option>
                         <option value="pro">Pro</option>
                       </select>
+                    </td>
+                    <td style={S.td}>
+                      {org.plan === "starter" && org.trial_ends_at ? (
+                        (() => {
+                          const daysLeft = Math.ceil((new Date(org.trial_ends_at) - new Date()) / (1000*60*60*24));
+                          return daysLeft > 0
+                            ? <span style={{color:"#22c55e",fontSize:12,fontWeight:600}}>🟢 {daysLeft}d left</span>
+                            : <span style={{color:"#ef4444",fontSize:12,fontWeight:600}}>🔴 Expired</span>;
+                        })()
+                      ) : (
+                        <span style={{color:"#475569",fontSize:12}}>—</span>
+                      )}
                     </td>
                     <td style={S.td}>
                       <select defaultValue={org.status} onChange={e => updateOrg(org.id, { status: e.target.value })}
