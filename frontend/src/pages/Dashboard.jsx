@@ -130,93 +130,159 @@ export default function Dashboard() {
   return (
     <>
       <Navbar />
-      <div style={{ padding: "20px", fontFamily: "Lora, serif" }}>
-        <h1>Traffic Dashboard</h1>
-        <div style={{ marginBottom: "10px" }}>
-          <button onClick={() => setView("summary")}>Summary</button>
-          <button onClick={() => setView("daily")}>Daily</button>
-        </div>
-        {error ? <p style={{ color: "red" }}>{error}</p> : null}
-        <div style={{ display:"flex", gap:"10px", marginBottom:"15px", flexWrap:"wrap" }}>
-          <div style={{ background:"#e8f1ff", padding:"8px" }}>Requests <b>{stats.total_requests || 0}</b></div>
-          <div style={{ background:"#e7fff3", padding:"8px" }}>OTP Sent <b>{stats.otp_sent || 0}</b></div>
-          <div style={{ background:"#fff3e8", padding:"8px" }}>Conversions <b>{stats.conversions || 0}</b></div>
-          <div style={{ background:"#f3e8ff", padding:"8px" }}>Last Hour <b>{stats.last_hour_requests || 0}</b></div>
-        </div>
-        <div style={{ marginBottom:"15px", display:"flex", gap:"8px", flexWrap:"wrap" }}>
-          <input type="date" value={from} onChange={e => setFrom(e.target.value)} />
-          <input type="date" value={to} onChange={e => setTo(e.target.value)} />
-          <select value={advertiser} onChange={e => setAdvertiser(e.target.value)}>
-            <option value="">All Advertisers</option>
-            {filters.advertisers.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-          <select value={publisher} onChange={e => setPublisher(e.target.value)}>
-            <option value="">All Publishers</option>
-            {filters.publishers.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-          <select value={geo} onChange={e => setGeo(e.target.value)}>
-            <option value="">All Geo</option>
-            {filters.geos.map(item => <option key={item} value={item}>{item}</option>)}
-          </select>
-          <select value={carrier} onChange={e => setCarrier(e.target.value)}>
-            <option value="">All Carrier</option>
-            {filters.carriers.map(item => <option key={item} value={item}>{item}</option>)}
-          </select>
-          <select value={offer} onChange={e => setOffer(e.target.value)}>
-            <option value="">All Offers</option>
-            {filters.offers.map(item => <option key={item.id} value={item.id}>{item.offer_name}</option>)}
-          </select>
-          <button onClick={loadReport} disabled={loading}>{loading ? "Loading..." : "Apply"}</button>
-          <button onClick={exportCSV}>Export CSV</button>
-        </div>
-        <div style={{ overflowX: "auto" }}>
-          {data.length === 0 && !loading ? (
-            <div style={{ textAlign:"center", padding:60, color:"#94a3b8", fontSize:16 }}>
-              📊 No data found for selected filters.<br/>
-              <span style={{ fontSize:13, marginTop:8, display:"block" }}>Add advertisers, offers and publishers to get started.</span>
+      <div style={S.page}>
+        <div style={S.glow1}/><div style={S.glow2}/>
+        <div style={S.inner}>
+          <h1 style={S.title}>Traffic Dashboard</h1>
+
+          <div style={S.viewTabs}>
+            <button
+              onClick={() => setView("summary")}
+              style={{...S.tabBtn, ...(view==="summary" ? S.tabBtnActive : {})}}
+            >Summary</button>
+            <button
+              onClick={() => setView("daily")}
+              style={{...S.tabBtn, ...(view==="daily" ? S.tabBtnActive : {})}}
+            >Daily</button>
+          </div>
+
+          {error ? <p style={S.errorText}>{error}</p> : null}
+
+          <div style={S.statsRow}>
+            <div style={{...S.statCard, borderLeft:"3px solid #3b82f6"}}>
+              <div style={S.statLabel}>Requests</div>
+              <div style={{...S.statValue, color:"#3b82f6"}}>{stats.total_requests || 0}</div>
             </div>
-          ) : (
-            <table border="1" cellPadding="8" width="100%" style={{ textAlign:"center" }}>
-              <thead>
-                <tr>
-                  {view === "daily" && <th>Date</th>}
-                  <th>Advertiser</th><th>Offer</th><th>Publisher</th><th>Geo</th><th>Carrier</th>
-                  <th>CPA</th><th>Publisher CPA</th><th>Cap</th><th>Publisher Cap</th>
-                  <th>Pin Req</th><th>Unique Req</th><th>Pin Sent</th><th>Unique Sent</th>
-                  <th>Verify Req</th><th>Unique Verify</th><th>Verified</th><th>Publisher Verified</th>
-                  <th>CR %</th><th>Publisher CR</th><th>Revenue</th><th>Publisher Revenue</th>
-                  <th>Profit</th><th>Last Pin Gen</th><th>Last Verification</th><th>Last Success Verification</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((row, i) => (
-                  <tr key={`${row.offer_id || "offer"}-${row.publisher_id || "pub"}-${i}`}>
-                    {view === "daily" && <td>{formatDate(row.date)}</td>}
-                    <td>{row.advertiser_name}</td><td>{row.offer_name}</td><td>{row.publisher_name}</td>
-                    <td>{row.geo}</td><td>{row.carrier}</td><td>{row.cpa}</td><td>{row.publisher_cpa}</td>
-                    <td>{row.cap}</td><td>{row.publisher_cap}</td><td>{row.pin_req}</td><td>{row.unique_req}</td>
-                    <td>{row.pin_sent}</td><td>{row.unique_sent}</td><td>{row.verify_req}</td><td>{row.unique_verify}</td>
-                    <td>{row.verified}</td><td>{row.publisher_verified}</td>
-                    <td>{row.cr_percent}%</td><td>{row.publisher_cr}%</td>
-                    <td>{money(row.revenue)}</td><td>{money(row.publisher_revenue)}</td>
-                    <td style={{ color: toNumber(row.profit) >= 0 ? "green" : "red" }}>{money(row.profit)}</td>
-                    <td>{formatDate(row.last_pin_gen)}</td><td>{formatDate(row.last_verification)}</td>
-                    <td>{formatDate(row.last_success_verification)}</td>
-                  </tr>
-                ))}
-                <tr>
-                  <td colSpan={view === "daily" ? 10 : 9}><b>TOTAL</b></td>
-                  <td>{total.pin_req}</td><td>{total.unique_req}</td><td>{total.pin_sent}</td><td>{total.unique_sent}</td>
-                  <td>{total.verify_req}</td><td>{total.unique_verify}</td><td>{total.verified}</td><td>{total.publisher_verified}</td>
-                  <td>-</td><td>-</td><td>{money(total.revenue)}</td><td>{money(total.publisher_revenue)}</td>
-                  <td style={{ color: total.profit >= 0 ? "green" : "red" }}>{money(total.profit)}</td>
-                  <td colSpan="3" />
-                </tr>
-              </tbody>
-            </table>
-          )}
+            <div style={{...S.statCard, borderLeft:"3px solid #22c55e"}}>
+              <div style={S.statLabel}>OTP Sent</div>
+              <div style={{...S.statValue, color:"#22c55e"}}>{stats.otp_sent || 0}</div>
+            </div>
+            <div style={{...S.statCard, borderLeft:"3px solid #f59e0b"}}>
+              <div style={S.statLabel}>Conversions</div>
+              <div style={{...S.statValue, color:"#f59e0b"}}>{stats.conversions || 0}</div>
+            </div>
+            <div style={{...S.statCard, borderLeft:"3px solid #8b5cf6"}}>
+              <div style={S.statLabel}>Last Hour</div>
+              <div style={{...S.statValue, color:"#8b5cf6"}}>{stats.last_hour_requests || 0}</div>
+            </div>
+          </div>
+
+          <div style={S.filterBar}>
+            <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={S.input} />
+            <input type="date" value={to} onChange={e => setTo(e.target.value)} style={S.input} />
+            <select value={advertiser} onChange={e => setAdvertiser(e.target.value)} style={S.select}>
+              <option value="">All Advertisers</option>
+              {filters.advertisers.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+            <select value={publisher} onChange={e => setPublisher(e.target.value)} style={S.select}>
+              <option value="">All Publishers</option>
+              {filters.publishers.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+            <select value={geo} onChange={e => setGeo(e.target.value)} style={S.select}>
+              <option value="">All Geo</option>
+              {filters.geos.map(item => <option key={item} value={item}>{item}</option>)}
+            </select>
+            <select value={carrier} onChange={e => setCarrier(e.target.value)} style={S.select}>
+              <option value="">All Carrier</option>
+              {filters.carriers.map(item => <option key={item} value={item}>{item}</option>)}
+            </select>
+            <select value={offer} onChange={e => setOffer(e.target.value)} style={S.select}>
+              <option value="">All Offers</option>
+              {filters.offers.map(item => <option key={item.id} value={item.id}>{item.offer_name}</option>)}
+            </select>
+            <button onClick={loadReport} disabled={loading} style={S.applyBtn}>
+              {loading ? "Loading..." : "Apply"}
+            </button>
+            <button onClick={exportCSV} style={S.exportBtn}>Export CSV</button>
+          </div>
+
+          <div style={S.tableWrap}>
+            {data.length === 0 && !loading ? (
+              <div style={S.emptyState}>
+                📊 No data found for selected filters.
+                <span style={S.emptySub}>Add advertisers, offers and publishers to get started.</span>
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={S.table}>
+                  <thead>
+                    <tr>
+                      {view === "daily" && <th style={S.th}>Date</th>}
+                      <th style={S.th}>Advertiser</th><th style={S.th}>Offer</th><th style={S.th}>Publisher</th>
+                      <th style={S.th}>Geo</th><th style={S.th}>Carrier</th>
+                      <th style={S.th}>CPA</th><th style={S.th}>Publisher CPA</th><th style={S.th}>Cap</th><th style={S.th}>Publisher Cap</th>
+                      <th style={S.th}>Pin Req</th><th style={S.th}>Unique Req</th><th style={S.th}>Pin Sent</th><th style={S.th}>Unique Sent</th>
+                      <th style={S.th}>Verify Req</th><th style={S.th}>Unique Verify</th><th style={S.th}>Verified</th><th style={S.th}>Publisher Verified</th>
+                      <th style={S.th}>CR %</th><th style={S.th}>Publisher CR</th><th style={S.th}>Revenue</th><th style={S.th}>Publisher Revenue</th>
+                      <th style={S.th}>Profit</th><th style={S.th}>Last Pin Gen</th><th style={S.th}>Last Verification</th><th style={S.th}>Last Success Verification</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.map((row, i) => (
+                      <tr key={`${row.offer_id || "offer"}-${row.publisher_id || "pub"}-${i}`} style={S.tr}>
+                        {view === "daily" && <td style={S.td}>{formatDate(row.date)}</td>}
+                        <td style={S.td}>{row.advertiser_name}</td><td style={S.td}>{row.offer_name}</td><td style={S.td}>{row.publisher_name}</td>
+                        <td style={S.td}>{row.geo}</td><td style={S.td}>{row.carrier}</td><td style={S.td}>{row.cpa}</td><td style={S.td}>{row.publisher_cpa}</td>
+                        <td style={S.td}>{row.cap}</td><td style={S.td}>{row.publisher_cap}</td><td style={S.td}>{row.pin_req}</td><td style={S.td}>{row.unique_req}</td>
+                        <td style={S.td}>{row.pin_sent}</td><td style={S.td}>{row.unique_sent}</td><td style={S.td}>{row.verify_req}</td><td style={S.td}>{row.unique_verify}</td>
+                        <td style={S.td}>{row.verified}</td><td style={S.td}>{row.publisher_verified}</td>
+                        <td style={S.td}>{row.cr_percent}%</td><td style={S.td}>{row.publisher_cr}%</td>
+                        <td style={S.td}>{money(row.revenue)}</td><td style={S.td}>{money(row.publisher_revenue)}</td>
+                        <td style={{...S.td, color: toNumber(row.profit) >= 0 ? "#22c55e" : "#ef4444", fontWeight:600}}>{money(row.profit)}</td>
+                        <td style={S.td}>{formatDate(row.last_pin_gen)}</td><td style={S.td}>{formatDate(row.last_verification)}</td>
+                        <td style={S.td}>{formatDate(row.last_success_verification)}</td>
+                      </tr>
+                    ))}
+                    <tr style={S.totalRow}>
+                      <td colSpan={view === "daily" ? 10 : 9} style={S.td}><b>TOTAL</b></td>
+                      <td style={S.td}>{total.pin_req}</td><td style={S.td}>{total.unique_req}</td><td style={S.td}>{total.pin_sent}</td><td style={S.td}>{total.unique_sent}</td>
+                      <td style={S.td}>{total.verify_req}</td><td style={S.td}>{total.unique_verify}</td><td style={S.td}>{total.verified}</td><td style={S.td}>{total.publisher_verified}</td>
+                      <td style={S.td}>-</td><td style={S.td}>-</td><td style={S.td}>{money(total.revenue)}</td><td style={S.td}>{money(total.publisher_revenue)}</td>
+                      <td style={{...S.td, color: total.profit >= 0 ? "#22c55e" : "#ef4444", fontWeight:700}}>{money(total.profit)}</td>
+                      <td colSpan="3" style={S.td} />
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>
   );
 }
+
+const S = {
+  page: { minHeight:"100vh", background:"#050810", padding:"24px 24px 60px", position:"relative", overflow:"hidden", fontFamily:"Lora, serif" },
+  glow1: { position:"absolute", width:600, height:600, borderRadius:"50%", background:"radial-gradient(circle,rgba(59,130,246,0.07) 0%,transparent 70%)", top:-200, left:-200, pointerEvents:"none" },
+  glow2: { position:"absolute", width:400, height:400, borderRadius:"50%", background:"radial-gradient(circle,rgba(139,92,246,0.07) 0%,transparent 70%)", bottom:-100, right:0, pointerEvents:"none" },
+  inner: { maxWidth:1400, margin:"0 auto", position:"relative", zIndex:1 },
+  title: { color:"#f1f5f9", fontSize:28, fontWeight:700, marginBottom:20, fontFamily:"Syne,sans-serif" },
+
+  viewTabs: { display:"flex", gap:8, marginBottom:16 },
+  tabBtn: { padding:"8px 18px", borderRadius:10, border:"1px solid rgba(255,255,255,0.08)", background:"#0d1326", color:"#94a3b8", fontSize:13, fontWeight:600, cursor:"pointer" },
+  tabBtnActive: { background:"#3b82f6", color:"#fff", border:"1px solid #3b82f6" },
+
+  errorText: { color:"#ef4444", fontSize:13, marginBottom:12 },
+
+  statsRow: { display:"flex", gap:14, marginBottom:20, flexWrap:"wrap" },
+  statCard: { background:"#0d1326", border:"1px solid rgba(255,255,255,0.07)", borderRadius:12, padding:"14px 20px", minWidth:140 },
+  statLabel: { color:"#475569", fontSize:12, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:6 },
+  statValue: { fontSize:24, fontWeight:700 },
+
+  filterBar: { marginBottom:20, display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" },
+  input: { background:"#0d1326", border:"1px solid rgba(255,255,255,0.08)", color:"#f1f5f9", padding:"8px 12px", borderRadius:10, fontSize:13, colorScheme:"dark" },
+  select: { background:"#0d1326", border:"1px solid rgba(255,255,255,0.08)", color:"#f1f5f9", padding:"8px 12px", borderRadius:10, fontSize:13, cursor:"pointer" },
+  applyBtn: { background:"#3b82f6", color:"#fff", border:"none", padding:"9px 20px", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer" },
+  exportBtn: { background:"#0d1326", border:"1px solid rgba(255,255,255,0.08)", color:"#94a3b8", padding:"9px 20px", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer" },
+
+  tableWrap: { background:"#0d1326", border:"1px solid rgba(255,255,255,0.07)", borderRadius:16, overflow:"hidden" },
+  emptyState: { textAlign:"center", padding:60, color:"#94a3b8", fontSize:16 },
+  emptySub: { fontSize:13, marginTop:8, display:"block", color:"#475569" },
+
+  table: { width:"100%", borderCollapse:"collapse", fontSize:13 },
+  th: { padding:"12px 14px", textAlign:"left", fontSize:11, fontWeight:600, color:"#475569", textTransform:"uppercase", letterSpacing:"0.05em", borderBottom:"1px solid rgba(255,255,255,0.08)", background:"#0a0f1e", whiteSpace:"nowrap" },
+  td: { padding:"10px 14px", color:"#cbd5e1", borderBottom:"1px solid rgba(255,255,255,0.04)", whiteSpace:"nowrap" },
+  tr: { transition:"background 0.15s" },
+  totalRow: { background:"#0a0f1e" },
+};
