@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Navbar from "../../components/Navbar";
 const API_BASE = "https://backend.mob13r.com";
 const PLANS = [
   { id:"starter", name:"Starter", price:49, publishers:5, offers:15, conversions:"2,500", monthly_conversions:2500, max_publishers:5, max_offers:15, features:["5 Publishers","15 Offers","2.5K Conversions/mo","Basic Dashboard","Landing Builder"], color:"#3b82f6" },
@@ -36,8 +37,10 @@ export default function Plans() {
     }
   };
   return (
-    <div style={S.page}>
-      <div style={S.glow1}/><div style={S.glow2}/>
+    <>
+      <Navbar />
+      <div style={S.page}>
+        <div style={S.glow1}/><div style={S.glow2}/>
       {toast && (
         <div style={{position:"fixed",top:24,right:24,zIndex:9999,background:toast.type==="error"?"rgba(239,68,68,0.15)":"rgba(34,197,94,0.15)",border:`1px solid ${toast.type==="error"?"rgba(239,68,68,0.3)":"rgba(34,197,94,0.3)"}`,color:toast.type==="error"?"#ef4444":"#22c55e",padding:"12px 20px",borderRadius:12,fontSize:13,fontWeight:500}}>
           {toast.msg}
@@ -103,8 +106,9 @@ export default function Plans() {
         <div style={{textAlign:"center",marginTop:24}}>
           <a href="/dashboard" style={{color:"#475569",fontSize:14,textDecoration:"none"}}>← Back to Dashboard</a>
         </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 const S = {
