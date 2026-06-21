@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Navbar from "../components/Navbar";
+import { btn, input, table, th, td, page } from "../styles/shared.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://backend.mob13r.com";
 
@@ -76,62 +77,91 @@ export default function PublisherDashboard() {
     } catch { alert("Failed to load hourly data"); }
   };
 
-  if (loading) return <p style={{padding:20}}>Loading...</p>;
+  if (loading) return (
+    <>
+      <Navbar />
+      <div style={page}><p style={{color:"#94a3b8",padding:20}}>Loading...</p></div>
+    </>
+  );
 
   return (
     <>
       <Navbar />
-      <div style={{padding:20}}>
-        <h2>Publisher Dashboard - <span style={{color:"#2563eb"}}>{publisherName}</span></h2>
-        {error && <div style={{background:"#fee2e2",border:"1px solid #ef4444",borderRadius:6,padding:"10px 16px",marginBottom:12,color:"#b91c1c",fontWeight:500}}>{error}</div>}
-        <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
-          <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} />
-          <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} />
-          <button onClick={fetchData}>Apply</button>
-          <select value={filterOffer} onChange={e=>setFilterOffer(e.target.value)}>
+      <div style={page}>
+        <h2 style={{fontFamily:"Syne,sans-serif",fontSize:24,fontWeight:700,color:"#f1f5f9",marginBottom:20}}>
+          Publisher Dashboard — <span style={{color:"#60a5fa"}}>{publisherName}</span>
+        </h2>
+
+        {error && (
+          <div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:10,padding:"10px 16px",marginBottom:16,color:"#f87171",fontWeight:500,fontSize:13}}>
+            {error}
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap",alignItems:"center"}}>
+          <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} style={{...input,width:"auto",colorScheme:"dark"}} />
+          <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} style={{...input,width:"auto",colorScheme:"dark"}} />
+          <button onClick={fetchData} style={btn}>Apply</button>
+          <select value={filterOffer} onChange={e=>setFilterOffer(e.target.value)} style={{...input,width:"auto"}}>
             <option value="">All Offers</option>{offerOptions.map(o=><option key={o}>{o}</option>)}
           </select>
-          <select value={filterGeo} onChange={e=>setFilterGeo(e.target.value)}>
+          <select value={filterGeo} onChange={e=>setFilterGeo(e.target.value)} style={{...input,width:"auto"}}>
             <option value="">All Geo</option>{geoOptions.map(g=><option key={g}>{g}</option>)}
           </select>
-          <select value={filterCarrier} onChange={e=>setFilterCarrier(e.target.value)}>
+          <select value={filterCarrier} onChange={e=>setFilterCarrier(e.target.value)} style={{...input,width:"auto"}}>
             <option value="">All Carrier</option>{carrierOptions.map(c=><option key={c}>{c}</option>)}
           </select>
         </div>
-        <div style={{overflowX:"auto"}}>
-        <table border="1" cellPadding="8" width="100%" style={{textAlign:"center",minWidth:1200}}>
-          <thead><tr>{["Date","Offer","Geo","Carrier","CPA","Cap","Pin Req","Unique Req","Pin Sent","Unique Sent","Verify Req","Unique Verify","Verified","CR %","Revenue","Last Pin Gen","Last Verification","Last Success"].map(h=><th key={h}>{h}</th>)}</tr></thead>
-          <tbody>
-            {filteredRows.map((r,i)=>(
-              <tr key={i}>
-                <td>{fmt(r.stat_date)}</td>
-                <td><button onClick={()=>openHourly(r)}>{r.offer}</button></td>
-                <td>{r.geo}</td><td>{r.carrier}</td><td>{r.cpa}</td><td>{r.cap}</td>
-                <td>{r.pin_request_count}</td><td>{r.unique_pin_request_count}</td>
-                <td>{r.pin_send_count}</td><td>{r.unique_pin_sent}</td>
-                <td>{r.pin_validation_request_count}</td><td>{r.unique_pin_validation_request_count}</td>
-                <td>{r.unique_pin_verified}</td><td>{r.cr}%</td><td>${r.revenue}</td>
-                <td>{fmtDT(r.last_pin_gen_date)}</td>
-                <td>{fmtDT(r.last_pin_verification_date)}</td>
-                <td>{fmtDT(r.last_success_pin_verification_date)}</td>
-              </tr>
-            ))}
-            <tr style={{fontWeight:"bold",background:"#f3f4f6"}}>
-              <td colSpan="6">TOTAL</td>
-              <td>{totals.pin}</td><td>{totals.uReq}</td><td>{totals.sent}</td><td>{totals.uSent}</td>
-              <td>{totals.vReq}</td><td>{totals.uVer}</td><td>{totals.ver}</td>
-              <td></td><td>${totals.rev.toFixed(2)}</td><td colSpan="3"></td>
-            </tr>
-          </tbody>
-        </table>
-        </div>
-        {hourlyOpen && (
-          <div style={{marginTop:25}}>
-            <h3>Hourly - {hourlyMeta.offer} ({fmt(hourlyMeta.stat_date)}) <button onClick={()=>setHourlyOpen(false)}>X</button></h3>
-            <table border="1" cellPadding="8" style={{textAlign:"center"}}>
-              <thead><tr>{["Hour","Unique Req","Unique Sent","Verify Req","Verified","Revenue"].map(h=><th key={h}>{h}</th>)}</tr></thead>
-              <tbody>{hourlyRows.map((h,i)=><tr key={i}><td>{hrLabel(h.hour)}</td><td>{h.unique_pin_requests}</td><td>{h.unique_pin_sent}</td><td>{h.unique_pin_verification_requests}</td><td>{h.pin_verified}</td><td>${h.revenue}</td></tr>)}</tbody>
+
+        <div style={{background:"#0d1326",border:"1px solid rgba(255,255,255,0.07)",borderRadius:16,overflow:"hidden"}}>
+          <div style={{overflowX:"auto"}}>
+            <table style={{...table,minWidth:1200}}>
+              <thead>
+                <tr>{["Date","Offer","Geo","Carrier","CPA","Cap","Pin Req","Unique Req","Pin Sent","Unique Sent","Verify Req","Unique Verify","Verified","CR %","Revenue","Last Pin Gen","Last Verification","Last Success"].map(h=><th key={h} style={th}>{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((r,i)=>(
+                  <tr key={i}>
+                    <td style={td}>{fmt(r.stat_date)}</td>
+                    <td style={td}><button onClick={()=>openHourly(r)} style={{background:"none",border:"none",color:"#60a5fa",cursor:"pointer",fontWeight:600,padding:0}}>{r.offer}</button></td>
+                    <td style={td}>{r.geo}</td><td style={td}>{r.carrier}</td><td style={td}>{r.cpa}</td><td style={td}>{r.cap}</td>
+                    <td style={td}>{r.pin_request_count}</td><td style={td}>{r.unique_pin_request_count}</td>
+                    <td style={td}>{r.pin_send_count}</td><td style={td}>{r.unique_pin_sent}</td>
+                    <td style={td}>{r.pin_validation_request_count}</td><td style={td}>{r.unique_pin_validation_request_count}</td>
+                    <td style={td}>{r.unique_pin_verified}</td><td style={td}>{r.cr}%</td><td style={td}>${r.revenue}</td>
+                    <td style={td}>{fmtDT(r.last_pin_gen_date)}</td>
+                    <td style={td}>{fmtDT(r.last_pin_verification_date)}</td>
+                    <td style={td}>{fmtDT(r.last_success_pin_verification_date)}</td>
+                  </tr>
+                ))}
+                <tr style={{fontWeight:"bold",background:"#0a0f1e"}}>
+                  <td style={td} colSpan="6">TOTAL</td>
+                  <td style={td}>{totals.pin}</td><td style={td}>{totals.uReq}</td><td style={td}>{totals.sent}</td><td style={td}>{totals.uSent}</td>
+                  <td style={td}>{totals.vReq}</td><td style={td}>{totals.uVer}</td><td style={td}>{totals.ver}</td>
+                  <td style={td}></td><td style={td}>${totals.rev.toFixed(2)}</td><td style={td} colSpan="3"></td>
+                </tr>
+              </tbody>
             </table>
+          </div>
+        </div>
+
+        {hourlyOpen && (
+          <div style={{marginTop:24,background:"#0d1326",border:"1px solid rgba(255,255,255,0.07)",borderRadius:16,padding:20}}>
+            <h3 style={{color:"#f1f5f9",fontSize:16,fontWeight:600,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span>Hourly — {hourlyMeta.offer} ({fmt(hourlyMeta.stat_date)})</span>
+              <button onClick={()=>setHourlyOpen(false)} style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.2)",color:"#ef4444",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:13}}>✕</button>
+            </h3>
+            <div style={{overflowX:"auto"}}>
+              <table style={table}>
+                <thead><tr>{["Hour","Unique Req","Unique Sent","Verify Req","Verified","Revenue"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+                <tbody>{hourlyRows.map((h,i)=>(
+                  <tr key={i}>
+                    <td style={td}>{hrLabel(h.hour)}</td><td style={td}>{h.unique_pin_requests}</td><td style={td}>{h.unique_pin_sent}</td>
+                    <td style={td}>{h.unique_pin_verification_requests}</td><td style={td}>{h.pin_verified}</td><td style={td}>${h.revenue}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
