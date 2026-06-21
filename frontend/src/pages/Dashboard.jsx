@@ -144,7 +144,6 @@ export default function Dashboard() {
         <div style={S.inner}>
           <h1 style={S.title}>Traffic Dashboard</h1>
 
-          {/* TABS + STATS — same row */}
           <div style={S.topRow}>
             <div style={S.viewTabs}>
               <button
@@ -160,19 +159,19 @@ export default function Dashboard() {
             <div style={S.statsRow}>
               <div style={{...S.statCard, borderLeft:"3px solid #3b82f6"}}>
                 <div style={S.statLabel}>Requests</div>
-                <div style={{...S.statValue, color:"#3b82f6"}}>{stats.total_requests || 0}</div>
+                <div style={{...S.statValue, color:"#60a5fa"}}>{stats.total_requests || 0}</div>
               </div>
               <div style={{...S.statCard, borderLeft:"3px solid #22c55e"}}>
                 <div style={S.statLabel}>OTP Sent</div>
-                <div style={{...S.statValue, color:"#22c55e"}}>{stats.otp_sent || 0}</div>
+                <div style={{...S.statValue, color:"#4ade80"}}>{stats.otp_sent || 0}</div>
               </div>
               <div style={{...S.statCard, borderLeft:"3px solid #f59e0b"}}>
                 <div style={S.statLabel}>Conversions</div>
-                <div style={{...S.statValue, color:"#f59e0b"}}>{stats.conversions || 0}</div>
+                <div style={{...S.statValue, color:"#fbbf24"}}>{stats.conversions || 0}</div>
               </div>
               <div style={{...S.statCard, borderLeft:"3px solid #8b5cf6"}}>
                 <div style={S.statLabel}>Last Hour</div>
-                <div style={{...S.statValue, color:"#8b5cf6"}}>{stats.last_hour_requests || 0}</div>
+                <div style={{...S.statValue, color:"#a78bfa"}}>{stats.last_hour_requests || 0}</div>
               </div>
             </div>
           </div>
@@ -240,7 +239,7 @@ export default function Dashboard() {
                         <td style={S.td}>{row.verified}</td><td style={S.td}>{row.publisher_verified}</td>
                         <td style={S.td}>{row.cr_percent}%</td><td style={S.td}>{row.publisher_cr}%</td>
                         <td style={S.td}>{money(row.revenue)}</td><td style={S.td}>{money(row.publisher_revenue)}</td>
-                        <td style={{...S.td, color: toNumber(row.profit) >= 0 ? "#22c55e" : "#ef4444", fontWeight:700}}>{money(row.profit)}</td>
+                        <td style={{...S.td, color: toNumber(row.profit) >= 0 ? "#4ade80" : "#f87171", fontWeight:600}}>{money(row.profit)}</td>
                         <td style={S.td}>{formatDate(row.last_pin_gen)}</td><td style={S.td}>{formatDate(row.last_verification)}</td>
                         <td style={S.td}>{formatDate(row.last_success_verification)}</td>
                       </tr>
@@ -250,7 +249,7 @@ export default function Dashboard() {
                       <td style={S.td}>{total.pin_req}</td><td style={S.td}>{total.unique_req}</td><td style={S.td}>{total.pin_sent}</td><td style={S.td}>{total.unique_sent}</td>
                       <td style={S.td}>{total.verify_req}</td><td style={S.td}>{total.unique_verify}</td><td style={S.td}>{total.verified}</td><td style={S.td}>{total.publisher_verified}</td>
                       <td style={S.td}>-</td><td style={S.td}>-</td><td style={S.td}>{money(total.revenue)}</td><td style={S.td}>{money(total.publisher_revenue)}</td>
-                      <td style={{...S.td, color: total.profit >= 0 ? "#22c55e" : "#ef4444", fontWeight:700}}>{money(total.profit)}</td>
+                      <td style={{...S.td, color: total.profit >= 0 ? "#4ade80" : "#f87171", fontWeight:700}}>{money(total.profit)}</td>
                       <td colSpan="3" style={S.td} />
                     </tr>
                   </tbody>
@@ -269,35 +268,35 @@ const S = {
   glow1: { position:"absolute", width:600, height:600, borderRadius:"50%", background:"radial-gradient(circle,rgba(59,130,246,0.07) 0%,transparent 70%)", top:-200, left:-200, pointerEvents:"none" },
   glow2: { position:"absolute", width:400, height:400, borderRadius:"50%", background:"radial-gradient(circle,rgba(139,92,246,0.07) 0%,transparent 70%)", bottom:-100, right:0, pointerEvents:"none" },
   inner: { maxWidth:"100%", margin:"0 auto", position:"relative", zIndex:1 },
-  title: { color:"#f1f5f9", fontSize:28, fontWeight:700, marginBottom:20, fontFamily:"Syne,sans-serif" },
+  title: { color:"#cbd5e1", fontSize:24, fontWeight:700, marginBottom:18, fontFamily:"Syne,sans-serif" },
 
-  topRow: { display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, marginBottom:20, flexWrap:"wrap" },
+  topRow: { display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, marginBottom:18, flexWrap:"wrap" },
 
   viewTabs: { display:"flex", gap:8, flexShrink:0 },
-  tabBtn: { padding:"10px 20px", borderRadius:10, border:"1px solid rgba(255,255,255,0.08)", background:"#0d1326", color:"#94a3b8", fontSize:14, fontWeight:600, cursor:"pointer" },
-  tabBtnActive: { background:"#3b82f6", color:"#fff", border:"1px solid #3b82f6" },
+  tabBtn: { padding:"9px 18px", borderRadius:10, border:"1px solid rgba(255,255,255,0.08)", background:"#0d1326", color:"#64748b", fontSize:13, fontWeight:600, cursor:"pointer" },
+  tabBtnActive: { background:"#3b82f6", color:"#e2e8f0", border:"1px solid #3b82f6" },
 
-  errorText: { color:"#ef4444", fontSize:14, marginBottom:12 },
+  errorText: { color:"#f87171", fontSize:13, marginBottom:12 },
 
-  statsRow: { display:"flex", gap:14, flexWrap:"wrap" },
-  statCard: { background:"#0d1326", border:"1px solid rgba(255,255,255,0.07)", borderRadius:12, padding:"10px 20px", minWidth:130 },
-  statLabel: { color:"#475569", fontSize:11, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:4 },
-  statValue: { fontSize:22, fontWeight:700 },
+  statsRow: { display:"flex", gap:12, flexWrap:"wrap" },
+  statCard: { background:"#0d1326", border:"1px solid rgba(255,255,255,0.07)", borderRadius:12, padding:"8px 16px", minWidth:110 },
+  statLabel: { color:"#475569", fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:3 },
+  statValue: { fontSize:18, fontWeight:700 },
 
-  filterBar: { marginBottom:20, display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" },
-  input: { background:"#0d1326", border:"1px solid rgba(255,255,255,0.08)", color:"#f1f5f9", padding:"10px 14px", borderRadius:10, fontSize:14, colorScheme:"dark" },
-  select: { background:"#0d1326", border:"1px solid rgba(255,255,255,0.08)", color:"#f1f5f9", padding:"10px 14px", borderRadius:10, fontSize:14, cursor:"pointer" },
-  applyBtn: { background:"#3b82f6", color:"#fff", border:"none", padding:"10px 22px", borderRadius:10, fontSize:14, fontWeight:600, cursor:"pointer" },
-  exportBtn: { background:"#0d1326", border:"1px solid rgba(255,255,255,0.08)", color:"#94a3b8", padding:"10px 22px", borderRadius:10, fontSize:14, fontWeight:600, cursor:"pointer" },
+  filterBar: { marginBottom:18, display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" },
+  input: { background:"#0d1326", border:"1px solid rgba(255,255,255,0.08)", color:"#94a3b8", padding:"8px 12px", borderRadius:10, fontSize:13, colorScheme:"dark" },
+  select: { background:"#0d1326", border:"1px solid rgba(255,255,255,0.08)", color:"#94a3b8", padding:"8px 12px", borderRadius:10, fontSize:13, cursor:"pointer" },
+  applyBtn: { background:"#3b82f6", color:"#e2e8f0", border:"none", padding:"9px 20px", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer" },
+  exportBtn: { background:"#0d1326", border:"1px solid rgba(255,255,255,0.08)", color:"#64748b", padding:"9px 20px", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer" },
 
   tableWrap: { background:"#0d1326", border:"1px solid rgba(255,255,255,0.07)", borderRadius:16, overflow:"hidden", width:"100%" },
-  emptyState: { textAlign:"center", padding:60, color:"#94a3b8", fontSize:16 },
-  emptySub: { fontSize:13, marginTop:8, display:"block", color:"#475569" },
+  emptyState: { textAlign:"center", padding:60, color:"#64748b", fontSize:15 },
+  emptySub: { fontSize:12, marginTop:8, display:"block", color:"#475569" },
 
-  tableScroll: { overflowX:"auto", maxHeight:"72vh", overflowY:"auto" },
-  table: { width:"100%", minWidth:"100%", borderCollapse:"collapse", fontSize:15, tableLayout:"auto" },
-  th: { padding:"16px 18px", textAlign:"left", fontSize:12, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.06em", borderBottom:"1px solid rgba(255,255,255,0.08)", background:"#0a0f1e", whiteSpace:"nowrap", position:"sticky", top:0, zIndex:2 },
-  td: { padding:"14px 18px", color:"#e2e8f0", borderBottom:"1px solid rgba(255,255,255,0.04)", whiteSpace:"nowrap", fontSize:15 },
+  tableScroll: { overflowX:"auto", maxHeight:"70vh", overflowY:"auto" },
+  table: { width:"100%", minWidth:"100%", borderCollapse:"collapse", fontSize:13, tableLayout:"auto" },
+  th: { padding:"12px 16px", textAlign:"left", fontSize:11, fontWeight:600, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.05em", borderBottom:"1px solid rgba(255,255,255,0.08)", background:"#0a0f1e", whiteSpace:"nowrap", position:"sticky", top:0, zIndex:2 },
+  td: { padding:"11px 16px", color:"#94a3b8", borderBottom:"1px solid rgba(255,255,255,0.04)", whiteSpace:"nowrap", fontSize:13 },
   tr: { transition:"background 0.15s" },
   totalRow: { background:"#0a0f1e" },
 };
