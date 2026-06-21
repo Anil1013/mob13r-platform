@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Navbar from "../components/Navbar";
+import { btn, btnRed, input, table, th, td, page } from "../styles/shared.js";
 
 /* ================= CONFIG ================= */
 const API_BASE =
@@ -50,7 +51,7 @@ function exportCSV(rows) {
 
 /* ================= JSON VIEW ================= */
 const renderJSON = data => (
-  <pre style={{ maxHeight: 130, overflow: "auto" }}>
+  <pre style={{ maxHeight: 130, overflow: "auto", background:"#0a0f1e", color:"#94a3b8", padding:8, borderRadius:8, fontSize:11, margin:0 }}>
     {data ? JSON.stringify(data, null, 2) : "-"}
   </pre>
 );
@@ -121,117 +122,140 @@ export default function DumpDashboard() {
     });
   }, [rows, msisdn, offer, publisher, advertiser, fromDate, toDate]);
 
-  if (loading) return <p>Loading dump logs…</p>;
-  if (error) return <p style={{ color: "red" }}>{error}</p>;
+  if (loading) return (
+    <>
+      <Navbar />
+      <div style={page}><p style={{color:"#94a3b8"}}>Loading dump logs…</p></div>
+    </>
+  );
+  if (error) return (
+    <>
+      <Navbar />
+      <div style={page}><p style={{color:"#f87171"}}>{error}</p></div>
+    </>
+  );
 
   return (
-    <div style={{ padding: 20 }}>
+    <>
       <Navbar />
-      <h1>Main Dump Dashboard</h1>
+      <div style={page}>
+        <h1 style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#f1f5f9",marginBottom:24}}>
+          Main Dump Dashboard
+        </h1>
 
-      {/* ================= FILTER BAR ================= */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(6, 1fr)",
-          gap: 10,
-          marginBottom: 10,
-        }}
-      >
-        <input
-          placeholder="MSISDN"
-          value={msisdn}
-          onChange={e => setMsisdn(e.target.value)}
-        />
-        <input
-          placeholder="Offer"
-          value={offer}
-          onChange={e => setOffer(e.target.value)}
-        />
-        <input
-          placeholder="Publisher"
-          value={publisher}
-          onChange={e => setPublisher(e.target.value)}
-        />
-        <input
-          placeholder="Advertiser"
-          value={advertiser}
-          onChange={e => setAdvertiser(e.target.value)}
-        />
-        <input
-          type="date"
-          value={fromDate}
-          onChange={e => setFromDate(e.target.value)}
-        />
-        <input
-          type="date"
-          value={toDate}
-          onChange={e => setToDate(e.target.value)}
-        />
-      </div>
-
-      {/* ================= ACTIONS ================= */}
-      <div style={{ marginBottom: 15 }}>
-        <button
-          onClick={() => {
-            setMsisdn("");
-            setOffer("");
-            setPublisher("");
-            setAdvertiser("");
-            setFromDate("");
-            setToDate("");
+        {/* ================= FILTER BAR ================= */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(6, 1fr)",
+            gap: 10,
+            marginBottom: 16,
           }}
         >
-          Clear Filters
-        </button>{" "}
-        <button onClick={() => exportCSV(filteredRows)}>Export CSV</button>
-      </div>
+          <input
+            style={input}
+            placeholder="MSISDN"
+            value={msisdn}
+            onChange={e => setMsisdn(e.target.value)}
+          />
+          <input
+            style={input}
+            placeholder="Offer"
+            value={offer}
+            onChange={e => setOffer(e.target.value)}
+          />
+          <input
+            style={input}
+            placeholder="Publisher"
+            value={publisher}
+            onChange={e => setPublisher(e.target.value)}
+          />
+          <input
+            style={input}
+            placeholder="Advertiser"
+            value={advertiser}
+            onChange={e => setAdvertiser(e.target.value)}
+          />
+          <input
+            style={{...input, colorScheme:"dark"}}
+            type="date"
+            value={fromDate}
+            onChange={e => setFromDate(e.target.value)}
+          />
+          <input
+            style={{...input, colorScheme:"dark"}}
+            type="date"
+            value={toDate}
+            onChange={e => setToDate(e.target.value)}
+          />
+        </div>
 
-      {/* ================= TABLE ================= */}
-      <div style={{ overflowX: "auto" }}>
-        <table border="1" cellPadding="6" style={{ width: "100%" }}>
-          <thead>
-            <tr>
-              <th>Offer ID</th>
-              <th>Publisher</th>
-              <th>Advertiser</th>
-              <th>Offer</th>
-              <th>Geo</th>
-              <th>Carrier</th>
-              <th>MSISDN</th>
-              <th>Publisher Req</th>
-              <th>Publisher Res</th>
-              <th>Advertiser Req</th>
-              <th>Advertiser Res</th>
-              <th>Status</th>
-              <th>Date / Time (IST)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredRows.map((row, i) => (
-              <tr key={i}>
-                <td>{row.offer_id}</td>
-                <td>{row.publisher_name}</td>
-                <td>{row.advertiser_name}</td>
-                <td>{row.offer_name}</td>
-                <td>{row.geo}</td>
-                <td>{row.carrier}</td>
-                <td>{row.msisdn}</td>
-                <td>{renderJSON(row.publisher_request)}</td>
-                <td>{renderJSON(row.publisher_response)}</td>
-                <td>{renderJSON(row.advertiser_request)}</td>
-                <td>{renderJSON(row.advertiser_response)}</td>
-                <td>{row.status}</td>
-                <td>{row.created_ist}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+        {/* ================= ACTIONS ================= */}
+        <div style={{ marginBottom: 20, display:"flex", gap:10 }}>
+          <button
+            style={btnRed}
+            onClick={() => {
+              setMsisdn("");
+              setOffer("");
+              setPublisher("");
+              setAdvertiser("");
+              setFromDate("");
+              setToDate("");
+            }}
+          >
+            Clear Filters
+          </button>
+          <button style={btn} onClick={() => exportCSV(filteredRows)}>Export CSV</button>
+        </div>
 
-      <p style={{ marginTop: 10 }}>
-        Showing <b>{filteredRows.length}</b> of {rows.length}
-      </p>
-    </div>
+        {/* ================= TABLE ================= */}
+        <div style={{background:"#0d1326", border:"1px solid rgba(255,255,255,0.07)", borderRadius:16, overflow:"hidden"}}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={table}>
+              <thead>
+                <tr>
+                  <th style={th}>Offer ID</th>
+                  <th style={th}>Publisher</th>
+                  <th style={th}>Advertiser</th>
+                  <th style={th}>Offer</th>
+                  <th style={th}>Geo</th>
+                  <th style={th}>Carrier</th>
+                  <th style={th}>MSISDN</th>
+                  <th style={th}>Publisher Req</th>
+                  <th style={th}>Publisher Res</th>
+                  <th style={th}>Advertiser Req</th>
+                  <th style={th}>Advertiser Res</th>
+                  <th style={th}>Status</th>
+                  <th style={th}>Date / Time (IST)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((row, i) => (
+                  <tr key={i}>
+                    <td style={td}>{row.offer_id}</td>
+                    <td style={td}>{row.publisher_name}</td>
+                    <td style={td}>{row.advertiser_name}</td>
+                    <td style={td}>{row.offer_name}</td>
+                    <td style={td}>{row.geo}</td>
+                    <td style={td}>{row.carrier}</td>
+                    <td style={td}>{row.msisdn}</td>
+                    <td style={td}>{renderJSON(row.publisher_request)}</td>
+                    <td style={td}>{renderJSON(row.publisher_response)}</td>
+                    <td style={td}>{renderJSON(row.advertiser_request)}</td>
+                    <td style={td}>{renderJSON(row.advertiser_response)}</td>
+                    <td style={td}>{row.status}</td>
+                    <td style={td}>{row.created_ist}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <p style={{ marginTop: 16, color:"#64748b", fontSize:13 }}>
+          Showing <b style={{color:"#94a3b8"}}>{filteredRows.length}</b> of {rows.length}
+        </p>
+      </div>
+    </>
   );
 }
