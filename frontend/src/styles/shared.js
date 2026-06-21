@@ -2,7 +2,7 @@ export const btn = { padding:"10px 20px", borderRadius:10, border:"none", backgr
 export const btnRed = { padding:"10px 20px", borderRadius:10, border:"1px solid rgba(239,68,68,0.2)", background:"rgba(239,68,68,0.08)", color:"#ef4444", fontSize:13, fontWeight:500, cursor:"pointer" };
 export const input = { width:"100%", padding:"10px 14px", borderRadius:10, border:"1px solid rgba(255,255,255,0.08)", background:"rgba(255,255,255,0.04)", color:"#f1f5f9", fontSize:14, outline:"none" };
 export const table = { width:"100%", borderCollapse:"collapse" };
-export const th = { padding:"12px 16px", textAlign:"left", fontSize:11, fontWeight:600, color:"#475569", textTransform:"uppercase", letterSpacing:"0.08em", borderBottom:"1px solid rgba(255,255,255,0.07)", background:"#0a0f1e" };
+export const th = { padding:"12px 16px", textAlign:"left", fontSize:14, fontWeight:600, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.08em", borderBottom:"1px solid rgba(255,255,255,0.07)", background:"#0a0f1e" };
 export const td = { padding:"14px 16px", borderBottom:"1px solid rgba(255,255,255,0.04)", color:"#94a3b8", fontSize:13 };
 export const page = { minHeight:"100vh", background:"#050810", padding:"32px 24px" };
 export const badge = (color) => ({
