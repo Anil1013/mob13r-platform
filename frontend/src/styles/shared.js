@@ -102,10 +102,25 @@ export const filterSelect = { ...input, width: 240, cursor: "pointer" };
 
 export const applyBtn = { ...btn, padding: "12px 28px" };
 
+export const exportBtn = { 
+  fontFamily: theme.fontFamily,
+  background: theme.bgCard, border: theme.border, 
+  color: theme.textMuted, padding: "12px 28px", borderRadius: theme.borderRadius, 
+  fontSize: 14, fontWeight: 600, cursor: "pointer" 
+};
+
 export const tableWrap = { 
   background: theme.bgCard, border: theme.border, 
   borderRadius: 20, overflow: "hidden" 
 };
+
+export const tableScroll = { overflowX: "auto", maxHeight: "70vh", overflowY: "auto" };
+
+export const stickyTh = { ...th, position: "sticky", top: 0, zIndex: 2, whiteSpace: "nowrap" };
+
+export const stickyTd = { ...td, whiteSpace: "nowrap" };
+
+export const totalRow = { background: theme.bgCard };
 
 export const card = { 
   background: theme.bgCard, border: theme.border, 
