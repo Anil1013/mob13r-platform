@@ -1,17 +1,16 @@
 /* ============================================
    Mob13r Shared Styles — Pastel Light Theme
-   Excel-style bordered table cells
-   Font: Lora (serif)
+   Excel-style bordered cells, Bold Lora font
    ============================================ */
 
 const font = "'Lora', serif";
 
 export const btn = { padding:"10px 20px", borderRadius:10, border:"none", background:"linear-gradient(135deg,#e8856a,#d4709a)", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font };
 export const btnRed = { padding:"10px 20px", borderRadius:10, border:"1px solid rgba(220,100,100,0.3)", background:"rgba(220,100,100,0.08)", color:"#dc6464", fontSize:13, fontWeight:500, cursor:"pointer", fontFamily:font };
-export const input = { width:"100%", padding:"10px 14px", borderRadius:10, border:"1px solid rgba(210,160,180,0.4)", background:"#fff", color:"#5a3f50", fontSize:13, outline:"none", fontFamily:font };
+export const input = { width:"100%", padding:"10px 14px", borderRadius:10, border:"1px solid rgba(210,160,180,0.4)", background:"#fff", color:"#4a2f3f", fontSize:13, outline:"none", fontFamily:font };
 export const table = { width:"100%", borderCollapse:"collapse", border:"1px solid #e8d0dc" };
-export const th = { padding:"12px 16px", textAlign:"left", fontSize:14, fontWeight:600, color:"#9b7faa", textTransform:"uppercase", letterSpacing:"0.08em", background:"#f5eef8", fontFamily:font, border:"1px solid #e8d0dc" };
-export const td = { padding:"12px 16px", color:"#6b4f6a", fontSize:13, fontFamily:font, border:"1px solid #eedde8", background:"#fff" };
+export const th = { padding:"12px 16px", textAlign:"left", fontSize:14, fontWeight:700, color:"#9b7faa", textTransform:"uppercase", letterSpacing:"0.08em", background:"#f5eef8", fontFamily:font, border:"1px solid #e8d0dc" };
+export const td = { padding:"12px 16px", color:"#4a2f3f", fontSize:13, fontFamily:font, border:"1px solid #eedde8", background:"#fff", fontWeight:600 };
 export const page = { minHeight:"100vh", background:"#fdf6f9", padding:"32px 24px", fontFamily:font };
 export const badge = (color) => ({
   display:"inline-flex", alignItems:"center", gap:6,
@@ -33,13 +32,13 @@ export const statCard = { background:"#fff", border:"1px solid rgba(210,160,180,
 export const statLabel = { color:"#b89ab0", fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:3, fontFamily:font };
 export const statValue = { fontSize:18, fontWeight:700, fontFamily:font };
 export const filterBar = { marginBottom:18, display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" };
-export const filterInput = { background:"#fff", border:"1px solid rgba(210,160,180,0.35)", color:"#5a3f50", padding:"8px 12px", borderRadius:10, fontSize:13, fontFamily:font };
-export const filterSelect = { background:"#fff", border:"1px solid rgba(210,160,180,0.35)", color:"#5a3f50", padding:"8px 12px", borderRadius:10, fontSize:13, cursor:"pointer", fontFamily:font };
+export const filterInput = { background:"#fff", border:"1px solid rgba(210,160,180,0.35)", color:"#4a2f3f", padding:"8px 12px", borderRadius:10, fontSize:13, fontFamily:font };
+export const filterSelect = { background:"#fff", border:"1px solid rgba(210,160,180,0.35)", color:"#4a2f3f", padding:"8px 12px", borderRadius:10, fontSize:13, cursor:"pointer", fontFamily:font };
 export const applyBtn = { background:"linear-gradient(135deg,#e8856a,#d4709a)", color:"#fff", border:"none", padding:"9px 20px", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font };
 export const exportBtn = { background:"#fff", border:"1px solid rgba(210,160,180,0.35)", color:"#9b7faa", padding:"9px 20px", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:font };
 export const tableWrap = { background:"#fff", border:"1px solid #e8d0dc", borderRadius:16, overflow:"hidden", width:"100%", boxShadow:"0 4px 20px rgba(210,160,180,0.1)" };
 export const tableScroll = { overflowX:"auto", maxHeight:"70vh", overflowY:"auto" };
-export const stickyTh = { padding:"12px 16px", textAlign:"left", fontSize:14, fontWeight:600, color:"#9b7faa", textTransform:"uppercase", letterSpacing:"0.08em", background:"#f5eef8", whiteSpace:"nowrap", position:"sticky", top:0, zIndex:2, fontFamily:font, border:"1px solid #e8d0dc" };
-export const stickyTd = { padding:"11px 16px", color:"#6b4f6a", whiteSpace:"nowrap", fontSize:13, fontFamily:font, border:"1px solid #eedde8", background:"#fff" };
+export const stickyTh = { padding:"12px 16px", textAlign:"left", fontSize:14, fontWeight:700, color:"#9b7faa", textTransform:"uppercase", letterSpacing:"0.08em", background:"#f5eef8", whiteSpace:"nowrap", position:"sticky", top:0, zIndex:2, fontFamily:font, border:"1px solid #e8d0dc" };
+export const stickyTd = { padding:"11px 16px", color:"#4a2f3f", whiteSpace:"nowrap", fontSize:13, fontFamily:font, border:"1px solid #eedde8", background:"#fff", fontWeight:600 };
 export const totalRow = { background:"#fdf0f5" };
 export const card = { background:"#fff", border:"1px solid rgba(210,160,180,0.25)", borderRadius:16, padding:24, fontFamily:font, boxShadow:"0 4px 20px rgba(210,160,180,0.08)" };
