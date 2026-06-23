@@ -187,7 +187,7 @@ export default function Offers() {
       <Navbar />
 
       <div style={page}>
-        <h1 style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#f1f5f9",marginBottom:24}}>
+        <h1 style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#4a2f3f",marginBottom:24}}>
           Universal Offer Engine
         </h1>
 
@@ -372,7 +372,7 @@ export default function Offers() {
         {selectedOffer && (
           <div style={styles.card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <h3 style={{color:"#f1f5f9",fontSize:18,fontWeight:600,fontFamily:"Syne,sans-serif"}}>
+                <h3 style={{color:"#4a2f3f",fontSize:18,fontWeight:600,fontFamily:"Syne,sans-serif"}}>
                   Configuring: {selectedOffer.service_name}
                 </h3>
                 <button onClick={() => setSelectedOffer(null)} style={btnRed}>Close</button>
@@ -380,8 +380,8 @@ export default function Offers() {
 
             {/* AI MAGIC INTEGRATOR SECTION */}
             <div style={styles.aiBox}>
-                <h4 style={{ marginTop: 0, color: '#93c5fd', fontFamily:"Syne,sans-serif" }}>🚀 AI Magic Integrator</h4>
-                <p style={{ fontSize: '12px', color: '#60a5fa', fontWeight: 'bold' }}>Upload API Document (PDF/DOCX) to auto-configure this service</p>
+                <h4 style={{ marginTop: 0, color: '#e8856a', fontFamily:"Syne,sans-serif" }}>🚀 AI Magic Integrator</h4>
+                <p style={{ fontSize: '12px', color: '#c07050', fontWeight: 'bold', fontFamily:"'Lora', serif" }}>Upload API Document (PDF/DOCX) to auto-configure this service</p>
                 <input type="file" accept=".pdf,.docx" onChange={handleAIUpload} style={{ fontSize: '12px', color:"#94a3b8" }} />
             </div>
 
@@ -432,7 +432,7 @@ export default function Offers() {
               <tbody>
                 {parameters.map((p) => (
                   <tr key={p.id}>
-                    <td style={{ ...td, textAlign: 'left', fontWeight: 600, color:"#f1f5f9" }}>{p.param_key}</td>
+                    <td style={{ ...td, textAlign: 'left', fontWeight: 700, color:"#4a2f3f", fontFamily:"'Lora', serif" }}>{p.param_key}</td>
                     <td style={td}>
                         <input 
                             style={{...styles.cellInput, width: '100%'}} 
@@ -461,23 +461,23 @@ export default function Offers() {
 }
 
 const styles = {
-  topBar: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20, alignItems:"center", background: '#0d1326', border:"1px solid rgba(255,255,255,0.07)", padding: '16px', borderRadius: '16px' },
-  tableWrap: { background: '#0d1326', border:"1px solid rgba(255,255,255,0.07)", padding: '8px', borderRadius: '16px', overflowX:"auto" },
+  topBar: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20, alignItems:"center", background: '#fff', border:"1px solid #e8d0dc", padding: '16px', borderRadius: '16px', boxShadow:"0 2px 8px rgba(210,160,180,0.1)" },
+  tableWrap: { background: '#fff', border:"1px solid #e8d0dc", padding: '8px', borderRadius: '16px', overflowX:"auto" },
 
-  smallInput: { background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", color:"#f1f5f9", borderRadius:10, padding:"8px 12px", fontSize:13, outline:"none" },
-  cellInput: { width: "90%", textAlign: "center", padding: 6, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", color:"#f1f5f9", borderRadius: 8, fontSize:13, outline:"none" },
-  select: { background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", color:"#f1f5f9", borderRadius:10, padding:"8px 12px", fontSize:13, outline:"none" },
+  smallInput: { background:"#fff", border:"1px solid #e8d0dc", color:"#4a2f3f", borderRadius:10, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"'Lora', serif", fontWeight:600 },
+  cellInput: { width: "90%", textAlign: "center", padding: 6, background:"#fff", border:"1px solid #e8d0dc", color:"#4a2f3f", borderRadius: 8, fontSize:13, outline:"none", fontFamily:"'Lora', serif", fontWeight:600 },
+  select: { background:"#fff", border:"1px solid #e8d0dc", color:"#4a2f3f", borderRadius:10, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"'Lora', serif" },
 
-  smallBtn: { fontSize: '11px', padding: '6px 10px', background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:"#94a3b8", borderRadius:8, cursor:"pointer" },
+  smallBtn: { fontSize: '12px', padding: '6px 12px', background:"#fff", border:"1px solid #e8d0dc", color:"#9b7faa", borderRadius:8, cursor:"pointer", fontFamily:"'Lora', serif" },
 
-  card: { background: "#0d1326", border:"1px solid rgba(255,255,255,0.07)", padding: 24, marginTop: 24, borderRadius: '16px' },
+  card: { background: "#fff", border:"1px solid #e8d0dc", padding: 24, marginTop: 24, borderRadius: '16px', boxShadow:"0 4px 20px rgba(210,160,180,0.08)" },
   inline: { display: "flex", gap: 10, marginBottom: 20, marginTop: 4 },
 
-  aiBox: { background: 'rgba(59,130,246,0.06)', padding: '20px', borderRadius: '12px', border: '2px dashed rgba(59,130,246,0.3)', marginBottom: '20px' },
-  workflowGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', background: '#0a0f1e', padding: '16px', borderRadius: '12px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.06)' },
-  workflowLabel: { fontSize: '12px', fontWeight: 600, color:"#cbd5e1" },
+  aiBox: { background: 'rgba(232,133,106,0.06)', padding: '20px', borderRadius: '12px', border: '2px dashed rgba(232,133,106,0.35)', marginBottom: '20px' },
+  workflowGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', background: '#fdf6f9', padding: '16px', borderRadius: '12px', marginBottom: '20px', border: '1px solid #eedde8' },
+  workflowLabel: { fontSize: '12px', fontWeight: 600, color:"#6b4f6a", fontFamily:"'Lora', serif" },
 
-  badgePrimary: { color: "#4ade80", fontWeight: 600, fontSize: '11px' },
-  badgeFallback: { color: "#fbbf24", fontWeight: 600, fontSize: '11px' },
-  badgeCap: { color: "#f87171", fontWeight: 600, fontSize: '11px' },
+  badgePrimary: { color: "#2f9e60", fontWeight: 600, fontSize: '11px', fontFamily:"'Lora', serif" },
+  badgeFallback: { color: "#c07000", fontWeight: 600, fontSize: '11px', fontFamily:"'Lora', serif" },
+  badgeCap: { color: "#dc6464", fontWeight: 600, fontSize: '11px', fontFamily:"'Lora', serif" },
 };
