@@ -80,7 +80,7 @@ export default function PublisherDashboard() {
   if (loading) return (
     <>
       <Navbar />
-      <div style={page}><p style={{color:"#94a3b8",padding:20}}>Loading...</p></div>
+      <div style={page}><p style={{color:"#64748b",padding:20}}>Loading...</p></div>
     </>
   );
 
@@ -88,19 +88,19 @@ export default function PublisherDashboard() {
     <>
       <Navbar />
       <div style={page}>
-        <h2 style={{fontFamily:"Syne,sans-serif",fontSize:24,fontWeight:700,color:"#f1f5f9",marginBottom:20}}>
-          Publisher Dashboard — <span style={{color:"#60a5fa"}}>{publisherName}</span>
+        <h2 style={{fontFamily:"Syne,sans-serif",fontSize:24,fontWeight:700,color:"#1e293b",marginBottom:20}}>
+          Publisher Dashboard — <span style={{color:"#2563eb"}}>{publisherName}</span>
         </h2>
 
         {error && (
-          <div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:10,padding:"10px 16px",marginBottom:16,color:"#f87171",fontWeight:500,fontSize:13}}>
+          <div style={{background:"rgba(239,68,68,0.06)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"10px 16px",marginBottom:16,color:"#dc2626",fontWeight:500,fontSize:13}}>
             {error}
           </div>
         )}
 
         <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap",alignItems:"center"}}>
-          <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} style={{...input,width:"auto",colorScheme:"dark"}} />
-          <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} style={{...input,width:"auto",colorScheme:"dark"}} />
+          <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} style={{...input,width:"auto",colorScheme:"light"}} />
+          <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} style={{...input,width:"auto",colorScheme:"light"}} />
           <button onClick={fetchData} style={btn}>Apply</button>
           <select value={filterOffer} onChange={e=>setFilterOffer(e.target.value)} style={{...input,width:"auto"}}>
             <option value="">All Offers</option>{offerOptions.map(o=><option key={o}>{o}</option>)}
@@ -113,7 +113,7 @@ export default function PublisherDashboard() {
           </select>
         </div>
 
-        <div style={{background:"#0d1326",border:"1px solid rgba(255,255,255,0.07)",borderRadius:16,overflow:"hidden"}}>
+        <div style={{background:"#ffffff",border:"1px solid #e2e8f0",borderRadius:16,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}>
           <div style={{overflowX:"auto"}}>
             <table style={{...table,minWidth:1200}}>
               <thead>
@@ -123,7 +123,7 @@ export default function PublisherDashboard() {
                 {filteredRows.map((r,i)=>(
                   <tr key={i}>
                     <td style={td}>{fmt(r.stat_date)}</td>
-                    <td style={td}><button onClick={()=>openHourly(r)} style={{background:"none",border:"none",color:"#60a5fa",cursor:"pointer",fontWeight:600,padding:0}}>{r.offer}</button></td>
+                    <td style={td}><button onClick={()=>openHourly(r)} style={{background:"none",border:"none",color:"#2563eb",cursor:"pointer",fontWeight:600,padding:0}}>{r.offer}</button></td>
                     <td style={td}>{r.geo}</td><td style={td}>{r.carrier}</td><td style={td}>{r.cpa}</td><td style={td}>{r.cap}</td>
                     <td style={td}>{r.pin_request_count}</td><td style={td}>{r.unique_pin_request_count}</td>
                     <td style={td}>{r.pin_send_count}</td><td style={td}>{r.unique_pin_sent}</td>
@@ -134,7 +134,7 @@ export default function PublisherDashboard() {
                     <td style={td}>{fmtDT(r.last_success_pin_verification_date)}</td>
                   </tr>
                 ))}
-                <tr style={{fontWeight:"bold",background:"#0a0f1e"}}>
+                <tr style={{fontWeight:"bold",background:"#f8fafc"}}>
                   <td style={td} colSpan="6">TOTAL</td>
                   <td style={td}>{totals.pin}</td><td style={td}>{totals.uReq}</td><td style={td}>{totals.sent}</td><td style={td}>{totals.uSent}</td>
                   <td style={td}>{totals.vReq}</td><td style={td}>{totals.uVer}</td><td style={td}>{totals.ver}</td>
@@ -146,10 +146,10 @@ export default function PublisherDashboard() {
         </div>
 
         {hourlyOpen && (
-          <div style={{marginTop:24,background:"#0d1326",border:"1px solid rgba(255,255,255,0.07)",borderRadius:16,padding:20}}>
-            <h3 style={{color:"#f1f5f9",fontSize:16,fontWeight:600,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{marginTop:24,background:"#ffffff",border:"1px solid #e2e8f0",borderRadius:16,padding:20,boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}>
+            <h3 style={{color:"#1e293b",fontSize:16,fontWeight:600,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <span>Hourly — {hourlyMeta.offer} ({fmt(hourlyMeta.stat_date)})</span>
-              <button onClick={()=>setHourlyOpen(false)} style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.2)",color:"#ef4444",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:13}}>✕</button>
+              <button onClick={()=>setHourlyOpen(false)} style={{background:"rgba(239,68,68,0.06)",border:"1px solid rgba(239,68,68,0.2)",color:"#ef4444",borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:13}}>✕</button>
             </h3>
             <div style={{overflowX:"auto"}}>
               <table style={table}>
