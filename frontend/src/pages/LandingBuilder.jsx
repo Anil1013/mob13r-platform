@@ -20,7 +20,7 @@ const DEFAULT_FORM = {
   verify_button_text: "Confirm",
   disclaimer: "",
   theme_color: "#22c55e",
-  text_color: "#ffffff",
+  text_color: "#1e293b", // Updated default for readability on light cards
   card_color: "#ffffff",
   success_redirect_url: "",
   show_timer: true,
@@ -75,7 +75,7 @@ export default function LandingBuilder() {
       verify_button_text: item.verify_button_text || "Confirm",
       disclaimer: item.disclaimer || "",
       theme_color: item.theme_color || "#22c55e",
-      text_color: item.text_color || "#ffffff",
+      text_color: item.text_color || "#1e293b",
       card_color: item.card_color || "#ffffff",
       success_redirect_url: item.success_redirect_url || "",
       show_timer: item.show_timer ?? true,
@@ -413,17 +413,17 @@ export default function LandingBuilder() {
                 <div style={styles.landingList}>
                   {landings.map((item) => (
                     <div key={item.id} style={styles.landingItem}>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 14, color:"#f1f5f9" }}>{item.title}</div>
-                        <div style={{ fontSize: 12, marginTop: 4, color: "#4ade80" }}>
+                      <div style={{ flex: 1, minWidth: 0, paddingRight: 10 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color:"#4a2f3f" }}>{item.title}</div>
+                        <div style={{ fontSize: 12, marginTop: 4, color: "#22c55e", fontWeight: 600 }}>
                           {item.offer_name && `Offer: ${item.offer_name}`} {item.publisher_name && ` | Publisher: ${item.publisher_name}`}
                         </div>
-                        <div style={{ fontSize: 11, marginTop: 2, color:"#64748b" }}>{item.landing_url}</div>
+                        <div style={{ fontSize: 11, marginTop: 2, color:"#64748b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.landing_url}</div>
                       </div>
-                      <div style={{ display: "flex", gap: 8 }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                         <button style={styles.copyButton} onClick={() => copyUrl(item.landing_url)}>Copy</button>
-                        <button style={{ border: "none", background: "rgba(59,130,246,0.15)", color: "#60a5fa", padding: "10px 14px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13 }} onClick={() => startEdit(item)}>Edit</button>
-                        <button style={{ border: "none", background: "rgba(239,68,68,0.1)", color: "#f87171", padding: "10px 10px", borderRadius: 10, cursor: "pointer" }} onClick={() => deleteLanding(item.id, item.title)}>🗑</button>
+                        <button style={{ border: "none", background: "rgba(59,130,246,0.1)", color: "#3b82f6", padding: "10px 14px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13 }} onClick={() => startEdit(item)}>Edit</button>
+                        <button style={{ border: "none", background: "rgba(239,68,68,0.1)", color: "#ef4444", padding: "10px 12px", borderRadius: 10, cursor: "pointer", fontSize: 14 }} onClick={() => deleteLanding(item.id, item.title)}>🗑</button>
                       </div>
                     </div>
                   ))}
@@ -432,15 +432,15 @@ export default function LandingBuilder() {
             )}
           </div>
 
-          {/* RIGHT PANEL: FULL HEIGHT STREAMLINED LANDING PAGE LIVE PREVIEW */}
+          {/* RIGHT PANEL: LIVE PREVIEW */}
           <div style={styles.previewPanel}>
-            <div style={{ ...styles.previewCard, backgroundImage: previewBackground.url ? `url(${previewBackground.url})` : "none", color: form.text_color }}>
+            <div style={{ ...styles.previewCard, backgroundImage: previewBackground.url ? `url(${previewBackground.url})` : "none" }}>
               
               {/* Core Overlay covering full area background */}
               <div style={{ ...styles.overlay, background: form.background_overlay }} />
               
               {/* Dynamic content card stretched as a real page view container */}
-              <div style={{ ...styles.previewContent, background: form.card_color && form.card_color.startsWith("#") ? `${form.card_color}F2` : "#ffffff", borderRadius: form.card_radius }}>
+              <div style={{ ...styles.previewContent, background: form.card_color, borderRadius: form.card_radius, color: form.text_color }}>
                 
                 <div style={styles.previewHeaderContainer}>
                   {previewLogo.url ? (
@@ -454,8 +454,8 @@ export default function LandingBuilder() {
                 {previewHero.url && <img src={previewHero.url} alt="Hero Asset" style={styles.hero} />}
                 
                 <div style={{ textAlign: form.rtl_enabled ? "right" : "left", direction: form.rtl_enabled ? "rtl" : "ltr" }}>
-                  <h2 style={{ fontSize: 24, fontWeight: 800, margin: "10px 0", color: "#1e293b" }}>{form.title || "Premium Subscription Title"}</h2>
-                  <p style={{ fontSize: 14, margin: "5px 0", color: "#475569", fontWeight: 500 }}>{form.subtitle || "Access unlimited contents immediately"}</p>
+                  <h2 style={{ fontSize: 24, fontWeight: 800, margin: "10px 0", color: form.text_color }}>{form.title || "Premium Subscription Title"}</h2>
+                  <p style={{ fontSize: 14, margin: "5px 0", color: form.text_color, opacity: 0.85, fontWeight: 500 }}>{form.subtitle || "Access unlimited contents immediately"}</p>
                   
                   {form.show_timer && (
                     <div style={{...styles.timerBox, borderColor: form.theme_color, color: form.theme_color}}>
@@ -463,11 +463,11 @@ export default function LandingBuilder() {
                     </div>
                   )}
 
-                  <p style={{...styles.previewDescription, color: "#64748b"}}>{form.description || "Enter your mobile information inside the next steps to start authentication."}</p>
+                  <p style={{...styles.previewDescription, color: form.text_color, opacity: 0.75}}>{form.description || "Enter your mobile information inside the next steps to start authentication."}</p>
                 </div>
 
                 <div style={styles.actionSection}>
-                  <button style={{ ...styles.previewButton, background: form.theme_color, borderRadius: form.button_radius }}>
+                  <button style={{ ...styles.previewButton, background: form.theme_color, borderRadius: form.button_radius, color: "#ffffff" }}>
                     {form.button_text}
                   </button>
                   {form.show_disclaimer && (
@@ -499,7 +499,7 @@ function ColorInput({ label, value, onChange }) {
   return (
     <div style={styles.colorBox}>
       <label>{label}</label>
-      <input type="color" value={value && value.startsWith("#") ? value : "#ffffff"} onChange={(e) => onChange(e.target.value)} />
+      <input type="color" value={value && value.startsWith("#") ? value : "#ffffff"} onChange={(e) => onChange(e.target.value)} style={{cursor:"pointer"}} />
     </div>
   );
 }
@@ -511,22 +511,22 @@ function UploadBox({ title, onFile }) {
   };
   return (
     <div style={styles.uploadBox} onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
-      <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600 }}>{title}</div>
+      <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600, color: "#6b4f6a" }}>{title}</div>
       <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml" style={{fontSize: 11, maxWidth: '100%'}} onChange={(e) => { if (e.target.files?.[0]) onFile(e.target.files[0]); }} />
     </div>
   );
 }
 
 /* =========================
-   UPDATED STYLES — standardized dark palette (#050810/#0d1326), 13/14px font
+   UPDATED STYLES — Added Box-Sizing & Corrected UI Colors
 ========================= */
 const styles = {
-  page: { minHeight: "100vh", padding: "80px 20px", background: '#050810', color: "#f1f5f9" },
+  page: { minHeight: "100vh", padding: "80px 20px", background: '#050810', color: "#f1f5f9", boxSizing: "border-box" },
   header: { marginBottom: 30 },
-  heading: { fontSize: 28, fontWeight: 700, fontFamily:"Syne,sans-serif", color:"#4a2f3f" },
+  heading: { fontSize: 28, fontWeight: 700, fontFamily:"Syne,sans-serif", color:"#e2d5e5" },
   subheading: { color:"#9b7faa", fontSize: 13, marginTop: 4, fontFamily:"'Lora', serif" },
   layout: { display: "grid", gap: 24, alignItems: "start" },
-  builderCard: { background: "#fff", border: "1px solid rgba(210,160,180,0.25)", borderRadius: 24, padding: 24, boxShadow:"0 4px 20px rgba(210,160,180,0.08)" },
+  builderCard: { background: "#fff", border: "1px solid rgba(210,160,180,0.25)", borderRadius: 24, padding: 24, boxShadow:"0 4px 20px rgba(210,160,180,0.08)", boxSizing: "border-box" },
 
   previewPanel: { position: "sticky", top: 100 },
   previewCard: {
@@ -552,32 +552,32 @@ const styles = {
     justifyContent: "space-between",
   },
   previewHeaderContainer: { display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", marginBottom: 15 },
-  carrierPlaceholder: { background: "#f5eef8", color: "#9b7faa", padding: "6px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, border:"1px solid rgba(210,160,180,0.3)" },
-  timerBox: { border: "1px solid", padding: "8px 12px", borderRadius: 8, margin: "10px 0", display: "inline-block", fontSize: 13 },
+  carrierPlaceholder: { background: "rgba(245,238,248,0.8)", color: "#9b7faa", padding: "6px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, border:"1px solid rgba(210,160,180,0.3)" },
+  timerBox: { border: "1px solid", padding: "8px 12px", borderRadius: 8, margin: "10px 0", display: "inline-block", fontSize: 13, backgroundColor: "rgba(0,0,0,0.02)" },
   actionSection: { marginTop: "auto", width: "100%" },
-  disclaimerText: { fontSize: 11, textAlign: "center", color: "#9b7faa", marginTop: 12, lineHeight: 1.4 },
+  disclaimerText: { fontSize: 11, textAlign: "center", opacity: 0.7, marginTop: 12, lineHeight: 1.4 },
 
   logo: { width: 60, height: 60, borderRadius: 14, objectFit: "cover" },
   hero: { width: "100%", height: 240, objectFit: "cover", borderRadius: 16, marginBottom: 20 },
   previewDescription: { lineHeight: 1.6, marginTop: 10, fontSize: 13 },
-  previewButton: { width: "100%", padding: "18px", border: "none", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" },
+  previewButton: { width: "100%", padding: "18px", border: "none", fontWeight: 700, fontSize: 14, cursor: "pointer" },
 
   sectionTitle: { fontSize: 16, fontWeight: 700, marginBottom: 18, marginTop: 24, color:"#4a2f3f", fontFamily:"Syne,sans-serif" },
   grid: { display: "grid", gap: 14 },
   grid3: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 },
-  colorBox: { display: "flex", flexDirection: "column", gap: 10, background: "#fdf6f9", border:"1px solid rgba(210,160,180,0.2)", padding: 14, borderRadius: 16, fontSize: 13, color:"#6b4f6a", fontFamily:"'Lora', serif" },
-  input: { width: "100%", padding: 12, borderRadius: 10, border: "1px solid rgba(210,160,180,0.4)", background: "#fff", color: "#4a2f3f", outline: "none", fontSize: 13, fontFamily:"'Lora', serif", fontWeight:600 },
+  colorBox: { display: "flex", flexDirection: "column", gap: 10, background: "#fdf6f9", border:"1px solid rgba(210,160,180,0.2)", padding: 14, borderRadius: 16, fontSize: 13, color:"#6b4f6a", fontFamily:"'Lora', serif", boxSizing: "border-box" },
+  input: { width: "100%", padding: 12, borderRadius: 10, border: "1px solid rgba(210,160,180,0.4)", background: "#fff", color: "#4a2f3f", outline: "none", fontSize: 13, fontFamily:"'Lora', serif", fontWeight:600, boxSizing: "border-box" },
 
-  select: { width: "100%", padding: 12, borderRadius: 10, border: "1px solid rgba(210,160,180,0.4)", background: "#fff", color: "#4a2f3f", outline: "none", cursor: "pointer", fontSize: 13, fontFamily:"'Lora', serif" },
+  select: { width: "100%", padding: 12, borderRadius: 10, border: "1px solid rgba(210,160,180,0.4)", background: "#fff", color: "#4a2f3f", outline: "none", cursor: "pointer", fontSize: 13, fontFamily:"'Lora', serif", boxSizing: "border-box" },
   selectOption: { background: "#fff", color: "#4a2f3f", padding: 12 },
 
-  textarea: { width: "100%", minHeight: 100, padding: 12, borderRadius: 10, border: "1px solid rgba(210,160,180,0.4)", background: "#fff", color: "#4a2f3f", outline: "none", fontSize: 13, fontFamily:"'Lora', serif", fontWeight:600 },
+  textarea: { width: "100%", minHeight: 100, padding: 12, borderRadius: 10, border: "1px solid rgba(210,160,180,0.4)", background: "#fff", color: "#4a2f3f", outline: "none", fontSize: 13, fontFamily:"'Lora', serif", fontWeight:600, boxSizing: "border-box" },
   uploadGrid: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 },
-  uploadBox: { border: "2px dashed rgba(210,160,180,0.4)", borderRadius: 16, padding: "12px 8px", textAlign: "center", background: "#fdf6f9" },
+  uploadBox: { border: "2px dashed rgba(210,160,180,0.4)", borderRadius: 16, padding: "12px 8px", textAlign: "center", background: "#fdf6f9", boxSizing: "border-box" },
   toggleGrid: { display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12 },
-  toggleItem: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fdf6f9", border:"1px solid rgba(210,160,180,0.2)", padding: 14, borderRadius: 14, fontSize: 13, color:"#6b4f6a", fontFamily:"'Lora', serif" },
-  createButton: { width: "100%", padding: 16, borderRadius: 12, border: "none", background: "linear-gradient(135deg,#e8856a,#d4709a)", color: "#fff", fontWeight: 700, fontSize: 14, fontFamily:"'Lora', serif" },
+  toggleItem: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fdf6f9", border:"1px solid rgba(210,160,180,0.2)", padding: 14, borderRadius: 14, fontSize: 13, color:"#6b4f6a", fontFamily:"'Lora', serif", boxSizing: "border-box" },
+  createButton: { width: "100%", padding: 16, borderRadius: 12, border: "none", background: "linear-gradient(135deg,#e8856a,#d4709a)", color: "#fff", fontWeight: 700, fontSize: 14, fontFamily:"'Lora', serif", cursor:"pointer" },
   landingList: { display: "grid", gap: 12 },
-  landingItem: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fdf6f9", border:"1px solid rgba(210,160,180,0.2)", padding: 14, borderRadius: 14 },
+  landingItem: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fdf6f9", border:"1px solid rgba(210,160,180,0.2)", padding: 14, borderRadius: 14, boxSizing: "border-box" },
   copyButton: { border: "1px solid rgba(210,160,180,0.35)", background: "#fff", color: "#6b4f6a", padding: "10px 14px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, fontFamily:"'Lora', serif" },
 };
