@@ -187,12 +187,6 @@ router.post("/auto-integrate/:offerId", async (req, res) => {
 
     try {
       const result = await model.generateContent([
-        {
-          inlineData: {
-            mimeType: ext.endsWith(".pdf") ? "application/pdf" : "text/plain",
-            data: fileBuffer.toString("base64")
-          }
-        },
         `
 You are an expert telecom API parser.
 
