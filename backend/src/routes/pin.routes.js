@@ -56,17 +56,19 @@ function resolveTemplate(value, runtime) {
    Only ACTIVE parameters (is_active = true) pass honge
 ===================================================== */
 
-function buildPayload(params, runtime) {
+function buildPayload(params, runtime, skipOtp = false) {
   const payload = {};
   params.forEach(({ param_key, param_value, is_active }) => {
     // Skip inactive params
     if (!is_active) return;
-    // Skip URL/method/fallback keys — yeh payload mein nahi jayenge
+    // Skip URL/method/fallback keys
     if (
       param_key.includes("url") ||
       param_key.includes("method") ||
       param_key.includes("fallback")
     ) return;
+    // pin_send mein otp/pin skip karo
+    if (skipOtp && (param_key === "otp" || param_key === "pin")) return;
     payload[param_key] = resolveTemplate(param_value, runtime);
   });
   return payload;
@@ -177,9 +179,10 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     let injectedScript = workflow.injectedScript;
 
     // Build payload — only is_active=true params
-    const payload = buildPayload(allParams, runtime);
-
     const sessionToken = uuidv4();
+    runtime.session_token = sessionToken;
+
+    const payload = buildPayload(allParams, runtime, true); // pin_send: skip otp/pin
 
     await pool.query(
       `INSERT INTO pin_sessions (offer_id,msisdn,session_token,params,publisher_request,publisher_id,status)
@@ -293,7 +296,7 @@ router.all("/pin/verify", async (req, res) => {
     };
 
     // Build payload — only is_active=true params
-    const payload = buildPayload(allParams, runtime);
+    const payload = buildPayload(allParams, runtime, true); // pin_send: skip otp/pin
 
     const verifyRowToken = uuidv4();
 
