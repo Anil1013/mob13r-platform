@@ -20,8 +20,8 @@ async function insertDefaultParams(offerId) {
   try {
     for (const [key, value] of DEFAULT_PARAMS) {
       await pool.query(
-        `INSERT INTO offer_parameters (offer_id, param_key, param_value)
-         VALUES ($1, $2, $3) ON CONFLICT (offer_id, param_key) DO NOTHING`,
+        `INSERT INTO offer_parameters (offer_id, param_key, param_value, is_active)
+         VALUES ($1, $2, $3, false) ON CONFLICT (offer_id, param_key) DO NOTHING`,
         [offerId, key, value]
       );
     }
@@ -94,7 +94,7 @@ router.get("/:offerId/parameters", orgAuth, async (req, res) => {
     const offerId = Number(req.params.offerId);
     if (isNaN(offerId)) return res.status(400).json([]);
     let result = await pool.query(
-      `SELECT id, param_key, param_value FROM offer_parameters WHERE offer_id = $1 ORDER BY id ASC`,
+      `SELECT id, param_key, param_value, is_active FROM offer_parameters WHERE offer_id = $1 ORDER BY id ASC`,
       [offerId]
     );
     const existingKeys = result.rows.map(p => p.param_key);
@@ -102,12 +102,12 @@ router.get("/:offerId/parameters", orgAuth, async (req, res) => {
     if (missing.length > 0) {
       for (const [key, value] of missing) {
         await pool.query(
-          `INSERT INTO offer_parameters (offer_id, param_key, param_value) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+          `INSERT INTO offer_parameters (offer_id, param_key, param_value, is_active) VALUES ($1, $2, $3, false) ON CONFLICT DO NOTHING`,
           [offerId, key, value]
         );
       }
       result = await pool.query(
-        `SELECT id, param_key, param_value FROM offer_parameters WHERE offer_id = $1 ORDER BY id ASC`,
+        `SELECT id, param_key, param_value, is_active FROM offer_parameters WHERE offer_id = $1 ORDER BY id ASC`,
         [offerId]
       );
     }
@@ -121,10 +121,15 @@ router.get("/:offerId/parameters", orgAuth, async (req, res) => {
 router.patch("/parameters/:id", orgAuth, async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { param_value } = req.body;
+    const { param_value, is_active } = req.body;
     const result = await pool.query(
-      `UPDATE offer_parameters SET param_value = $1 WHERE id = $2 RETURNING *`,
-      [param_value, id]
+      `UPDATE offer_parameters SET
+        param_value = COALESCE($1, param_value),
+        is_active = COALESCE($2, is_active)
+       WHERE id = $3 RETURNING *`,
+      [param_value !== undefined ? param_value : null,
+       is_active !== undefined ? is_active : null,
+       id]
     );
     return res.json(result.rows[0]);
   } catch (err) {
@@ -143,7 +148,7 @@ router.post("/:offerId/parameters", orgAuth, async (req, res) => {
     );
     if (exists.rows.length) return res.status(400).json({ message: "This parameter key already exists" });
     const result = await pool.query(
-      `INSERT INTO offer_parameters (offer_id, param_key, param_value) VALUES ($1, $2, $3) RETURNING *`,
+      `INSERT INTO offer_parameters (offer_id, param_key, param_value, is_active) VALUES ($1, $2, $3, true) RETURNING *`,
       [offerId, param_key, param_value || ""]
     );
     return res.json(result.rows[0]);
