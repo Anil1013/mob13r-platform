@@ -265,7 +265,7 @@ export default function Offers() {
               </div>
               <div>
                 <label style={styles.workflowLabel}>
-                  <input type="checkbox" defaultChecked={selectedOffer.has_status_check} onChange={e => updateOffer(selectedOffer.id, { has_status_check: e.target.checked })} /> Shemaroo Status Check
+                  <input type="checkbox" defaultChecked={selectedOffer.has_status_check} onChange={e => updateOffer(selectedOffer.id, { has_status_check: e.target.checked })} /> Enable Status Check
                 </label>
                 <input placeholder="Status Check URL" style={{...styles.cellInput,width:"100%",marginTop:6}} defaultValue={selectedOffer.check_status_url} onBlur={e => updateOffer(selectedOffer.id, { check_status_url: e.target.value })} />
               </div>
