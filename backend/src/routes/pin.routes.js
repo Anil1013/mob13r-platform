@@ -401,20 +401,20 @@ router.all("/pin/verify", async (req, res) => {
       }
     }
 
-    // today_hits increment — verified hone par USED counter badhao
+    // Pehle daily reset (UTC midnight)
+    await pool.query(
+      `UPDATE offers SET today_hits = 0, last_reset_date = CURRENT_DATE
+       WHERE id = $1 AND last_reset_date < CURRENT_DATE`,
+      [session.offer_id]
+    );
+
+    // Phir increment
     if (isCredited) {
       await pool.query(
         `UPDATE offers SET today_hits = today_hits + 1 WHERE id = $1`,
         [session.offer_id]
       );
     }
-
-    // Agar din badal gaya toh today_hits reset karo (daily reset)
-    await pool.query(
-      `UPDATE offers SET today_hits = 0, last_reset_date = CURRENT_DATE
-       WHERE id = $1 AND last_reset_date < CURRENT_DATE`,
-      [session.offer_id]
-    );
 
     const publisherResponse = mapPublisherResponse(
       { ...advMapped.body, session_token },
