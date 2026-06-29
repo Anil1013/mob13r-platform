@@ -35,19 +35,8 @@ async function insertDefaultParams(offerId) {
 router.get("/", orgAuth, async (req, res) => {
   try {
     const { advertiser_id } = req.query;
-    let query = `SELECT o.*, a.name AS advertiser_name,
-                   COALESCE(v.verified_count, 0) AS verified_count
-                 FROM offers o
+    let query = `SELECT o.*, a.name AS advertiser_name FROM offers o
                  JOIN advertisers a ON a.id = o.advertiser_id
-                 LEFT JOIN (
-                   SELECT offer_id,
-                     COUNT(*) FILTER (
-                       WHERE status IN ('VERIFIED','SCRUBBED','CAP_REACHED')
-                       AND parent_session_token IS NOT NULL
-                     ) AS verified_count
-                   FROM pin_sessions
-                   GROUP BY offer_id
-                 ) v ON v.offer_id = o.id
                  WHERE o.org_id = $1`;
     const params = [req.orgId];
     if (advertiser_id) {
