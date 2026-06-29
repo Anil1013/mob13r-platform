@@ -45,19 +45,18 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 8080;
 
-// ✅ IST midnight cron — reset today_hits daily at 00:00 IST (18:30 UTC)
+/* ✅ IST midnight cron — reset today_hits daily at 00:00 IST (18:30 UTC) */
 cron.schedule("30 18 * * *", async () => {
   try {
     const result = await pool.query(
-      `UPDATE offers SET today_hits = 0, last_reset_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
-       WHERE last_reset_date < (NOW() AT TIME ZONE 'Asia/Kolkata')::date`
+      "UPDATE offers SET today_hits = 0, last_reset_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date WHERE last_reset_date < (NOW() AT TIME ZONE 'Asia/Kolkata')::date"
     );
-    console.log(\`✅ Daily reset: \${result.rowCount} offers reset at IST midnight\`);
+    console.log("Daily reset: " + result.rowCount + " offers reset at IST midnight");
   } catch (err) {
-    console.error("❌ Cron reset failed:", err.message);
+    console.error("Cron reset failed:", err.message);
   }
 }, { timezone: "UTC" });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
+  console.log("Backend running on port " + PORT);
 });
