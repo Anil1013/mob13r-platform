@@ -401,10 +401,10 @@ router.all("/pin/verify", async (req, res) => {
       }
     }
 
-    // Pehle daily reset (UTC midnight)
+    // Pehle daily reset (IST midnight)
     await pool.query(
-      `UPDATE offers SET today_hits = 0, last_reset_date = CURRENT_DATE
-       WHERE id = $1 AND last_reset_date < CURRENT_DATE`,
+      `UPDATE offers SET today_hits = 0, last_reset_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+       WHERE id = $1 AND last_reset_date < (NOW() AT TIME ZONE 'Asia/Kolkata')::date`,
       [session.offer_id]
     );
 
