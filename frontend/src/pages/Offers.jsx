@@ -138,7 +138,7 @@ export default function Offers() {
   };
 
   /* ---------------- HELPERS ---------------- */
-  const remaining = (o) => !o.daily_cap ? "0" : Math.max(o.daily_cap - (o.verified_count ?? 0), 0);
+  const remaining = (o) => !o.daily_cap ? "0" : Math.max(o.daily_cap - (o.today_hits ?? 0), 0);
   const autoRevenue = (o) => o.cpa ? `$${(Number(o.cpa) * Number(o.today_hits || 0)).toFixed(2)}` : "$0.00";
 
   const routeBadge = (o) => {
@@ -218,7 +218,7 @@ export default function Offers() {
                     <input style={styles.cellInput} defaultValue={o.daily_cap === null ? "" : o.daily_cap} placeholder="0"
                       onBlur={(e) => { const val = e.target.value === "" ? 0 : parseInt(e.target.value); updateOffer(o.id, { daily_cap: val }); }} />
                   </td>
-                  <td style={td}>{o.verified_count ?? 0}</td>
+                  <td style={td}>{o.today_hits ?? 0}</td>
                   <td style={td}>{remaining(o)}</td>
                   <td style={td}>{autoRevenue(o)}</td>
                   <td style={td}>{routeBadge(o)}</td>
