@@ -34,6 +34,13 @@ async function insertDefaultParams(offerId) {
 
 router.get("/", orgAuth, async (req, res) => {
   try {
+    // Auto-reset today_hits at IST midnight (runs on every page load)
+    await pool.query(
+      `UPDATE offers SET today_hits = 0, last_reset_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+       WHERE org_id = $1 AND last_reset_date < (NOW() AT TIME ZONE 'Asia/Kolkata')::date`,
+      [req.orgId]
+    );
+
     const { advertiser_id } = req.query;
     let query = `SELECT o.*, a.name AS advertiser_name FROM offers o
                  JOIN advertisers a ON a.id = o.advertiser_id
