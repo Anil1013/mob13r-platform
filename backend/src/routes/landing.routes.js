@@ -132,6 +132,7 @@ router.get("/", async (req, res) => {
     const result = await pool.query(`
       SELECT lp.*, o.service_name AS offer_name, o.portal_url,
         o.has_antifraud, o.has_status_check, o.has_portal_step,
+        o.carrier, o.geo,
         p.name AS publisher_name
       FROM landing_pages lp
       LEFT JOIN publisher_offers po ON po.id = lp.publisher_offer_id
