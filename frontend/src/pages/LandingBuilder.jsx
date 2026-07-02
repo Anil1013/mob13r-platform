@@ -314,7 +314,7 @@ export default function LandingBuilder() {
                 <option value="" style={styles.selectOption}>Select Publisher Offer</option>
                 {offers.map((o) => (
                   <option key={o.id} value={o.id} style={styles.selectOption}>
-                    {o.service_name} - {o.publisher_name}
+                    {o.service_name} | Publisher: {o.publisher_name} | Carrier: {o.carrier}
                   </option>
                 ))}
               </select>
@@ -416,7 +416,7 @@ export default function LandingBuilder() {
                       <div style={{ flex: 1, minWidth: 0, paddingRight: 10 }}>
                         <div style={{ fontWeight: 700, fontSize: 14, color:"#4a2f3f" }}>{item.title}</div>
                         <div style={{ fontSize: 12, marginTop: 4, color: "#22c55e", fontWeight: 600 }}>
-                          {item.offer_name && `Offer: ${item.offer_name}`} {item.publisher_name && ` | Publisher: ${item.publisher_name}`}
+                          {item.offer_name && `Offer: ${item.offer_name}`} {item.publisher_name && ` | Publisher: ${item.publisher_name}`} {item.carrier && ` | Carrier: ${item.carrier}`}
                         </div>
                         <div style={{ fontSize: 11, marginTop: 2, color:"#64748b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.landing_url}</div>
                       </div>
