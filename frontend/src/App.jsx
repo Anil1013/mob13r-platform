@@ -23,6 +23,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/landing/:id" element={<DynamicLanding />} />
+        <Route path="/landing/:publisher/:id" element={<DynamicLanding />} />
 
         {/* PRIVATE */}
         <Route element={<ProtectedRoute />}>
