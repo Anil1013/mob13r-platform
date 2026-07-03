@@ -15,6 +15,9 @@ export default function DynamicLanding() {
   const [landing, setLanding] =
     useState(null);
 
+  const [carrierBlocked, setCarrierBlocked] =
+    useState(false);
+
   const [step, setStep] =
     useState("msisdn");
 
@@ -69,7 +72,50 @@ export default function DynamicLanding() {
   useEffect(() => {
     loadLanding();
 
-    return () => {
+    if (carrierBlocked) {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#1a1a2e",
+        color: "#fff",
+        fontFamily: "sans-serif",
+        textAlign: "center",
+        padding: "24px"
+      }}>
+        <div style={{ fontSize: "64px", marginBottom: "16px" }}>📵</div>
+        <h2 style={{ fontSize: "22px", marginBottom: "8px" }}>
+          {landing?.carrier ? `${landing.carrier} Network Required` : "Wrong Network"}
+        </h2>
+        <p style={{ color: "#aaa", maxWidth: "300px", lineHeight: "1.6" }}>
+          This offer is only available on <strong style={{ color: "#fff" }}>{landing?.carrier || "the required carrier"}</strong> mobile network.
+        </p>
+        <p style={{ color: "#aaa", marginTop: "12px", fontSize: "14px" }}>
+          Please disable WiFi and connect using your {landing?.carrier} SIM card, then refresh the page.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          style={{
+            marginTop: "24px",
+            padding: "12px 28px",
+            background: "#e94560",
+            color: "#fff",
+            border: "none",
+            borderRadius: "8px",
+            fontSize: "16px",
+            cursor: "pointer"
+          }}
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
+  return () => {
       if (pollingRef.current) {
         clearInterval(
           pollingRef.current
@@ -115,6 +161,21 @@ export default function DynamicLanding() {
           setLanding(
             landingData
           );
+
+          // Carrier detection via ip-api.com
+          if (landingData.carrier) {
+            try {
+              const ipRes = await fetch("https://ip-api.com/json/?fields=org,isp,as");
+              const ipData = await ipRes.json();
+              const combined = ((ipData.org || "") + " " + (ipData.isp || "") + " " + (ipData.as || "")).toLowerCase();
+              const expectedCarrier = (landingData.carrier || "").toLowerCase();
+              if (!combined.includes(expectedCarrier)) {
+                setCarrierBlocked(true);
+              }
+            } catch (e) {
+              console.warn("Carrier check failed, allowing through:", e);
+            }
+          }
 
           setTimer(
             Number(
