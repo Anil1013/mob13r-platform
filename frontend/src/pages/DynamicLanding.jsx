@@ -15,9 +15,6 @@ export default function DynamicLanding() {
   const [landing, setLanding] =
     useState(null);
 
-  const [carrierBlocked, setCarrierBlocked] =
-    useState(false);
-
   const [step, setStep] =
     useState("msisdn");
 
@@ -72,52 +69,7 @@ export default function DynamicLanding() {
   useEffect(() => {
     loadLanding();
 
-    if (carrierBlocked) {
-    return (
-      <div style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#1a1a2e",
-        color: "#fff",
-        fontFamily: "sans-serif",
-        textAlign: "center",
-        padding: "24px"
-      }}>
-        <div style={{ fontSize: "64px", marginBottom: "16px" }}>📵</div>
-        <h2 style={{ fontSize: "22px", marginBottom: "8px" }}>
-          {landing?.carrier ? `${landing.carrier} Network Required` : "Wrong Network"}
-        </h2>
-        <p style={{ color: "#aaa", maxWidth: "300px", lineHeight: "1.6" }}>
-          This offer is only available on{" "}
-          <strong style={{ color: "#fff" }}>{landing?.carrier || "the required carrier"}</strong>
-          {landing?.geo ? <span> in <strong style={{ color: "#fff" }}>{landing.geo}</strong></span> : ""}.
-        </p>
-        <p style={{ color: "#aaa", marginTop: "12px", fontSize: "14px" }}>
-          Please disable WiFi and connect using your {landing?.carrier} SIM card in {landing?.geo || "the correct country"}, then refresh the page.
-        </p>
-        <button
-          onClick={() => window.location.reload()}
-          style={{
-            marginTop: "24px",
-            padding: "12px 28px",
-            background: "#e94560",
-            color: "#fff",
-            border: "none",
-            borderRadius: "8px",
-            fontSize: "16px",
-            cursor: "pointer"
-          }}
-        >
-          Try Again
-        </button>
-      </div>
-    );
-  }
-
-  return () => {
+    return () => {
       if (pollingRef.current) {
         clearInterval(
           pollingRef.current
@@ -163,31 +115,6 @@ export default function DynamicLanding() {
           setLanding(
             landingData
           );
-
-          // Carrier + Geo detection via ip-api.com
-          if (landingData.carrier || landingData.geo) {
-            try {
-              const ipRes = await fetch("https://ip-api.com/json/?fields=org,isp,as,countryCode");
-              const ipData = await ipRes.json();
-              const combined = ((ipData.org || "") + " " + (ipData.isp || "") + " " + (ipData.as || "")).toLowerCase();
-              const userCountry = (ipData.countryCode || "").toUpperCase();
-
-              const expectedCarrier = (landingData.carrier || "").toLowerCase();
-              const expectedGeo = (landingData.geo || "").toUpperCase();
-
-              // Check carrier match
-              const carrierMatch = !expectedCarrier || combined.includes(expectedCarrier);
-
-              // Check geo/country match (ip-api returns ISO 2-letter code e.g. IQ, KW, PS, JO)
-              const geoMatch = !expectedGeo || userCountry === expectedGeo;
-
-              if (!carrierMatch || !geoMatch) {
-                setCarrierBlocked(true);
-              }
-            } catch (e) {
-              console.warn("Carrier/Geo check failed, allowing through:", e);
-            }
-          }
 
           setTimer(
             Number(
@@ -448,6 +375,13 @@ export default function DynamicLanding() {
 
           setStatusText(
             "OTP Sent Successfully"
+          );
+        } else if (data.status === "WRONG_CARRIER") {
+          setStatusText(
+            data.message || "Wrong carrier"
+          );
+          alert(
+            "❌ " + (data.message || "This number is not valid for this offer.")
           );
         } else {
           alert(
