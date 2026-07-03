@@ -17,6 +17,7 @@ import dashboardReportRoutes from "./routes/dashboard.report.routes.js";
 import saasAuthRoutes from "./routes/saas/auth.routes.js";
 import saasOrgRoutes from "./routes/saas/org.routes.js";
 import saasAdminRoutes from "./routes/saas/admin.routes.js";
+import carrierPrefixRoutes from "./routes/carrier-prefixes.routes.js";
 
 const app = express();
 
@@ -70,6 +71,7 @@ app.use("/api", docsRoutes);
 app.use("/api/saas", saasAuthRoutes);
 app.use("/api/saas", saasOrgRoutes);
 app.use("/api/saas", saasAdminRoutes);
+app.use("/api", carrierPrefixRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ status: "FAILED", error: "Route not found" });
