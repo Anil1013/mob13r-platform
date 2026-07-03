@@ -7,37 +7,112 @@ CREATE TABLE IF NOT EXISTS carrier_prefixes (
   UNIQUE(carrier, geo, prefix)
 );
 
--- Common Middle East / Asia carrier prefixes
+-- =============================================
+-- Palestine (PS) — country code 970 / 972
+-- =============================================
 INSERT INTO carrier_prefixes (carrier, geo, prefix) VALUES
--- Palestine
-('Jawwal', 'PS', '970-59'),
-('Jawwal', 'PS', '972-59'),
-('Ooredoo', 'PS', '970-56'),
-('Ooredoo', 'PS', '972-56'),
--- Jordan
-('Zain', 'JO', '962-79'),
-('Zain', 'JO', '962-77'),
-('Orange', 'JO', '962-77'),
-('Umniah', 'JO', '962-78'),
--- Iraq
-('Zain', 'IQ', '964-77'),
-('Zain', 'IQ', '964-78'),
-('Asiacell', 'IQ', '964-77'),
-('Korek', 'IQ', '964-75'),
--- Kuwait
-('Zain', 'KW', '965-96'),
-('Zain', 'KW', '965-97'),
-('Ooredoo', 'KW', '965-55'),
-('STC', 'KW', '965-50'),
--- Saudi Arabia
-('STC', 'SA', '966-5'),
-('Mobily', 'SA', '966-56'),
-('Zain', 'SA', '966-59'),
--- Egypt
-('Vodafone', 'EG', '20-10'),
-('Orange', 'EG', '20-12'),
-('Etisalat', 'EG', '20-11'),
--- UAE
-('Etisalat', 'AE', '971-50'),
-('Du', 'AE', '971-55')
+('Jawwal',  'PS', '97059'),
+('Jawwal',  'PS', '97259'),
+('Jawwal',  'PS', '00970590'),
+('Ooredoo', 'PS', '97056'),
+('Ooredoo', 'PS', '97256'),
+('Ooredoo', 'PS', '00970560')
+
+ON CONFLICT DO NOTHING;
+
+-- =============================================
+-- Iraq (IQ) — country code 964
+-- =============================================
+-- Asiacell:  077x (9647700-9647799)
+-- Zain IQ:   078x, 079x
+-- Korek:     075x
+-- Umniah IQ: 076x
+INSERT INTO carrier_prefixes (carrier, geo, prefix) VALUES
+('Asiacell', 'IQ', '964077'),
+('Asiacell', 'IQ', '00964077'),
+('Asiacell', 'IQ', '077'),
+
+('Zain',     'IQ', '964078'),
+('Zain',     'IQ', '964079'),
+('Zain',     'IQ', '00964078'),
+('Zain',     'IQ', '00964079'),
+('Zain',     'IQ', '078'),
+('Zain',     'IQ', '079'),
+
+('Korek',    'IQ', '964075'),
+('Korek',    'IQ', '00964075'),
+('Korek',    'IQ', '075'),
+
+('Umniah',   'IQ', '964076'),
+('Umniah',   'IQ', '00964076'),
+('Umniah',   'IQ', '076')
+
+ON CONFLICT DO NOTHING;
+
+-- =============================================
+-- Kuwait (KW) — country code 965
+-- =============================================
+-- Zain KW:   96x, 97x (start with 9)
+-- Ooredoo:   55x, 66x
+-- STC:       50x, 51x
+INSERT INTO carrier_prefixes (carrier, geo, prefix) VALUES
+('Zain',    'KW', '96596'),
+('Zain',    'KW', '96597'),
+('Zain',    'KW', '0096596'),
+('Zain',    'KW', '0096597'),
+
+('Ooredoo', 'KW', '96555'),
+('Ooredoo', 'KW', '96566'),
+('Ooredoo', 'KW', '0096555'),
+
+('STC',     'KW', '96550'),
+('STC',     'KW', '96551'),
+('STC',     'KW', '0096550')
+
+ON CONFLICT DO NOTHING;
+
+-- =============================================
+-- Jordan (JO) — country code 962
+-- =============================================
+INSERT INTO carrier_prefixes (carrier, geo, prefix) VALUES
+('Zain',    'JO', '96279'),
+('Zain',    'JO', '96277'),
+('Orange',  'JO', '96278'),
+('Umniah',  'JO', '96276'),
+('Orange',  'JO', '00962780'),
+('Zain',    'JO', '00962790')
+
+ON CONFLICT DO NOTHING;
+
+-- =============================================
+-- Saudi Arabia (SA) — country code 966
+-- =============================================
+INSERT INTO carrier_prefixes (carrier, geo, prefix) VALUES
+('STC',     'SA', '9665'),
+('Mobily',  'SA', '96656'),
+('Zain',    'SA', '96659'),
+('STC',     'SA', '009665')
+
+ON CONFLICT DO NOTHING;
+
+-- =============================================
+-- Egypt (EG) — country code 20
+-- =============================================
+INSERT INTO carrier_prefixes (carrier, geo, prefix) VALUES
+('Vodafone', 'EG', '2010'),
+('Orange',   'EG', '2012'),
+('Etisalat', 'EG', '2011'),
+('WE',       'EG', '2015'),
+('Vodafone', 'EG', '00201')
+
+ON CONFLICT DO NOTHING;
+
+-- =============================================
+-- UAE (AE) — country code 971
+-- =============================================
+INSERT INTO carrier_prefixes (carrier, geo, prefix) VALUES
+('Etisalat', 'AE', '97150'),
+('Du',       'AE', '97155'),
+('Etisalat', 'AE', '009715')
+
 ON CONFLICT DO NOTHING;
