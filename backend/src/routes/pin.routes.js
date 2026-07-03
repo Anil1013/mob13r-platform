@@ -149,6 +149,28 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const offer = offerRes.rows[0];
 
+    // ✅ MSISDN Prefix Validation — carrier + geo check
+    if (offer.carrier && offer.geo) {
+      const msisdn = String(incoming.msisdn).replace(/[^0-9]/g, "");
+      const prefixRes = await pool.query(
+        `SELECT prefix FROM carrier_prefixes WHERE LOWER(carrier) = LOWER($1) AND UPPER(geo) = UPPER($2)`,
+        [offer.carrier, offer.geo]
+      );
+      if (prefixRes.rows.length > 0) {
+        const normalizedMsisdn = msisdn.replace(/^00/, "");
+        const matched = prefixRes.rows.some(row => {
+          const p = row.prefix.replace(/[^0-9]/g, "");
+          return normalizedMsisdn.startsWith(p);
+        });
+        if (!matched) {
+          return res.status(400).json({
+            status: "WRONG_CARRIER",
+            message: `This offer is only for ${offer.carrier} (${offer.geo}) subscribers. Please use a valid ${offer.carrier} number.`
+          });
+        }
+      }
+    }
+
     // Fetch ALL params (active + inactive) — we need URL/method from all
     const paramRes = await pool.query(
       `SELECT param_key, param_value, is_active FROM offer_parameters WHERE offer_id=$1`,
