@@ -20,7 +20,7 @@ export default function Navbar() {
     { to:"/dashboard/dump", label:"Dump Logs" },
     { to:"/publisher/dashboard", label:"Pub Dashboard" },
     { to:"/plans", label:"📦 Plans" },
-    ...(isSuperAdmin ? [{ to:"/super-admin", label:"⚙️ Super Admin" }] : []),
+    ...(isSuperAdmin ? [{ to:"/super-admin", label:"⚙️ Super Admin" }, { to:"/carrier-prefixes", label:"📡 Carriers" }] : []),
   ];
   return (
     <>
