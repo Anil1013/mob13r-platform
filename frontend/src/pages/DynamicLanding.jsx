@@ -91,10 +91,12 @@ export default function DynamicLanding() {
           {landing?.carrier ? `${landing.carrier} Network Required` : "Wrong Network"}
         </h2>
         <p style={{ color: "#aaa", maxWidth: "300px", lineHeight: "1.6" }}>
-          This offer is only available on <strong style={{ color: "#fff" }}>{landing?.carrier || "the required carrier"}</strong> mobile network.
+          This offer is only available on{" "}
+          <strong style={{ color: "#fff" }}>{landing?.carrier || "the required carrier"}</strong>
+          {landing?.geo ? <span> in <strong style={{ color: "#fff" }}>{landing.geo}</strong></span> : ""}.
         </p>
         <p style={{ color: "#aaa", marginTop: "12px", fontSize: "14px" }}>
-          Please disable WiFi and connect using your {landing?.carrier} SIM card, then refresh the page.
+          Please disable WiFi and connect using your {landing?.carrier} SIM card in {landing?.geo || "the correct country"}, then refresh the page.
         </p>
         <button
           onClick={() => window.location.reload()}
@@ -162,18 +164,28 @@ export default function DynamicLanding() {
             landingData
           );
 
-          // Carrier detection via ip-api.com
-          if (landingData.carrier) {
+          // Carrier + Geo detection via ip-api.com
+          if (landingData.carrier || landingData.geo) {
             try {
-              const ipRes = await fetch("https://ip-api.com/json/?fields=org,isp,as");
+              const ipRes = await fetch("https://ip-api.com/json/?fields=org,isp,as,countryCode");
               const ipData = await ipRes.json();
               const combined = ((ipData.org || "") + " " + (ipData.isp || "") + " " + (ipData.as || "")).toLowerCase();
+              const userCountry = (ipData.countryCode || "").toUpperCase();
+
               const expectedCarrier = (landingData.carrier || "").toLowerCase();
-              if (!combined.includes(expectedCarrier)) {
+              const expectedGeo = (landingData.geo || "").toUpperCase();
+
+              // Check carrier match
+              const carrierMatch = !expectedCarrier || combined.includes(expectedCarrier);
+
+              // Check geo/country match (ip-api returns ISO 2-letter code e.g. IQ, KW, PS, JO)
+              const geoMatch = !expectedGeo || userCountry === expectedGeo;
+
+              if (!carrierMatch || !geoMatch) {
                 setCarrierBlocked(true);
               }
             } catch (e) {
-              console.warn("Carrier check failed, allowing through:", e);
+              console.warn("Carrier/Geo check failed, allowing through:", e);
             }
           }
 
