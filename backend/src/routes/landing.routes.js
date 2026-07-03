@@ -146,6 +146,55 @@ router.get("/", async (req, res) => {
   }
 });
 
+/* GET LANDING BY PUBLISHER NAME — /landing/:publisher/:id */
+router.get("/:publisher/:id", async (req, res) => {
+  try {
+    const { publisher, id } = req.params;
+
+    // Find publisher_offer_id for this landing + publisher combo
+    const result = await pool.query(`
+      SELECT lp.*, po.offer_id, po.publisher_id, po.publisher_cpa,
+        o.service_name, o.geo, o.carrier, o.portal_url, o.otp_length,
+        o.has_antifraud, o.has_status_check, o.has_portal_step,
+        o.af_trigger_point, o.af_prepare_url, o.check_status_url,
+        o.pin_send_url, o.pin_verify_url,
+        o.encode_headers_base64, o.encode_ip_base64,
+        p.api_key, p.name AS publisher_name
+      FROM landing_pages lp
+      LEFT JOIN publisher_offers po ON po.offer_id = (
+        SELECT po2.offer_id FROM publisher_offers po2
+        LEFT JOIN landing_pages lp2 ON lp2.publisher_offer_id = po2.id
+        WHERE lp2.id = $1 LIMIT 1
+      )
+      LEFT JOIN publishers p ON p.id = po.publisher_id
+      LEFT JOIN offers o ON o.id = po.offer_id
+      WHERE lp.id = $1
+        AND LOWER(REPLACE(p.name, ' ', '')) = LOWER(REPLACE($2, ' ', ''))
+        AND po.status = 'active'
+      LIMIT 1
+    `, [id, publisher]);
+
+    if (!result.rows.length) {
+      // Fallback: just load landing with original publisher
+      return res.redirect(`/api/landing/${id}`);
+    }
+
+    const landing = result.rows[0];
+    res.json({
+      status: "SUCCESS",
+      data: {
+        ...landing,
+        redirect_url: landing.success_redirect_url || landing.portal_url || "",
+        antifraud: { enabled: landing.has_antifraud, trigger_point: landing.af_trigger_point, prepare_url: landing.af_prepare_url },
+        status_check: { enabled: landing.has_status_check, url: landing.check_status_url },
+        portal: { enabled: landing.has_portal_step, url: landing.portal_url },
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ status: "FAILED", error: err.message });
+  }
+});
+
 /* GET SINGLE LANDING */
 router.get("/:id", async (req, res) => {
   try {
