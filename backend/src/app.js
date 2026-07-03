@@ -1,4 +1,5 @@
 import express from "express";
+import carrierPrefixRoutes from "./routes/carrier-prefixes.routes.js";
 import cors from "cors";
 import fileUpload from "express-fileupload";
 
@@ -17,7 +18,6 @@ import dashboardReportRoutes from "./routes/dashboard.report.routes.js";
 import saasAuthRoutes from "./routes/saas/auth.routes.js";
 import saasOrgRoutes from "./routes/saas/org.routes.js";
 import saasAdminRoutes from "./routes/saas/admin.routes.js";
-import carrierPrefixRoutes from "./routes/carrier-prefixes.routes.js";
 
 const app = express();
 
@@ -47,6 +47,7 @@ app.use(fileUpload({
 
 app.use("/uploads", express.static("public/uploads"));
 app.use(express.json({ limit: "50mb" }));
+app.use("/api", carrierPrefixRoutes);
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 app.use((req, res, next) => {
@@ -71,7 +72,6 @@ app.use("/api", docsRoutes);
 app.use("/api/saas", saasAuthRoutes);
 app.use("/api/saas", saasOrgRoutes);
 app.use("/api/saas", saasAdminRoutes);
-app.use("/api", carrierPrefixRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ status: "FAILED", error: "Route not found" });
