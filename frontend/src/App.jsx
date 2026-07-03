@@ -13,6 +13,7 @@ import ProtectedRoute from "./auth/ProtectedRoute";
 import Signup from "./pages/saas/Signup";
 import Plans from "./pages/saas/Plans";
 import SuperAdmin from "./pages/saas/SuperAdmin";
+import CarrierPrefixes from "./pages/CarrierPrefixes";
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/publisher/dashboard" element={<PublisherDashboard />} />
           <Route path="/plans" element={<Plans />} />
           <Route path="/super-admin" element={<SuperAdmin />} />
+          <Route path="/carrier-prefixes" element={<CarrierPrefixes />} />
         </Route>
 
         {/* Default */}
