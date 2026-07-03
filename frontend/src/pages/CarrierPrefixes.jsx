@@ -2,64 +2,101 @@ import { useEffect, useState } from "react";
 
 const API_BASE = "https://backend.mob13r.com";
 
-const COMMON_CARRIERS = {
-  PS: ["Jawwal", "Ooredoo"],
-  IQ: ["Zain", "Asiacell", "Korek", "Umniah"],
-  KW: ["Zain", "Ooredoo", "STC"],
-  JO: ["Zain", "Orange", "Umniah"],
-  SA: ["STC", "Mobily", "Zain"],
+const CARRIERS_BY_GEO = {
   AE: ["Etisalat", "Du"],
-  EG: ["Vodafone", "Orange", "Etisalat", "WE"],
+  AF: ["Roshan", "MTN", "Etisalat", "AWCC"],
   BH: ["Zain", "Batelco", "STC"],
-  OM: ["Ooredoo", "Omantel", "Vodafone"],
-  QA: ["Ooredoo", "Vodafone"],
-  YE: ["Yemen Mobile", "MTN", "Sabafon"],
+  BD: ["Grameenphone", "Banglalink", "Robi", "Airtel", "Teletalk"],
+  DZ: ["Mobilis", "Ooredoo", "Djezzy"],
+  EG: ["Vodafone", "Orange", "Etisalat", "WE"],
+  IQ: ["Zain", "Asiacell", "Korek", "Umniah"],
+  IN: ["Jio", "Airtel", "Vi", "BSNL"],
+  ID: ["Telkomsel", "Indosat", "XL", "Tri"],
+  IR: ["MCI", "Irancell", "RighTel"],
+  JO: ["Zain", "Orange", "Umniah"],
+  KW: ["Zain", "Ooredoo", "STC"],
+  KZ: ["Kcell", "Beeline", "Tele2"],
   LB: ["Touch", "Alfa"],
+  LY: ["Libyana", "Madar"],
+  MA: ["Maroc Telecom", "Orange", "Inwi"],
+  MM: ["MPT", "Telenor", "Ooredoo", "Mytel"],
+  MY: ["Maxis", "Celcom", "Digi", "U Mobile"],
+  NG: ["MTN", "Glo", "Airtel", "9mobile"],
+  OM: ["Ooredoo", "Omantel", "Vodafone"],
+  PK: ["Jazz", "Telenor", "Zong", "Ufone"],
+  PS: ["Jawwal", "Ooredoo"],
+  PH: ["Globe", "Smart", "DITO"],
+  QA: ["Ooredoo", "Vodafone"],
+  SA: ["STC", "Mobily", "Zain"],
+  SD: ["Zain", "MTN", "Sudani"],
   SY: ["Syriatel", "MTN"],
+  TH: ["AIS", "DTAC", "True Move"],
+  TN: ["Ooredoo", "Orange", "Tunisie Telecom"],
+  TR: ["Turkcell", "Vodafone", "Turk Telekom"],
+  TZ: ["Vodacom", "Airtel", "Tigo", "Halotel"],
+  UZ: ["Ucell", "Beeline", "MobiUz"],
+  VN: ["Viettel", "Vinaphone", "Mobifone"],
+  YE: ["Yemen Mobile", "MTN", "Sabafon"],
+  ZA: ["Vodacom", "MTN", "Cell C", "Telkom"],
 };
 
-const ALL_GEOS = [
-  "AE","BH","EG","IQ","JO","KW","LB","OM","PS","QA","SA","SY","YE",
-  "IN","PK","BD","LK","NP","MM","TH","ID","MY","PH","VN",
-];
+const ALL_GEOS = Object.keys(CARRIERS_BY_GEO).sort();
+
+const GEO_NAMES = {
+  AE:"UAE", AF:"Afghanistan", BH:"Bahrain", BD:"Bangladesh",
+  DZ:"Algeria", EG:"Egypt", IQ:"Iraq", IN:"India", ID:"Indonesia",
+  IR:"Iran", JO:"Jordan", KW:"Kuwait", KZ:"Kazakhstan", LB:"Lebanon",
+  LY:"Libya", MA:"Morocco", MM:"Myanmar", MY:"Malaysia", NG:"Nigeria",
+  OM:"Oman", PK:"Pakistan", PS:"Palestine", PH:"Philippines",
+  QA:"Qatar", SA:"Saudi Arabia", SD:"Sudan", SY:"Syria", TH:"Thailand",
+  TN:"Tunisia", TR:"Turkey", TZ:"Tanzania", UZ:"Uzbekistan",
+  VN:"Vietnam", YE:"Yemen", ZA:"South Africa",
+};
 
 export default function CarrierPrefixes() {
   const [rows, setRows] = useState([]);
   const [filterGeo, setFilterGeo] = useState("");
   const [filterCarrier, setFilterCarrier] = useState("");
   const [form, setForm] = useState({ carrier: "", geo: "", prefix: "" });
+  const [customCarrier, setCustomCarrier] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
 
-  const token = localStorage.getItem("token");
-  const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
-
   const load = async () => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (filterGeo) params.set("geo", filterGeo);
-    if (filterCarrier) params.set("carrier", filterCarrier);
-    const res = await fetch(`${API_BASE}/api/carrier-prefixes?${params}`, { headers });
-    const data = await res.json();
-    setRows(data.data || []);
+    try {
+      const params = new URLSearchParams();
+      if (filterGeo) params.set("geo", filterGeo);
+      if (filterCarrier) params.set("carrier", filterCarrier);
+      const res = await fetch(`${API_BASE}/api/carrier-prefixes?${params}`);
+      const data = await res.json();
+      setRows((data.data || []).sort((a, b) =>
+        a.geo.localeCompare(b.geo) || a.carrier.localeCompare(b.carrier) || a.prefix.localeCompare(b.prefix)
+      ));
+    } catch (e) { console.error(e); }
     setLoading(false);
   };
 
   useEffect(() => { load(); }, [filterGeo, filterCarrier]);
 
+  const finalCarrier = form.carrier === "__custom__" ? customCarrier : form.carrier;
+
   const add = async () => {
-    if (!form.carrier || !form.geo || !form.prefix) {
+    if (!finalCarrier || !form.geo || !form.prefix) {
       setMsg({ type: "error", text: "Sab fields required hain" });
+      setTimeout(() => setMsg(null), 3000);
       return;
     }
     const res = await fetch(`${API_BASE}/api/carrier-prefixes`, {
-      method: "POST", headers,
-      body: JSON.stringify(form),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ carrier: finalCarrier, geo: form.geo, prefix: form.prefix }),
     });
     const data = await res.json();
     if (data.status === "SUCCESS") {
-      setMsg({ type: "success", text: "✅ Prefix add ho gaya!" });
+      setMsg({ type: "success", text: `✅ ${finalCarrier} (${form.geo}) - ${form.prefix} add ho gaya!` });
       setForm({ carrier: "", geo: "", prefix: "" });
+      setCustomCarrier("");
       load();
     } else {
       setMsg({ type: "error", text: data.error || "Failed" });
@@ -67,65 +104,82 @@ export default function CarrierPrefixes() {
     setTimeout(() => setMsg(null), 3000);
   };
 
-  const remove = async (id) => {
-    if (!confirm("Delete karna hai?")) return;
-    await fetch(`${API_BASE}/api/carrier-prefixes/${id}`, { method: "DELETE", headers });
+  const remove = async (id, carrier, geo) => {
+    if (!confirm(`Delete ${carrier} (${geo})?`)) return;
+    await fetch(`${API_BASE}/api/carrier-prefixes/${id}`, { method: "DELETE" });
     load();
   };
 
   const s = {
-    page: { padding: "24px", fontFamily: "sans-serif", background: "#f8f9fa", minHeight: "100vh" },
-    title: { fontSize: "22px", fontWeight: "700", marginBottom: "4px", color: "#1a1a2e" },
-    sub: { color: "#888", fontSize: "13px", marginBottom: "24px" },
-    card: { background: "#fff", borderRadius: "12px", padding: "20px", marginBottom: "20px", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" },
-    label: { fontSize: "12px", color: "#666", marginBottom: "4px", display: "block" },
-    input: { width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "14px", boxSizing: "border-box" },
-    select: { width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "14px", background: "#fff", boxSizing: "border-box" },
-    btn: { padding: "10px 20px", borderRadius: "8px", border: "none", background: "#e94560", color: "#fff", fontWeight: "600", cursor: "pointer", fontSize: "14px" },
-    btnSm: { padding: "5px 12px", borderRadius: "6px", border: "none", background: "#fee2e2", color: "#dc2626", cursor: "pointer", fontSize: "12px", fontWeight: "600" },
-    grid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "12px" },
-    grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" },
+    page: { padding: "24px", fontFamily: "'Inter', sans-serif", background: "#f5f6fa", minHeight: "100vh" },
+    title: { fontSize: "22px", fontWeight: "700", marginBottom: "2px", color: "#1a1a2e" },
+    sub: { color: "#999", fontSize: "13px", marginBottom: "24px" },
+    card: { background: "#fff", borderRadius: "12px", padding: "20px", marginBottom: "20px", boxShadow: "0 1px 4px rgba(0,0,0,0.07)" },
+    label: { fontSize: "11px", color: "#666", marginBottom: "5px", display: "block", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" },
+    input: { width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e0e0e0", fontSize: "14px", boxSizing: "border-box", outline: "none" },
+    select: { width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e0e0e0", fontSize: "14px", background: "#fff", boxSizing: "border-box" },
+    btn: { padding: "10px 22px", borderRadius: "8px", border: "none", background: "#e94560", color: "#fff", fontWeight: "600", cursor: "pointer", fontSize: "14px" },
+    btnDel: { padding: "4px 10px", borderRadius: "6px", border: "none", background: "#fff0f0", color: "#dc2626", cursor: "pointer", fontSize: "12px", fontWeight: "600" },
+    grid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" },
+    grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" },
     table: { width: "100%", borderCollapse: "collapse" },
-    th: { textAlign: "left", fontSize: "11px", color: "#888", fontWeight: "600", padding: "8px 12px", borderBottom: "2px solid #f0f0f0", textTransform: "uppercase" },
-    td: { padding: "10px 12px", borderBottom: "1px solid #f5f5f5", fontSize: "14px" },
-    badge: { display: "inline-block", padding: "2px 8px", borderRadius: "20px", background: "#e8f4fd", color: "#0066cc", fontSize: "12px", fontWeight: "600" },
-    msg: (t) => ({ padding: "10px 16px", borderRadius: "8px", marginBottom: "12px", fontSize: "13px", background: t === "success" ? "#dcfce7" : "#fee2e2", color: t === "success" ? "#16a34a" : "#dc2626" }),
+    th: { textAlign: "left", fontSize: "11px", color: "#aaa", fontWeight: "700", padding: "8px 14px", borderBottom: "2px solid #f0f0f0", textTransform: "uppercase", letterSpacing: "0.5px" },
+    td: { padding: "10px 14px", borderBottom: "1px solid #f7f7f7", fontSize: "14px" },
+    geoBadge: { display: "inline-block", padding: "3px 10px", borderRadius: "20px", background: "#eef2ff", color: "#4f46e5", fontSize: "12px", fontWeight: "700" },
+    prefixCode: { background: "#f5f5f5", padding: "2px 8px", borderRadius: "4px", fontFamily: "monospace", fontSize: "13px" },
+    msg: (t) => ({ padding: "10px 16px", borderRadius: "8px", marginBottom: "14px", fontSize: "13px", fontWeight: "500", background: t === "success" ? "#dcfce7" : "#fee2e2", color: t === "success" ? "#16a34a" : "#dc2626" }),
+    sectionTitle: { fontWeight: "600", marginBottom: "14px", fontSize: "15px", display: "flex", alignItems: "center", gap: "8px" },
   };
 
-  const suggestedCarriers = form.geo ? (COMMON_CARRIERS[form.geo] || []) : [];
+  const suggestedCarriers = form.geo ? (CARRIERS_BY_GEO[form.geo] || []) : [];
+
+  // Group rows by GEO for display
+  const grouped = rows.reduce((acc, r) => {
+    if (!acc[r.geo]) acc[r.geo] = [];
+    acc[r.geo].push(r);
+    return acc;
+  }, {});
 
   return (
     <div style={s.page}>
       <div style={s.title}>📡 Carrier Prefix Manager</div>
-      <div style={s.sub}>Manage carrier number prefixes for MSISDN validation</div>
+      <div style={s.sub}>MSISDN validation ke liye carrier prefixes manage karo</div>
 
       {/* ADD FORM */}
       <div style={s.card}>
-        <div style={{ fontWeight: "600", marginBottom: "14px", fontSize: "15px" }}>Add New Prefix</div>
+        <div style={s.sectionTitle}>➕ Add New Prefix</div>
         {msg && <div style={s.msg(msg.type)}>{msg.text}</div>}
         <div style={s.grid3}>
           <div>
             <span style={s.label}>Country (GEO)</span>
-            <select style={s.select} value={form.geo} onChange={e => setForm({ ...form, geo: e.target.value, carrier: "" })}>
-              <option value="">Select GEO</option>
-              {ALL_GEOS.map(g => <option key={g} value={g}>{g}</option>)}
+            <select style={s.select} value={form.geo}
+              onChange={e => setForm({ ...form, geo: e.target.value, carrier: "" })}>
+              <option value="">-- Select Country --</option>
+              {ALL_GEOS.map(g => (
+                <option key={g} value={g}>{g} — {GEO_NAMES[g] || g}</option>
+              ))}
             </select>
           </div>
           <div>
             <span style={s.label}>Carrier</span>
             {suggestedCarriers.length > 0 ? (
-              <select style={s.select} value={form.carrier} onChange={e => setForm({ ...form, carrier: e.target.value })}>
-                <option value="">Select Carrier</option>
-                {suggestedCarriers.map(c => <option key={c} value={c}>{c}</option>)}
-                <option value="__custom__">Other (type below)</option>
-              </select>
+              <>
+                <select style={s.select} value={form.carrier}
+                  onChange={e => setForm({ ...form, carrier: e.target.value })}>
+                  <option value="">-- Select Carrier --</option>
+                  {suggestedCarriers.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="__custom__">+ Other (custom)</option>
+                </select>
+                {form.carrier === "__custom__" && (
+                  <input style={{ ...s.input, marginTop: "6px" }}
+                    placeholder="Carrier name type karo"
+                    value={customCarrier}
+                    onChange={e => setCustomCarrier(e.target.value)} />
+                )}
+              </>
             ) : (
-              <input style={s.input} placeholder="e.g. Zain" value={form.carrier}
-                onChange={e => setForm({ ...form, carrier: e.target.value })} />
-            )}
-            {form.carrier === "__custom__" && (
-              <input style={{ ...s.input, marginTop: "6px" }} placeholder="Type carrier name"
-                onChange={e => setForm({ ...form, carrier: e.target.value })} />
+              <input style={s.input} placeholder="e.g. Zain"
+                value={form.carrier} onChange={e => setForm({ ...form, carrier: e.target.value })} />
             )}
           </div>
           <div>
@@ -139,15 +193,16 @@ export default function CarrierPrefixes() {
 
       {/* FILTER + TABLE */}
       <div style={s.card}>
-        <div style={{ fontWeight: "600", marginBottom: "14px", fontSize: "15px" }}>
-          All Prefixes <span style={{ color: "#888", fontWeight: "400" }}>({rows.length})</span>
+        <div style={s.sectionTitle}>
+          📋 All Prefixes
+          <span style={{ color: "#999", fontWeight: "400", fontSize: "13px" }}>({rows.length} total)</span>
         </div>
         <div style={s.grid2}>
           <div>
-            <span style={s.label}>Filter by GEO</span>
+            <span style={s.label}>Filter by Country</span>
             <select style={s.select} value={filterGeo} onChange={e => setFilterGeo(e.target.value)}>
               <option value="">All Countries</option>
-              {ALL_GEOS.map(g => <option key={g} value={g}>{g}</option>)}
+              {ALL_GEOS.map(g => <option key={g} value={g}>{g} — {GEO_NAMES[g] || g}</option>)}
             </select>
           </div>
           <div>
@@ -158,27 +213,29 @@ export default function CarrierPrefixes() {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: "center", color: "#888", padding: "24px" }}>Loading...</div>
+          <div style={{ textAlign: "center", color: "#aaa", padding: "32px" }}>Loading...</div>
+        ) : rows.length === 0 ? (
+          <div style={{ textAlign: "center", color: "#aaa", padding: "32px" }}>No prefixes found</div>
         ) : (
           <table style={s.table}>
             <thead>
               <tr>
-                <th style={s.th}>Carrier</th>
                 <th style={s.th}>GEO</th>
+                <th style={s.th}>Country</th>
+                <th style={s.th}>Carrier</th>
                 <th style={s.th}>Prefix</th>
                 <th style={s.th}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
-                <tr><td colSpan={4} style={{ ...s.td, textAlign: "center", color: "#aaa" }}>No prefixes found</td></tr>
-              ) : rows.map(r => (
-                <tr key={r.id}>
+              {rows.map((r, i) => (
+                <tr key={r.id} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                  <td style={s.td}><span style={s.geoBadge}>{r.geo}</span></td>
+                  <td style={s.td} style={{ ...s.td, color: "#666", fontSize: "13px" }}>{GEO_NAMES[r.geo] || r.geo}</td>
                   <td style={s.td}><strong>{r.carrier}</strong></td>
-                  <td style={s.td}><span style={s.badge}>{r.geo}</span></td>
-                  <td style={s.td}><code style={{ background: "#f5f5f5", padding: "2px 8px", borderRadius: "4px" }}>{r.prefix}</code></td>
+                  <td style={s.td}><span style={s.prefixCode}>{r.prefix}</span></td>
                   <td style={s.td}>
-                    <button style={s.btnSm} onClick={() => remove(r.id)}>Delete</button>
+                    <button style={s.btnDel} onClick={() => remove(r.id, r.carrier, r.geo)}>🗑 Delete</button>
                   </td>
                 </tr>
               ))}
