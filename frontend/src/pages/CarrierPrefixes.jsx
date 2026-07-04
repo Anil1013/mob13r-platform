@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Navbar from "../components/Navbar";
 
 const API_BASE = "https://backend.mob13r.com";
 
@@ -113,7 +114,9 @@ export default function CarrierPrefixes() {
   }, {});
 
   return (
-    <div style={s.page}>
+    <>
+      <Navbar />
+      <div style={s.page}>
       <div style={s.title}>📡 Carrier Prefix Manager</div>
       <div style={s.sub}>MSISDN validation ke liye carrier prefixes manage karo</div>
 
@@ -223,5 +226,6 @@ export default function CarrierPrefixes() {
         )}
       </div>
     </div>
+    </>
   );
 }
