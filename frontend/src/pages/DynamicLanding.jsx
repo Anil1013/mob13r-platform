@@ -10,7 +10,7 @@ const API_BASE =
   "https://backend.mob13r.com";
 
 export default function DynamicLanding() {
-  const { id } = useParams();
+  const { id, publisher } = useParams();
 
   const [landing, setLanding] =
     useState(null);
@@ -86,9 +86,13 @@ export default function DynamicLanding() {
         abortRef.current =
           new AbortController();
 
+        const apiUrl = publisher
+            ? `${API_BASE}/api/landing/${encodeURIComponent(publisher)}/${id}`
+            : `${API_BASE}/api/landing/${id}`;
+
         const res =
           await fetch(
-            `${API_BASE}/api/landing/${id}`,
+            apiUrl,
             {
               signal:
                 abortRef.current
