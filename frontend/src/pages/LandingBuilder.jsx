@@ -54,6 +54,7 @@ export default function LandingBuilder() {
   const [form, setForm] = useState(DEFAULT_FORM);
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 900 : false);
   const [editingId, setEditingId] = useState(null);
+  const [assignState, setAssignState] = useState({}); // { landingId: { open, publishers, selectedPub } }
   const [toast, setToast] = useState(null);
 
   const showToast = (msg, type = "success") => {
@@ -212,6 +213,20 @@ export default function LandingBuilder() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const loadAssignablePublishers = async (item) => {
+    try {
+      // Get all publishers who have this offer assigned but NOT this specific landing
+      const res = await fetch(`${API_BASE}/api/landing/assignable-publishers/${item.id}`);
+      const data = await res.json();
+      if (data.status === "SUCCESS") {
+        setAssignState(prev => ({
+          ...prev,
+          [item.id]: { open: true, publishers: data.data || [], selectedPub: "" }
+        }));
+      }
+    } catch (e) { console.error(e); }
   };
 
   const loadLandings = async () => {
@@ -420,10 +435,43 @@ export default function LandingBuilder() {
                         </div>
                         <div style={{ fontSize: 11, marginTop: 2, color:"#64748b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.landing_url}</div>
                       </div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <button style={styles.copyButton} onClick={() => copyUrl(item.landing_url)}>Copy</button>
-                        <button style={{ border: "none", background: "rgba(59,130,246,0.1)", color: "#3b82f6", padding: "10px 14px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13 }} onClick={() => startEdit(item)}>Edit</button>
-                        <button style={{ border: "none", background: "rgba(239,68,68,0.1)", color: "#ef4444", padding: "10px 12px", borderRadius: 10, cursor: "pointer", fontSize: 14 }} onClick={() => deleteLanding(item.id, item.title)}>🗑</button>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button style={styles.copyButton} onClick={() => copyUrl(item.landing_url)}>Copy</button>
+                          <button style={{ border: "none", background: "rgba(34,197,94,0.1)", color: "#16a34a", padding: "10px 14px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13 }}
+                            onClick={() => loadAssignablePublishers(item)}>Assign</button>
+                          <button style={{ border: "none", background: "rgba(59,130,246,0.1)", color: "#3b82f6", padding: "10px 14px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13 }} onClick={() => startEdit(item)}>Edit</button>
+                          <button style={{ border: "none", background: "rgba(239,68,68,0.1)", color: "#ef4444", padding: "10px 12px", borderRadius: 10, cursor: "pointer", fontSize: 14 }} onClick={() => deleteLanding(item.id, item.title)}>🗑</button>
+                        </div>
+                        {assignState[item.id]?.open && (
+                          <div style={{ display: "flex", gap: 8, alignItems: "center", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "8px 12px", borderRadius: 10, marginTop: 4 }}>
+                            <select
+                              value={assignState[item.id]?.selectedPub || ""}
+                              onChange={e => setAssignState(prev => ({ ...prev, [item.id]: { ...prev[item.id], selectedPub: e.target.value } }))}
+                              style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 13, minWidth: 160 }}>
+                              <option value="">-- Select Publisher --</option>
+                              {(assignState[item.id]?.publishers || []).map(p => (
+                                <option key={p.id} value={p.name}>{p.name}</option>
+                              ))}
+                            </select>
+                            {assignState[item.id]?.selectedPub && (
+                              <button
+                                style={{ border: "none", background: "#16a34a", color: "#fff", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
+                                onClick={() => {
+                                  const pub = assignState[item.id].selectedPub;
+                                  const url = `https://dashboard.mob13r.com/landing/${encodeURIComponent(pub)}/${item.id}`;
+                                  copyUrl(url);
+                                  alert("URL Copied!\n" + url);
+                                  setAssignState(prev => ({ ...prev, [item.id]: { ...prev[item.id], open: false } }));
+                                }}>
+                                Copy URL
+                              </button>
+                            )}
+                            <button
+                              style={{ border: "none", background: "transparent", color: "#9ca3af", cursor: "pointer", fontSize: 16 }}
+                              onClick={() => setAssignState(prev => ({ ...prev, [item.id]: { ...prev[item.id], open: false } }))}>✕</button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
