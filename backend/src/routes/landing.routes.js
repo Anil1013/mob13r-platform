@@ -126,6 +126,29 @@ router.post("/", async (req, res) => {
   }
 });
 
+/* GET ASSIGNABLE PUBLISHERS — publishers who have this offer but landing not yet assigned */
+router.get("/assignable-publishers/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Get offer_id for this landing
+    const result = await pool.query(`
+      SELECT DISTINCT p.id, p.name
+      FROM publisher_offers po
+      JOIN publishers p ON p.id = po.publisher_id
+      WHERE po.offer_id = (
+        SELECT po2.offer_id FROM landing_pages lp
+        JOIN publisher_offers po2 ON po2.id = lp.publisher_offer_id
+        WHERE lp.id = $1
+      )
+      AND po.status = 'active'
+      ORDER BY p.name
+    `, [id]);
+    res.json({ status: "SUCCESS", data: result.rows });
+  } catch (err) {
+    res.status(500).json({ status: "FAILED", error: err.message });
+  }
+});
+
 /* GET ALL LANDINGS */
 router.get("/", async (req, res) => {
   try {
