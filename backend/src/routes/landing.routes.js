@@ -115,7 +115,19 @@ router.post("/", async (req, res) => {
     `, values);
 
     const landing = result.rows[0];
-    const landingUrl = `${FRONTEND_BASE_URL}/landing/${landing.id}`;
+
+    // Get publisher name for URL
+    const pubRes = await pool.query(
+      `SELECT p.name FROM publisher_offers po
+       JOIN publishers p ON p.id = po.publisher_id
+       WHERE po.id = $1 LIMIT 1`,
+      [publisher_offer_id]
+    );
+    const pubName = pubRes.rows[0]?.name
+      ? encodeURIComponent(pubRes.rows[0].name)
+      : "publisher";
+
+    const landingUrl = `${FRONTEND_BASE_URL}/landing/${pubName}/${landing.id}`;
 
     await pool.query(`UPDATE landing_pages SET landing_url=$1 WHERE id=$2`, [landingUrl, landing.id]);
 
