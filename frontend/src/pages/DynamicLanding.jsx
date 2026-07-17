@@ -12,6 +12,10 @@ const API_BASE =
 export default function DynamicLanding() {
   const { id, publisher } = useParams();
 
+  // URL params se api_key read karo (e.g. ?api_key=xxx)
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlApiKey = urlParams.get("api_key") || "";
+
   const [landing, setLanding] =
     useState(null);
 
@@ -260,20 +264,10 @@ export default function DynamicLanding() {
             .toString(36)
             .substring(2);
 
-        const clickId =
-          "click_" +
-          Math.random()
-            .toString(36)
-            .substring(2);
-
+        // click_id = session_token use karenge (OTP send ke baad set hoga)
         localStorage.setItem(
           "bfid",
           bfid
-        );
-
-        localStorage.setItem(
-          "click_id",
-          clickId
         );
       } catch (err) {
         console.error(err);
@@ -324,14 +318,14 @@ export default function DynamicLanding() {
                 "",
 
               "x-api-key":
-                landing.api_key,
+                landing.api_key || urlApiKey,
 
               user_agent:
                 navigator.userAgent,
 
               click_id:
                 localStorage.getItem(
-                  "click_id"
+                  "session_token"
                 ) || "",
 
               bfid:
@@ -364,6 +358,12 @@ export default function DynamicLanding() {
             "session_token",
             data.session_token ||
               ""
+          );
+
+          // click_id = session_token (for publisher tracking)
+          localStorage.setItem(
+            "click_id",
+            data.session_token || ""
           );
 
           if (
@@ -457,7 +457,7 @@ export default function DynamicLanding() {
               otp: otpValue,
 
               "x-api-key":
-                landing.api_key,
+                landing.api_key || urlApiKey,
 
               user_agent:
                 navigator.userAgent,
