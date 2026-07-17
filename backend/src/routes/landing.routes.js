@@ -127,7 +127,16 @@ router.post("/", async (req, res) => {
       ? encodeURIComponent(pubRes.rows[0].name)
       : "publisher";
 
-    const landingUrl = `${FRONTEND_BASE_URL}/landing/${pubName}/${landing.id}`;
+    // Get publisher api_key
+    const apiKeyRes = await pool.query(
+      `SELECT p.api_key FROM publisher_offers po
+       JOIN publishers p ON p.id = po.publisher_id
+       WHERE po.id = $1 LIMIT 1`,
+      [publisher_offer_id]
+    );
+    const apiKey = apiKeyRes.rows[0]?.api_key || "";
+
+    const landingUrl = `${FRONTEND_BASE_URL}/landing/${pubName}/${landing.id}?api_key=${apiKey}`;
 
     await pool.query(`UPDATE landing_pages SET landing_url=$1 WHERE id=$2`, [landingUrl, landing.id]);
 
@@ -188,7 +197,10 @@ router.get("/:publisher/:id", async (req, res) => {
 
     // Find publisher_offer_id for this landing + publisher combo
     const result = await pool.query(`
-      SELECT lp.*, po.offer_id, po.publisher_id, po.publisher_cpa,
+      SELECT lp.*,
+        po.id AS publisher_offer_id,
+        po.offer_id, po.publisher_id, po.publisher_cpa,
+        o.id AS offer_id,
         o.service_name, o.geo, o.carrier, o.portal_url, o.otp_length,
         o.has_antifraud, o.has_status_check, o.has_portal_step,
         o.af_trigger_point, o.af_prepare_url, o.check_status_url,
@@ -196,16 +208,14 @@ router.get("/:publisher/:id", async (req, res) => {
         o.encode_headers_base64, o.encode_ip_base64,
         p.api_key, p.name AS publisher_name
       FROM landing_pages lp
-      LEFT JOIN publisher_offers po ON po.offer_id = (
-        SELECT po2.offer_id FROM publisher_offers po2
-        LEFT JOIN landing_pages lp2 ON lp2.publisher_offer_id = po2.id
-        WHERE lp2.id = $1 LIMIT 1
-      )
-      LEFT JOIN publishers p ON p.id = po.publisher_id
-      LEFT JOIN offers o ON o.id = po.offer_id
-      WHERE lp.id = $1
-        AND LOWER(REPLACE(p.name, ' ', '')) = LOWER(REPLACE($2, ' ', ''))
+      JOIN publisher_offers po_orig ON po_orig.id = lp.publisher_offer_id
+      JOIN publisher_offers po ON po.offer_id = po_orig.offer_id
+        AND LOWER(REPLACE((SELECT name FROM publishers WHERE id = po.publisher_id), ' ', ''))
+            = LOWER(REPLACE($2, ' ', ''))
         AND po.status = 'active'
+      JOIN publishers p ON p.id = po.publisher_id
+      JOIN offers o ON o.id = po.offer_id
+      WHERE lp.id = $1
       LIMIT 1
     `, [id, publisher]);
 
