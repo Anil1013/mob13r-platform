@@ -217,13 +217,12 @@ export default function LandingBuilder() {
 
   const loadAssignablePublishers = async (item) => {
     try {
-      // Get all publishers who have this offer assigned but NOT this specific landing
       const res = await fetch(`${API_BASE}/api/landing/assignable-publishers/${item.id}`);
       const data = await res.json();
       if (data.status === "SUCCESS") {
         setAssignState(prev => ({
           ...prev,
-          [item.id]: { open: true, publishers: data.data || [], selectedPub: "" }
+          [item.id]: { open: true, publishers: data.data || [], selectedPub: "", selectedApiKey: "" }
         }));
       }
     } catch (e) { console.error(e); }
@@ -447,7 +446,10 @@ export default function LandingBuilder() {
                           <div style={{ display: "flex", gap: 8, alignItems: "center", background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "8px 12px", borderRadius: 10, marginTop: 4 }}>
                             <select
                               value={assignState[item.id]?.selectedPub || ""}
-                              onChange={e => setAssignState(prev => ({ ...prev, [item.id]: { ...prev[item.id], selectedPub: e.target.value } }))}
+                              onChange={e => {
+                                const pub = (assignState[item.id]?.publishers || []).find(p => p.name === e.target.value);
+                                setAssignState(prev => ({ ...prev, [item.id]: { ...prev[item.id], selectedPub: e.target.value, selectedApiKey: pub?.api_key || "" } }));
+                              }}
                               style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 13, minWidth: 160 }}>
                               <option value="">-- Select Publisher --</option>
                               {(assignState[item.id]?.publishers || []).map(p => (
@@ -459,7 +461,8 @@ export default function LandingBuilder() {
                                 style={{ border: "none", background: "#16a34a", color: "#fff", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
                                 onClick={() => {
                                   const pub = assignState[item.id].selectedPub;
-                                  const url = `https://dashboard.mob13r.com/landing/${encodeURIComponent(pub)}/${item.id}`;
+                                  const apiKey = assignState[item.id].selectedApiKey || "";
+                                  const url = `https://dashboard.mob13r.com/landing/${encodeURIComponent(pub)}/${item.id}${apiKey ? "?api_key=" + apiKey : ""}`;
                                   copyUrl(url);
                                   alert("URL Copied!\n" + url);
                                   setAssignState(prev => ({ ...prev, [item.id]: { ...prev[item.id], open: false } }));
