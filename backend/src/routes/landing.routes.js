@@ -153,7 +153,7 @@ router.get("/assignable-publishers/:id", async (req, res) => {
     const { id } = req.params;
     // Get offer_id for this landing
     const result = await pool.query(`
-      SELECT DISTINCT p.id, p.name
+      SELECT DISTINCT p.id, p.name, p.api_key
       FROM publisher_offers po
       JOIN publishers p ON p.id = po.publisher_id
       WHERE po.offer_id = (
