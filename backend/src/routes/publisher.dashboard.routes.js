@@ -48,7 +48,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
           ) AS stat_date,
 
           po.id AS publisher_offer_id,
-          o.service_name AS offer,
+          COALESCE(po.pub_offer_name, o.service_name) AS offer,
           o.geo,
           o.carrier,
           po.publisher_cpa AS cpa,
@@ -151,7 +151,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
         GROUP BY
           stat_date,
           po.id,
-          o.service_name,
+          COALESCE(po.pub_offer_name, o.service_name) AS service_name,
           o.geo,
           o.carrier,
           po.publisher_cpa,
