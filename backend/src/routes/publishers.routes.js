@@ -71,7 +71,7 @@ router.get("/offers/all", orgAuth, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT po.id, po.publisher_id, p.name AS publisher_name, po.offer_id,
-              o.service_name AS name, o.geo, o.carrier, po.publisher_cpa,
+              COALESCE(po.pub_offer_name, o.service_name) AS name, o.service_name AS original_name, o.geo, o.carrier, po.publisher_cpa, po.pub_offer_name,
               po.daily_cap, po.pass_percent, po.weight, po.status
        FROM publisher_offers po
        JOIN publishers p ON p.id = po.publisher_id
@@ -110,7 +110,7 @@ router.get("/:publisherId/offers", orgAuth, async (req, res) => {
 router.post("/:publisherId/offers", orgAuth, async (req, res) => {
   try {
     const { publisherId } = req.params;
-    const { offer_id, publisher_cpa, daily_cap = 0, pass_percent = 100, weight = 100 } = req.body;
+    const { offer_id, publisher_cpa, daily_cap = 0, pass_percent = 100, weight = 100, pub_offer_name } = req.body;
     if (!offer_id || publisher_cpa === undefined) return res.status(400).json({ status: "FAILED", message: "offer_id and publisher_cpa required" });
     const exists = await pool.query(
       `SELECT id FROM publisher_offers WHERE publisher_id = $1 AND offer_id = $2`,
@@ -118,9 +118,9 @@ router.post("/:publisherId/offers", orgAuth, async (req, res) => {
     );
     if (exists.rows.length) return res.status(400).json({ status: "FAILED", message: "Offer already assigned" });
     const insert = await pool.query(
-      `INSERT INTO publisher_offers (publisher_id, offer_id, publisher_cpa, daily_cap, pass_percent, weight, status, org_id)
-       VALUES ($1,$2,$3,$4,$5,$6,'active',$7) RETURNING *`,
-      [publisherId, offer_id, publisher_cpa, daily_cap, pass_percent, weight, req.orgId]
+      `INSERT INTO publisher_offers (publisher_id, offer_id, publisher_cpa, daily_cap, pass_percent, weight, status, org_id, pub_offer_name)
+       VALUES ($1,$2,$3,$4,$5,$6,'active',$7,$8) RETURNING *`,
+      [publisherId, offer_id, publisher_cpa, daily_cap, pass_percent, weight, req.orgId, pub_offer_name || null]
     );
     res.json({ status: "SUCCESS", data: insert.rows[0] });
   } catch (err) {
@@ -132,16 +132,17 @@ router.post("/:publisherId/offers", orgAuth, async (req, res) => {
 router.patch("/:publisherId/offers/:id", orgAuth, async (req, res) => {
   try {
     const { publisherId, id } = req.params;
-    const { status, publisher_cpa, daily_cap, pass_percent, weight } = req.body;
+    const { status, publisher_cpa, daily_cap, pass_percent, weight, pub_offer_name } = req.body;
     await pool.query(
       `UPDATE publisher_offers SET
         status = COALESCE($1, status),
         publisher_cpa = COALESCE($2, publisher_cpa),
         daily_cap = COALESCE($3, daily_cap),
         pass_percent = COALESCE($4, pass_percent),
-        weight = COALESCE($5, weight)
-       WHERE id = $6 AND publisher_id = $7`,
-      [status, publisher_cpa, daily_cap, pass_percent, weight, id, publisherId]
+        weight = COALESCE($5, weight),
+        pub_offer_name = COALESCE($6, pub_offer_name)
+       WHERE id = $7 AND publisher_id = $8`,
+      [status, publisher_cpa, daily_cap, pass_percent, weight, pub_offer_name || null, id, publisherId]
     );
     res.json({ status: "SUCCESS" });
   } catch (err) {
