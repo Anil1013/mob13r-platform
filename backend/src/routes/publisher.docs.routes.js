@@ -33,8 +33,13 @@ router.get("/publisher/:pubId/offer/:offerId/docs", async (req, res) => {
        🔹 2. Fetch Offer Details (Dynamic Geo & Carrier)
     ========================================================== */
     const offerRes = await pool.query(
-      "SELECT id, geo, carrier, service_name FROM offers WHERE id=$1",
-      [offerId]
+      `SELECT o.id, o.geo, o.carrier, o.service_name,
+              COALESCE(po.pub_offer_name, o.service_name) AS display_name
+       FROM offers o
+       LEFT JOIN publisher_offers po ON po.offer_id = o.id AND po.publisher_id = $2
+       WHERE o.id = $1
+       LIMIT 1`,
+      [offerId, pubId]
     );
 
     if (!offerRes.rows.length) {
@@ -43,6 +48,8 @@ router.get("/publisher/:pubId/offer/:offerId/docs", async (req, res) => {
     }
 
     const offer = offerRes.rows[0];
+    // Use custom pub_offer_name if set, else original service_name
+    const offerDisplayName = offer.display_name || offer.service_name;
     const BASE = "https://backend.mob13r.com";
 
     /* ==========================================================
@@ -93,7 +100,7 @@ router.get("/publisher/:pubId/offer/:offerId/docs", async (req, res) => {
       // Header
       doc.fontSize(22).text("Mob13r Publisher API Docs", { align: "center" });
       doc.moveDown();
-      doc.fontSize(12).text(`Service: ${offer.service_name || "N/A"}`);
+      doc.fontSize(12).text(`Service: ${offerDisplayName || "N/A"}`);
       doc.text(`Offer ID: ${offerId} | Publisher ID: ${pubId}`);
       doc.text(`Geo: ${offer.geo || "N/A"} | Carrier: ${offer.carrier || "N/A"}`);
       doc.text(`API Key: ${apiKey}`);
@@ -135,7 +142,7 @@ router.get("/publisher/:pubId/offer/:offerId/docs", async (req, res) => {
     const html = `
       <html>
         <head>
-          <title>API Docs: ${offer.service_name}</title>
+          <title>API Docs: ${offerDisplayName}</title>
           <style>
             body { font-family: -apple-system, sans-serif; padding: 40px; color: #1f2937; line-height: 1.6; }
             .container { max-width: 900px; margin: auto; }
@@ -148,7 +155,7 @@ router.get("/publisher/:pubId/offer/:offerId/docs", async (req, res) => {
         <body>
           <div class="container">
             <div class="header">
-              <h1>API Documentation: ${offer.service_name}</h1>
+              <h1>API Documentation: ${offerDisplayName}</h1>
               <p><strong>Geo:</strong> ${offer.geo} | <strong>Carrier:</strong> ${offer.carrier}</p>
               <a href="?format=pdf" class="btn">📥 Download PDF Version</a>
             </div>
