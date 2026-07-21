@@ -213,7 +213,7 @@ export default function CarrierPrefixes() {
               {rows.map((r, i) => (
                 <tr key={r.id} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
                   <td style={s.td}><span style={s.geoBadge}>{r.geo}</span></td>
-                  <td style={s.td} style={{ ...s.td, color: "#666", fontSize: "13px" }}>{GEO_NAMES[r.geo] || r.geo}</td>
+                  <td style={{ ...s.td, color: "#666", fontSize: "13px" }}>{GEO_NAMES[r.geo] || r.geo}</td>
                   <td style={s.td}><strong>{r.carrier}</strong></td>
                   <td style={s.td}><span style={s.prefixCode}>{r.prefix}</span></td>
                   <td style={s.td}>
