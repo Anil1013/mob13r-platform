@@ -20,6 +20,7 @@ export default function PublisherAssignOffers() {
   const [form, setForm] = useState({
     offer_id: "",
     publisher_cpa: "",
+    pub_offer_name: "",
     daily_cap: "",
     pass_percent: 100,
     weight: 100,
@@ -129,6 +130,7 @@ export default function PublisherAssignOffers() {
     const payload = {
       offer_id: parseNumber(form.offer_id),
       publisher_cpa: parseNumber(form.publisher_cpa),
+      pub_offer_name: form.pub_offer_name || null,
       daily_cap: parseNumber(form.daily_cap, { allowEmpty: true }),
       pass_percent: parseNumber(form.pass_percent),
       weight: parseNumber(form.weight),
@@ -173,6 +175,7 @@ export default function PublisherAssignOffers() {
         setForm({
           offer_id: "",
           publisher_cpa: "",
+          pub_offer_name: "",
           daily_cap: "",
           pass_percent: 100,
           weight: 100,
@@ -190,6 +193,7 @@ export default function PublisherAssignOffers() {
   const saveEdit = async (row) => {
     const payload = {
       publisher_cpa: parseNumber(editRow.publisher_cpa),
+      pub_offer_name: editRow.pub_offer_name || null,
       daily_cap: parseNumber(editRow.daily_cap, { allowEmpty: true }),
       pass_percent: parseNumber(editRow.pass_percent),
       weight: parseNumber(editRow.weight),
@@ -317,6 +321,15 @@ export default function PublisherAssignOffers() {
               </select>
 
               <input
+                style={{...styles.smallInput, minWidth: "140px"}}
+                type="text"
+                placeholder="Offer Name (Publisher ke liye)"
+                value={form.pub_offer_name}
+                onChange={(e) =>
+                  setForm({ ...form, pub_offer_name: e.target.value })
+                }
+              />
+              <input
                 style={styles.smallInput}
                 type="number"
                 step="0.01"
@@ -370,7 +383,8 @@ export default function PublisherAssignOffers() {
               <thead>
                 <tr>
                   {!publisherId && <th style={th}>Publisher</th>}
-                  <th style={th}>Offer</th>
+                  <th style={th}>Offer (Original)</th>
+                  <th style={th}>Pub Offer Name</th>
                   <th style={th}>Geo</th>
                   <th style={th}>Carrier</th>
                   <th style={th}>CPA</th>
@@ -385,7 +399,23 @@ export default function PublisherAssignOffers() {
                 {assigned.map((a) => (
                   <tr key={a.id}>
                     {!publisherId && <td style={{...td, color:"#1e293b", fontWeight:500}}>{a.publisher_name}</td>}
-                    <td style={{...td, color:"#1e293b", fontWeight:500}}>{a.name}</td>
+                    <td style={{...td, color:"#64748b", fontSize:12}}>{a.original_name || a.name}</td>
+                    <td style={{...td, color:"#1e293b", fontWeight:500}}>
+                      {editingId === a.id ? (
+                        <input
+                          style={styles.cellInput}
+                          type="text"
+                          placeholder="Custom name..."
+                          value={editRow.pub_offer_name || ""}
+                          onChange={(e) => setEditRow({ ...editRow, pub_offer_name: e.target.value })}
+                        />
+                      ) : (
+                        <span style={{color: a.pub_offer_name ? "#16a34a" : "#94a3b8"}}>
+                          {a.pub_offer_name || a.name}
+                          {a.pub_offer_name && <span style={{fontSize:10, marginLeft:4, color:"#16a34a"}}>✎ custom</span>}
+                        </span>
+                      )}
+                    </td>
                     <td style={td}>{a.geo}</td>
                     <td style={td}>{a.carrier}</td>
 
