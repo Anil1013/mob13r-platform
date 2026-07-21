@@ -151,7 +151,8 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
         GROUP BY
           stat_date,
           po.id,
-          COALESCE(po.pub_offer_name, o.service_name) AS service_name,
+          po.pub_offer_name,
+          o.service_name,
           o.geo,
           o.carrier,
           po.publisher_cpa,
