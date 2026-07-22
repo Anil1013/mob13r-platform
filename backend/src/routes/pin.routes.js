@@ -317,8 +317,8 @@ router.all("/pin/verify", async (req, res) => {
       userAgent: ua
     };
 
-    // Build payload — only is_active=true params
-    const payload = buildPayload(allParams, runtime, true); // pin_send: skip otp/pin
+    // Build payload — only is_active=true params (skipOtp=false for VERIFY so pin/otp IS included)
+    const payload = buildPayload(allParams, runtime, false);
 
     const verifyRowToken = uuidv4();
 
