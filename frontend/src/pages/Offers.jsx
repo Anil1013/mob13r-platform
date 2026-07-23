@@ -187,7 +187,7 @@ export default function Offers() {
           <table style={table}>
             <thead>
               <tr>
-                {["ID","Advertiser","Service","CPA ($)","Geo","Carrier","OTP Len","Cap","Used","Remain","Revenue ($)","Route","Control","Params"].map(h => (
+                {["ID","Advertiser","Service","CPA ($)","Geo","Carrier","OTP Len","Cap","Used","Publishers","Remain","Revenue ($)","Route","Control","Params"].map(h => (
                   <th key={h} style={th}>{h}</th>
                 ))}
               </tr>
@@ -219,6 +219,7 @@ export default function Offers() {
                       onBlur={(e) => { const val = e.target.value === "" ? 0 : parseInt(e.target.value); updateOffer(o.id, { daily_cap: val }); }} />
                   </td>
                   <td style={td}>{o.today_hits ?? 0}</td>
+                  <td style={td}><span style={{background:"rgba(59,130,246,0.08)",color:"#2563eb",padding:"2px 6px",borderRadius:10,fontSize:12,fontWeight:600}}>{o.active_publishers ?? 0}</span></td>
                   <td style={td}>{remaining(o)}</td>
                   <td style={td}>{autoRevenue(o)}</td>
                   <td style={td}>{routeBadge(o)}</td>
