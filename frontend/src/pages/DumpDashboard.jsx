@@ -84,6 +84,7 @@ export default function DumpDashboard() {
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const PAGE_SIZE = 100;
+  const [error, setError] = useState(null);
 
   /* ================= FETCH ================= */
   useEffect(() => { fetchData(); }, [page]);
@@ -265,7 +266,7 @@ export default function DumpDashboard() {
               <tbody>
                 {filteredRows.map((row, i) => (
                   <tr key={i}>
-                    <td style={td} title={row.session_id} style={{...td, maxWidth:80, overflow:"hidden", textOverflow:"ellipsis", fontFamily:"monospace", fontSize:11}}>{String(i+1+page*PAGE_SIZE)}</td>
+                    <td style={{...td, maxWidth:60, fontFamily:"monospace", fontSize:11}} title={row.session_id}>{String(i+1+page*PAGE_SIZE)}</td>
                     <td style={{...td, maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", fontFamily:"monospace", fontSize:10}} title={row.session_id}>{row.session_id?.slice(0,8)}...</td>
                     <td style={td}>{row.publisher_name}</td>
                     <td style={td}>{row.advertiser_name}</td>
