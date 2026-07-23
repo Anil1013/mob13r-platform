@@ -84,7 +84,6 @@ export default function DumpDashboard() {
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const PAGE_SIZE = 100;
-  const [error, setError] = useState(null);
 
   /* ================= FETCH ================= */
   useEffect(() => { fetchData(); }, [page]);
