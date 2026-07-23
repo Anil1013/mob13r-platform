@@ -5,6 +5,7 @@ export default function Navbar() {
   const user = JSON.parse(localStorage.getItem("user")) || { email: "Admin" };
   const org = JSON.parse(localStorage.getItem("org")) || {};
   const isSuperAdmin = user.email === "admin@mob13r.com";
+  const isOrgAdmin = user.role === "admin" || user.role === "owner" || isSuperAdmin;
   const logout = () => {
     ["token","token_expiry","user","publisher_key","publisher_id","publisher_name","org"].forEach(k=>localStorage.removeItem(k));
     navigate("/login", { replace: true });
@@ -20,7 +21,8 @@ export default function Navbar() {
     { to:"/dashboard/dump", label:"Dump Logs" },
     { to:"/publisher/dashboard", label:"Pub Dashboard" },
     { to:"/plans", label:"📦 Plans" },
-    ...(isSuperAdmin ? [{ to:"/super-admin", label:"⚙️ Super Admin" }, { to:"/carrier-prefixes", label:"📡 Carriers" }] : []),
+    ...(isOrgAdmin ? [{ to:"/carrier-prefixes", label:"📡 Carriers" }] : []),
+    ...(isSuperAdmin ? [{ to:"/super-admin", label:"⚙️ Super Admin" }] : []),
   ];
   return (
     <>
