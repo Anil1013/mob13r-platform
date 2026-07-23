@@ -13,7 +13,17 @@ function generatePublisherKey() {
 router.get("/", orgAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, name, api_key, status, created_at FROM publishers WHERE org_id = $1 ORDER BY id DESC`,
+      `SELECT p.id, p.name, p.api_key, p.status, p.created_at,
+        COUNT(DISTINCT po.id) FILTER (WHERE po.status = 'active') AS assigned_offers,
+        COUNT(DISTINCT ps.id) FILTER (WHERE ps.status IN ('VERIFIED','SCRUBBED','CAP_REACHED') AND ps.parent_session_token IS NOT NULL) AS total_conversions,
+        COALESCE(SUM(ps.publisher_cpa) FILTER (WHERE ps.publisher_credited = TRUE), 0) AS total_revenue,
+        COUNT(DISTINCT CASE WHEN ps.created_at::date = CURRENT_DATE THEN ps.id END) AS today_requests
+       FROM publishers p
+       LEFT JOIN publisher_offers po ON po.publisher_id = p.id
+       LEFT JOIN pin_sessions ps ON ps.publisher_id = p.id AND ps.org_id = p.org_id
+       WHERE p.org_id = $1
+       GROUP BY p.id
+       ORDER BY p.id DESC`,
       [req.orgId]
     );
     res.json({ status: "SUCCESS", data: result.rows });
