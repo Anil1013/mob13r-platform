@@ -26,6 +26,19 @@ function parseIstDate(createdIst) {
 }
 
 /* ================= CSV EXPORT ================= */
+function statusBadge(status) {
+  const colors = {
+    VERIFIED: { bg: "#dcfce7", color: "#16a34a" },
+    OTP_SENT: { bg: "#dbeafe", color: "#1d4ed8" },
+    OTP_FAILED: { bg: "#fee2e2", color: "#dc2626" },
+    OTP_INVALID: { bg: "#fef9c3", color: "#854d0e" },
+    CAP_REACHED: { bg: "#f3e8ff", color: "#7c3aed" },
+    SCRUBBED: { bg: "#f1f5f9", color: "#64748b" },
+  };
+  const c = colors[status] || { bg: "#f1f5f9", color: "#64748b" };
+  return <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: c.bg, color: c.color }}>{status}</span>;
+}
+
 function exportCSV(rows) {
   if (!rows.length) return alert("No data to export");
 
@@ -68,29 +81,37 @@ export default function DumpDashboard() {
   const [advertiser, setAdvertiser] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const PAGE_SIZE = 100;
 
   /* ================= FETCH ================= */
-  useEffect(() => {
+  useEffect(() => { fetchData(); }, [page]);
+
+  const fetchData = async () => {
+    setLoading(true);
     const token = localStorage.getItem("token");
-
-    fetch(`${API_BASE}/api/dashboard/dump`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async res => {
-        const json = await res.json();
-
-        if (!res.ok) {
-          const msg = json?.message || "Failed to load dump";
-          throw new Error(msg);
-        }
-
-        setRows(Array.isArray(json?.data) ? json.data : []);
-      })
-      .catch(err => setError(err.message || "Failed to load dump"))
-      .finally(() => setLoading(false));
-  }, []);
+    const params = new URLSearchParams();
+    if (msisdn) params.set("msisdn", msisdn);
+    if (fromDate) params.set("from", fromDate);
+    if (toDate) params.set("to", toDate);
+    params.set("limit", PAGE_SIZE);
+    params.set("offset", page * PAGE_SIZE);
+    try {
+      const res = await fetch(`${API_BASE}/api/dashboard/dump?${params}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d?.message || "Failed");
+      setRows(Array.isArray(d?.data) ? d.data : []);
+      setTotal(d.total || 0);
+    } catch(e) { setError(e.message || "Failed to load dump"); }
+    setLoading(false);
+  };
 
   /* ================= FILTER LOGIC ================= */
+  const applyFilters = () => { setPage(0); fetchData(); };
+
   const filteredRows = useMemo(() => {
     return rows.filter(row => {
       if (msisdn && !row.msisdn?.includes(msisdn)) return false;
@@ -206,6 +227,13 @@ export default function DumpDashboard() {
             Clear Filters
           </button>
           <button style={btn} onClick={() => exportCSV(filteredRows)}>Export CSV</button>
+          <button style={btn} onClick={applyFilters}>Apply Filters</button>
+          <span style={{fontSize:13, color:"#64748b"}}>Total: {total} records</span>
+          <div style={{display:"flex", gap:8, alignItems:"center"}}>
+            <button style={{...btn, opacity: page===0?0.4:1}} disabled={page===0} onClick={()=>setPage(p=>p-1)}>← Prev</button>
+            <span style={{fontSize:13}}>Page {page+1} of {Math.ceil(total/PAGE_SIZE)||1}</span>
+            <button style={{...btn, opacity: (page+1)*PAGE_SIZE>=total?0.4:1}} disabled={(page+1)*PAGE_SIZE>=total} onClick={()=>setPage(p=>p+1)}>Next →</button>
+          </div>
         </div>
 
         {/* ================= TABLE ================= */}
@@ -214,15 +242,20 @@ export default function DumpDashboard() {
             <table style={table}>
               <thead>
                 <tr>
-                  <th style={th}>Offer ID</th>
+                  <th style={th}>#</th>
+                  <th style={th}>Session ID</th>
                   <th style={th}>Publisher</th>
                   <th style={th}>Advertiser</th>
                   <th style={th}>Offer</th>
                   <th style={th}>Geo</th>
                   <th style={th}>Carrier</th>
                   <th style={th}>MSISDN</th>
-                  <th style={th}>Publisher Req</th>
-                  <th style={th}>Publisher Res</th>
+                  <th style={th}>Status</th>
+                  <th style={th}>Payout ($)</th>
+                  <th style={th}>Pub CPA ($)</th>
+                  <th style={th}>Credited</th>
+                  <th style={th}>Pub Req</th>
+                  <th style={th}>Pub Res</th>
                   <th style={th}>Advertiser Req</th>
                   <th style={th}>Advertiser Res</th>
                   <th style={th}>Status</th>
@@ -232,13 +265,18 @@ export default function DumpDashboard() {
               <tbody>
                 {filteredRows.map((row, i) => (
                   <tr key={i}>
-                    <td style={td}>{row.offer_id}</td>
+                    <td style={td} title={row.session_id} style={{...td, maxWidth:80, overflow:"hidden", textOverflow:"ellipsis", fontFamily:"monospace", fontSize:11}}>{String(i+1+page*PAGE_SIZE)}</td>
+                    <td style={{...td, maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", fontFamily:"monospace", fontSize:10}} title={row.session_id}>{row.session_id?.slice(0,8)}...</td>
                     <td style={td}>{row.publisher_name}</td>
                     <td style={td}>{row.advertiser_name}</td>
                     <td style={td}>{row.offer_name}</td>
                     <td style={td}>{row.geo}</td>
                     <td style={td}>{row.carrier}</td>
                     <td style={td}>{row.msisdn}</td>
+                    <td style={td}>{statusBadge(row.status)}</td>
+                    <td style={td}>{row.payout ? `$${Number(row.payout).toFixed(2)}` : "-"}</td>
+                    <td style={td}>{row.publisher_cpa ? `$${Number(row.publisher_cpa).toFixed(2)}` : "-"}</td>
+                    <td style={td}>{row.publisher_credited ? <span style={{color:"#16a34a",fontWeight:700}}>✓</span> : <span style={{color:"#dc2626"}}>✗</span>}</td>
                     <td style={td}>{renderJSON(row.publisher_request)}</td>
                     <td style={td}>{renderJSON(row.publisher_response)}</td>
                     <td style={td}>{renderJSON(row.advertiser_request)}</td>
