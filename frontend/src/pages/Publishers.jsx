@@ -54,7 +54,7 @@ export default function Publishers() {
         <div style={{background:"#ffffff",border:"1px solid #e2e8f0",borderRadius:16,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}>
           <div style={{overflowX:"auto"}}>
             <table style={table}>
-              <thead><tr>{["ID","Name","API Key","Status","Created","Actions"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+              <thead><tr>{["ID","Name","API Key","Status","Offers","Conversions","Revenue","Today Req","Created","Actions"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
               <tbody>
                 {publishers.map(p=>(
                   <tr key={p.id}>
@@ -67,6 +67,10 @@ export default function Publishers() {
                         <button style={{background:"#ffffff",border:"1px solid #cbd5e1",color:"#475569",padding:"4px 8px",borderRadius:6,cursor:"pointer",fontSize:12}} onClick={()=>copyKey(p.api_key)}>📋</button>
                       </div>
                     </td>
+                    <td style={td}><span style={{background:"rgba(59,130,246,0.08)",color:"#2563eb",padding:"2px 8px",borderRadius:6,fontSize:12,fontWeight:600}}>{p.assigned_offers||0}</span></td>
+                    <td style={td}><span style={{background:"rgba(34,197,94,0.08)",color:"#16a34a",padding:"2px 8px",borderRadius:6,fontSize:12,fontWeight:600}}>{p.total_conversions||0}</span></td>
+                    <td style={td}><span style={{fontWeight:600,color:"#0369a1"}}>${Number(p.total_revenue||0).toFixed(2)}</span></td>
+                    <td style={td}>{p.today_requests||0}</td>
                     <td style={td}><span style={badge(p.status==="active"?"green":"red")}>{p.status==="active"?"● Active":"● Paused"}</span></td>
                     <td style={td}>{new Date(p.created_at).toLocaleDateString()}</td>
                     <td style={td}>
