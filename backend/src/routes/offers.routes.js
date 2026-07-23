@@ -42,9 +42,13 @@ router.get("/", orgAuth, async (req, res) => {
     );
 
     const { advertiser_id } = req.query;
-    let query = `SELECT o.*, a.name AS advertiser_name FROM offers o
+    let query = `SELECT o.*, a.name AS advertiser_name,
+                   COUNT(DISTINCT po.publisher_id) FILTER (WHERE po.status = 'active') AS active_publishers
+                 FROM offers o
                  JOIN advertisers a ON a.id = o.advertiser_id
-                 WHERE o.org_id = $1`;
+                 LEFT JOIN publisher_offers po ON po.offer_id = o.id
+                 WHERE o.org_id = $1
+                 GROUP BY o.id, a.name`;
     const params = [req.orgId];
     if (advertiser_id) {
       query += ` AND o.advertiser_id = $2`;
