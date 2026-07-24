@@ -7,7 +7,7 @@ const router = express.Router();
 router.get("/", orgAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM advertisers WHERE org_id = $1 ORDER BY created_at DESC",
+      `SELECT *, ROW_NUMBER() OVER (ORDER BY created_at ASC) AS seq_id FROM advertisers WHERE org_id = $1 ORDER BY created_at DESC`,
       [req.orgId]
     );
     res.json(result.rows);
