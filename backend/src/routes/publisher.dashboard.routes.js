@@ -108,12 +108,15 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
 
           MAX(
             ps.created_at
+          ) FILTER (
+            WHERE ps.parent_session_token IS NULL
           ) AS last_pin_gen_date,
 
           MAX(
             ps.created_at
           ) FILTER (
             WHERE ps.status = 'OTP_SENT'
+            AND ps.parent_session_token IS NULL
           ) AS last_pin_gen_success_date,
 
           MAX(
