@@ -22,12 +22,12 @@ const todayIST = () => {
 
 const defaultFilters = { advertisers:[], publishers:[], geos:[], carriers:[], offers:[] };
 
-const formatDate = (value) => {
+const formatDate = (value, tz = "Asia/Kolkata") => {
   if (!value) return "-";
   if (typeof value === "string" && !value.includes("T") && !value.match(/^\d{4}-\d{2}-\d{2}$/)) return value;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
-  return new Intl.DateTimeFormat("en-IN", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:true }).format(parsed);
+  return new Intl.DateTimeFormat("en-IN", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:true, timeZone: tz }).format(parsed);
 };
 
 const formatDateOnly = (value) => {
@@ -61,6 +61,7 @@ export default function Dashboard() {
   const [carrier, setCarrier] = useState("");
   const [offer, setOffer] = useState("");
   const [view, setView] = useState("summary");
+  const [timezone, setTimezone] = useState("Asia/Kolkata");
 
   const authHeader = useMemo(() => {
     const token = localStorage.getItem("token");
@@ -177,6 +178,21 @@ export default function Dashboard() {
 
         {error ? <p style={{color:"#f87171", fontSize:13, marginBottom:12}}>{error}</p> : null}
 
+        <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
+          <label style={{ fontSize: 13, color: "#94a3b8" }}>🕐 Timezone:</label>
+          <select value={timezone} onChange={e => setTimezone(e.target.value)}
+            style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#1e293b", color: "#f1f5f9", fontSize: 13 }}>
+            <option value="Asia/Kolkata">IST — India</option>
+            <option value="Asia/Jerusalem">IST — Palestine</option>
+            <option value="Asia/Baghdad">AST — Iraq / Kuwait / Saudi</option>
+            <option value="Asia/Dubai">GST — UAE / Oman</option>
+            <option value="Africa/Cairo">EET — Egypt</option>
+            <option value="Asia/Amman">EET — Jordan</option>
+            <option value="Europe/London">GMT — UK</option>
+            <option value="UTC">UTC</option>
+          </select>
+        </div>
+
         <div style={filterBar}>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={filterInput} />
           <input type="date" value={to} onChange={e => setTo(e.target.value)} style={filterInput} />
@@ -237,8 +253,8 @@ export default function Dashboard() {
                       <td style={stickyTd}>{row.cr_percent}%</td><td style={stickyTd}>{row.publisher_cr}%</td>
                       <td style={stickyTd}>{money(row.revenue)}</td><td style={stickyTd}>{money(row.publisher_revenue)}</td>
                       <td style={{...stickyTd, color: toNumber(row.profit) >= 0 ? "#4ade80" : "#f87171", fontWeight:600}}>{money(row.profit)}</td>
-                      <td style={stickyTd}>{formatDate(row.last_pin_gen)}</td><td style={stickyTd}>{formatDate(row.last_verification)}</td>
-                      <td style={stickyTd}>{formatDate(row.last_success_verification)}</td>
+                      <td style={stickyTd}>{formatDate(row.last_pin_gen, timezone)}</td><td style={stickyTd}>{formatDate(row.last_verification, timezone)}</td>
+                      <td style={stickyTd}>{formatDate(row.last_success_verification, timezone)}</td>
                     </tr>
                   ))}
                   <tr style={totalRow}>
