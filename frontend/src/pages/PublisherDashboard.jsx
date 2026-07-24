@@ -12,11 +12,24 @@ const todayIST = () => {
 };
 
 const fmt = (v) => { if (!v) return "-"; const [y,m,d]=String(v).slice(0,10).split("-"); return `${d}/${m}/${y}`; };
-const fmtDT = (v) => { if (!v) return "-"; const s=String(v).replace("T"," ").replace("Z","").split(".")[0]; const [dt,t]=s.split(" "); if(!dt||!t) return "-"; const [y,m,d]=dt.split("-"); return `${d}/${m}/${y}, ${t}`; };
+const fmtDT = (v, tz = "Asia/Kolkata") => {
+  if (!v) return "-";
+  try {
+    const date = new Date(v);
+    if (isNaN(date.getTime())) return "-";
+    return date.toLocaleString("en-IN", {
+      timeZone: tz,
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hour12: true
+    });
+  } catch { return "-"; }
+};
 const hrLabel = (h) => { if (!h) return "-"; const hh=String(h).slice(11,13); if(!hh||isNaN(Number(hh))) return "-"; const n=String((Number(hh)+1)%24).padStart(2,"0"); return `${hh}:00 - ${n}:00`; };
 
 export default function PublisherDashboard() {
   const today = todayIST();
+  const [timezone, setTimezone] = useState("Asia/Kolkata");
   const [rows, setRows] = useState([]);
   const [publisherName, setPublisherName] = useState("");
   const [fromDate, setFromDate] = useState(today);
@@ -98,6 +111,22 @@ export default function PublisherDashboard() {
           </div>
         )}
 
+        {/* TIMEZONE SELECTOR */}
+        <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}>
+          <label style={{ color: "#94a3b8", fontSize: 13 }}>🕐 Timezone:</label>
+          <select value={timezone} onChange={e => setTimezone(e.target.value)}
+            style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#1e293b", color: "#f1f5f9", fontSize: 13 }}>
+            <option value="Asia/Kolkata">IST — India</option>
+            <option value="Asia/Jerusalem">IST — Palestine</option>
+            <option value="Asia/Baghdad">AST — Iraq / Kuwait / Saudi</option>
+            <option value="Asia/Dubai">GST — UAE / Oman</option>
+            <option value="Africa/Cairo">EET — Egypt</option>
+            <option value="Asia/Amman">EET — Jordan</option>
+            <option value="Europe/London">GMT — UK</option>
+            <option value="UTC">UTC</option>
+          </select>
+        </div>
+
         <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap",alignItems:"center"}}>
           <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} style={{...input,width:"auto",colorScheme:"light"}} />
           <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} style={{...input,width:"auto",colorScheme:"light"}} />
@@ -129,8 +158,8 @@ export default function PublisherDashboard() {
                     <td style={td}>{r.pin_send_count}</td><td style={td}>{r.unique_pin_sent}</td>
                     <td style={td}>{r.pin_validation_request_count}</td><td style={td}>{r.unique_pin_validation_request_count}</td>
                     <td style={td}>{r.unique_pin_verified}</td><td style={td}>{r.cr}%</td><td style={td}>${r.revenue}</td>
-                    <td style={td}>{fmtDT(r.last_pin_gen_date)}</td>
-                    <td style={td}>{fmtDT(r.last_pin_verification_date)}</td>
+                    <td style={td}>{fmtDT(r.last_pin_gen_date, timezone)}</td>
+                    <td style={td}>{fmtDT(r.last_pin_verification_date, timezone)}</td>
                     <td style={td}>{fmtDT(r.last_success_pin_verification_date)}</td>
                   </tr>
                 ))}
