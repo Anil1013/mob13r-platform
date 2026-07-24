@@ -55,7 +55,7 @@ export default function Advertisers() {
                 <tbody>
                   {filtered.map(a=>(
                     <tr key={a.id}>
-                      <td style={td}><span style={{background:"rgba(59,130,246,0.08)",color:"#2563eb",padding:"2px 8px",borderRadius:6,fontSize:12,fontWeight:600}}>{a.id}</span></td>
+                      <td style={td}><span style={{background:"rgba(59,130,246,0.08)",color:"#2563eb",padding:"2px 8px",borderRadius:6,fontSize:12,fontWeight:600}}>{a.seq_id || a.id}</span></td>
                       <td style={{...td,color:"#1e293b",fontWeight:500}}>{a.name}</td>
                       <td style={td}>{a.email}</td>
                       <td style={td}><span style={badge(a.status==="active"?"green":"red")}>{a.status==="active"?"● Active":"● Inactive"}</span></td>
