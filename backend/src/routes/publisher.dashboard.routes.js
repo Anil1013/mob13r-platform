@@ -44,7 +44,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
       WITH offer_stats AS (
         SELECT
           DATE(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+            ps.created_at
           ) AS stat_date,
 
           po.id AS publisher_offer_id,
@@ -107,24 +107,24 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
           ) AS revenue,
 
           MAX(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+            ps.created_at
           ) AS last_pin_gen_date,
 
           MAX(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+            ps.created_at
           ) FILTER (
             WHERE ps.status = 'OTP_SENT'
           ) AS last_pin_gen_success_date,
 
           MAX(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+            ps.created_at
           ) FILTER (
             WHERE ps.parent_session_token IS NOT NULL
           ) AS last_pin_verification_date,
 
           /* 🔥 FIXED LAST SUCCESS */
           MAX(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+            ps.created_at
           ) FILTER (
             WHERE ps.status = 'VERIFIED'
             AND ps.publisher_credited = TRUE
@@ -143,7 +143,7 @@ router.get("/dashboard/offers", publisherAuth, async (req, res) => {
                   )
              )
          AND DATE(
-              ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+              ps.created_at
             ) BETWEEN $2 AND $3
 
         WHERE po.publisher_id = $1
@@ -225,7 +225,7 @@ router.get(
         SELECT
           DATE_TRUNC(
             'hour',
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+            ps.created_at
           ) AS hour,
 
           COUNT(DISTINCT ps.msisdn) FILTER (
@@ -269,7 +269,7 @@ router.get(
         WHERE po.publisher_id = $1
           AND po.id = $2
           AND DATE(
-            ps.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata'
+            ps.created_at
           ) BETWEEN $3 AND $4
 
         GROUP BY hour
