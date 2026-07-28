@@ -13,7 +13,7 @@ function generatePublisherKey() {
 router.get("/", orgAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT p.id, p.name, p.api_key, p.status, p.created_at,
+      `SELECT p.id, p.name, p.email, p.api_key, p.status, p.created_at,
         COUNT(DISTINCT po.id) FILTER (WHERE po.status = 'active') AS assigned_offers,
         COUNT(DISTINCT ps.id) FILTER (WHERE ps.status IN ('VERIFIED','SCRUBBED','CAP_REACHED') AND ps.parent_session_token IS NOT NULL) AS total_conversions,
         COALESCE(SUM(ps.publisher_cpa) FILTER (WHERE ps.publisher_credited = TRUE), 0) AS total_revenue,
@@ -35,7 +35,7 @@ router.get("/", orgAuth, async (req, res) => {
 
 router.post("/", orgAuth, async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, email } = req.body;
     if (!name) return res.status(400).json({ status: "FAILED", message: "Publisher name required" });
 
     const countRes = await pool.query(
@@ -51,8 +51,8 @@ router.post("/", orgAuth, async (req, res) => {
 
     const apiKey = generatePublisherKey();
     const result = await pool.query(
-      `INSERT INTO publishers (name, api_key, status, org_id) VALUES ($1, $2, 'active', $3) RETURNING *`,
-      [name, apiKey, req.orgId]
+      `INSERT INTO publishers (name, api_key, status, org_id, email) VALUES ($1, $2, 'active', $3, $4) RETURNING *`,
+      [name, apiKey, req.orgId, email || null]
     );
     res.json({ status: "SUCCESS", data: result.rows[0] });
   } catch (err) {
