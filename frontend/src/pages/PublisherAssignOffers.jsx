@@ -27,6 +27,11 @@ export default function PublisherAssignOffers() {
   });
 
   const [editingId, setEditingId] = useState(null);
+  const [emailModal, setEmailModal] = useState(null); // { publisher_id, offer_id, publisher_name, offer_name, email }
+  const [emailTo, setEmailTo] = useState("");
+  const [emailMsg, setEmailMsg] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailResult, setEmailResult] = useState(null);
   const [editRow, setEditRow] = useState({});
 
   const parseNumber = (value, { allowEmpty = false } = {}) => {
@@ -274,9 +279,42 @@ export default function PublisherAssignOffers() {
     }
   };
 
+  const sendEmail = async () => {
+    if (!emailTo || !emailTo.includes("@")) {
+      setEmailResult({ ok: false, msg: "Valid email required" });
+      return;
+    }
+    setEmailSending(true);
+    setEmailResult(null);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/api/email/send-docs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          publisher_id: emailModal.publisher_id,
+          offer_id: emailModal.offer_id,
+          to_email: emailTo,
+          custom_message: emailMsg,
+        }),
+      });
+      const d = await res.json();
+      if (d.status === "SUCCESS") {
+        setEmailResult({ ok: true, msg: `✅ Email sent to ${emailTo}` });
+        setTimeout(() => { setEmailModal(null); setEmailResult(null); setEmailTo(""); setEmailMsg(""); }, 2000);
+      } else {
+        setEmailResult({ ok: false, msg: d.error || "Failed to send email" });
+      }
+    } catch (e) {
+      setEmailResult({ ok: false, msg: e.message });
+    }
+    setEmailSending(false);
+  };
+
   return (
     <>
       <Navbar />
+      <EmailModal />
       {toast && <div style={styles.toast}>{toast}</div>}
 
       <div style={page}>
@@ -548,6 +586,23 @@ export default function PublisherAssignOffers() {
                       >
                         📥 PDF
                       </button>
+
+                      <button
+                        style={{...styles.smallBtn, marginLeft: 6, background:"rgba(34,197,94,0.06)", borderColor:"rgba(34,197,94,0.2)", color:"#16a34a"}}
+                        onClick={() => {
+                          setEmailModal({
+                            publisher_id: a.publisher_id,
+                            offer_id: a.offer_id,
+                            publisher_name: a.publisher_name,
+                            offer_name: a.pub_offer_name || a.name,
+                          });
+                          setEmailTo(a.publisher_email || "");
+                          setEmailMsg("");
+                          setEmailResult(null);
+                        }}
+                      >
+                        📧 Email
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -558,6 +613,48 @@ export default function PublisherAssignOffers() {
       </div>
     </>
   );
+
+  // ======= EMAIL MODAL =======
+  function EmailModal() {
+    if (!emailModal) return null;
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
+        onClick={e => { if (e.target === e.currentTarget) setEmailModal(null); }}>
+        <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+          <h3 style={{ margin: "0 0 4px", color: "#1e293b" }}>📧 Send API Docs via Email</h3>
+          <p style={{ margin: "0 0 20px", color: "#64748b", fontSize: 13 }}>
+            {emailModal.publisher_name} — {emailModal.offer_name}
+          </p>
+          <label style={{ fontSize: 12, color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>Recipient Email *</label>
+          <input
+            style={{ display: "block", width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, marginTop: 6, marginBottom: 14, boxSizing: "border-box" }}
+            type="email" placeholder="publisher@example.com"
+            value={emailTo} onChange={e => setEmailTo(e.target.value)}
+          />
+          <label style={{ fontSize: 12, color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>Custom Message (optional)</label>
+          <textarea
+            style={{ display: "block", width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, marginTop: 6, marginBottom: 14, boxSizing: "border-box", resize: "vertical", minHeight: 80 }}
+            placeholder="Add a personal note..."
+            value={emailMsg} onChange={e => setEmailMsg(e.target.value)}
+          />
+          {emailResult && (
+            <div style={{ padding: "10px 14px", borderRadius: 8, marginBottom: 14, fontSize: 13, background: emailResult.ok ? "#dcfce7" : "#fee2e2", color: emailResult.ok ? "#16a34a" : "#dc2626" }}>
+              {emailResult.msg}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: "pointer", fontSize: 14 }}
+              onClick={() => setEmailModal(null)}>Cancel</button>
+            <button
+              style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: emailSending ? "#94a3b8" : "#16a34a", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600 }}
+              onClick={sendEmail} disabled={emailSending}>
+              {emailSending ? "Sending…" : "📧 Send Email"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 }
 
 /* ================= STYLES ================= */
