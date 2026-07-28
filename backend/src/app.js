@@ -1,5 +1,6 @@
 import express from "express";
 import carrierPrefixRoutes from "./routes/carrier-prefixes.routes.js";
+import emailRoutes from "./routes/email.routes.js";
 import cors from "cors";
 import fileUpload from "express-fileupload";
 
@@ -48,6 +49,7 @@ app.use(fileUpload({
 app.use("/uploads", express.static("public/uploads"));
 app.use(express.json({ limit: "50mb" }));
 app.use("/api", carrierPrefixRoutes);
+app.use("/api", emailRoutes);
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 app.use((req, res, next) => {
