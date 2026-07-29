@@ -21,7 +21,7 @@ export default function Navbar() {
     { to:"/dashboard/dump", label:"Dump Logs" },
     { to:"/publisher/dashboard", label:"Pub Dashboard" },
     { to:"/plans", label:"📦 Plans" },
-    ...(isOrgAdmin ? [{ to:"/carrier-prefixes", label:"📡 Carriers" }] : []),
+    ...(isOrgAdmin ? [{ to:"/carrier-prefixes", label:"📡 Carriers" }, { to:"/email-logs", label:"📧 Email Logs" }] : []),
     ...(isSuperAdmin ? [{ to:"/super-admin", label:"⚙️ Super Admin" }] : []),
   ];
   return (
