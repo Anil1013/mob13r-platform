@@ -132,7 +132,7 @@ router.post("/email/send-docs", orgAuth, async (req, res) => {
     const fileName = `API_Docs_${offer.display_name}_${offer.geo}_${offer.carrier}.pdf`.replace(/\s+/g, "_");
 
     await transporter.sendMail({
-      from: `"${senderName}" <${process.env.SMTP_USER}>`,
+      from: `"${senderName}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
       to: to_email,
       subject: `API Integration Docs — ${offer.display_name} (${offer.geo} | ${offer.carrier})`,
       html: `
