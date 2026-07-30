@@ -50,96 +50,96 @@ async function getDocsData(pubId, offerId) {
 function generatePDF({ publisher, offer, pinSendURL, verifyURL, statusURL, params }) {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margin: 50, size: "A4", bufferPages: true });
+      const doc = new PDFDocument({ margin: 50, size: "A4" });
       const chunks = [];
       doc.on("data", c => chunks.push(c));
       doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
 
-      const PW = 595; // page width
-      const ML = 50;  // margin left
-      const CW = PW - ML * 2; // content width = 495
+      const ML = 50;
+      const CW = 495;
 
       // ── HEADER ──────────────────────────────────────────────
-      doc.rect(0, 0, PW, 80).fill(DARK);
-      doc.fontSize(22).fillColor(RED).text("mob13r", ML, 22, { continued: true });
-      doc.fillColor(WHITE).text("  —  API Documentation");
+      doc.rect(0, 0, 595, 80).fill(DARK);
+      doc.fontSize(22).fillColor(RED).text("mob13r", ML, 22);
+      doc.fontSize(22).fillColor(WHITE).text("  —  API Documentation", ML, 22);
       doc.fontSize(10).fillColor("#94a3b8").text("Publisher Integration Guide", ML, 52);
-
-      // Move below header
       doc.y = 100;
 
       // ── OFFER INFO ───────────────────────────────────────────
-      doc.fontSize(14).fillColor(DARK).font("Helvetica-Bold").text("Service: ", ML, doc.y, { continued: true });
-      doc.fillColor(RED).text(offer.display_name);
-      doc.font("Helvetica").fontSize(11).fillColor(GRAY)
-        .text(`Geo: ${offer.geo}   |   Carrier: ${offer.carrier}   |   OTP Length: ${offer.otp_length || 4}`, ML);
-      doc.fontSize(10).fillColor(GRAY).text(`Publisher: ${publisher.name}   |   API Key: ${publisher.api_key}`, ML);
-      doc.moveDown(0.6);
+      doc.fontSize(13).fillColor(DARK).text("Service: " + offer.display_name, ML);
+      doc.fontSize(11).fillColor(GRAY).text("Geo: " + offer.geo + "   |   Carrier: " + offer.carrier + "   |   OTP Length: " + (offer.otp_length || 4), ML);
+      doc.fontSize(10).fillColor(GRAY).text("Publisher: " + publisher.name, ML);
+      doc.fontSize(10).fillColor(GRAY).text("API Key: " + publisher.api_key, ML);
+      doc.moveDown(0.5);
 
       // Divider
       doc.rect(ML, doc.y, CW, 1).fill("#e2e8f0");
-      doc.moveDown(0.8);
+      doc.y = doc.y + 10;
 
-      // ── HELPER: Draw URL Box ──────────────────────────────────
+      // ── HELPER: URL Box ───────────────────────────────────────
       const drawURLBox = (url) => {
-        const textH = doc.heightOfString(url, { width: CW - 16, fontSize: 8 });
-        const boxH = Math.max(textH + 20, 36);
+        const lines = Math.ceil(url.length / 80);
+        const boxH = Math.max(lines * 12 + 20, 36);
         const boxY = doc.y;
         doc.rect(ML, boxY, CW, boxH).fill(BG);
-        doc.fontSize(8).fillColor(GREEN).text(url, ML + 8, boxY + 10, { width: CW - 16, lineBreak: true });
+        doc.fontSize(8).fillColor(GREEN).text(url, ML + 8, boxY + 10, { width: CW - 16 });
         doc.y = boxY + boxH + 8;
       };
 
       // ── PIN SEND ─────────────────────────────────────────────
-      doc.fontSize(13).fillColor(DARK).font("Helvetica-Bold").text("1.  PIN SEND", ML);
-      doc.font("Helvetica").fontSize(10).fillColor(GRAY).text("Generate OTP — Initialize the subscription flow with user's mobile number.", ML);
-      doc.moveDown(0.3);
+      doc.fontSize(13).fillColor(DARK).text("1. PIN SEND (Generate OTP)", ML);
+      doc.fontSize(10).fillColor(GRAY).text("Initialize the subscription flow with user's mobile number.", ML);
+      doc.y = doc.y + 6;
       drawURLBox(pinSendURL);
-      doc.moveDown(0.3);
+      doc.y = doc.y + 4;
 
+      doc.fontSize(10).fillColor(DARK).text("Parameters:", ML);
+      doc.y = doc.y + 4;
       drawTable(doc, [
         ["offer_id",   String(offer.id),      "Offer identifier"],
         ["msisdn",     "{msisdn}",             "User mobile number with country code"],
-        ["geo",        offer.geo,              "Country / GEO code"],
+        ["geo",        offer.geo,              "Country code"],
         ["carrier",    offer.carrier,          "Carrier name"],
         ["x-api-key",  publisher.api_key,      "Your publisher API key"],
       ], ML);
-      doc.moveDown(1);
+      doc.y = doc.y + 20;
 
       // ── PIN VERIFY ───────────────────────────────────────────
-      doc.fontSize(13).fillColor(DARK).font("Helvetica-Bold").text("2.  PIN VERIFY", ML);
-      doc.font("Helvetica").fontSize(10).fillColor(GRAY).text("Confirm OTP — Validate the OTP entered by user to complete subscription.", ML);
-      doc.moveDown(0.3);
+      doc.fontSize(13).fillColor(DARK).text("2. PIN VERIFY (Confirm OTP)", ML);
+      doc.fontSize(10).fillColor(GRAY).text("Confirm the OTP entered by user to complete subscription.", ML);
+      doc.y = doc.y + 6;
       drawURLBox(verifyURL);
-      doc.moveDown(0.3);
+      doc.y = doc.y + 4;
 
+      doc.fontSize(10).fillColor(DARK).text("Parameters:", ML);
+      doc.y = doc.y + 4;
       drawTable(doc, [
         ["session_token", "{session_token}", "Returned in PIN SEND response"],
-        ["otp",           "{otp}",           "OTP entered by the user"],
+        ["otp",           "{otp}",           "OTP entered by user"],
         ["x-api-key",     publisher.api_key, "Your publisher API key"],
       ], ML);
-      doc.moveDown(1);
+      doc.y = doc.y + 20;
 
       // ── STATUS CHECK ─────────────────────────────────────────
       if (statusURL) {
-        doc.fontSize(13).fillColor(DARK).font("Helvetica-Bold").text("3.  STATUS CHECK", ML);
-        doc.font("Helvetica").fontSize(10).fillColor(GRAY).text("Verify subscription status.", ML);
-        doc.moveDown(0.3);
+        doc.fontSize(13).fillColor(DARK).text("3. STATUS CHECK", ML);
+        doc.y = doc.y + 6;
         drawURLBox(statusURL);
-        doc.moveDown(1);
+        doc.y = doc.y + 20;
       }
 
       // ── ACTIVE PARAMETERS ────────────────────────────────────
       if (params && params.length > 0) {
-        doc.fontSize(13).fillColor(DARK).font("Helvetica-Bold").text("Active Parameters", ML);
-        doc.font("Helvetica").moveDown(0.3);
+        doc.fontSize(13).fillColor(DARK).text("Active Parameters (Advertiser Request)", ML);
+        doc.y = doc.y + 4;
         drawTable(doc, params.map(p => [p.param_key, p.param_value, "Active parameter"]), ML);
-        doc.moveDown(1);
+        doc.y = doc.y + 20;
       }
 
       // ── FOOTER ───────────────────────────────────────────────
       doc.fontSize(9).fillColor("#94a3b8")
-        .text(`Generated by mob13r Platform  |  ${new Date().toLocaleDateString("en-IN")}`,
+        .text("Generated by mob13r Platform  |  " + new Date().toLocaleDateString("en-IN"),
           ML, doc.page.height - 40, { align: "center", width: CW });
 
       doc.end();
