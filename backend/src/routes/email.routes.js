@@ -2,8 +2,6 @@ import express from "express";
 import nodemailer from "nodemailer";
 import pool from "../db.js";
 import orgAuth from "../middleware/orgAuth.js";
-import https from "https";
-import http from "http";
 import PDFDocument from "pdfkit";
 
 const router = express.Router();
