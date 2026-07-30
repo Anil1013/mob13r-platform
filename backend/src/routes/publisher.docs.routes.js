@@ -1,207 +1,296 @@
 import express from "express";
-import pool from "../db.js";
 import PDFDocument from "pdfkit";
+import pool from "../db.js";
 
 const router = express.Router();
+const BASE = "https://backend.mob13r.com";
 
-/**
- * 🔥 Publisher API Docs Generator (Generic & Session Flow)
- * Version: V23 - Fully Updated (No lines broken)
- */
+async function getDocsData(pubId, offerId) {
+  const pubRes = await pool.query(
+    "SELECT id, api_key, name FROM publishers WHERE id=$1",
+    [pubId]
+  );
+  if (!pubRes.rows.length) throw new Error("Publisher not found");
+  const publisher = pubRes.rows[0];
+
+  const offerRes = await pool.query(
+    `SELECT o.id, o.geo, o.carrier, o.service_name, o.otp_length,
+            o.pin_send_url, o.pin_verify_url, o.check_status_url, o.portal_url,
+            COALESCE(po.pub_offer_name, o.service_name) AS display_name
+     FROM offers o
+     LEFT JOIN publisher_offers po ON po.offer_id = o.id AND po.publisher_id = $2
+     WHERE o.id = $1 LIMIT 1`,
+    [offerId, pubId]
+  );
+  if (!offerRes.rows.length) throw new Error("Offer not found");
+  const offer = offerRes.rows[0];
+
+  // Active parameters
+  const paramsRes = await pool.query(
+    `SELECT param_key, param_value FROM offer_parameters
+     WHERE offer_id=$1 AND is_active=true ORDER BY id`,
+    [offerId]
+  );
+
+  const pinSendURL = `${BASE}/api/publisher/pin/send?offer_id=${offerId}&msisdn={msisdn}&geo=${offer.geo}&carrier=${offer.carrier}&x-api-key=${publisher.api_key}`;
+  const verifyURL  = `${BASE}/api/publisher/pin/verify?session_token={session_token}&otp={otp}&x-api-key=${publisher.api_key}`;
+  const statusURL  = offer.check_status_url ? `${BASE}/api/publisher/status/check?session_token={session_token}&x-api-key=${publisher.api_key}` : null;
+
+  return { publisher, offer, pinSendURL, verifyURL, statusURL, params: paramsRes.rows };
+}
+
+function generatePDF({ publisher, offer, pinSendURL, verifyURL, statusURL, params }) {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 50, size: "A4" });
+      const chunks = [];
+      doc.on("data", c => chunks.push(c));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+
+      const RED = "#e94560";
+      const DARK = "#1a1a2e";
+      const GRAY = "#64748b";
+      const WHITE = "#ffffff";
+      const BG = "#0a0f1e";
+      const GREEN = "#22c55e";
+
+      // ── HEADER ──────────────────────────────────────────────
+      doc.rect(0, 0, 595, 80).fill(DARK);
+      doc.fontSize(24).fillColor(RED).text("mob13r", 50, 20, { continued: true });
+      doc.fillColor(WHITE).text("  —  API Documentation", { continued: false });
+      doc.fontSize(11).fillColor("#94a3b8").text("Publisher Integration Guide", 50, 50);
+      doc.moveDown(3);
+
+      // ── OFFER INFO ───────────────────────────────────────────
+      doc.fontSize(13).fillColor(DARK).text(`Service: `, { continued: true });
+      doc.fillColor(RED).text(offer.display_name);
+      doc.fontSize(11).fillColor(GRAY)
+        .text(`Geo: ${offer.geo}   |   Carrier: ${offer.carrier}   |   OTP Length: ${offer.otp_length || 4}`);
+      doc.moveDown(0.3);
+      doc.fontSize(10).fillColor(GRAY).text(`Publisher: ${publisher.name}`);
+      doc.fontSize(10).fillColor(GRAY).text(`API Key: ${publisher.api_key}`);
+      doc.moveDown(0.5);
+
+      // Divider
+      doc.rect(50, doc.y, 495, 1).fill("#e2e8f0");
+      doc.moveDown(0.8);
+
+      // ── PIN SEND ─────────────────────────────────────────────
+      doc.fontSize(13).fillColor(DARK).text("1.  PIN SEND  ", { continued: true });
+      doc.fontSize(10).fillColor(GRAY).text("— Generate OTP");
+      doc.moveDown(0.3);
+      doc.fontSize(10).fillColor(GRAY).text("Initialize the subscription flow with user's mobile number.");
+      doc.moveDown(0.4);
+
+      // URL box
+      const urlY1 = doc.y;
+      doc.rect(50, urlY1, 495, 36).fill(BG);
+      doc.fontSize(8.5).fillColor(GREEN).text(pinSendURL, 58, urlY1 + 10, { width: 479, lineBreak: true });
+      doc.y = urlY1 + 42;
+      doc.moveDown(0.6);
+
+      // Parameters table
+      doc.fontSize(11).fillColor(DARK).text("Parameters:");
+      doc.moveDown(0.3);
+      const pSend = [
+        ["offer_id",   String(offer.id),      "Offer identifier"],
+        ["msisdn",     "{msisdn}",             "User mobile number with country code"],
+        ["geo",        offer.geo,              "Country / GEO code"],
+        ["carrier",    offer.carrier,          "Carrier name"],
+        ["x-api-key",  publisher.api_key,      "Your publisher API key"],
+      ];
+      drawTable(doc, pSend, 50);
+      doc.moveDown(0.8);
+
+      // ── PIN VERIFY ───────────────────────────────────────────
+      doc.fontSize(13).fillColor(DARK).text("2.  PIN VERIFY  ", { continued: true });
+      doc.fontSize(10).fillColor(GRAY).text("— Confirm OTP");
+      doc.moveDown(0.3);
+      doc.fontSize(10).fillColor(GRAY).text("Confirm the OTP entered by user to complete the subscription.");
+      doc.moveDown(0.4);
+
+      const urlY2 = doc.y;
+      doc.rect(50, urlY2, 495, 36).fill(BG);
+      doc.fontSize(8.5).fillColor(GREEN).text(verifyURL, 58, urlY2 + 10, { width: 479, lineBreak: true });
+      doc.y = urlY2 + 42;
+      doc.moveDown(0.6);
+
+      doc.fontSize(11).fillColor(DARK).text("Parameters:");
+      doc.moveDown(0.3);
+      const pVerify = [
+        ["session_token", "{session_token}", "Returned in PIN SEND response"],
+        ["otp",           "{otp}",           "OTP entered by the user"],
+        ["x-api-key",     publisher.api_key, "Your publisher API key"],
+      ];
+      drawTable(doc, pVerify, 50);
+      doc.moveDown(0.8);
+
+      // ── STATUS CHECK ─────────────────────────────────────────
+      if (statusURL) {
+        doc.fontSize(13).fillColor(DARK).text("3.  STATUS CHECK  ", { continued: true });
+        doc.fontSize(10).fillColor(GRAY).text("— Verify subscription status");
+        doc.moveDown(0.3);
+        const urlY3 = doc.y;
+        doc.rect(50, urlY3, 495, 36).fill(BG);
+        doc.fontSize(8.5).fillColor(GREEN).text(statusURL, 58, urlY3 + 10, { width: 479, lineBreak: true });
+        doc.y = urlY3 + 42;
+        doc.moveDown(0.8);
+      }
+
+      // ── ACTIVE PARAMETERS ────────────────────────────────────
+      if (params.length > 0) {
+        doc.fontSize(13).fillColor(DARK).text("Active Parameters (Advertiser Request):");
+        doc.moveDown(0.3);
+        const pRows = params.map(p => [p.param_key, p.param_value, "Active parameter"]);
+        drawTable(doc, pRows, 50);
+        doc.moveDown(0.8);
+      }
+
+      // ── FOOTER ───────────────────────────────────────────────
+      const pageH = doc.page.height;
+      doc.fontSize(9).fillColor("#94a3b8")
+        .text(`Generated by mob13r Platform  |  ${new Date().toLocaleDateString("en-IN")}`, 50, pageH - 40, { align: "center", width: 495 });
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+function drawTable(doc, rows, x) {
+  const cols = [160, 160, 175];
+  const headers = ["Parameter", "Value", "Description"];
+  let y = doc.y;
+
+  // Header row
+  doc.rect(x, y, 495, 18).fill("#1e293b");
+  let cx = x + 6;
+  headers.forEach((h, i) => {
+    doc.fontSize(9).fillColor(WHITE).text(h, cx, y + 5, { width: cols[i], lineBreak: false });
+    cx += cols[i];
+  });
+  y += 18;
+
+  // Data rows
+  rows.forEach((row, ri) => {
+    const bg = ri % 2 === 0 ? "#f8fafc" : "#ffffff";
+    doc.rect(x, y, 495, 18).fill(bg);
+    cx = x + 6;
+    row.forEach((cell, ci) => {
+      const color = ci === 0 ? "#e94560" : ci === 1 ? "#0369a1" : "#475569";
+      doc.fontSize(8.5).fillColor(color).text(String(cell || ""), cx, y + 5, { width: cols[ci] - 4, lineBreak: false, ellipsis: true });
+      cx += cols[ci];
+    });
+    y += 18;
+  });
+  doc.y = y;
+}
+
+/* ── HTML DOCS ─────────────────────────────────────── */
 router.get("/publisher/:pubId/offer/:offerId/docs", async (req, res) => {
   try {
     const { pubId, offerId } = req.params;
-    const { format } = req.query; // Supports ?format=pdf for direct download
+    const { format } = req.query;
 
-    /* ==========================================================
-       🔹 1. Fetch Publisher Details
-    ========================================================== */
-    const pubRes = await pool.query(
-      "SELECT id, api_key FROM publishers WHERE id=$1",
-      [pubId]
-    );
+    const data = await getDocsData(pubId, offerId);
+    const { publisher, offer, pinSendURL, verifyURL, statusURL, params } = data;
 
-    if (!pubRes.rows.length) {
-      console.error("❌ Docs Error: Publisher not found");
-      return res.status(404).json({ error: "Publisher not found" });
-    }
-
-    const publisher = pubRes.rows[0];
-    const apiKey = publisher.api_key;
-
-    /* ==========================================================
-       🔹 2. Fetch Offer Details (Dynamic Geo & Carrier)
-    ========================================================== */
-    const offerRes = await pool.query(
-      `SELECT o.id, o.geo, o.carrier, o.service_name,
-              COALESCE(po.pub_offer_name, o.service_name) AS display_name
-       FROM offers o
-       LEFT JOIN publisher_offers po ON po.offer_id = o.id AND po.publisher_id = $2
-       WHERE o.id = $1
-       LIMIT 1`,
-      [offerId, pubId]
-    );
-
-    if (!offerRes.rows.length) {
-      console.error("❌ Docs Error: Offer not found");
-      return res.status(404).json({ error: "Offer not found" });
-    }
-
-    const offer = offerRes.rows[0];
-    // Use custom pub_offer_name if set, else original service_name
-    const offerDisplayName = offer.display_name || offer.service_name;
-    const BASE = "https://backend.mob13r.com";
-
-    /* ==========================================================
-       🔥 UNIVERSAL DYNAMIC URLs (Generic Geo/Carrier)
-    ========================================================== */
-
-    // ✅ STEP 1: PIN SEND (msisdn required)
-    const pinSendURL =
-      `${BASE}/api/publisher/pin/send` +
-      `?offer_id=${offerId}` +
-      `&msisdn={msisdn}` +
-      `&geo=${offer.geo || "N/A"}` +
-      `&carrier=${offer.carrier || "N/A"}` +
-      `&x-api-key=${apiKey}`;
-
-    // ✅ STEP 2: PIN VERIFY (session_token based)
-    const verifyURL =
-      `${BASE}/api/publisher/pin/verify` +
-      `?session_token={session_token}` +
-      `&otp={otp}` +
-      `&x-api-key=${apiKey}`;
-
-    // ✅ STEP 3: STATUS CHECK (session_token based)
-    const statusURL =
-      `${BASE}/api/publisher/status` +
-      `?session_token={session_token}` +
-      `&x-api-key=${apiKey}`;
-
-    // ✅ STEP 4: PORTAL REDIRECT (Success Flow)
-    const portalURL =
-      `${BASE}/portal/${offerId}` +
-      `?session_token={session_token}`;
-
-    /* ==========================================================
-       📄 GENERATE PDF VERSION (If ?format=pdf)
-    ========================================================== */
-    if (format === 'pdf') {
-      const doc = new PDFDocument({ margin: 40 });
-
+    if (format === "pdf") {
+      const pdfBuffer = await generatePDF(data);
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename=offer_${offerId}_api_docs.pdf`
-      );
-
-      doc.pipe(res);
-
-      // Header
-      doc.fontSize(22).text("Mob13r Publisher API Docs", { align: "center" });
-      doc.moveDown();
-      doc.fontSize(12).text(`Service: ${offerDisplayName || "N/A"}`);
-      doc.text(`Offer ID: ${offerId} | Publisher ID: ${pubId}`);
-      doc.text(`Geo: ${offer.geo || "N/A"} | Carrier: ${offer.carrier || "N/A"}`);
-      doc.text(`API Key: ${apiKey}`);
-      doc.moveDown(2);
-
-      // PIN SEND
-      doc.fontSize(14).fillColor("blue").text("1. PIN SEND (Generate OTP)");
-      doc.fontSize(10).fillColor("black").text(pinSendURL);
-      doc.moveDown();
-
-      // VERIFY
-      doc.fontSize(14).fillColor("blue").text("2. PIN VERIFY (Session Based)");
-      doc.fontSize(10).fillColor("black").text(verifyURL);
-      doc.moveDown();
-
-      // STATUS
-      doc.fontSize(14).fillColor("blue").text("3. STATUS CHECK");
-      doc.fontSize(10).fillColor("black").text(statusURL);
-      doc.moveDown();
-
-      // PORTAL
-      doc.fontSize(14).fillColor("blue").text("4. SUCCESS REDIRECT (Portal)");
-      doc.fontSize(10).fillColor("black").text(portalURL);
-      doc.moveDown(2);
-
-      // Notes
-      doc.fontSize(12).text("Integration Notes:");
-      doc.fontSize(10).text("- Use 'session_token' from Step 1 response for all subsequent calls.");
-      doc.text("- Do NOT reuse tokens across different users.");
-      doc.text("- Redirect user to Portal URL only after Status is 'active'.");
-
-      doc.end();
-      return;
+      res.setHeader("Content-Disposition", `attachment; filename="API_Docs_${offer.display_name}_${offer.geo}_${offer.carrier}.pdf"`);
+      return res.end(pdfBuffer);
     }
 
-    /* ==========================================================
-       🖥️ GENERATE HTML PREVIEW (Default View)
-    ========================================================== */
-    const html = `
-      <html>
-        <head>
-          <title>API Docs: ${offerDisplayName}</title>
-          <style>
-            body { font-family: -apple-system, sans-serif; padding: 40px; color: #1f2937; line-height: 1.6; }
-            .container { max-width: 900px; margin: auto; }
-            .header { border-bottom: 2px solid #e5e7eb; padding-bottom: 20px; margin-bottom: 30px; }
-            .endpoint { background: #f9fafb; padding: 20px; border-radius: 8px; border-left: 5px solid #2563eb; margin-bottom: 20px; }
-            code { background: #111827; color: #10b981; padding: 10px; display: block; border-radius: 5px; margin-top: 10px; overflow-x: auto; font-size: 0.9em; }
-            .btn { background: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>API Documentation: ${offerDisplayName}</h1>
-              <p><strong>Geo:</strong> ${offer.geo} | <strong>Carrier:</strong> ${offer.carrier}</p>
-              <a href="?format=pdf" class="btn">📥 Download PDF Version</a>
-            </div>
+    // HTML response
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>API Docs: ${offer.display_name}</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; max-width: 860px; margin: 0 auto; padding: 32px; background: #f8fafc; color: #1e293b; }
+  h1 { color: #1e293b; } span.red { color: #e94560; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; background: #e8f4fd; color: #0369a1; margin-right: 6px; }
+  .card { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .url-box { background: #0a0f1e; color: #22c55e; padding: 14px 18px; border-radius: 8px; font-family: monospace; font-size: 13px; word-break: break-all; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  th { background: #1e293b; color: #fff; padding: 9px 12px; text-align: left; font-size: 12px; }
+  td { padding: 9px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  td:first-child { color: #e94560; font-weight: 600; }
+  td:nth-child(2) { color: #0369a1; font-family: monospace; }
+  .btn { display: inline-block; padding: 10px 20px; background: #e94560; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 700; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+  <h1><span class="red">mob13r</span> — API Documentation: ${offer.display_name}</h1>
+  <p><span class="badge">Geo: ${offer.geo}</span><span class="badge">Carrier: ${offer.carrier}</span><span class="badge">OTP: ${offer.otp_length || 4} digits</span></p>
+  <a class="btn" href="/api/publisher/${pubId}/offer/${offerId}/docs?format=pdf">⬇ Download PDF</a>
+  <hr style="margin-bottom:20px; border:none; border-top:1px solid #e2e8f0;">
 
-            <div class="endpoint">
-              <h3>1. PIN SEND (Generate OTP)</h3>
-              <p>Initialize the subscription flow with user's mobile number.</p>
-              <code>${pinSendURL}</code>
-            </div>
+  <div class="card">
+    <h2>1. PIN SEND (Generate OTP)</h2>
+    <p>Initialize the subscription flow with user's mobile number.</p>
+    <div class="url-box">${pinSendURL}</div>
+    <table><thead><tr><th>Parameter</th><th>Value</th><th>Description</th></tr></thead><tbody>
+      <tr><td>offer_id</td><td>${offerId}</td><td>Offer identifier</td></tr>
+      <tr><td>msisdn</td><td>{msisdn}</td><td>User mobile number with country code</td></tr>
+      <tr><td>geo</td><td>${offer.geo}</td><td>Country code</td></tr>
+      <tr><td>carrier</td><td>${offer.carrier}</td><td>Carrier name</td></tr>
+      <tr><td>x-api-key</td><td>${publisher.api_key}</td><td>Your publisher API key</td></tr>
+    </tbody></table>
+  </div>
 
-            <div class="endpoint">
-              <h3>2. PIN VERIFY (Confirm OTP)</h3>
-              <p>Verify the 5-digit PIN received by the user.</p>
-              <code>${verifyURL}</code>
-            </div>
+  <div class="card">
+    <h2>2. PIN VERIFY (Confirm OTP)</h2>
+    <p>Confirm the OTP entered by user to complete the subscription.</p>
+    <div class="url-box">${verifyURL}</div>
+    <table><thead><tr><th>Parameter</th><th>Value</th><th>Description</th></tr></thead><tbody>
+      <tr><td>session_token</td><td>{session_token}</td><td>Returned from PIN SEND response</td></tr>
+      <tr><td>otp</td><td>{otp}</td><td>OTP entered by user</td></tr>
+      <tr><td>x-api-key</td><td>${publisher.api_key}</td><td>Your publisher API key</td></tr>
+    </tbody></table>
+  </div>
 
-            <div class="endpoint">
-              <h3>3. STATUS CHECK</h3>
-              <p>Check the final subscription status using session_token.</p>
-              <code>${statusURL}</code>
-            </div>
+  ${statusURL ? `
+  <div class="card">
+    <h2>3. STATUS CHECK</h2>
+    <div class="url-box">${statusURL}</div>
+  </div>` : ""}
 
-            <div class="endpoint">
-              <h3>4. PORTAL / SUCCESS REDIRECT</h3>
-              <p>Redirect user to this URL after successful verify.</p>
-              <code>${portalURL}</code>
-            </div>
+  ${params.length > 0 ? `
+  <div class="card">
+    <h2>Active Parameters</h2>
+    <table><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>
+      ${params.map(p => `<tr><td>${p.param_key}</td><td>${p.param_value}</td></tr>`).join("")}
+    </tbody></table>
+  </div>` : ""}
 
-            <div style="margin-top: 50px; padding: 20px; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;">
-              <strong>Important Notes:</strong>
-              <ul>
-                <li>Replace {msisdn} with the user's actual mobile number.</li>
-                <li>Capture <b>session_token</b> from PIN SEND response to use in Step 2, 3, and 4.</li>
-                <li>Follow the order: Send -> Verify -> Status -> Portal.</li>
-              </ul>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-
-    res.send(html);
+  <p style="color:#94a3b8; font-size:12px; text-align:center; margin-top:40px;">Generated by mob13r Platform | ${new Date().toLocaleDateString("en-IN")}</p>
+</body></html>`);
 
   } catch (err) {
-    console.error("❌ CRITICAL ERROR in Docs Route:", err.message);
-    res.status(500).json({ error: "Failed to generate documentation", details: err.message });
+    console.error("Docs error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── PDF DOWNLOAD ───────────────────────────────────── */
+router.get("/publisher/:pubId/offer/:offerId/download-pdf", async (req, res) => {
+  try {
+    const { pubId, offerId } = req.params;
+    const data = await getDocsData(pubId, offerId);
+    const pdfBuffer = await generatePDF(data);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition",
+      `attachment; filename="API_Docs_${data.offer.display_name}_${data.offer.geo}_${data.offer.carrier}.pdf"`.replace(/\s+/g, "_"));
+    res.end(pdfBuffer);
+  } catch (err) {
+    console.error("PDF download error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
