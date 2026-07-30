@@ -5,6 +5,14 @@ import pool from "../db.js";
 const router = express.Router();
 const BASE = "https://backend.mob13r.com";
 
+// Color constants (module level - accessible everywhere)
+const RED   = "#e94560";
+const DARK  = "#1a1a2e";
+const GRAY  = "#64748b";
+const WHITE = "#ffffff";
+const BG    = "#0a0f1e";
+const GREEN = "#22c55e";
+
 async function getDocsData(pubId, offerId) {
   const pubRes = await pool.query(
     "SELECT id, api_key, name FROM publishers WHERE id=$1",
@@ -47,12 +55,7 @@ function generatePDF({ publisher, offer, pinSendURL, verifyURL, statusURL, param
       doc.on("data", c => chunks.push(c));
       doc.on("end", () => resolve(Buffer.concat(chunks)));
 
-      const RED = "#e94560";
-      const DARK = "#1a1a2e";
-      const GRAY = "#64748b";
-      const WHITE = "#ffffff";
-      const BG = "#0a0f1e";
-      const GREEN = "#22c55e";
+
 
       // ── HEADER ──────────────────────────────────────────────
       doc.rect(0, 0, 595, 80).fill(DARK);
