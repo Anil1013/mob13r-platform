@@ -351,7 +351,11 @@ export default function PublisherAssignOffers() {
                 }
               >
                 <option value="">Select Offer</option>
-                {offers.map((o) => (
+                {offers.filter(o => {
+                  // Hide already assigned offers for selected publisher
+                  if (!publisherId) return true;
+                  return !assigned.some(a => a.offer_id === o.id && String(a.publisher_id) === String(publisherId));
+                }).map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.service_name} | {o.geo} | {o.carrier}
                   </option>
