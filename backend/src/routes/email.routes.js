@@ -40,7 +40,7 @@ async function getDocsData(pubId, offerId, orgId) {
 }
 
 /* Build HTML email body */
-function buildEmailHTML({ publisher, offer, pinSendURL, verifyURL, statusURL, params }) {
+function buildEmailHTML({ publisher, offer, pinSendURL, verifyURL, statusURL, portalURL, antifraudURL, params }) {
   const paramRows = (rows) => rows.map(([k, v, d]) => `
     <tr>
       <td style="padding:9px 12px;border-bottom:1px solid #f0f0f0;color:#e94560;font-weight:600;font-family:monospace;font-size:13px;">${k}</td>
@@ -135,6 +135,20 @@ function buildEmailHTML({ publisher, offer, pinSendURL, verifyURL, statusURL, pa
         ["x-api-key",     publisher.api_key, "Your publisher API key"],
       ]
     ) : ""}
+
+    ${portalURL ? `
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:16px;">
+      <h3 style="margin:0 0 6px;color:#1e293b;font-size:15px;">${statusURL ? "4" : "3"}. PORTAL STEP</h3>
+      <p style="margin:0 0 10px;color:#64748b;font-size:13px;">Redirect user to advertiser portal for final confirmation.</p>
+      <div style="background:#0a0f1e;color:#22c55e;padding:14px 18px;border-radius:8px;font-family:monospace;font-size:12px;word-break:break-all;">${portalURL}</div>
+    </div>` : ""}
+
+    ${antifraudURL ? `
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:16px;">
+      <h3 style="margin:0 0 6px;color:#1e293b;font-size:15px;">${[statusURL,portalURL].filter(Boolean).length+3}. ANTIFRAUD CHECK</h3>
+      <p style="margin:0 0 10px;color:#64748b;font-size:13px;">Antifraud verification before processing subscription.</p>
+      <div style="background:#0a0f1e;color:#22c55e;padding:14px 18px;border-radius:8px;font-family:monospace;font-size:12px;word-break:break-all;">${antifraudURL}</div>
+    </div>` : ""}
 
     ${params.length > 0 ? `
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:16px;">
