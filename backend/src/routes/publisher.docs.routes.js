@@ -40,14 +40,18 @@ async function getDocsData(pubId, offerId) {
     [offerId]
   );
 
-  const pinSendURL = `${BASE}/api/publisher/pin/send?offer_id=${offerId}&msisdn={msisdn}&geo=${offer.geo}&carrier=${offer.carrier}&x-api-key=${publisher.api_key}`;
-  const verifyURL  = `${BASE}/api/publisher/pin/verify?session_token={session_token}&otp={otp}&x-api-key=${publisher.api_key}`;
-  const statusURL  = offer.check_status_url ? `${BASE}/api/publisher/status/check?session_token={session_token}&x-api-key=${publisher.api_key}` : null;
+  const pinSendURL   = `${BASE}/api/publisher/pin/send?offer_id=${offerId}&msisdn={msisdn}&geo=${offer.geo}&carrier=${offer.carrier}&x-api-key=${publisher.api_key}`;
+  const verifyURL    = `${BASE}/api/publisher/pin/verify?session_token={session_token}&otp={otp}&x-api-key=${publisher.api_key}`;
+  const statusURL    = offer.has_status_check && offer.check_status_url
+    ? `${BASE}/api/publisher/status/check?session_token={session_token}&x-api-key=${publisher.api_key}` : null;
+  const portalURL    = offer.has_portal_step && offer.portal_url ? offer.portal_url : null;
+  const antifraudURL = offer.has_antifraud && offer.af_prepare_url
+    ? `${BASE}/api/publisher/antifraud/prepare?session_token={session_token}&x-api-key=${publisher.api_key}` : null;
 
-  return { publisher, offer, pinSendURL, verifyURL, statusURL, params: paramsRes.rows };
+  return { publisher, offer, pinSendURL, verifyURL, statusURL, portalURL, antifraudURL, params: paramsRes.rows };
 }
 
-function generatePDF({ publisher, offer, pinSendURL, verifyURL, statusURL, params }) {
+function generatePDF({ publisher, offer, pinSendURL, verifyURL, statusURL, portalURL, antifraudURL, params }) {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ margin: 50, size: "A4" });
@@ -126,6 +130,25 @@ function generatePDF({ publisher, offer, pinSendURL, verifyURL, statusURL, param
         doc.fontSize(13).fillColor(DARK).text("3. STATUS CHECK", ML);
         doc.y = doc.y + 6;
         drawURLBox(statusURL);
+        doc.y = doc.y + 20;
+      }
+
+      // ── PORTAL STEP ──────────────────────────────────────────
+      if (portalURL) {
+        doc.fontSize(13).fillColor(DARK).text("3. PORTAL STEP", ML);
+        doc.fontSize(10).fillColor(GRAY).text("User will be redirected to advertiser portal for final confirmation.", ML);
+        doc.y = doc.y + 6;
+        drawURLBox(portalURL);
+        doc.y = doc.y + 20;
+      }
+
+      // ── ANTIFRAUD ─────────────────────────────────────────────
+      if (antifraudURL) {
+        const num = portalURL ? "4" : "3";
+        doc.fontSize(13).fillColor(DARK).text(`${num}. ANTIFRAUD CHECK`, ML);
+        doc.fontSize(10).fillColor(GRAY).text("Antifraud verification before processing subscription.", ML);
+        doc.y = doc.y + 6;
+        drawURLBox(antifraudURL);
         doc.y = doc.y + 20;
       }
 
@@ -247,7 +270,30 @@ router.get("/publisher/:pubId/offer/:offerId/docs", async (req, res) => {
   ${statusURL ? `
   <div class="card">
     <h2>3. STATUS CHECK</h2>
+    <p>Verify the subscription status.</p>
     <div class="url-box">${statusURL}</div>
+    <table><thead><tr><th>Parameter</th><th>Value</th><th>Description</th></tr></thead><tbody>
+      <tr><td>session_token</td><td>{session_token}</td><td>Session token</td></tr>
+      <tr><td>x-api-key</td><td>${publisher.api_key}</td><td>Publisher API key</td></tr>
+    </tbody></table>
+  </div>` : ""}
+
+  ${portalURL ? `
+  <div class="card">
+    <h2>${statusURL ? "4" : "3"}. PORTAL STEP</h2>
+    <p>Redirect user to advertiser portal for final confirmation.</p>
+    <div class="url-box">${portalURL}</div>
+  </div>` : ""}
+
+  ${antifraudURL ? `
+  <div class="card">
+    <h2>${[statusURL, portalURL].filter(Boolean).length + 3}. ANTIFRAUD CHECK</h2>
+    <p>Antifraud verification before processing subscription.</p>
+    <div class="url-box">${antifraudURL}</div>
+    <table><thead><tr><th>Parameter</th><th>Value</th><th>Description</th></tr></thead><tbody>
+      <tr><td>session_token</td><td>{session_token}</td><td>Session token</td></tr>
+      <tr><td>x-api-key</td><td>${publisher.api_key}</td><td>Publisher API key</td></tr>
+    </tbody></table>
   </div>` : ""}
 
   ${params.length > 0 ? `
