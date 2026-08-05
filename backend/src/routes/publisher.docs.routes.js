@@ -42,11 +42,16 @@ async function getDocsData(pubId, offerId) {
 
   const pinSendURL   = `${BASE}/api/publisher/pin/send?offer_id=${offerId}&msisdn={msisdn}&geo=${offer.geo}&carrier=${offer.carrier}&x-api-key=${publisher.api_key}`;
   const verifyURL    = `${BASE}/api/publisher/pin/verify?session_token={session_token}&otp={otp}&x-api-key=${publisher.api_key}`;
-  const statusURL    = offer.has_status_check && offer.check_status_url
-    ? `${BASE}/api/publisher/status/check?session_token={session_token}&x-api-key=${publisher.api_key}` : null;
-  const portalURL    = offer.has_portal_step && offer.portal_url ? offer.portal_url : null;
-  const antifraudURL = offer.has_antifraud && offer.af_prepare_url
-    ? `${BASE}/api/publisher/antifraud/prepare?session_token={session_token}&x-api-key=${publisher.api_key}` : null;
+  // Use has_ flag only — check_status_url/portal_url may be empty but flag decides
+  const statusURL    = offer.has_status_check
+    ? (offer.check_status_url || `${BASE}/api/publisher/status/check?session_token={session_token}&x-api-key=${publisher.api_key}`)
+    : null;
+  const portalURL    = offer.has_portal_step
+    ? (offer.portal_url || `${BASE}/api/publisher/portal?session_token={session_token}&x-api-key=${publisher.api_key}`)
+    : null;
+  const antifraudURL = offer.has_antifraud
+    ? (offer.af_prepare_url || `${BASE}/api/publisher/antifraud/prepare?session_token={session_token}&x-api-key=${publisher.api_key}`)
+    : null;
 
   return { publisher, offer, pinSendURL, verifyURL, statusURL, portalURL, antifraudURL, params: paramsRes.rows };
 }
