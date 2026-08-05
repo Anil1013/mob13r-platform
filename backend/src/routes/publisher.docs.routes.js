@@ -207,7 +207,7 @@ router.get("/publisher/:pubId/offer/:offerId/docs", async (req, res) => {
     const { format } = req.query;
 
     const data = await getDocsData(pubId, offerId);
-    const { publisher, offer, pinSendURL, verifyURL, statusURL, params } = data;
+    const { publisher, offer, pinSendURL, verifyURL, statusURL, portalURL, antifraudURL, params } = data;
 
     if (format === "pdf") {
       const pdfBuffer = await generatePDF(data);
