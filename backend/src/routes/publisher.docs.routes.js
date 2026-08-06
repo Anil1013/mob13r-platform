@@ -24,6 +24,7 @@ async function getDocsData(pubId, offerId) {
   const offerRes = await pool.query(
     `SELECT o.id, o.geo, o.carrier, o.service_name, o.otp_length,
             o.pin_send_url, o.pin_verify_url, o.check_status_url, o.portal_url,
+            o.has_antifraud, o.has_status_check, o.has_portal_step, o.af_prepare_url,
             COALESCE(po.pub_offer_name, o.service_name) AS display_name
      FROM offers o
      LEFT JOIN publisher_offers po ON po.offer_id = o.id AND po.publisher_id = $2
