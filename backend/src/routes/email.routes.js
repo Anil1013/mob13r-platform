@@ -16,7 +16,8 @@ async function getDocsData(pubId, offerId, orgId) {
 
   const offerRes = await pool.query(
     `SELECT o.id, o.geo, o.carrier, o.service_name, o.otp_length,
-            o.pin_send_url, o.pin_verify_url, o.check_status_url,
+            o.pin_send_url, o.pin_verify_url, o.check_status_url, o.portal_url,
+            o.has_antifraud, o.has_status_check, o.has_portal_step, o.af_prepare_url,
             COALESCE(po.pub_offer_name, o.service_name) AS display_name
      FROM offers o
      LEFT JOIN publisher_offers po ON po.offer_id = o.id AND po.publisher_id = $2
@@ -32,11 +33,19 @@ async function getDocsData(pubId, offerId, orgId) {
   );
 
   const BASE = "https://backend.mob13r.com";
-  const pinSendURL = `${BASE}/api/publisher/pin/send?offer_id=${offerId}&msisdn={msisdn}&geo=${offer.geo}&carrier=${offer.carrier}&x-api-key=${publisher.api_key}`;
-  const verifyURL  = `${BASE}/api/publisher/pin/verify?session_token={session_token}&otp={otp}&x-api-key=${publisher.api_key}`;
-  const statusURL  = offer.check_status_url ? `${BASE}/api/publisher/status/check?session_token={session_token}&x-api-key=${publisher.api_key}` : null;
+  const pinSendURL   = `${BASE}/api/publisher/pin/send?offer_id=${offerId}&msisdn={msisdn}&geo=${offer.geo}&carrier=${offer.carrier}&x-api-key=${publisher.api_key}`;
+  const verifyURL    = `${BASE}/api/publisher/pin/verify?session_token={session_token}&otp={otp}&x-api-key=${publisher.api_key}`;
+  const statusURL    = offer.has_status_check
+    ? (offer.check_status_url || `${BASE}/api/publisher/status/check?session_token={session_token}&x-api-key=${publisher.api_key}`)
+    : null;
+  const portalURL    = offer.has_portal_step
+    ? (offer.portal_url || `${BASE}/api/publisher/portal?session_token={session_token}&x-api-key=${publisher.api_key}`)
+    : null;
+  const antifraudURL = offer.has_antifraud
+    ? (offer.af_prepare_url || `${BASE}/api/publisher/antifraud/prepare?session_token={session_token}&x-api-key=${publisher.api_key}`)
+    : null;
 
-  return { publisher, offer, pinSendURL, verifyURL, statusURL, params: paramsRes.rows };
+  return { publisher, offer, pinSendURL, verifyURL, statusURL, portalURL, antifraudURL, params: paramsRes.rows };
 }
 
 /* Build HTML email body */
@@ -135,6 +144,24 @@ function buildEmailHTML({ publisher, offer, pinSendURL, verifyURL, statusURL, po
         ["x-api-key",     publisher.api_key, "Your publisher API key"],
       ]
     ) : ""}
+
+    ${portalURL ? `
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:16px;">
+      <h3 style="margin:0 0 6px;color:#1e293b;font-size:15px;">${statusURL ? "4" : "3"}. PORTAL STEP</h3>
+      <p style="margin:0 0 10px;color:#64748b;font-size:13px;">Redirect user to advertiser portal for final confirmation.</p>
+      <div style="background:#0a0f1e;color:#22c55e;padding:14px 18px;border-radius:8px;font-family:monospace;font-size:12px;word-break:break-all;">${portalURL}</div>
+    </div>` : ""}
+
+    ${antifraudURL ? `
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:16px;">
+      <h3 style="margin:0 0 6px;color:#1e293b;font-size:15px;">${[statusURL,portalURL].filter(Boolean).length + 3}. ANTIFRAUD CHECK</h3>
+      <p style="margin:0 0 10px;color:#64748b;font-size:13px;">Antifraud verification before processing subscription.</p>
+      <div style="background:#0a0f1e;color:#22c55e;padding:14px 18px;border-radius:8px;font-family:monospace;font-size:12px;word-break:break-all;">${antifraudURL}</div>
+      ${table([
+        ["session_token", "{session_token}", "Session token from PIN SEND"],
+        ["x-api-key",     publisher.api_key, "Your publisher API key"],
+      ])}
+    </div>` : ""}
 
     ${portalURL ? `
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:16px;">
