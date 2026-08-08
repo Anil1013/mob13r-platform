@@ -10,6 +10,7 @@ export default function Offers() {
   /* ---------------- STATE ---------------- */
   const [advertisers, setAdvertisers] = useState([]);
   const [offers, setOffers] = useState([]);
+  const [search, setSearch] = useState("");
   const [selectedOffer, setSelectedOffer] = useState(null);
   const [parameters, setParameters] = useState([]);
 
@@ -138,6 +139,14 @@ export default function Offers() {
   };
 
   /* ---------------- HELPERS ---------------- */
+  const filteredOffers = offers.filter(o =>
+    !search ||
+    o.service_name?.toLowerCase().includes(search.toLowerCase()) ||
+    o.geo?.toLowerCase().includes(search.toLowerCase()) ||
+    o.carrier?.toLowerCase().includes(search.toLowerCase()) ||
+    o.advertiser_name?.toLowerCase().includes(search.toLowerCase())
+  );
+
   const remaining = (o) => !o.daily_cap ? "0" : Math.max(o.daily_cap - (o.today_hits ?? 0), 0);
   const autoRevenue = (o) => o.cpa ? `$${(Number(o.cpa) * Number(o.today_hits || 0)).toFixed(2)}` : "$0.00";
 
@@ -182,6 +191,21 @@ export default function Offers() {
           <button type="submit" style={btn}>Create</button>
         </form>
 
+        {/* SEARCH BAR */}
+        <div style={{ marginBottom: 14 }}>
+          <input
+            style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, width: 300, outline:"none" }}
+            placeholder="🔍 Search by offer, geo, carrier, advertiser..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          {search && <button onClick={() => setSearch("")}
+            style={{ marginLeft: 8, padding: "9px 14px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor:"pointer", fontSize: 13 }}>
+            ✕ Clear
+          </button>}
+          <span style={{ marginLeft: 12, fontSize: 13, color: "#64748b" }}>{filteredOffers.length} of {offers.length} offers</span>
+        </div>
+
         {/* OFFER TABLE */}
         <div style={styles.tableWrap}>
           <table style={table}>
@@ -193,7 +217,7 @@ export default function Offers() {
               </tr>
             </thead>
             <tbody>
-              {offers.map(o => (
+              {filteredOffers.map(o => (
                 <tr key={o.id}>
                   <td style={td}>
                     <span style={{background:"rgba(232,133,106,0.12)",color:"#e8856a",padding:"2px 8px",borderRadius:6,fontSize:12,fontWeight:700}}>{o.id}</span>
