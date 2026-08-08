@@ -27,6 +27,22 @@ const fmtDT = (v, tz = "Asia/Kolkata") => {
 };
 const hrLabel = (h) => { if (!h) return "-"; const hh=String(h).slice(11,13); if(!hh||isNaN(Number(hh))) return "-"; const n=String((Number(hh)+1)%24).padStart(2,"0"); return `${hh}:00 - ${n}:00`; };
 
+function exportPublisherCSV(rows, fromDate, toDate) {
+  if (!rows.length) return alert("No data to export");
+  const headers = ["Date","Offer","Geo","Carrier","CPA","CAP","PIN REQ","Unique REQ","PIN SENT","Unique SENT","Verify REQ","Unique Verify","Verified","CR%","Revenue","Last Pin Gen","Last Verification","Last Success"];
+  const keys = ["stat_date","offer","geo","carrier","cpa","cap","pin_request_count","unique_pin_request_count","pin_send_count","unique_pin_sent","pin_validation_request_count","unique_pin_validation_request_count","unique_pin_verified","cr","revenue","last_pin_gen_date","last_pin_verification_date","last_success_pin_verification_date"];
+  const csv = [
+    headers.join(","),
+    ...rows.map(r => keys.map(k => `"${String(r[k] ?? "").replace(/"/g,'""')}"`).join(","))
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `publisher_report_${fromDate}_${toDate}.csv`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
 export default function PublisherDashboard() {
   const today = todayIST();
   const [timezone, setTimezone] = useState("Asia/Kolkata");
@@ -131,6 +147,7 @@ export default function PublisherDashboard() {
           <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} style={{...input,width:"auto",colorScheme:"light"}} />
           <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} style={{...input,width:"auto",colorScheme:"light"}} />
           <button onClick={fetchData} style={btn}>Apply</button>
+          <button style={{...btn, background:"#16a34a", border:"none", color:"#fff"}} onClick={() => exportPublisherCSV(filteredRows, fromDate, toDate)}>⬇ Export CSV</button>
           <select value={filterOffer} onChange={e=>setFilterOffer(e.target.value)} style={{...input,width:"auto"}}>
             <option value="">All Offers</option>{offerOptions.map(o=><option key={o}>{o}</option>)}
           </select>
