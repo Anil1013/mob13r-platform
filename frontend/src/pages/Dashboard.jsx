@@ -61,6 +61,7 @@ export default function Dashboard() {
   const [carrier, setCarrier] = useState("");
   const [offer, setOffer] = useState("");
   const [view, setView] = useState("summary");
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const [timezone, setTimezone] = useState("Asia/Kolkata");
 
   const authHeader = useMemo(() => {
@@ -118,6 +119,15 @@ export default function Dashboard() {
       setStats(json?.data && typeof json.data === "object" ? json.data : {});
     } catch { setStats({}); }
   }, [from, to, advertiser, publisher, geo, carrier, offer, authHeader]);
+
+  // Auto-refresh every 30s
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      loadData();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, from, to]);
 
   useEffect(() => { loadReport(); loadFilters(); loadRealtime(); }, [loadReport, loadFilters, loadRealtime]);
 
@@ -218,6 +228,11 @@ export default function Dashboard() {
           </select>
           <button onClick={loadReport} disabled={loading} style={applyBtn}>{loading ? "Loading..." : "Apply"}</button>
           <button onClick={exportCSV} style={exportBtn}>Export CSV</button>
+          <button
+            onClick={() => setAutoRefresh(v => !v)}
+            style={{...exportBtn, background: autoRefresh ? "#16a34a" : "#64748b", color:"#fff", border:"none"}}>
+            {autoRefresh ? "🔄 Auto ON" : "🔄 Auto OFF"}
+          </button>
         </div>
 
         <div style={tableWrap}>
