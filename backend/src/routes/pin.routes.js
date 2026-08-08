@@ -149,6 +149,19 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const offer = offerRes.rows[0];
 
+    // ✅ Duplicate MSISDN check — same MSISDN same offer same day
+    const dupCheck = await pool.query(
+      `SELECT COUNT(*) AS cnt FROM pin_sessions
+       WHERE msisdn = $1 AND offer_id = $2
+       AND status IN ('VERIFIED','SCRUBBED','CAP_REACHED')
+       AND parent_session_token IS NOT NULL
+       AND created_at::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date`,
+      [incoming.msisdn, offer_id]
+    );
+    if (Number(dupCheck.rows[0].cnt) > 0) {
+      return res.status(400).json({ status: "DUPLICATE", message: "This number has already been subscribed today." });
+    }
+
     // ✅ MSISDN Prefix Validation — carrier + geo check
     if (offer.carrier && offer.geo) {
       const msisdn = String(incoming.msisdn).replace(/[^0-9]/g, "");
@@ -284,8 +297,18 @@ router.all("/pin/verify", async (req, res) => {
     const { session_token, otp } = { ...req.query, ...req.body };
     if (!session_token || !otp) return res.json({ status: "FAILED", message: "session_token and otp required" });
 
-    const sRes = await pool.query(`SELECT * FROM pin_sessions WHERE session_token=$1`, [session_token]);
-    if (!sRes.rows.length) return res.json({ status: "INVALID_SESSION" });
+    const sRes = await pool.query(
+      `SELECT * FROM pin_sessions WHERE session_token=$1 AND created_at > NOW() - INTERVAL '24 hours'`,
+      [session_token]
+    );
+    if (!sRes.rows.length) {
+      // Check if session exists but expired
+      const expiredCheck = await pool.query(`SELECT id FROM pin_sessions WHERE session_token=$1`, [session_token]);
+      if (expiredCheck.rows.length) {
+        return res.json({ status: "FAILED", message: "Session expired. Please request a new OTP." });
+      }
+      return res.json({ status: "INVALID_SESSION" });
+    }
 
     const session = sRes.rows[0];
 
