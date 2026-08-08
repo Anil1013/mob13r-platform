@@ -1,4 +1,5 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import carrierPrefixRoutes from "./routes/carrier-prefixes.routes.js";
 import emailRoutes from "./routes/email.routes.js";
 import cors from "cors";
@@ -48,6 +49,16 @@ app.use(fileUpload({
 
 app.use("/uploads", express.static("public/uploads"));
 app.use(express.json({ limit: "50mb" }));
+
+// Rate limiting — PIN SEND/VERIFY: 10 req/min per IP
+const pinLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { status: "FAILED", message: "Too many requests. Please wait 1 minute." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api/publisher/pin", pinLimiter);
 app.use("/api", carrierPrefixRoutes);
 app.use("/api", emailRoutes);
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
