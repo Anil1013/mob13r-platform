@@ -6,6 +6,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.co
 export default function Publishers() {
   const navigate = useNavigate();
   const [publishers,setPublishers] = useState([]);
+  const [search,setSearch] = useState("");
   const [name,setName] = useState("");
   const [email,setEmail] = useState("");
   const [loading,setLoading] = useState(false);
@@ -19,6 +20,13 @@ export default function Publishers() {
     if(data.status==="SUCCESS") setPublishers(data.data);
   };
   const showToast=(msg,type="success")=>{ setToast({msg,type}); setTimeout(()=>setToast(null),2500); };
+  const filteredPubs = publishers.filter(p =>
+    !search ||
+    p.name?.toLowerCase().includes(search.toLowerCase()) ||
+    (p.email || "")?.toLowerCase().includes(search.toLowerCase()) ||
+    p.status?.toLowerCase().includes(search.toLowerCase())
+  );
+
   const add=async()=>{
     if(!name.trim()) return showToast("Name required","error");
     if(email && !email.includes("@")) return showToast("Valid email required","error");
@@ -56,10 +64,20 @@ export default function Publishers() {
         </div>
         <div style={{background:"#ffffff",border:"1px solid #e2e8f0",borderRadius:16,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}>
           <div style={{overflowX:"auto"}}>
+            <div style={{ padding:"12px 16px 0", display:"flex", gap:10, alignItems:"center" }}>
+              <input
+                style={{ padding:"8px 14px", borderRadius:8, border:"1px solid #e2e8f0", fontSize:13, width:280, outline:"none" }}
+                placeholder="🔍 Search publishers..."
+                value={search} onChange={e => setSearch(e.target.value)}
+              />
+              {search && <button onClick={() => setSearch("")}
+                style={{ padding:"8px 12px", borderRadius:8, border:"1px solid #e2e8f0", background:"#fff", cursor:"pointer", fontSize:13 }}>✕</button>}
+              <span style={{ fontSize:13, color:"#64748b" }}>{filteredPubs.length} of {publishers.length}</span>
+            </div>
             <table style={table}>
               <thead><tr>{["ID","Name","Email","API Key","Status","Offers","Conversions","Revenue","Today Req","Created","Actions"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
               <tbody>
-                {publishers.map(p=>(
+                {filteredPubs.map(p=>(
                   <tr key={p.id}>
                     <td style={td}><span style={{background:"rgba(59,130,246,0.08)",color:"#2563eb",padding:"2px 8px",borderRadius:6,fontSize:12,fontWeight:600}}>{p.id}</span></td>
                     <td style={{...td,color:"#1e293b",fontWeight:500}}>{p.name}</td>
