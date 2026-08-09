@@ -1,6 +1,5 @@
 import express from "express";
-import rateLimit from "express-rate-limit";
-import rateLimit from "express-rate-limit";
+import rateLimit from "express-rate-limit"; // Removed duplicate import
 import carrierPrefixRoutes from "./routes/carrier-prefixes.routes.js";
 import emailRoutes from "./routes/email.routes.js";
 import cors from "cors";
@@ -26,61 +25,61 @@ const app = express();
 
 app.set("trust proxy", 1);
 
-app.use(cors({
-  origin: [
-    "https://dashboard.mob13r.com",
-    "https://backend.mob13r.com",
-    "http://localhost:5173",
-    "http://localhost:3000",
-  ],
-  credentials: true,
-}));
+// CORS configuration supporting Preflight OPTIONS requests
+app.use(
+  cors({
+    origin: [
+      "https://dashboard.mob13r.com",
+      "https://backend.mob13r.com",
+      "http://localhost:5173",
+      "http://localhost:3000",
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    credentials: true,
+  })
+);
 
-app.use(fileUpload({
-  useTempFiles: true,
-  tempFileDir: "/tmp/",
-  createParentPath: true,
-  abortOnLimit: true,
-  safeFileNames: true,
-  preserveExtension: true,
-  parseNested: true,
-  debug: process.env.NODE_ENV !== "production",
-  limits: { fileSize: 50 * 1024 * 1024 },
-}));
+app.use(
+  fileUpload({
+    useTempFiles: true,
+    tempFileDir: "/tmp/",
+    createParentPath: true,
+    abortOnLimit: true,
+    safeFileNames: true,
+    preserveExtension: true,
+    parseNested: true,
+    debug: process.env.NODE_ENV !== "production",
+    limits: { fileSize: 50 * 1024 * 1024 },
+  })
+);
 
 app.use("/uploads", express.static("public/uploads"));
 app.use(express.json({ limit: "50mb" }));
-
-// Rate limiting — 10 requests/min per IP on PIN endpoints
-const pinLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  message: { status: "FAILED", message: "Too many requests. Please wait 1 minute." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use("/api/publisher/pin", pinLimiter);
-
-// Rate limiting — PIN SEND/VERIFY: 10 req/min per IP
-const pinLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  message: { status: "FAILED", message: "Too many requests. Please wait 1 minute." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use("/api/publisher/pin", pinLimiter);
-app.use("/api", carrierPrefixRoutes);
-app.use("/api", emailRoutes);
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
+// Rate limiting — 10 requests/min per IP on PIN endpoints (Removed duplicate)
+const pinLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { status: "FAILED", message: "Too many requests. Please wait 1 minute." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api/publisher/pin", pinLimiter);
+
+// Logging Middleware
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.originalUrl}`);
   next();
 });
 
+// Health check endpoint
 app.get("/health", (req, res) => res.json({ status: "OK" }));
 
+// Routes
+app.use("/api", carrierPrefixRoutes);
+app.use("/api", emailRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/advertisers", advertisersRoutes);
 app.use("/api/offers", offersRoutes);
@@ -97,10 +96,12 @@ app.use("/api/saas", saasAuthRoutes);
 app.use("/api/saas", saasOrgRoutes);
 app.use("/api/saas", saasAdminRoutes);
 
+// 404 Handler
 app.use((req, res) => {
   res.status(404).json({ status: "FAILED", error: "Route not found" });
 });
 
+// Global Error Handler
 app.use((err, req, res, next) => {
   console.error("GLOBAL ERROR:", err);
   if (err?.message === "Unexpected end of form")
