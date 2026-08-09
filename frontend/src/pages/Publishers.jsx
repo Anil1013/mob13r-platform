@@ -75,7 +75,7 @@ export default function Publishers() {
               <span style={{ fontSize:13, color:"#64748b" }}>{filteredPubs.length} of {publishers.length}</span>
             </div>
             <table style={table}>
-              <thead><tr>{["ID","Name","Email","API Key","Status","Offers","Conversions","Revenue","Today Req","Created","Actions"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+              <thead><tr>{["ID","Name","Email","API Key","Offers","Conversions","Revenue","Today Req","Status","Created","Actions"].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
               <tbody>
                 {filteredPubs.map(p=>(
                   <tr key={p.id}>
