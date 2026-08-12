@@ -1,4 +1,5 @@
 import express from "express";
+import helmet from "helmet";
 import rateLimit from "express-rate-limit"; // Removed duplicate import
 import carrierPrefixRoutes from "./routes/carrier-prefixes.routes.js";
 import emailRoutes from "./routes/email.routes.js";
@@ -24,6 +25,12 @@ import saasAdminRoutes from "./routes/saas/admin.routes.js";
 const app = express();
 
 app.set("trust proxy", 1);
+
+// Security headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: false, // Disabled for API
+}));
 
 // CORS configuration supporting Preflight OPTIONS requests
 app.use(
