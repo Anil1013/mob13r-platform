@@ -1,5 +1,21 @@
 import { NavLink, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 export default function Navbar() {
+  const [serverStatus, setServerStatus] = useState("checking");
+
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const res = await fetch("https://backend.mob13r.com/health", { signal: AbortSignal.timeout(5000) });
+        setServerStatus(res.ok ? "up" : "down");
+      } catch {
+        setServerStatus("down");
+      }
+    };
+    checkHealth();
+    const interval = setInterval(checkHealth, 60000); // Check every 60s
+    return () => clearInterval(interval);
+  }, []);
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
   const user = JSON.parse(localStorage.getItem("user")) || { email: "Admin" };
@@ -41,6 +57,18 @@ export default function Navbar() {
           <div style={S.right}>
             {org.name && <span style={S.orgBadge}>{org.name}</span>}
             <span style={S.email}>{user.email}</span>
+            <span style={{
+              display:"inline-flex", alignItems:"center", gap:5, fontSize:12,
+              color: serverStatus==="up" ? "#16a34a" : serverStatus==="down" ? "#dc2626" : "#94a3b8",
+              background: serverStatus==="up" ? "rgba(22,163,74,0.08)" : serverStatus==="down" ? "rgba(220,38,38,0.08)" : "rgba(148,163,184,0.08)",
+              padding:"4px 10px", borderRadius:20, marginRight:8, cursor:"pointer"
+            }} onClick={() => window.open("https://stats.uptimerobot.com/foHwPIQcEM","_blank")}
+              title="Click to view server status">
+              <span style={{width:7,height:7,borderRadius:"50%",display:"inline-block",
+                background: serverStatus==="up"?"#16a34a":serverStatus==="down"?"#dc2626":"#94a3b8"
+              }}/>
+              {serverStatus==="up"?"● Server UP":serverStatus==="down"?"● Server DOWN":"● Checking..."}
+            </span>
             <button style={S.logout} onClick={logout}>Logout</button>
           </div>
         </div>
