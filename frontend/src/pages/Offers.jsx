@@ -211,7 +211,7 @@ export default function Offers() {
           <table style={table}>
             <thead>
               <tr>
-                {["ID","Advertiser","Service","CPA ($)","Geo","Carrier","OTP Len","Cap","Used","Publishers","Remain","Revenue ($)","Route","Control","Params"].map(h => (
+                {["ID","Advertiser","Service","CPA ($)","Geo","Carrier","OTP Len","Cap","Used","Publishers","Remain","Today Rev","Status","Route","Control","Params"].map(h => (
                   <th key={h} style={th}>{h}</th>
                 ))}
               </tr>
@@ -245,7 +245,16 @@ export default function Offers() {
                   <td style={td}>{o.today_hits ?? 0}</td>
                   <td style={td}><span style={{background:"rgba(59,130,246,0.08)",color:"#2563eb",padding:"2px 6px",borderRadius:10,fontSize:12,fontWeight:600}}>{o.active_publishers ?? 0}</span></td>
                   <td style={td}>{remaining(o)}</td>
-                  <td style={td}>{autoRevenue(o)}</td>
+                  <td style={{...td, fontWeight:600, color:"#16a34a"}}>{autoRevenue(o)}</td>
+                  <td style={td}>
+                    <span style={{
+                      padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:700,
+                      background: o.status==="active" ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
+                      color: o.status==="active" ? "#16a34a" : "#dc2626"
+                    }}>
+                      {o.status==="active" ? "● Active" : "● Paused"}
+                    </span>
+                  </td>
                   <td style={td}>{routeBadge(o)}</td>
                   <td style={td}>
                     <button onClick={() => changeServiceType(o.id, o.service_type === "NORMAL" ? "FALLBACK" : "NORMAL")} style={styles.smallBtn}>
