@@ -62,7 +62,7 @@ export default function Navbar() {
               color: serverStatus==="up" ? "#16a34a" : serverStatus==="down" ? "#dc2626" : "#94a3b8",
               background: serverStatus==="up" ? "rgba(22,163,74,0.08)" : serverStatus==="down" ? "rgba(220,38,38,0.08)" : "rgba(148,163,184,0.08)",
               padding:"4px 10px", borderRadius:20, marginRight:8, cursor:"pointer"
-            }} onClick={() => window.open("https://stats.uptimerobot.com/foHwPIQcEM","_blank")}
+            }} onClick={() => window.open("https://stats.uptimerobot.com/foHwPiOcEM","_blank")}
               title="Click to view server status">
               <span style={{width:7,height:7,borderRadius:"50%",display:"inline-block",
                 background: serverStatus==="up"?"#16a34a":serverStatus==="down"?"#dc2626":"#94a3b8"
