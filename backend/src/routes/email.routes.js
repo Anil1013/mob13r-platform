@@ -154,13 +154,10 @@ function buildEmailHTML({ publisher, offer, pinSendURL, verifyURL, statusURL, po
 
     ${antifraudURL ? `
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:16px;">
-      <h3 style="margin:0 0 6px;color:#1e293b;font-size:15px;">${[statusURL,portalURL].filter(Boolean).length + 3}. ANTIFRAUD CHECK</h3>
-      <p style="margin:0 0 10px;color:#64748b;font-size:13px;">Antifraud verification before processing subscription.</p>
-      <div style="background:#0a0f1e;color:#22c55e;padding:14px 18px;border-radius:8px;font-family:monospace;font-size:12px;word-break:break-all;">${antifraudURL}</div>
-      ${table([
-        ["session_token", "{session_token}", "Session token from PIN SEND"],
-        ["x-api-key",     publisher.api_key, "Your publisher API key"],
-      ])}
+      <h3 style="margin:0 0 6px;color:#1e293b;font-size:15px;">${[statusURL,portalURL].filter(Boolean).length + 3}. ANTIFRAUD</h3>
+      <p style="margin:0;color:#92400e;background:#fef3c7;padding:10px 14px;border-radius:8px;font-size:13px;">
+        ✅ Antifraud verification is handled <strong>automatically by mob13r</strong> before each PIN request. No additional integration required.
+      </p>
     </div>` : ""}
 
     ${portalURL ? `
