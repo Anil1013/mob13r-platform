@@ -2,6 +2,7 @@ import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit"; // Removed duplicate import
 import carrierPrefixRoutes from "./routes/carrier-prefixes.routes.js";
+import offerGroupRoutes from "./routes/offer-groups.routes.js";
 import emailRoutes from "./routes/email.routes.js";
 import cors from "cors";
 import fileUpload from "express-fileupload";
@@ -86,6 +87,7 @@ app.get("/health", (req, res) => res.json({ status: "OK" }));
 
 // Routes
 app.use("/api", carrierPrefixRoutes);
+app.use("/api", offerGroupRoutes);
 app.use("/api", emailRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/advertisers", advertisersRoutes);
