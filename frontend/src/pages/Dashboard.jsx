@@ -46,6 +46,12 @@ function csvCell(value) {
   return `"${normalized.replace(/"/g, '""')}"`;
 }
 
+function crColor(cr) {
+  const c = Number(cr || 0);
+  const color = c >= 50 ? "#22c55e" : c >= 20 ? "#f59e0b" : "#ef4444";
+  return <span style={{color, fontWeight:700}}>{c.toFixed(1)}%</span>;
+}
+
 export default function Dashboard() {
   const today = todayIST();
   const [data, setData] = useState([]);
@@ -354,15 +360,7 @@ export default function Dashboard() {
                       <td style={stickyTd}>{row.cap}</td><td style={stickyTd}>{row.publisher_cap}</td><td style={stickyTd}>{row.pin_req}</td><td style={stickyTd}>{row.unique_req}</td>
                       <td style={stickyTd}>{row.pin_sent}</td><td style={stickyTd}>{row.unique_sent}</td><td style={stickyTd}>{row.verify_req}</td><td style={stickyTd}>{row.unique_verify}</td>
                       <td style={stickyTd}>{row.verified}</td><td style={stickyTd}>{row.publisher_verified}</td>
-                      <td style={stickyTd}>(() => {
-  const cr = toNumber(row.cr_percent);
-  const color = cr >= 50 ? "#22c55e" : cr >= 20 ? "#f59e0b" : "#ef4444";
-  return <span style={{color, fontWeight:700}}>{cr.toFixed(1)}%</span>;
-})()%</td><td style={stickyTd}>(() => {
-  const cr = toNumber(row.publisher_cr);
-  const color = cr >= 50 ? "#22c55e" : cr >= 20 ? "#f59e0b" : "#ef4444";
-  return <span style={{color, fontWeight:600}}>{cr.toFixed(1)}%</span>;
-})()%</td>
+                      <td style={stickyTd}>{crColor(toNumber(row.cr_percent))}%</td><td style={stickyTd}>{crColor(toNumber(row.publisher_cr))}%</td>
                       <td style={stickyTd}>{money(row.revenue)}</td><td style={stickyTd}>{money(row.publisher_revenue)}</td>
                       <td style={{...stickyTd, color: toNumber(row.profit) >= 0 ? "#4ade80" : "#f87171", fontWeight:600}}>{money(row.profit)}</td>
                       <td style={stickyTd}>{formatDate(row.last_pin_gen, timezone)}</td><td style={stickyTd}>{formatDate(row.last_verification, timezone)}</td>
