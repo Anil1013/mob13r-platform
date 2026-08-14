@@ -195,6 +195,24 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+
+          {/* Second row - Additional Stats */}
+          {(stats.active_publishers_today !== undefined) && (
+            <div style={{display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8, marginTop:8}}>
+              {[
+                { label:"👥 Active Pub Today",   value: stats.active_publishers_today||0,  color:"#06b6d4" },
+                { label:"📦 Active Offers Today", value: stats.active_offers_today||0,      color:"#8b5cf6" },
+                { label:"❌ Failed Today",        value: stats.failed_today||0,             color:"#ef4444" },
+                { label:"✂️ Scrubbed Today",      value: stats.scrubbed_today||0,           color:"#f59e0b" },
+                { label:"🚫 Cap Reached",         value: stats.cap_reached_today||0,        color:"#64748b" },
+              ].map((s,i) => (
+                <div key={i} style={{...statCard, borderLeft:`3px solid ${s.color}`, padding:"8px 12px"}}>
+                  <div style={{...statLabel, fontSize:9, marginBottom:2}}>{s.label}</div>
+                  <div style={{...statValue, color:s.color, fontSize:18}}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {error ? <p style={{color:"#f87171", fontSize:13, marginBottom:12}}>{error}</p> : null}
