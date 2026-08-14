@@ -157,7 +157,19 @@ export default function Dashboard() {
     <>
       <Navbar />
       <div style={page}>
-        <h1 style={pageTitle}>Traffic Dashboard</h1>
+        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16}}>
+          <h1 style={{...pageTitle, margin:0}}>Traffic Dashboard</h1>
+          <div style={{display:"flex", gap:8, alignItems:"center"}}>
+            {data.length > 0 && (
+              <span style={{background:"rgba(34,197,94,0.1)", color:"#22c55e", padding:"4px 12px", borderRadius:20, fontSize:12, fontWeight:700}}>
+                {data.length} rows loaded
+              </span>
+            )}
+            <span style={{background:"rgba(148,163,184,0.1)", color:"#94a3b8", padding:"4px 12px", borderRadius:20, fontSize:12}}>
+              {from === to ? from : `${from} → ${to}`}
+            </span>
+          </div>
+        </div>
 
         {/* TABS + STATS — same row */}
         <div style={topRow}>
@@ -166,27 +178,86 @@ export default function Dashboard() {
             <button onClick={() => setView("daily")} style={{...tabBtn, ...(view==="daily" ? tabBtnActive : {})}}>Daily</button>
           </div>
 
-          <div style={statRow}>
-            <div style={{...statCard, borderLeft:"3px solid #3b82f6"}}>
-              <div style={statLabel}>Requests</div>
-              <div style={{...statValue, color:"#60a5fa"}}>{stats.total_requests || 0}</div>
-            </div>
-            <div style={{...statCard, borderLeft:"3px solid #22c55e"}}>
-              <div style={statLabel}>OTP Sent</div>
-              <div style={{...statValue, color:"#4ade80"}}>{stats.otp_sent || 0}</div>
-            </div>
-            <div style={{...statCard, borderLeft:"3px solid #f59e0b"}}>
-              <div style={statLabel}>Conversions</div>
-              <div style={{...statValue, color:"#fbbf24"}}>{stats.conversions || 0}</div>
-            </div>
-            <div style={{...statCard, borderLeft:"3px solid #8b5cf6"}}>
-              <div style={statLabel}>Last Hour</div>
-              <div style={{...statValue, color:"#a78bfa"}}>{stats.last_hour_requests || 0}</div>
-            </div>
+          <div style={{display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:10}}>
+            {[
+              { label:"📥 Requests",    value: stats.total_requests||0,    color:"#3b82f6", sub: `Unique: ${stats.unique_requests||0}` },
+              { label:"📤 OTP Sent",    value: stats.otp_sent||0,          color:"#06b6d4", sub: `Unique: ${stats.unique_sent||0}` },
+              { label:"✅ Conversions", value: stats.conversions||0,        color:"#22c55e", sub: `CR: ${stats.total_requests ? ((stats.conversions/stats.total_requests)*100).toFixed(1) : 0}%` },
+              { label:"💰 Revenue",     value: `$${Number(total.revenue||0).toFixed(2)}`,   color:"#f59e0b", sub: `Pub: $${Number(total.publisher_revenue||0).toFixed(2)}` },
+              { label:"📈 Profit",      value: `$${Number(total.profit||0).toFixed(2)}`,     color:"#8b5cf6", sub: `Margin: ${total.revenue ? ((total.profit/total.revenue)*100).toFixed(0) : 0}%` },
+              { label:"⏱ Last Hour",   value: stats.last_hour_requests||0, color:"#e94560", sub: "requests" },
+              { label:"🔄 CR %",        value: `${stats.total_requests ? ((stats.conversions/stats.total_requests)*100).toFixed(1) : 0}%`, color:"#16a34a", sub: `${stats.conversions||0} verified` },
+            ].map((s,i) => (
+              <div key={i} style={{...statCard, borderLeft:`3px solid ${s.color}`, padding:"12px 14px"}}>
+                <div style={{...statLabel, fontSize:10, marginBottom:4}}>{s.label}</div>
+                <div style={{...statValue, color:s.color, fontSize:20}}>{s.value}</div>
+                <div style={{fontSize:10, color:"#64748b", marginTop:3}}>{s.sub}</div>
+              </div>
+            ))}
           </div>
         </div>
 
         {error ? <p style={{color:"#f87171", fontSize:13, marginBottom:12}}>{error}</p> : null}
+
+        {/* QUICK INSIGHTS */}
+        {data.length > 0 && (
+          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16}}>
+            {/* Top Offer */}
+            <div style={{background:"#1e293b", borderRadius:10, padding:"12px 16px", border:"1px solid rgba(255,255,255,0.06)"}}>
+              <div style={{fontSize:11, color:"#64748b", fontWeight:700, textTransform:"uppercase", marginBottom:8}}>🏆 Top Offer (by conversions)</div>
+              {(() => {
+                const grouped = data.reduce((acc, r) => {
+                  const key = r.offer || r.service_name || "-";
+                  if (!acc[key]) acc[key] = { conversions: 0, revenue: 0 };
+                  acc[key].conversions += Number(r.verified || 0);
+                  acc[key].revenue += Number(r.revenue || 0);
+                  return acc;
+                }, {});
+                const top = Object.entries(grouped).sort((a,b) => b[1].conversions - a[1].conversions)[0];
+                return top ? (
+                  <div>
+                    <div style={{color:"#f1f5f9", fontWeight:700, fontSize:14}}>{top[0]}</div>
+                    <div style={{color:"#22c55e", fontSize:13}}>{top[1].conversions} conversions · ${top[1].revenue.toFixed(2)}</div>
+                  </div>
+                ) : <div style={{color:"#64748b"}}>No data</div>;
+              })()}
+            </div>
+            {/* Top Publisher */}
+            <div style={{background:"#1e293b", borderRadius:10, padding:"12px 16px", border:"1px solid rgba(255,255,255,0.06)"}}>
+              <div style={{fontSize:11, color:"#64748b", fontWeight:700, textTransform:"uppercase", marginBottom:8}}>⭐ Top Publisher (by revenue)</div>
+              {(() => {
+                const grouped = data.reduce((acc, r) => {
+                  const key = r.publisher || "-";
+                  if (!acc[key]) acc[key] = { revenue: 0, conversions: 0 };
+                  acc[key].revenue += Number(r.publisher_revenue || 0);
+                  acc[key].conversions += Number(r.publisher_verified || 0);
+                  return acc;
+                }, {});
+                const top = Object.entries(grouped).sort((a,b) => b[1].revenue - a[1].revenue)[0];
+                return top ? (
+                  <div>
+                    <div style={{color:"#f1f5f9", fontWeight:700, fontSize:14}}>{top[0]}</div>
+                    <div style={{color:"#f59e0b", fontSize:13}}>${top[1].revenue.toFixed(2)} revenue · {top[1].conversions} conv</div>
+                  </div>
+                ) : <div style={{color:"#64748b"}}>No data</div>;
+              })()}
+            </div>
+            {/* Best CR */}
+            <div style={{background:"#1e293b", borderRadius:10, padding:"12px 16px", border:"1px solid rgba(255,255,255,0.06)"}}>
+              <div style={{fontSize:11, color:"#64748b", fontWeight:700, textTransform:"uppercase", marginBottom:8}}>📊 Best CR% (min 5 requests)</div>
+              {(() => {
+                const rows = data.filter(r => Number(r.pin_req || 0) >= 5);
+                const top = rows.sort((a,b) => Number(b.cr || 0) - Number(a.cr || 0))[0];
+                return top ? (
+                  <div>
+                    <div style={{color:"#f1f5f9", fontWeight:700, fontSize:14}}>{top.offer || top.service_name || "-"}</div>
+                    <div style={{color:"#8b5cf6", fontSize:13}}>{Number(top.cr || 0).toFixed(1)}% CR · {top.carrier} {top.geo}</div>
+                  </div>
+                ) : <div style={{color:"#64748b"}}>No data</div>;
+              })()}
+            </div>
+          </div>
+        )}
 
         <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
           <label style={{ fontSize: 13, color: "#94a3b8" }}>🕐 Timezone:</label>
@@ -265,7 +336,15 @@ export default function Dashboard() {
                       <td style={stickyTd}>{row.cap}</td><td style={stickyTd}>{row.publisher_cap}</td><td style={stickyTd}>{row.pin_req}</td><td style={stickyTd}>{row.unique_req}</td>
                       <td style={stickyTd}>{row.pin_sent}</td><td style={stickyTd}>{row.unique_sent}</td><td style={stickyTd}>{row.verify_req}</td><td style={stickyTd}>{row.unique_verify}</td>
                       <td style={stickyTd}>{row.verified}</td><td style={stickyTd}>{row.publisher_verified}</td>
-                      <td style={stickyTd}>{row.cr_percent}%</td><td style={stickyTd}>{row.publisher_cr}%</td>
+                      <td style={stickyTd}>(() => {
+  const cr = toNumber(row.cr_percent);
+  const color = cr >= 50 ? "#22c55e" : cr >= 20 ? "#f59e0b" : "#ef4444";
+  return <span style={{color, fontWeight:700}}>{cr.toFixed(1)}%</span>;
+})()%</td><td style={stickyTd}>(() => {
+  const cr = toNumber(row.publisher_cr);
+  const color = cr >= 50 ? "#22c55e" : cr >= 20 ? "#f59e0b" : "#ef4444";
+  return <span style={{color, fontWeight:600}}>{cr.toFixed(1)}%</span>;
+})()%</td>
                       <td style={stickyTd}>{money(row.revenue)}</td><td style={stickyTd}>{money(row.publisher_revenue)}</td>
                       <td style={{...stickyTd, color: toNumber(row.profit) >= 0 ? "#4ade80" : "#f87171", fontWeight:600}}>{money(row.profit)}</td>
                       <td style={stickyTd}>{formatDate(row.last_pin_gen, timezone)}</td><td style={stickyTd}>{formatDate(row.last_verification, timezone)}</td>
