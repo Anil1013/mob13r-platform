@@ -14,6 +14,7 @@ import Signup from "./pages/saas/Signup";
 import Plans from "./pages/saas/Plans";
 import SuperAdmin from "./pages/saas/SuperAdmin";
 import CarrierPrefixes from "./pages/CarrierPrefixes";
+import OfferGroups from "./pages/OfferGroups";
 import EmailLogs from "./pages/EmailLogs";
 
 export default function App() {
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="/plans" element={<Plans />} />
           <Route path="/super-admin" element={<SuperAdmin />} />
           <Route path="/carrier-prefixes" element={<CarrierPrefixes />} />
+          <Route path="/offer-groups" element={<OfferGroups />} />
           <Route path="/email-logs" element={<EmailLogs />} />
         </Route>
 
