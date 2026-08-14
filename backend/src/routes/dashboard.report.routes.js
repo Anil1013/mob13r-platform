@@ -142,7 +142,13 @@ router.get("/dashboard/realtime", orgAuth, async (req, res) => {
         COUNT(*) FILTER (WHERE ps.status IN ('OTP_SENT','OTP_FAILED','OTP_INVALID')) AS total_requests,
         COUNT(*) FILTER (WHERE ps.status = 'OTP_SENT') AS otp_sent,
         COUNT(*) FILTER (WHERE ps.status IN ('VERIFIED','SCRUBBED','CAP_REACHED') AND ps.parent_session_token IS NOT NULL) AS conversions,
-        COUNT(*) FILTER (WHERE ps.created_at >= NOW() - INTERVAL '1 hour') AS last_hour_requests
+        COUNT(*) FILTER (WHERE ps.created_at >= NOW() - INTERVAL '1 hour') AS last_hour_requests,
+        COUNT(DISTINCT ps.publisher_id) FILTER (WHERE ps.created_at::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date) AS active_publishers_today,
+        COUNT(DISTINCT ps.offer_id) FILTER (WHERE ps.created_at::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date) AS active_offers_today,
+        COUNT(*) FILTER (WHERE ps.status = 'OTP_FAILED') AS failed_today,
+        COUNT(*) FILTER (WHERE ps.status = 'SCRUBBED') AS scrubbed_today,
+        COUNT(*) FILTER (WHERE ps.status = 'CAP_REACHED') AS cap_reached_today,
+        COUNT(DISTINCT ps.msisdn) AS unique_requests
       FROM pin_sessions ps
       LEFT JOIN offers o ON o.id = ps.offer_id
       ${whereClause};
