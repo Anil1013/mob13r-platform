@@ -148,13 +148,11 @@ function generatePDF({ publisher, offer, pinSendURL, verifyURL, statusURL, porta
         doc.y = doc.y + 20;
       }
 
-      // ── ANTIFRAUD ─────────────────────────────────────────────
+      // ── ANTIFRAUD — Internal only, not shown to publisher ─────
       if (antifraudURL) {
         const num = portalURL ? "4" : "3";
-        doc.fontSize(13).fillColor(DARK).text(`${num}. ANTIFRAUD CHECK`, ML);
-        doc.fontSize(10).fillColor(GRAY).text("Antifraud verification before processing subscription.", ML);
-        doc.y = doc.y + 6;
-        drawURLBox(antifraudURL);
+        doc.fontSize(13).fillColor(DARK).text(`${num}. ANTIFRAUD`, ML);
+        doc.fontSize(10).fillColor(GRAY).text("Antifraud verification is handled automatically by mob13r before each PIN request. No additional integration required.", ML);
         doc.y = doc.y + 20;
       }
 
@@ -293,13 +291,10 @@ router.get("/publisher/:pubId/offer/:offerId/docs", async (req, res) => {
 
   ${antifraudURL ? `
   <div class="card">
-    <h2>${[statusURL, portalURL].filter(Boolean).length + 3}. ANTIFRAUD CHECK</h2>
-    <p>Antifraud verification before processing subscription.</p>
-    <div class="url-box">${antifraudURL}</div>
-    <table><thead><tr><th>Parameter</th><th>Value</th><th>Description</th></tr></thead><tbody>
-      <tr><td>session_token</td><td>{session_token}</td><td>Session token</td></tr>
-      <tr><td>x-api-key</td><td>${publisher.api_key}</td><td>Publisher API key</td></tr>
-    </tbody></table>
+    <h2>${[statusURL, portalURL].filter(Boolean).length + 3}. ANTIFRAUD</h2>
+    <p style="color:#92400e; background:#fef3c7; padding:10px 14px; border-radius:8px; font-size:13px; margin:0;">
+      ✅ Antifraud verification is handled <strong>automatically by mob13r</strong> before each PIN request. No additional integration required.
+    </p>
   </div>` : ""}
 
   ${params.length > 0 ? `
