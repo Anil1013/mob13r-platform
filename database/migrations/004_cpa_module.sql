@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
   id               SERIAL PRIMARY KEY,
   org_id           INT NOT NULL REFERENCES organizations(id),
   vertical_id      INT NOT NULL REFERENCES verticals(id),
-  advertiser_id    INT NOT NULL REFERENCES advertisers(id),
+  advertiser_id    UUID NOT NULL REFERENCES advertisers(id),
   name             VARCHAR(255) NOT NULL,
   tracking_slug    VARCHAR(64) UNIQUE NOT NULL,
   destination_url  TEXT NOT NULL,
