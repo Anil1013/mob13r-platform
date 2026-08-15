@@ -10,7 +10,7 @@ const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0
 export default function CpaReports() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
-  const [groupBy, setGroupBy] = useState("campaign");
+  const [groupBy, setGroupBy] = useState("advertiser_publisher");
   const [from, setFrom] = useState(daysAgo(7));
   const [to, setTo] = useState(today());
   const [rows, setRows] = useState([]);
@@ -40,6 +40,7 @@ export default function CpaReports() {
   };
 
   const isAdvPub = groupBy === "advertiser_publisher";
+  const isCampaign = groupBy === "campaign";
   const groupLabel = { campaign: "Campaign", affiliate: "Publisher", vertical: "Vertical", geo: "Geo", date: "Date" }[groupBy];
   const totalCrIn = totals.clicks ? ((totals.conversions_in / totals.clicks) * 100).toFixed(2) : "0.00";
   const totalCrOut = totals.clicks ? ((totals.conversions_out / totals.clicks) * 100).toFixed(2) : "0.00";
@@ -62,9 +63,9 @@ export default function CpaReports() {
 
       <div style={filterBar}>
         <select style={filterSelect} value={groupBy} onChange={e => setGroupBy(e.target.value)}>
+          <option value="advertiser_publisher">Advertiser × Publisher</option>
           <option value="campaign">Group by Campaign</option>
           <option value="affiliate">Group by Publisher</option>
-          <option value="advertiser_publisher">Advertiser × Publisher</option>
           <option value="vertical">Group by Vertical</option>
           <option value="geo">Group by Geo</option>
           <option value="date">Group by Date</option>
@@ -85,7 +86,10 @@ export default function CpaReports() {
                     <th style={th}>Publisher</th>
                   </>
                 ) : (
-                  <th style={th}>{groupLabel}</th>
+                  <>
+                    <th style={th}>{groupLabel}</th>
+                    {isCampaign && <th style={th}>Advertiser</th>}
+                  </>
                 )}
                 <th style={th}>Clicks</th>
                 <th style={th}>Conv. In</th>
@@ -106,7 +110,10 @@ export default function CpaReports() {
                       <td style={td}>{r.publisher_name}</td>
                     </>
                   ) : (
-                    <td style={td}>{groupBy === "date" ? new Date(r.label).toLocaleDateString() : r.label}</td>
+                    <>
+                      <td style={td}>{groupBy === "date" ? new Date(r.label).toLocaleDateString() : r.label}</td>
+                      {isCampaign && <td style={td}>{r.advertiser_name || "—"}</td>}
+                    </>
                   )}
                   <td style={td}>{r.clicks}</td>
                   <td style={td}>{r.conversions_in}</td>
@@ -119,7 +126,7 @@ export default function CpaReports() {
                 </tr>
               ))}
               {!rows.length && (
-                <tr><td style={td} colSpan={isAdvPub ? 9 : 7}>{loading ? "Loading..." : "No data for this range."}</td></tr>
+                <tr><td style={td} colSpan={isAdvPub ? 9 : (isCampaign ? 8 : 7)}>{loading ? "Loading..." : "No data for this range."}</td></tr>
               )}
             </tbody>
           </table>

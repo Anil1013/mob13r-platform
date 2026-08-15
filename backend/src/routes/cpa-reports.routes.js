@@ -6,7 +6,7 @@ const router = express.Router();
 
 // Standard single-dimension grouping (existing behaviour, now with CR In/Out added)
 const GROUP_MAP = {
-  campaign: { label: "c.name", groupCol: "c.id, c.name" },
+  campaign: { label: "c.name", groupCol: "c.id, c.name, a.name", extra: "a.name AS advertiser_name" },
   affiliate: { label: "COALESCE(af.name, 'Direct / Unknown')", groupCol: "af.id, af.name" },
   geo: { label: "COALESCE(NULLIF(cl.geo, ''), 'Unknown')", groupCol: "cl.geo" },
   date: { label: "cl.created_at::date", groupCol: "cl.created_at::date" },
@@ -70,13 +70,14 @@ router.get("/", orgAuth, async (req, res) => {
     const g = GROUP_MAP[group_by] || GROUP_MAP.campaign;
 
     let query = `
-      SELECT ${g.label} AS label,
+      SELECT ${g.label} AS label,${g.extra ? ` ${g.extra},` : ""}
         COUNT(DISTINCT cl.id) AS clicks,
         COUNT(DISTINCT cv.id) FILTER (WHERE cv.status = 'approved') AS conversions_in,
         COUNT(DISTINCT cv.id) FILTER (WHERE cv.status = 'approved' AND cv.is_held = FALSE) AS conversions_out,
         COALESCE(SUM(cv.advertiser_payout) FILTER (WHERE cv.status = 'approved'), 0) AS revenue
       FROM clicks cl
       JOIN campaigns c ON c.id = cl.campaign_id
+      JOIN advertisers a ON a.id = c.advertiser_id
       JOIN verticals v ON v.id = c.vertical_id
       LEFT JOIN affiliates af ON af.id = cl.affiliate_id
       LEFT JOIN conversions cv ON cv.click_id = cl.click_id
@@ -94,6 +95,7 @@ router.get("/", orgAuth, async (req, res) => {
     const result = await pool.query(query, params);
     const data = result.rows.map(r => ({
       label: r.label,
+      advertiser_name: r.advertiser_name,
       clicks: Number(r.clicks),
       conversions_in: Number(r.conversions_in),
       conversions_out: Number(r.conversions_out),
