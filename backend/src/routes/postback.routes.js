@@ -12,7 +12,23 @@ function fillMacros(url, map) {
   return out;
 }
 
-// Forward the conversion to the publisher's single postback URL (if they've set one).
+// Finds the publisher_assignment that applies to this click — an exact
+// campaign-level assignment wins over a group-level one.
+async function findAssignment(affiliateId, campaignId) {
+  const res = await pool.query(
+    `SELECT pa.* FROM publisher_assignments pa
+     WHERE pa.affiliate_id = $1 AND pa.status = 'active'
+       AND (
+         pa.campaign_id = $2
+         OR pa.group_id IN (SELECT group_id FROM campaign_group_items WHERE campaign_id = $2)
+       )
+     ORDER BY pa.campaign_id IS NULL ASC
+     LIMIT 1`,
+    [affiliateId, campaignId]
+  );
+  return res.rows[0] || null;
+}
+
 async function forwardToPublisher({ postbackUrl, clickId, status, payout, transactionId }) {
   try {
     const url = fillMacros(postbackUrl, {
@@ -33,9 +49,6 @@ async function forwardToPublisher({ postbackUrl, clickId, status, payout, transa
 
 // PUBLIC: GET /postback?click_id=xxx&adv_key=xxx&status=approved&payout=1.5&transaction_id=xxx
 // This is what the advertiser calls (server-to-server) when a conversion happens.
-// adv_key is the advertiser's own unique postback key (each advertiser gets a distinct
-// postback URL from the Advertisers page) — if present, it must match the advertiser
-// on the campaign the click belongs to. Older integrations without adv_key still work.
 router.get("/postback", async (req, res) => {
   try {
     const { click_id, adv_key, status, payout, transaction_id } = req.query;
@@ -57,15 +70,33 @@ router.get("/postback", async (req, res) => {
       }
     }
 
-    const finalPayout = payout !== undefined ? Number(payout) : Number(campaign?.payout || 0);
+    // This is what the ADVERTISER pays us (revenue side).
+    const advertiserPayout = payout !== undefined ? Number(payout) : Number(campaign?.payout || 0);
     const finalStatus = status || "approved";
 
+    // Look up the publisher's own payout + hold % for this campaign/group.
+    let publisherPayout = advertiserPayout; // fallback: pass the full amount if no assignment exists
+    let holdPercent = 0;
+    if (click.affiliate_id) {
+      const assignment = await findAssignment(click.affiliate_id, click.campaign_id);
+      if (assignment) {
+        publisherPayout = Number(assignment.publisher_payout);
+        holdPercent = Number(assignment.hold_percent) || 0;
+      }
+    }
+
+    // Hold logic: randomly withhold hold_percent% of conversions from the publisher
+    // (they still count as a valid conversion for our own revenue/reporting — they
+    // just don't get forwarded, e.g. for quality control or margin management).
+    const isHeld = holdPercent > 0 && Math.random() * 100 < holdPercent;
+
     const insertRes = await pool.query(
-      `INSERT INTO conversions (org_id, click_id, campaign_id, affiliate_id, status, payout, transaction_id, raw_params)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `INSERT INTO conversions
+        (org_id, click_id, campaign_id, affiliate_id, status, payout, advertiser_payout, publisher_payout, is_held, transaction_id, raw_params)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT (click_id) DO NOTHING RETURNING *`,
-      [click.org_id, click_id, click.campaign_id, click.affiliate_id, finalStatus, finalPayout,
-       transaction_id || null, JSON.stringify(req.query)]
+      [click.org_id, click_id, click.campaign_id, click.affiliate_id, finalStatus, advertiserPayout,
+       advertiserPayout, publisherPayout, isHeld, transaction_id || null, JSON.stringify(req.query)]
     );
 
     if (!insertRes.rows.length) {
@@ -75,7 +106,7 @@ router.get("/postback", async (req, res) => {
     await pool.query(`UPDATE campaigns SET today_conversions = today_conversions + 1 WHERE id = $1`, [click.campaign_id]);
 
     let forwarded = false;
-    if (click.affiliate_id) {
+    if (click.affiliate_id && !isHeld) {
       const affRes = await pool.query(`SELECT postback_url FROM affiliates WHERE id = $1`, [click.affiliate_id]);
       const postbackUrl = affRes.rows[0]?.postback_url;
       if (postbackUrl) {
@@ -83,7 +114,7 @@ router.get("/postback", async (req, res) => {
           postbackUrl,
           clickId: click_id,
           status: finalStatus,
-          payout: finalPayout,
+          payout: publisherPayout,
           transactionId: transaction_id,
         });
         if (forwarded) {
@@ -92,7 +123,7 @@ router.get("/postback", async (req, res) => {
       }
     }
 
-    res.json({ status: "SUCCESS", message: "Conversion recorded", forwarded_to_publisher: forwarded });
+    res.json({ status: "SUCCESS", message: "Conversion recorded", held: isHeld, forwarded_to_publisher: forwarded });
   } catch (err) {
     console.error("POSTBACK ERROR:", err.message);
     res.status(500).json({ status: "FAILED", message: "Postback processing error" });

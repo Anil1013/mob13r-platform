@@ -149,7 +149,9 @@ export default function CpaSidebar() {
         {[
           { to: "/cpa/advertisers", icon: "🏢", label: "Advertisers" },
           { to: "/cpa/campaigns", icon: "📢", label: "All Campaigns" },
+          { to: "/cpa/traffic-groups", icon: "🔀", label: "Traffic Groups" },
           { to: "/cpa/affiliates", icon: "🤝", label: "Publishers" },
+          { to: "/cpa/assignments", icon: "🎯", label: "Assignments" },
           { to: "/cpa/conversions", icon: "✅", label: "Conversions" },
           { to: "/cpa/reports", icon: "📊", label: "Reports" },
         ].map(item => (

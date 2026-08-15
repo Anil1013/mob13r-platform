@@ -16,18 +16,52 @@ function fillMacros(url, map) {
   return out;
 }
 
+// Weighted-random pick among a traffic group's active campaigns (respecting
+// each campaign's own status + daily cap). Returns the chosen campaign row,
+// or null if nothing is eligible right now.
+async function pickCampaignFromGroup(groupId) {
+  const itemsRes = await pool.query(
+    `SELECT gi.weight, c.* FROM campaign_group_items gi
+     JOIN campaigns c ON c.id = gi.campaign_id
+     WHERE gi.group_id = $1 AND gi.status = 'active' AND c.status = 'active'`,
+    [groupId]
+  );
+  let eligible = itemsRes.rows.filter(c => !c.daily_cap || c.today_clicks < c.daily_cap);
+  if (!eligible.length) return null;
+
+  const totalWeight = eligible.reduce((s, c) => s + c.weight, 0);
+  if (totalWeight <= 0) return null;
+
+  let r = Math.random() * totalWeight;
+  for (const c of eligible) {
+    r -= c.weight;
+    if (r <= 0) return c;
+  }
+  return eligible[eligible.length - 1];
+}
+
 // PUBLIC: GET /click?cid=<tracking_slug>&aff_id=<affiliate_key>&sub1..sub5=
-// This is the single URL pushed to the advertiser / used by the publisher/affiliate.
+// cid can be either a single campaign's slug OR a traffic group's slug —
+// a traffic group transparently routes to one of its campaigns by weight %.
 router.get("/click", async (req, res) => {
   try {
     const { cid, aff_id, sub1, sub2, sub3, sub4, sub5 } = req.query;
     if (!cid) return res.status(400).send("Missing cid");
 
-    const campRes = await pool.query(`SELECT * FROM campaigns WHERE tracking_slug = $1`, [cid]);
-    if (!campRes.rows.length) return res.status(404).send("Campaign not found");
-    const campaign = campRes.rows[0];
+    let campaign = null;
 
-    if (campaign.status !== "active") return res.status(410).send("Campaign is paused");
+    const campRes = await pool.query(`SELECT * FROM campaigns WHERE tracking_slug = $1`, [cid]);
+    if (campRes.rows.length) {
+      campaign = campRes.rows[0];
+      if (campaign.status !== "active") return res.status(410).send("Campaign is paused");
+    } else {
+      const groupRes = await pool.query(`SELECT * FROM campaign_groups WHERE tracking_slug = $1`, [cid]);
+      if (!groupRes.rows.length) return res.status(404).send("Tracking link not found");
+      const group = groupRes.rows[0];
+      if (group.status !== "active") return res.status(410).send("Traffic group is paused");
+      campaign = await pickCampaignFromGroup(group.id);
+      if (!campaign) return res.status(429).send("No eligible campaign in this traffic group right now (all paused or capped)");
+    }
 
     // reset daily counter at IST midnight
     await pool.query(

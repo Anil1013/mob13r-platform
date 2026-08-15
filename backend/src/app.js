@@ -31,6 +31,8 @@ import conversionsRoutes from "./routes/conversions.routes.js";
 import trackRoutes from "./routes/track.routes.js";
 import postbackRoutes from "./routes/postback.routes.js";
 import cpaReportsRoutes from "./routes/cpa-reports.routes.js";
+import campaignGroupsRoutes from "./routes/campaign-groups.routes.js";
+import publisherAssignmentsRoutes from "./routes/publisher-assignments.routes.js";
 
 const app = express();
 
@@ -122,6 +124,8 @@ app.use("/api/conversions", conversionsRoutes);
 app.use("/", trackRoutes);     // GET /click?cid=...&aff_id=...
 app.use("/", postbackRoutes);  // GET /postback?click_id=...
 app.use("/api/cpa-reports", cpaReportsRoutes);
+app.use("/api/campaign-groups", campaignGroupsRoutes);
+app.use("/api/publisher-assignments", publisherAssignmentsRoutes);
 
 // 404 Handler
 app.use((req, res) => {

@@ -11,7 +11,7 @@ function isValidUrl(v) {
   return /^https?:\/\/.+/i.test(v.trim());
 }
 
-const emptyForm = { vertical_id: "", advertiser_id: "", name: "", destination_url: "", payout: "", currency: "USD", geo: "", daily_cap: "" };
+const emptyForm = { vertical_id: "", advertiser_id: "", name: "", destination_url: "", payout: "", currency: "USD", geo: "", carrier: "", daily_cap: "" };
 
 export default function Campaigns() {
   const navigate = useNavigate();
@@ -20,6 +20,7 @@ export default function Campaigns() {
   const [campaigns, setCampaigns] = useState([]);
   const [verticals, setVerticals] = useState([]);
   const [advertisers, setAdvertisers] = useState([]);
+  const [carrierOptions, setCarrierOptions] = useState([]);
   const [toast, setToast] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -78,6 +79,14 @@ export default function Campaigns() {
       if (Array.isArray(data)) setAdvertisers(data.filter(a => a.status !== "inactive"));
     } catch { /* silent — non-blocking */ }
   };
+  const loadCarriers = async (geo) => {
+    if (!geo || !geo.trim()) { setCarrierOptions([]); return; }
+    try {
+      const res = await fetch(`${API_BASE}/api/carrier-prefixes?geo=${encodeURIComponent(geo.trim())}`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (data.status === "SUCCESS") setCarrierOptions([...new Set(data.data.map(c => c.carrier))]);
+    } catch { /* datalist just stays empty, carrier field remains free text */ }
+  };
 
   const validate = (f) => {
     if (!f.vertical_id) return "Select a vertical";
@@ -102,6 +111,7 @@ export default function Campaigns() {
           name: form.name.trim(),
           destination_url: form.destination_url.trim(),
           geo: form.geo.trim().toUpperCase(),
+          carrier: form.carrier.trim(),
           currency: form.currency.trim().toUpperCase() || "USD",
           payout: Number(form.payout) || 0,
           daily_cap: form.daily_cap ? Number(form.daily_cap) : null,
@@ -142,7 +152,7 @@ export default function Campaigns() {
   const startEdit = (c) => {
     setEditingId(c.id);
     setExpandedId(null);
-    setEditForm({ name: c.name, destination_url: c.destination_url, payout: c.payout, currency: c.currency, geo: c.geo || "", daily_cap: c.daily_cap ?? "" });
+    setEditForm({ name: c.name, destination_url: c.destination_url, payout: c.payout, currency: c.currency, geo: c.geo || "", carrier: c.carrier || "", daily_cap: c.daily_cap ?? "" });
   };
   const cancelEdit = () => { setEditingId(null); setEditForm(null); };
 
@@ -160,6 +170,7 @@ export default function Campaigns() {
           name: editForm.name.trim(),
           destination_url: editForm.destination_url.trim(),
           geo: editForm.geo.trim().toUpperCase(),
+          carrier: editForm.carrier.trim(),
           currency: editForm.currency.trim().toUpperCase() || "USD",
           payout: Number(editForm.payout) || 0,
           daily_cap: editForm.daily_cap === "" ? null : Number(editForm.daily_cap),
@@ -215,7 +226,11 @@ export default function Campaigns() {
           <select style={input} value={form.currency} onChange={e => setForm(f => ({ ...f, currency: e.target.value }))}>
             {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          <input style={input} placeholder="Geo (e.g. IQ)" maxLength={10} value={form.geo} onChange={e => setForm(f => ({ ...f, geo: e.target.value }))} />
+          <input style={input} placeholder="Geo (e.g. IQ)" maxLength={10} value={form.geo} onChange={e => setForm(f => ({ ...f, geo: e.target.value }))} onBlur={e => loadCarriers(e.target.value)} />
+          <input style={input} placeholder="Carrier (e.g. Zain)" list="carrier-options" maxLength={100} value={form.carrier} onChange={e => setForm(f => ({ ...f, carrier: e.target.value }))} />
+          <datalist id="carrier-options">
+            {carrierOptions.map(c => <option key={c} value={c} />)}
+          </datalist>
           <input style={{ ...input, gridColumn: "span 2" }} placeholder="Daily cap (optional, whole number)" type="number" min="1" step="1" value={form.daily_cap} onChange={e => setForm(f => ({ ...f, daily_cap: e.target.value }))} />
           <button style={{ ...btn, gridColumn: "span 3", opacity: saving ? 0.7 : 1 }} onClick={createCampaign} disabled={saving}>{saving ? "Creating..." : "Create Campaign & Generate Tracking URL"}</button>
         </div>
@@ -246,6 +261,7 @@ export default function Campaigns() {
                 <th style={th}>Campaign</th>
                 <th style={th}>Vertical</th>
                 <th style={th}>Advertiser</th>
+                <th style={th}>Geo / Carrier</th>
                 <th style={th}>Tracking URL</th>
                 <th style={th}>Payout</th>
                 <th style={th}>Today (Clicks/Conv)</th>
@@ -258,7 +274,7 @@ export default function Campaigns() {
                 <Fragment key={c.id}>
                 {editingId === c.id ? (
                   <tr>
-                    <td style={td} colSpan={8}>
+                    <td style={td} colSpan={9}>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
                         <input style={input} placeholder="Campaign name" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
                         <input style={{ ...input, gridColumn: "span 2" }} placeholder="Destination URL" value={editForm.destination_url} onChange={e => setEditForm(f => ({ ...f, destination_url: e.target.value }))} />
@@ -266,7 +282,8 @@ export default function Campaigns() {
                         <select style={input} value={editForm.currency} onChange={e => setEditForm(f => ({ ...f, currency: e.target.value }))}>
                           {CURRENCIES.map(cur => <option key={cur} value={cur}>{cur}</option>)}
                         </select>
-                        <input style={input} placeholder="Geo" maxLength={10} value={editForm.geo} onChange={e => setEditForm(f => ({ ...f, geo: e.target.value }))} />
+                        <input style={input} placeholder="Geo" maxLength={10} value={editForm.geo} onChange={e => setEditForm(f => ({ ...f, geo: e.target.value }))} onBlur={e => loadCarriers(e.target.value)} />
+                        <input style={input} placeholder="Carrier" list="carrier-options" maxLength={100} value={editForm.carrier} onChange={e => setEditForm(f => ({ ...f, carrier: e.target.value }))} />
                         <input style={input} placeholder="Daily cap" type="number" min="1" step="1" value={editForm.daily_cap} onChange={e => setEditForm(f => ({ ...f, daily_cap: e.target.value }))} />
                         <div style={{ display: "flex", gap: 8 }}>
                           <button style={{ ...btn, opacity: saving ? 0.7 : 1 }} disabled={saving} onClick={() => saveEdit(c.id)}>{saving ? "Saving..." : "Save"}</button>
@@ -286,6 +303,7 @@ export default function Campaigns() {
                   </td>
                   <td style={td}>{c.vertical_code || c.vertical_name}</td>
                   <td style={td}>{c.advertiser_name}</td>
+                  <td style={td}>{c.geo || "—"} {c.carrier ? `/ ${c.carrier}` : ""}</td>
                   <td style={td}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <code style={{ fontSize: 11, background: "#f5eef8", padding: "3px 8px", borderRadius: 6, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.tracking_url}</code>
@@ -306,7 +324,7 @@ export default function Campaigns() {
                 )}
                 {expandedId === c.id && (
                   <tr>
-                    <td style={{ ...td, background: "#fdf6f9" }} colSpan={8}>
+                    <td style={{ ...td, background: "#fdf6f9" }} colSpan={9}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: "#9b7faa", textTransform: "uppercase", marginBottom: 6 }}>
                         Advertiser postback
                       </div>
@@ -320,7 +338,7 @@ export default function Campaigns() {
                 </Fragment>
               ))}
               {!campaigns.length && (
-                <tr><td style={td} colSpan={8}>{loading ? "Loading campaigns..." : "No campaigns yet — create one to get your first tracking URL."}</td></tr>
+                <tr><td style={td} colSpan={9}>{loading ? "Loading campaigns..." : "No campaigns yet — create one to get your first tracking URL."}</td></tr>
               )}
             </tbody>
           </table>

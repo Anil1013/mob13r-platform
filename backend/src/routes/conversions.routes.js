@@ -8,9 +8,10 @@ const router = express.Router();
 router.get("/", orgAuth, async (req, res) => {
   try {
     const { campaign_id, affiliate_id, status, from, to } = req.query;
-    let query = `SELECT cv.*, c.name AS campaign_name, af.name AS affiliate_name
+    let query = `SELECT cv.*, c.name AS campaign_name, a.name AS advertiser_name, af.name AS affiliate_name
                  FROM conversions cv
                  JOIN campaigns c ON c.id = cv.campaign_id
+                 JOIN advertisers a ON a.id = c.advertiser_id
                  LEFT JOIN affiliates af ON af.id = cv.affiliate_id
                  WHERE cv.org_id = $1`;
     const params = [req.orgId];
@@ -21,7 +22,11 @@ router.get("/", orgAuth, async (req, res) => {
     if (to) { params.push(to); query += ` AND cv.created_at <= $${params.length}`; }
     query += ` ORDER BY cv.id DESC LIMIT 500`;
     const result = await pool.query(query, params);
-    res.json({ status: "SUCCESS", data: result.rows });
+    const data = result.rows.map(r => ({
+      ...r,
+      margin: r.status === "approved" ? Number(r.advertiser_payout || r.payout || 0) - Number(r.is_held ? 0 : (r.publisher_payout || 0)) : 0,
+    }));
+    res.json({ status: "SUCCESS", data });
   } catch (err) {
     console.error("GET CONVERSIONS ERROR:", err.message);
     res.status(500).json({ status: "FAILED", message: "Failed to load conversions" });

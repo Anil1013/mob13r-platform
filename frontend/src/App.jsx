@@ -23,6 +23,8 @@ import CpaCampaigns from "./pages/cpa/Campaigns";
 import CpaAffiliates from "./pages/cpa/Affiliates";
 import CpaConversions from "./pages/cpa/Conversions";
 import CpaReports from "./pages/cpa/Reports";
+import CpaTrafficGroups from "./pages/cpa/TrafficGroups";
+import CpaAssignments from "./pages/cpa/Assignments";
 
 export default function App() {
   return (
@@ -56,6 +58,8 @@ export default function App() {
           <Route path="/cpa/affiliates" element={<CpaAffiliates />} />
           <Route path="/cpa/conversions" element={<CpaConversions />} />
           <Route path="/cpa/reports" element={<CpaReports />} />
+          <Route path="/cpa/traffic-groups" element={<CpaTrafficGroups />} />
+          <Route path="/cpa/assignments" element={<CpaAssignments />} />
         </Route>
 
         {/* Default */}

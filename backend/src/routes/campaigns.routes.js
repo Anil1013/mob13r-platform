@@ -62,7 +62,7 @@ router.get("/:id", orgAuth, async (req, res) => {
 // CREATE — this is the single tracking URL that gets pushed to the advertiser
 router.post("/", orgAuth, async (req, res) => {
   try {
-    const { vertical_id, advertiser_id, name, destination_url, payout, currency, geo, daily_cap } = req.body;
+    const { vertical_id, advertiser_id, name, destination_url, payout, currency, geo, carrier, daily_cap } = req.body;
     if (!vertical_id || !advertiser_id || !name || !destination_url) {
       return res.status(400).json({ status: "FAILED", message: "vertical_id, advertiser_id, name and destination_url are required" });
     }
@@ -86,10 +86,11 @@ router.post("/", orgAuth, async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO campaigns
-        (org_id, vertical_id, advertiser_id, name, tracking_slug, destination_url, payout, currency, geo, daily_cap, status, last_reset_date)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'active',CURRENT_DATE) RETURNING *`,
+        (org_id, vertical_id, advertiser_id, name, tracking_slug, destination_url, payout, currency, geo, carrier, daily_cap, status, last_reset_date)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'active',CURRENT_DATE) RETURNING *`,
       [req.orgId, vertical_id, advertiser_id, name.trim(), slug, destination_url.trim(),
-       Number(payout) || 0, (currency || "USD").trim().toUpperCase(), (geo || "").trim().toUpperCase(), daily_cap || null]
+       Number(payout) || 0, (currency || "USD").trim().toUpperCase(), (geo || "").trim().toUpperCase(),
+       (carrier || "").trim(), daily_cap || null]
     );
     const row = result.rows[0];
     res.json({ status: "SUCCESS", data: { ...row, tracking_url: buildTrackingUrl(row.tracking_slug) } });
@@ -104,7 +105,7 @@ router.post("/", orgAuth, async (req, res) => {
 
 router.patch("/:id", orgAuth, async (req, res) => {
   try {
-    const { name, destination_url, payout, currency, geo, daily_cap, status } = req.body;
+    const { name, destination_url, payout, currency, geo, carrier, daily_cap, status } = req.body;
 
     if (destination_url !== undefined && destination_url !== null && !/^https?:\/\/.+/i.test(String(destination_url).trim())) {
       return res.status(400).json({ status: "FAILED", message: "destination_url must start with http:// or https://" });
@@ -130,11 +131,12 @@ router.patch("/:id", orgAuth, async (req, res) => {
         payout = COALESCE($3, payout),
         currency = COALESCE($4, currency),
         geo = COALESCE($5, geo),
-        daily_cap = CASE WHEN $6 THEN $7 ELSE daily_cap END,
-        status = COALESCE($8, status)
-       WHERE id = $9 AND org_id = $10 RETURNING *`,
+        carrier = COALESCE($6, carrier),
+        daily_cap = CASE WHEN $7 THEN $8 ELSE daily_cap END,
+        status = COALESCE($9, status)
+       WHERE id = $10 AND org_id = $11 RETURNING *`,
       [name?.trim() || null, destination_url?.trim() || null, payout ?? null,
-       currency?.trim().toUpperCase() || null, geo?.trim().toUpperCase() || null,
+       currency?.trim().toUpperCase() || null, geo?.trim().toUpperCase() || null, carrier?.trim() || null,
        hasDailyCap, hasDailyCap ? (daily_cap === "" ? null : daily_cap) : null,
        status || null, req.params.id, req.orgId]
     );
