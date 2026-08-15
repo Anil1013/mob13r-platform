@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import pool from "../db.js";
 import orgAuth from "../middleware/orgAuth.js";
 
@@ -19,9 +20,10 @@ router.get("/", orgAuth, async (req, res) => {
 router.post("/", orgAuth, async (req, res) => {
   const { name, email } = req.body;
   try {
+    const postbackKey = crypto.randomBytes(20).toString("hex");
     const result = await pool.query(
-      `INSERT INTO advertisers (name, email, org_id) VALUES ($1, $2, $3) RETURNING *`,
-      [name, email, req.orgId]
+      `INSERT INTO advertisers (name, email, org_id, postback_key) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [name, email, req.orgId, postbackKey]
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -37,6 +39,22 @@ router.patch("/:id/toggle", orgAuth, async (req, res) => {
        WHERE id = $1 AND org_id = $2 RETURNING *`,
       [id, req.orgId]
     );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Regenerate the postback key (e.g. if it leaked) — the old postback URL stops working immediately.
+router.patch("/:id/regenerate-postback-key", orgAuth, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const postbackKey = crypto.randomBytes(20).toString("hex");
+    const result = await pool.query(
+      `UPDATE advertisers SET postback_key = $1 WHERE id = $2 AND org_id = $3 RETURNING *`,
+      [postbackKey, id, req.orgId]
+    );
+    if (!result.rows.length) return res.status(404).json({ message: "Advertiser not found" });
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ message: "Server error" });

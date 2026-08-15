@@ -13,7 +13,7 @@ function generateAffiliateKey() {
 router.get("/", orgAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT af.id, af.name, af.email, af.affiliate_key, af.status, af.created_at,
+      `SELECT af.id, af.name, af.email, af.affiliate_key, af.status, af.created_at, af.postback_url,
          COUNT(DISTINCT cl.id) AS total_clicks,
          COUNT(DISTINCT cv.id) FILTER (WHERE cv.status = 'approved') AS total_conversions,
          COALESCE(SUM(cv.payout) FILTER (WHERE cv.status = 'approved'), 0) AS total_revenue
@@ -91,56 +91,31 @@ router.get("/:id/campaigns", orgAuth, async (req, res) => {
   }
 });
 
-// Postback URLs — where WE forward conversions to this affiliate (S2S)
-router.get("/:id/postback-urls", orgAuth, async (req, res) => {
+// Single postback URL — where WE forward conversions to this publisher (S2S).
+// Editing this always updates the same field; there's only ever one per publisher.
+router.patch("/:id/postback", orgAuth, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT pb.* FROM affiliate_postbacks pb
-       JOIN affiliates af ON af.id = pb.affiliate_id
-       WHERE pb.affiliate_id = $1 AND af.org_id = $2 ORDER BY pb.id DESC`,
-      [req.params.id, req.orgId]
-    );
-    res.json({ status: "SUCCESS", data: result.rows });
-  } catch (err) {
-    console.error("GET AFFILIATE POSTBACKS ERROR:", err.message);
-    res.status(500).json({ status: "FAILED", message: "Failed to load postback urls" });
-  }
-});
+    const { postback_url } = req.body;
 
-router.post("/:id/postback-urls", orgAuth, async (req, res) => {
-  try {
-    const { postback_url, campaign_id } = req.body;
-    if (!postback_url || !/^https?:\/\/.+/i.test(postback_url.trim())) {
-      return res.status(400).json({ status: "FAILED", message: "postback_url must start with http:// or https://" });
+    if (postback_url !== null && postback_url !== "") {
+      if (!postback_url || !/^https?:\/\/.+/i.test(postback_url.trim())) {
+        return res.status(400).json({ status: "FAILED", message: "postback_url must start with http:// or https://" });
+      }
+      if (!postback_url.includes("{click_id}")) {
+        return res.status(400).json({ status: "FAILED", message: "postback_url must include the {click_id} macro so we can identify the conversion" });
+      }
     }
-    if (!postback_url.includes("{click_id}")) {
-      return res.status(400).json({ status: "FAILED", message: "postback_url must include the {click_id} macro so we can identify the conversion" });
-    }
-    const affCheck = await pool.query(`SELECT id FROM affiliates WHERE id = $1 AND org_id = $2`, [req.params.id, req.orgId]);
-    if (!affCheck.rows.length) return res.status(404).json({ status: "FAILED", message: "Affiliate not found" });
+
+    const value = (postback_url === null || postback_url === "") ? null : postback_url.trim();
     const result = await pool.query(
-      `INSERT INTO affiliate_postbacks (affiliate_id, campaign_id, postback_url) VALUES ($1,$2,$3) RETURNING *`,
-      [req.params.id, campaign_id || null, postback_url.trim()]
+      `UPDATE affiliates SET postback_url = $1 WHERE id = $2 AND org_id = $3 RETURNING *`,
+      [value, req.params.id, req.orgId]
     );
+    if (!result.rows.length) return res.status(404).json({ status: "FAILED", message: "Affiliate not found" });
     res.json({ status: "SUCCESS", data: result.rows[0] });
   } catch (err) {
-    console.error("ADD AFFILIATE POSTBACK ERROR:", err.message);
-    res.status(500).json({ status: "FAILED", message: "Failed to add postback url" });
-  }
-});
-
-router.delete("/postback-urls/:pbId", orgAuth, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `DELETE FROM affiliate_postbacks pb USING affiliates af
-       WHERE pb.id = $1 AND pb.affiliate_id = af.id AND af.org_id = $2 RETURNING pb.id`,
-      [req.params.pbId, req.orgId]
-    );
-    if (!result.rows.length) return res.status(404).json({ status: "FAILED", message: "Postback url not found" });
-    res.json({ status: "SUCCESS", message: "Deleted" });
-  } catch (err) {
-    console.error("DELETE AFFILIATE POSTBACK ERROR:", err.message);
-    res.status(500).json({ status: "FAILED", message: "Failed to delete postback url" });
+    console.error("UPDATE AFFILIATE POSTBACK ERROR:", err.message);
+    res.status(500).json({ status: "FAILED", message: "Failed to update postback url" });
   }
 });
 

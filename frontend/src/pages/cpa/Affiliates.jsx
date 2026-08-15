@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
-import { btn, btnRed, input, badge, pageTitle } from "../../styles/shared.js";
+import { btn, input, badge, pageTitle } from "../../styles/shared.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 
@@ -18,10 +18,9 @@ export default function Affiliates() {
   const [toast, setToast] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [links, setLinks] = useState([]);
-  const [postbacks, setPostbacks] = useState([]);
-  const [newPostback, setNewPostback] = useState("");
-  const [savingPb, setSavingPb] = useState(false);
   const [panelLoading, setPanelLoading] = useState(false);
+  const [postbackDraft, setPostbackDraft] = useState("");
+  const [savingPb, setSavingPb] = useState(false);
 
   useEffect(() => { if (!token) navigate("/login"); else load(); }, []);
   const showToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2800); };
@@ -86,16 +85,12 @@ export default function Affiliates() {
   const openAffiliate = async (a) => {
     if (expanded === a.id) { setExpanded(null); return; }
     setExpanded(a.id);
+    setPostbackDraft(a.postback_url || "");
     setPanelLoading(true);
     try {
-      const [linksRes, pbRes] = await Promise.all([
-        fetch(`${API_BASE}/api/affiliates/${a.id}/campaigns`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_BASE}/api/affiliates/${a.id}/postback-urls`, { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
-      const linksData = await linksRes.json();
-      const pbData = await pbRes.json();
-      setLinks(linksData.status === "SUCCESS" ? linksData.data : []);
-      setPostbacks(pbData.status === "SUCCESS" ? pbData.data : []);
+      const res = await fetch(`${API_BASE}/api/affiliates/${a.id}/campaigns`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      setLinks(data.status === "SUCCESS" ? data.data : []);
     } catch {
       showToast("Failed to load publisher details", "error");
     } finally {
@@ -103,36 +98,28 @@ export default function Affiliates() {
     }
   };
 
-  const addPostback = async (affId) => {
-    const url = newPostback.trim();
-    if (!url) return showToast("Enter a postback URL", "error");
-    if (!isValidUrl(url)) return showToast("Postback URL must start with http:// or https://", "error");
-    if (!url.includes("{click_id}")) return showToast("Postback URL must include the {click_id} macro", "error");
+  // One postback per publisher — this always updates the same field, never adds a new one.
+  const savePostback = async (affId) => {
+    const url = postbackDraft.trim();
+    if (url && !isValidUrl(url)) return showToast("Postback URL must start with http:// or https://", "error");
+    if (url && !url.includes("{click_id}")) return showToast("Postback URL must include the {click_id} macro", "error");
     setSavingPb(true);
     try {
-      const res = await fetch(`${API_BASE}/api/affiliates/${affId}/postback-urls`, {
-        method: "POST", headers: authHeaders,
-        body: JSON.stringify({ postback_url: url }),
+      const res = await fetch(`${API_BASE}/api/affiliates/${affId}/postback`, {
+        method: "PATCH", headers: authHeaders,
+        body: JSON.stringify({ postback_url: url || null }),
       });
       const data = await res.json();
-      if (data.status === "SUCCESS") { setPostbacks(p => [data.data, ...p]); setNewPostback(""); showToast("Postback URL saved"); }
-      else showToast(data.message || "Failed to save postback URL", "error");
+      if (data.status === "SUCCESS") {
+        setAffiliates(l => l.map(x => x.id === affId ? { ...x, postback_url: data.data.postback_url } : x));
+        showToast(url ? "Postback URL saved" : "Postback URL cleared");
+      } else {
+        showToast(data.message || "Failed to save postback URL", "error");
+      }
     } catch {
       showToast("Network error while saving postback URL", "error");
     } finally {
       setSavingPb(false);
-    }
-  };
-
-  const deletePostback = async (pbId) => {
-    const prev = postbacks;
-    setPostbacks(p => p.filter(x => x.id !== pbId));
-    try {
-      const res = await fetch(`${API_BASE}/api/affiliates/postback-urls/${pbId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) { setPostbacks(prev); showToast("Failed to remove postback URL", "error"); }
-    } catch {
-      setPostbacks(prev);
-      showToast("Network error while removing postback URL", "error");
     }
   };
 
@@ -143,7 +130,7 @@ export default function Affiliates() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
           <h1 style={pageTitle}>Publishers</h1>
-          <p style={{ color: "#9b7faa", fontSize: 13 }}>{affiliates.length} publishers · send us traffic on campaign tracking links, we forward conversions to their postback</p>
+          <p style={{ color: "#9b7faa", fontSize: 13 }}>{affiliates.length} publishers · each has one postback URL — editable anytime, never duplicated</p>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <input style={{ ...input, width: 200 }} placeholder="Publisher name *" value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} />
@@ -159,6 +146,7 @@ export default function Affiliates() {
               <div>
                 <strong style={{ color: "#4a2f3f" }}>{a.name}</strong>
                 <span style={{ color: "#b89ab0", fontSize: 12, marginLeft: 10 }}>{a.email || "—"}</span>
+                {a.postback_url && <span style={{ marginLeft: 10, fontSize: 10, background: "rgba(34,197,94,0.1)", color: "#16a34a", padding: "2px 8px", borderRadius: 10 }}>postback set</span>}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 12, color: "#9b7faa", flexWrap: "wrap" }}>
                 <span>Clicks: <b>{a.total_clicks}</b></span>
@@ -197,20 +185,23 @@ export default function Affiliates() {
                   {!links.length && <div style={{ fontSize: 12, color: "#b89ab0" }}>No active campaigns yet.</div>}
                 </div>
 
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#9b7faa", textTransform: "uppercase", marginBottom: 6 }}>Postback URLs — we forward conversions here (S2S)</div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                  <input style={{ ...input, flex: 1, minWidth: 260 }} placeholder="https://publisher-tracker.com/pb?click_id={click_id}&payout={payout}&status={status}" value={newPostback} onChange={e => setNewPostback(e.target.value)} onKeyDown={e => e.key === "Enter" && addPostback(a.id)} />
-                  <button style={{ ...btn, padding: "8px 16px", opacity: savingPb ? 0.7 : 1 }} onClick={() => addPostback(a.id)} disabled={savingPb}>{savingPb ? "Saving..." : "Add"}</button>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#9b7faa", textTransform: "uppercase", marginBottom: 6 }}>
+                  Postback URL — we forward every conversion here (S2S). One per publisher — saving just updates it.
                 </div>
-                <div style={{ fontSize: 11, color: "#b89ab0", marginBottom: 10 }}>Must include the <b>{"{click_id}"}</b> macro. Optional: <b>{"{payout}"}</b>, <b>{"{status}"}</b>, <b>{"{transaction_id}"}</b>.</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {postbacks.map(p => (
-                    <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", padding: "6px 12px", borderRadius: 10, border: "1px solid #eedde8", gap: 8, flexWrap: "wrap" }}>
-                      <code style={{ fontSize: 11, color: "#4a2f3f", wordBreak: "break-all" }}>{p.postback_url}</code>
-                      <button style={{ ...btnRed, padding: "3px 10px", fontSize: 11 }} onClick={() => deletePostback(p.id)}>Remove</button>
-                    </div>
-                  ))}
-                  {!postbacks.length && <div style={{ fontSize: 12, color: "#b89ab0" }}>No postback URL set — conversions won't be forwarded to this publisher yet.</div>}
+                <div style={{ display: "flex", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                  <input
+                    style={{ ...input, flex: 1, minWidth: 260 }}
+                    placeholder="https://publisher-tracker.com/pb?click_id={click_id}&payout={payout}&status={status}"
+                    value={postbackDraft}
+                    onChange={e => setPostbackDraft(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && savePostback(a.id)}
+                  />
+                  <button style={{ ...btn, padding: "8px 16px", opacity: savingPb ? 0.7 : 1 }} onClick={() => savePostback(a.id)} disabled={savingPb}>
+                    {savingPb ? "Saving..." : "Save"}
+                  </button>
+                </div>
+                <div style={{ fontSize: 11, color: "#b89ab0" }}>
+                  Must include the <b>{"{click_id}"}</b> macro. Optional: <b>{"{payout}"}</b>, <b>{"{status}"}</b>, <b>{"{transaction_id}"}</b>. Leave empty and Save to clear it.
                 </div>
                 </>
                 )}

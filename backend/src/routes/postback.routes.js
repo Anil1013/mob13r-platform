@@ -12,38 +12,33 @@ function fillMacros(url, map) {
   return out;
 }
 
-async function forwardToAffiliate({ affiliateId, campaignId, clickId, status, payout, transactionId }) {
+// Forward the conversion to the publisher's single postback URL (if they've set one).
+async function forwardToPublisher({ postbackUrl, clickId, status, payout, transactionId }) {
   try {
-    const pbRes = await pool.query(
-      `SELECT * FROM affiliate_postbacks
-       WHERE affiliate_id = $1 AND status = 'active'
-         AND (campaign_id = $2 OR campaign_id IS NULL)
-       ORDER BY campaign_id NULLS LAST`,
-      [affiliateId, campaignId]
+    const url = fillMacros(postbackUrl, {
+      click_id: clickId,
+      status,
+      payout,
+      transaction_id: transactionId || "",
+    });
+    axios.get(url, { timeout: 8000 }).catch(e =>
+      console.error("PUBLISHER POSTBACK FORWARD FAILED:", e.message)
     );
-    for (const pb of pbRes.rows) {
-      const url = fillMacros(pb.postback_url, {
-        click_id: clickId,
-        status,
-        payout,
-        transaction_id: transactionId || "",
-      });
-      axios.get(url, { timeout: 8000 }).catch(e =>
-        console.error("AFFILIATE POSTBACK FORWARD FAILED:", pb.id, e.message)
-      );
-    }
-    return pbRes.rows.length > 0;
+    return true;
   } catch (err) {
     console.error("FORWARD POSTBACK ERROR:", err.message);
     return false;
   }
 }
 
-// PUBLIC: GET /postback?click_id=xxx&status=approved&payout=1.5&transaction_id=xxx
+// PUBLIC: GET /postback?click_id=xxx&adv_key=xxx&status=approved&payout=1.5&transaction_id=xxx
 // This is what the advertiser calls (server-to-server) when a conversion happens.
+// adv_key is the advertiser's own unique postback key (each advertiser gets a distinct
+// postback URL from the Advertisers page) — if present, it must match the advertiser
+// on the campaign the click belongs to. Older integrations without adv_key still work.
 router.get("/postback", async (req, res) => {
   try {
-    const { click_id, status, payout, transaction_id } = req.query;
+    const { click_id, adv_key, status, payout, transaction_id } = req.query;
     if (!click_id) return res.status(400).json({ status: "FAILED", message: "click_id is required" });
 
     const clickRes = await pool.query(`SELECT * FROM clicks WHERE click_id = $1`, [click_id]);
@@ -52,6 +47,15 @@ router.get("/postback", async (req, res) => {
 
     const campRes = await pool.query(`SELECT * FROM campaigns WHERE id = $1`, [click.campaign_id]);
     const campaign = campRes.rows[0];
+    if (!campaign) return res.status(404).json({ status: "FAILED", message: "campaign not found for this click" });
+
+    if (adv_key) {
+      const advRes = await pool.query(`SELECT postback_key FROM advertisers WHERE id = $1`, [campaign.advertiser_id]);
+      const advertiser = advRes.rows[0];
+      if (!advertiser || advertiser.postback_key !== adv_key) {
+        return res.status(403).json({ status: "FAILED", message: "adv_key does not match this campaign's advertiser" });
+      }
+    }
 
     const finalPayout = payout !== undefined ? Number(payout) : Number(campaign?.payout || 0);
     const finalStatus = status || "approved";
@@ -72,20 +76,23 @@ router.get("/postback", async (req, res) => {
 
     let forwarded = false;
     if (click.affiliate_id) {
-      forwarded = await forwardToAffiliate({
-        affiliateId: click.affiliate_id,
-        campaignId: click.campaign_id,
-        clickId: click_id,
-        status: finalStatus,
-        payout: finalPayout,
-        transactionId: transaction_id,
-      });
-      if (forwarded) {
-        await pool.query(`UPDATE conversions SET postback_forwarded = TRUE WHERE click_id = $1`, [click_id]);
+      const affRes = await pool.query(`SELECT postback_url FROM affiliates WHERE id = $1`, [click.affiliate_id]);
+      const postbackUrl = affRes.rows[0]?.postback_url;
+      if (postbackUrl) {
+        forwarded = await forwardToPublisher({
+          postbackUrl,
+          clickId: click_id,
+          status: finalStatus,
+          payout: finalPayout,
+          transactionId: transaction_id,
+        });
+        if (forwarded) {
+          await pool.query(`UPDATE conversions SET postback_forwarded = TRUE WHERE click_id = $1`, [click_id]);
+        }
       }
     }
 
-    res.json({ status: "SUCCESS", message: "Conversion recorded", forwarded_to_affiliate: forwarded });
+    res.json({ status: "SUCCESS", message: "Conversion recorded", forwarded_to_publisher: forwarded });
   } catch (err) {
     console.error("POSTBACK ERROR:", err.message);
     res.status(500).json({ status: "FAILED", message: "Postback processing error" });

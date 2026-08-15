@@ -1,15 +1,10 @@
 import { useEffect, useState, Fragment } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, NavLink } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
 import { btn, btnRed, input, table, th, td, badge, pageTitle, filterBar, filterSelect } from "../../styles/shared.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 const CURRENCIES = ["USD", "INR", "EUR", "AED", "SAR", "IQD", "KWD", "JOD", "EGP"];
-
-// This is OUR postback URL — give this to the advertiser so THEY notify US of conversions.
-function buildAdvertiserPostbackUrl() {
-  return `${API_BASE}/postback?click_id={click_id}&status=approved&payout={payout}&transaction_id={transaction_id}`;
-}
 
 function isValidUrl(v) {
   if (!v || !v.trim()) return false;
@@ -300,19 +295,11 @@ export default function Campaigns() {
                   <tr>
                     <td style={{ ...td, background: "#fdf6f9" }} colSpan={8}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: "#9b7faa", textTransform: "uppercase", marginBottom: 6 }}>
-                        Postback URL — share this with the advertiser so THEY notify us of conversions
+                        Advertiser postback
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                        <code style={{ fontSize: 12, background: "#fff", padding: "6px 10px", borderRadius: 8, border: "1px solid #eedde8", flex: 1, overflowWrap: "break-word" }}>
-                          {buildAdvertiserPostbackUrl()}
-                        </code>
-                        <button style={btn} onClick={() => copyUrl(buildAdvertiserPostbackUrl(), "Postback URL")}>Copy</button>
-                      </div>
-                      <div style={{ fontSize: 11, color: "#b89ab0" }}>
-                        Macros: <b>{"{click_id}"}</b> — required, we passed this to advertiser in the tracking URL redirect ·{" "}
-                        <b>{"{payout}"}</b> — optional, overrides campaign default payout ·{" "}
-                        <b>{"{transaction_id}"}</b> — optional, advertiser's own reference ID ·{" "}
-                        <b>status</b> — approved / pending / rejected
+                      <div style={{ fontSize: 12, color: "#4a2f3f" }}>
+                        <b>{c.advertiser_name}</b> has one dedicated postback URL used for every campaign they run.
+                        Go to <NavLink to="/cpa/advertisers" style={{ color: "#e8856a", fontWeight: 700 }}>Advertisers</NavLink> → find {c.advertiser_name} → "Show URL" to copy it.
                       </div>
                     </td>
                   </tr>
