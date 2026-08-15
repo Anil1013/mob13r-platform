@@ -30,6 +30,7 @@ import affiliatesRoutes from "./routes/affiliates.routes.js";
 import conversionsRoutes from "./routes/conversions.routes.js";
 import trackRoutes from "./routes/track.routes.js";
 import postbackRoutes from "./routes/postback.routes.js";
+import cpaReportsRoutes from "./routes/cpa-reports.routes.js";
 
 const app = express();
 
@@ -120,6 +121,7 @@ app.use("/api/affiliates", affiliatesRoutes);
 app.use("/api/conversions", conversionsRoutes);
 app.use("/", trackRoutes);     // GET /click?cid=...&aff_id=...
 app.use("/", postbackRoutes);  // GET /postback?click_id=...
+app.use("/api/cpa-reports", cpaReportsRoutes);
 
 // 404 Handler
 app.use((req, res) => {

@@ -1,9 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
 import { btn, input, table, th, td, badge, pageTitle } from "../../styles/shared.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
+
+// This is OUR postback URL — give this to the advertiser so THEY notify US of conversions.
+function buildAdvertiserPostbackUrl() {
+  return `${API_BASE}/postback?click_id={click_id}&status=approved&payout={payout}&transaction_id={transaction_id}`;
+}
 
 export default function Campaigns() {
   const navigate = useNavigate();
@@ -14,6 +19,7 @@ export default function Campaigns() {
   const [toast, setToast] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
   const [form, setForm] = useState({ vertical_id: "", advertiser_id: "", name: "", destination_url: "", payout: "", currency: "USD", geo: "", daily_cap: "" });
 
   useEffect(() => { if (!token) navigate("/login"); else { load(); loadVerticals(); loadAdvertisers(); } }, []);
@@ -116,8 +122,15 @@ export default function Campaigns() {
             </thead>
             <tbody>
               {campaigns.map(c => (
-                <tr key={c.id}>
-                  <td style={td}>{c.name}</td>
+                <Fragment key={c.id}>
+                <tr>
+                  <td style={td}>
+                    {c.name}
+                    <button style={{ ...btn, padding: "2px 8px", fontSize: 10, marginLeft: 8, background: "#f5eef8", color: "#9b7faa" }}
+                      onClick={() => setExpandedId(id => id === c.id ? null : c.id)}>
+                      {expandedId === c.id ? "▲ Postback" : "▼ Postback"}
+                    </button>
+                  </td>
                   <td style={td}>{c.vertical_code || c.vertical_name}</td>
                   <td style={td}>{c.advertiser_name}</td>
                   <td style={td}>
@@ -134,6 +147,28 @@ export default function Campaigns() {
                     </span>
                   </td>
                 </tr>
+                {expandedId === c.id && (
+                  <tr>
+                    <td style={{ ...td, background: "#fdf6f9" }} colSpan={7}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#9b7faa", textTransform: "uppercase", marginBottom: 6 }}>
+                        Postback URL — share this with the advertiser so THEY notify us of conversions
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                        <code style={{ fontSize: 12, background: "#fff", padding: "6px 10px", borderRadius: 8, border: "1px solid #eedde8", flex: 1, overflowWrap: "break-word" }}>
+                          {buildAdvertiserPostbackUrl()}
+                        </code>
+                        <button style={btn} onClick={() => copyUrl(buildAdvertiserPostbackUrl())}>Copy</button>
+                      </div>
+                      <div style={{ fontSize: 11, color: "#b89ab0" }}>
+                        Macros: <b>{"{click_id}"}</b> — required, we passed this to advertiser in the tracking URL redirect ·{" "}
+                        <b>{"{payout}"}</b> — optional, overrides campaign default payout ·{" "}
+                        <b>{"{transaction_id}"}</b> — optional, advertiser's own reference ID ·{" "}
+                        <b>status</b> — approved / pending / rejected
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
               {!campaigns.length && (
                 <tr><td style={td} colSpan={7}>No campaigns yet — create one to get your first tracking URL.</td></tr>

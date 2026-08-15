@@ -76,9 +76,11 @@ export default function CpaSidebar({ onVerticalSelect, selectedVerticalId }) {
       <div style={S.divider} />
 
       <div style={S.navSection}>
+        <NavLink to="/cpa/advertisers" style={({ isActive }) => ({ ...S.navLink, ...(isActive ? S.navLinkActive : {}) })}>🏢 Advertisers</NavLink>
         <NavLink to="/cpa/campaigns" style={({ isActive }) => ({ ...S.navLink, ...(isActive ? S.navLinkActive : {}) })}>📢 Campaigns</NavLink>
-        <NavLink to="/cpa/affiliates" style={({ isActive }) => ({ ...S.navLink, ...(isActive ? S.navLinkActive : {}) })}>🤝 Affiliates</NavLink>
+        <NavLink to="/cpa/affiliates" style={({ isActive }) => ({ ...S.navLink, ...(isActive ? S.navLinkActive : {}) })}>🤝 Publishers</NavLink>
         <NavLink to="/cpa/conversions" style={({ isActive }) => ({ ...S.navLink, ...(isActive ? S.navLinkActive : {}) })}>✅ Conversions</NavLink>
+        <NavLink to="/cpa/reports" style={({ isActive }) => ({ ...S.navLink, ...(isActive ? S.navLinkActive : {}) })}>📊 Reports</NavLink>
       </div>
     </div>
   );

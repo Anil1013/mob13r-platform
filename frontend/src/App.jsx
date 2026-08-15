@@ -18,9 +18,11 @@ import OfferGroups from "./pages/OfferGroups";
 import EmailLogs from "./pages/EmailLogs";
 
 // ---- CPA MODULE (additive) ----
+import CpaAdvertisers from "./pages/cpa/Advertisers";
 import CpaCampaigns from "./pages/cpa/Campaigns";
 import CpaAffiliates from "./pages/cpa/Affiliates";
 import CpaConversions from "./pages/cpa/Conversions";
+import CpaReports from "./pages/cpa/Reports";
 
 export default function App() {
   return (
@@ -49,9 +51,11 @@ export default function App() {
           <Route path="/email-logs" element={<EmailLogs />} />
 
           {/* CPA MODULE (additive) */}
+          <Route path="/cpa/advertisers" element={<CpaAdvertisers />} />
           <Route path="/cpa/campaigns" element={<CpaCampaigns />} />
           <Route path="/cpa/affiliates" element={<CpaAffiliates />} />
           <Route path="/cpa/conversions" element={<CpaConversions />} />
+          <Route path="/cpa/reports" element={<CpaReports />} />
         </Route>
 
         {/* Default */}
