@@ -29,7 +29,7 @@ const TIME_DIM = {
 //                       &from=&to=&vertical_id=&campaign_id=&affiliate_id=&advertiser_id=&geo=&carrier=
 router.get("/", orgAuth, async (req, res) => {
   try {
-    const { group_by = "detailed", from, to, vertical_id, campaign_id, affiliate_id, advertiser_id, geo, carrier } = req.query;
+    const { group_by = "detailed", from, to, vertical_id, campaign_id, affiliate_id, advertiser_id, geo, carrier, hour } = req.query;
     const timeDim = TIME_DIM[group_by];
     const orderBy = timeDim ? timeDim.order : (ORDER_MAP[group_by] || ORDER_MAP.detailed);
 
@@ -59,6 +59,10 @@ router.get("/", orgAuth, async (req, res) => {
     if (advertiser_id) { params.push(advertiser_id); query += ` AND c.advertiser_id = $${params.length}`; }
     if (geo) { params.push(geo); query += ` AND c.geo = $${params.length}`; }
     if (carrier) { params.push(carrier); query += ` AND c.carrier = $${params.length}`; }
+    if (hour !== undefined && hour !== "") {
+      params.push(Number(hour));
+      query += ` AND EXTRACT(HOUR FROM cl.created_at AT TIME ZONE 'Asia/Kolkata') = $${params.length}`;
+    }
 
     query += ` GROUP BY a.id, a.name, af.id, af.name, c.id, c.name, c.geo, c.carrier${timeDim ? `, ${timeDim.groupBy}` : ""}
                ORDER BY ${orderBy} LIMIT 1000`;

@@ -53,6 +53,7 @@ export default function CpaReports() {
   const [campaignId, setCampaignId] = useState("");
   const [geo, setGeo] = useState("");
   const [carrier, setCarrier] = useState("");
+  const [hourFilter, setHourFilter] = useState("");
   const [rows, setRows] = useState([]);
   const [totals, setTotals] = useState(emptySums());
   const [loading, setLoading] = useState(false);
@@ -97,6 +98,7 @@ export default function CpaReports() {
     const gCampaignId = overrides.campaignId ?? campaignId;
     const gGeo = overrides.geo ?? geo;
     const gCarrier = overrides.carrier ?? carrier;
+    const gHourFilter = overrides.hourFilter ?? hourFilter;
     const gFrom = overrides.from ?? from;
     const gTo = overrides.to ?? to;
 
@@ -111,6 +113,7 @@ export default function CpaReports() {
       if (gCampaignId) params.set("campaign_id", gCampaignId);
       if (gGeo.trim()) params.set("geo", gGeo.trim().toUpperCase());
       if (gCarrier.trim()) params.set("carrier", gCarrier.trim());
+      if (gHourFilter !== "") params.set("hour", gHourFilter);
       const res = await fetch(`${API_BASE}/api/cpa-reports?${params}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (data.status === "SUCCESS") {
@@ -177,7 +180,8 @@ export default function CpaReports() {
       {toast && <div style={{ position: "fixed", top: 80, right: 24, zIndex: 9999, background: "rgba(239,68,68,0.08)", border: "1px solid #fca5a5", color: "#dc2626", padding: "12px 20px", borderRadius: 12, fontSize: 13 }}>{toast}</div>}
       <h1 style={pageTitle}>Reports</h1>
       <p style={{ color: "#9b7faa", fontSize: 13, marginTop: -12, marginBottom: 18 }}>
-        Advertiser, Publisher, Campaign, Geo and Carrier always show together · "Group by" adds a subtotal row per group · for Hour, narrow the date range to one day first · click a column header to sort
+        Advertiser, Publisher, Campaign, Geo and Carrier always show together · "Group by" adds a subtotal row per group ·
+        Group by Hour works for any date range, not just today · Hour filter narrows to that hour-of-day (IST) across the whole range · click a column header to sort
       </p>
 
       <div style={{ ...statRow, marginBottom: 18 }}>
@@ -219,6 +223,12 @@ export default function CpaReports() {
         <select style={{ ...filterSelect, width: 130 }} value={carrier} onChange={e => { const v = e.target.value; setCarrier(v); load({ carrier: v }); }}>
           <option value="">All Carriers</option>
           {carrierOptions.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select style={{ ...filterSelect, width: 110 }} value={hourFilter} onChange={e => { const v = e.target.value; setHourFilter(v); load({ hourFilter: v }); }}>
+          <option value="">All Hours</option>
+          {Array.from({ length: 24 }, (_, h) => (
+            <option key={h} value={h}>{String(h).padStart(2, "0")}:00 IST</option>
+          ))}
         </select>
         <input style={filterInput} type="date" value={from} onChange={e => setFrom(e.target.value)} />
         <input style={filterInput} type="date" value={to} onChange={e => setTo(e.target.value)} />
