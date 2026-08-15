@@ -51,8 +51,11 @@ router.get("/", orgAuth, async (req, res) => {
       WHERE cl.org_id = $1`;
     const params = [req.orgId];
 
-    if (from) { params.push(from); query += ` AND cl.created_at >= $${params.length}`; }
-    if (to) { params.push(to); query += ` AND cl.created_at <= $${params.length}::date + interval '1 day'`; }
+    // IMPORTANT: these boundaries must use the SAME timezone (Asia/Kolkata) as the
+    // Date/Hour grouping below — otherwise a UTC-based cutoff leaks a few hours of
+    // the next/previous IST day into results even when From/To pick a single date.
+    if (from) { params.push(from); query += ` AND (cl.created_at AT TIME ZONE 'Asia/Kolkata') >= $${params.length}::date`; }
+    if (to) { params.push(to); query += ` AND (cl.created_at AT TIME ZONE 'Asia/Kolkata') < $${params.length}::date + interval '1 day'`; }
     if (vertical_id) { params.push(vertical_id); query += ` AND c.vertical_id = $${params.length}`; }
     if (campaign_id) { params.push(campaign_id); query += ` AND cl.campaign_id = $${params.length}`; }
     if (affiliate_id) { params.push(affiliate_id); query += ` AND cl.affiliate_id = $${params.length}`; }
