@@ -11,21 +11,34 @@ const GREEN = "#16a34a";
 const RED = "#dc2626";
 const money = (n) => Number(n || 0).toFixed(2);
 
-const MODE_LABEL = {
-  advertiser_publisher: null, // has its own multi-column header, handled separately
-  advertiser: "Advertiser",
-  publisher: "Publisher",
-  campaign: "Campaign",
-  geo: "Geo",
-  carrier: "Carrier",
-  vertical: "Vertical",
-  date: "Date",
+const GROUP_FIELD = {
+  detailed: null,
+  advertiser: "advertiser_name",
+  publisher: "publisher_name",
+  campaign: "campaign_name",
+  geo: "geo",
+  carrier: "carrier",
 };
+const GROUP_LABEL = { advertiser: "Advertiser", publisher: "Publisher", campaign: "Campaign", geo: "Geo", carrier: "Carrier" };
+
+function emptySums() {
+  return { clicks: 0, conversions_in: 0, conversions_out: 0, revenue: 0, publisher_cost: 0, margin: 0 };
+}
+function addSums(a, r) {
+  return {
+    clicks: a.clicks + r.clicks,
+    conversions_in: a.conversions_in + r.conversions_in,
+    conversions_out: a.conversions_out + r.conversions_out,
+    revenue: a.revenue + r.revenue,
+    publisher_cost: a.publisher_cost + r.publisher_cost,
+    margin: a.margin + r.margin,
+  };
+}
 
 export default function CpaReports() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
-  const [groupBy, setGroupBy] = useState("advertiser_publisher");
+  const [groupBy, setGroupBy] = useState("detailed");
   const [from, setFrom] = useState(daysAgo(7));
   const [to, setTo] = useState(today());
   const [advertisers, setAdvertisers] = useState([]);
@@ -35,10 +48,10 @@ export default function CpaReports() {
   const [geo, setGeo] = useState("");
   const [carrier, setCarrier] = useState("");
   const [rows, setRows] = useState([]);
-  const [totals, setTotals] = useState({ clicks: 0, conversions_in: 0, conversions_out: 0, revenue: 0, publisher_cost: 0, margin: 0 });
+  const [totals, setTotals] = useState(emptySums());
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
-  const [sort, setSort] = useState({ key: "clicks", dir: "desc" });
+  const [sort, setSort] = useState(null);
 
   useEffect(() => { if (!token) navigate("/login"); else { load(); loadAdvertisers(); loadPublishers(); } }, []);
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2800); };
@@ -68,7 +81,8 @@ export default function CpaReports() {
     const gTo = overrides.to ?? to;
 
     if (gFrom && gTo && gFrom > gTo) return showToast("From date must be before To date");
-    setRows([]); // clear stale rows immediately so mismatched old-shape data never renders under new columns
+    setRows([]);
+    setSort(null);
     setLoading(true);
     try {
       const params = new URLSearchParams({ group_by: gGroupBy, from: gFrom, to: gTo });
@@ -80,7 +94,7 @@ export default function CpaReports() {
       const data = await res.json();
       if (data.status === "SUCCESS") {
         setRows(data.data);
-        setTotals({ clicks: 0, conversions_in: 0, conversions_out: 0, revenue: 0, publisher_cost: 0, margin: 0, ...data.totals });
+        setTotals({ ...emptySums(), ...data.totals });
       } else showToast(data.message || "Failed to load report");
     } catch {
       showToast("Network error while loading report");
@@ -89,15 +103,13 @@ export default function CpaReports() {
     }
   };
 
-  const isAdvPub = groupBy === "advertiser_publisher";
-  const isCampaign = groupBy === "campaign";
-  const groupLabel = MODE_LABEL[groupBy] || "Group";
   const totalCrIn = totals.clicks ? ((totals.conversions_in / totals.clicks) * 100).toFixed(2) : "0.00";
   const totalCrOut = totals.clicks ? ((totals.conversions_out / totals.clicks) * 100).toFixed(2) : "0.00";
 
-  const toggleSort = (key) => setSort(s => ({ key, dir: s.key === key && s.dir === "desc" ? "asc" : "desc" }));
+  const toggleSort = (key) => setSort(s => ({ key, dir: s && s.key === key && s.dir === "desc" ? "asc" : "desc" }));
 
-  const sortedRows = useMemo(() => {
+  const displayRows = useMemo(() => {
+    if (!sort) return rows;
     const arr = [...rows];
     arr.sort((a, b) => {
       let av = a[sort.key], bv = b[sort.key];
@@ -110,20 +122,36 @@ export default function CpaReports() {
     return arr;
   }, [rows, sort]);
 
+  const groupField = GROUP_FIELD[groupBy];
+
+  const flattened = useMemo(() => {
+    if (!groupField) return displayRows.map(row => ({ type: "row", row }));
+    const groups = new Map();
+    for (const r of displayRows) {
+      const key = r[groupField] ?? "—";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(r);
+    }
+    const out = [];
+    for (const [key, groupRows] of groups) {
+      for (const r of groupRows) out.push({ type: "row", row: r });
+      out.push({ type: "subtotal", key, sums: groupRows.reduce(addSums, emptySums()) });
+    }
+    return out;
+  }, [displayRows, groupField]);
+
   const SortTh = ({ label, sortKey }) => (
     <th style={{ ...th, cursor: "pointer", userSelect: "none" }} onClick={() => toggleSort(sortKey)}>
-      {label} {sort.key === sortKey ? (sort.dir === "desc" ? "▼" : "▲") : ""}
+      {label} {sort?.key === sortKey ? (sort.dir === "desc" ? "▼" : "▲") : ""}
     </th>
   );
-
-  const colCount = isAdvPub ? 12 : (isCampaign ? 9 : 8);
 
   return (
     <CpaLayout>
       {toast && <div style={{ position: "fixed", top: 80, right: 24, zIndex: 9999, background: "rgba(239,68,68,0.08)", border: "1px solid #fca5a5", color: "#dc2626", padding: "12px 20px", borderRadius: 12, fontSize: 13 }}>{toast}</div>}
       <h1 style={pageTitle}>Reports</h1>
       <p style={{ color: "#9b7faa", fontSize: 13, marginTop: -12, marginBottom: 18 }}>
-        CR In = conversions the advertiser confirmed · CR Out = conversions actually forwarded to the publisher (after any hold %) · click a column header to sort
+        Advertiser, Publisher, Campaign, Geo and Carrier always show together · "Group by" adds a subtotal row per group · click a column header to sort
       </p>
 
       <div style={{ ...statRow, marginBottom: 18 }}>
@@ -137,14 +165,12 @@ export default function CpaReports() {
 
       <div style={{ ...filterBar, flexWrap: "wrap" }}>
         <select style={filterSelect} value={groupBy} onChange={e => { const v = e.target.value; setGroupBy(v); load({ groupBy: v }); }}>
-          <option value="advertiser_publisher">Detailed (Advertiser × Publisher × Campaign)</option>
+          <option value="detailed">No grouping (all rows)</option>
           <option value="advertiser">Group by Advertiser</option>
           <option value="publisher">Group by Publisher</option>
           <option value="campaign">Group by Campaign</option>
           <option value="geo">Group by Geo</option>
           <option value="carrier">Group by Carrier</option>
-          <option value="vertical">Group by Vertical</option>
-          <option value="date">Group by Date</option>
         </select>
         <select style={filterSelect} value={advertiserId} onChange={e => { const v = e.target.value; setAdvertiserId(v); load({ advertiserId: v }); }}>
           <option value="">All Advertisers</option>
@@ -158,7 +184,7 @@ export default function CpaReports() {
         <input style={{ ...filterInput, width: 110 }} placeholder="Carrier" value={carrier} onChange={e => setCarrier(e.target.value)} />
         <input style={filterInput} type="date" value={from} onChange={e => setFrom(e.target.value)} />
         <input style={filterInput} type="date" value={to} onChange={e => setTo(e.target.value)} />
-        <button style={applyBtn} onClick={load} disabled={loading}>{loading ? "Loading..." : "Apply"}</button>
+        <button style={applyBtn} onClick={() => load()} disabled={loading}>{loading ? "Loading..." : "Apply"}</button>
       </div>
 
       <div style={{ background: "#fff", border: "1px solid #e8d0dc", borderRadius: 16, overflow: "hidden" }}>
@@ -166,20 +192,11 @@ export default function CpaReports() {
           <table style={table}>
             <thead>
               <tr>
-                {isAdvPub ? (
-                  <>
-                    <SortTh label="Advertiser" sortKey="advertiser_name" />
-                    <SortTh label="Publisher" sortKey="publisher_name" />
-                    <SortTh label="Campaign" sortKey="campaign_name" />
-                    <SortTh label="Geo" sortKey="geo" />
-                    <SortTh label="Carrier" sortKey="carrier" />
-                  </>
-                ) : (
-                  <>
-                    <SortTh label={groupLabel} sortKey="label" />
-                    {isCampaign && <SortTh label="Advertiser" sortKey="advertiser_name" />}
-                  </>
-                )}
+                <SortTh label="Advertiser" sortKey="advertiser_name" />
+                <SortTh label="Publisher" sortKey="publisher_name" />
+                <SortTh label="Campaign" sortKey="campaign_name" />
+                <SortTh label="Geo" sortKey="geo" />
+                <SortTh label="Carrier" sortKey="carrier" />
                 <SortTh label="Clicks" sortKey="clicks" />
                 <SortTh label="Conv. In" sortKey="conversions_in" />
                 <SortTh label="CR In" sortKey="cr_in" />
@@ -191,53 +208,45 @@ export default function CpaReports() {
               </tr>
             </thead>
             <tbody>
-              {sortedRows.map((r, i) => (
-                <tr key={i}>
-                  {isAdvPub ? (
-                    <>
-                      <td style={td}>{r.advertiser_name}</td>
-                      <td style={td}>{r.publisher_name}</td>
-                      <td style={td}>{r.campaign_name}</td>
-                      <td style={td}>{r.geo}</td>
-                      <td style={td}>{r.carrier}</td>
-                    </>
-                  ) : (
-                    <>
-                      <td style={td}>{groupBy === "date" ? new Date(r.label).toLocaleDateString() : r.label}</td>
-                      {isCampaign && <td style={td}>{r.advertiser_name || "—"}</td>}
-                    </>
-                  )}
-                  <td style={td}>{r.clicks}</td>
-                  <td style={td}>{r.conversions_in}</td>
-                  <td style={td}>{r.cr_in}%</td>
-                  <td style={td}>{r.conversions_out}</td>
-                  <td style={td}>{r.cr_out}%</td>
-                  <td style={{ ...td, color: GREEN, fontWeight: 600 }}>{money(r.revenue)}</td>
-                  <td style={{ ...td, color: RED, fontWeight: 600 }}>{money(r.publisher_cost)}</td>
-                  <td style={{ ...td, color: r.margin >= 0 ? GREEN : RED, fontWeight: 700 }}>{money(r.margin)}</td>
+              {flattened.map((item, i) => item.type === "row" ? (
+                <tr key={`r${i}`}>
+                  <td style={td}>{item.row.advertiser_name}</td>
+                  <td style={td}>{item.row.publisher_name}</td>
+                  <td style={td}>{item.row.campaign_name}</td>
+                  <td style={td}>{item.row.geo}</td>
+                  <td style={td}>{item.row.carrier}</td>
+                  <td style={td}>{item.row.clicks}</td>
+                  <td style={td}>{item.row.conversions_in}</td>
+                  <td style={td}>{item.row.cr_in}%</td>
+                  <td style={td}>{item.row.conversions_out}</td>
+                  <td style={td}>{item.row.cr_out}%</td>
+                  <td style={{ ...td, color: GREEN, fontWeight: 600 }}>{money(item.row.revenue)}</td>
+                  <td style={{ ...td, color: RED, fontWeight: 600 }}>{money(item.row.publisher_cost)}</td>
+                  <td style={{ ...td, color: item.row.margin >= 0 ? GREEN : RED, fontWeight: 700 }}>{money(item.row.margin)}</td>
+                </tr>
+              ) : (
+                <tr key={`s${i}`} style={{ background: "#f5eef8" }}>
+                  <td style={{ ...td, fontWeight: 800 }} colSpan={5}>
+                    Subtotal — {GROUP_LABEL[groupBy]}: {item.key}
+                  </td>
+                  <td style={{ ...td, fontWeight: 800 }}>{item.sums.clicks}</td>
+                  <td style={{ ...td, fontWeight: 800 }}>{item.sums.conversions_in}</td>
+                  <td style={{ ...td, fontWeight: 800 }}>{item.sums.clicks ? ((item.sums.conversions_in / item.sums.clicks) * 100).toFixed(2) : "0.00"}%</td>
+                  <td style={{ ...td, fontWeight: 800 }}>{item.sums.conversions_out}</td>
+                  <td style={{ ...td, fontWeight: 800 }}>{item.sums.clicks ? ((item.sums.conversions_out / item.sums.clicks) * 100).toFixed(2) : "0.00"}%</td>
+                  <td style={{ ...td, color: GREEN, fontWeight: 800 }}>{money(item.sums.revenue)}</td>
+                  <td style={{ ...td, color: RED, fontWeight: 800 }}>{money(item.sums.publisher_cost)}</td>
+                  <td style={{ ...td, color: item.sums.margin >= 0 ? GREEN : RED, fontWeight: 800 }}>{money(item.sums.margin)}</td>
                 </tr>
               ))}
-              {!sortedRows.length && (
-                <tr><td style={td} colSpan={colCount}>{loading ? "Loading..." : "No data for this range."}</td></tr>
+              {!flattened.length && (
+                <tr><td style={td} colSpan={13}>{loading ? "Loading..." : "No data for this range."}</td></tr>
               )}
             </tbody>
-            {sortedRows.length > 0 && (
+            {rows.length > 0 && (
               <tfoot>
                 <tr style={{ background: "#fdf6f9", fontWeight: 800 }}>
-                  {isAdvPub ? (
-                    <>
-                      <td style={td}>TOTAL</td>
-                      <td style={td}>{sortedRows.length} rows</td>
-                      <td style={td}>—</td>
-                      <td style={td}>—</td>
-                      <td style={td}>—</td>
-                    </>
-                  ) : (
-                    <>
-                      <td style={td}>TOTAL</td>
-                      {isCampaign && <td style={td}>—</td>}
-                    </>
-                  )}
+                  <td style={td} colSpan={5}>GRAND TOTAL</td>
                   <td style={td}>{totals.clicks}</td>
                   <td style={td}>{totals.conversions_in}</td>
                   <td style={td}>{totalCrIn}%</td>
