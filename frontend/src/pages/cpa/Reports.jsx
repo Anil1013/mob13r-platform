@@ -43,10 +43,12 @@ export default function CpaReports() {
   const [to, setTo] = useState(today());
   const [advertisers, setAdvertisers] = useState([]);
   const [publishers, setPublishers] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
   const [geoOptions, setGeoOptions] = useState([]);
   const [carrierOptions, setCarrierOptions] = useState([]);
   const [advertiserId, setAdvertiserId] = useState("");
   const [affiliateId, setAffiliateId] = useState("");
+  const [campaignId, setCampaignId] = useState("");
   const [geo, setGeo] = useState("");
   const [carrier, setCarrier] = useState("");
   const [rows, setRows] = useState([]);
@@ -81,6 +83,7 @@ export default function CpaReports() {
         const carriers = [...new Set(data.data.map(c => c.carrier).filter(Boolean))].sort();
         setGeoOptions(geos);
         setCarrierOptions(carriers);
+        setCampaigns(data.data);
       }
     } catch { /* non-blocking */ }
   };
@@ -89,6 +92,7 @@ export default function CpaReports() {
     const gGroupBy = overrides.groupBy ?? groupBy;
     const gAdvertiserId = overrides.advertiserId ?? advertiserId;
     const gAffiliateId = overrides.affiliateId ?? affiliateId;
+    const gCampaignId = overrides.campaignId ?? campaignId;
     const gGeo = overrides.geo ?? geo;
     const gCarrier = overrides.carrier ?? carrier;
     const gFrom = overrides.from ?? from;
@@ -102,6 +106,7 @@ export default function CpaReports() {
       const params = new URLSearchParams({ group_by: gGroupBy, from: gFrom, to: gTo });
       if (gAdvertiserId) params.set("advertiser_id", gAdvertiserId);
       if (gAffiliateId) params.set("affiliate_id", gAffiliateId);
+      if (gCampaignId) params.set("campaign_id", gCampaignId);
       if (gGeo.trim()) params.set("geo", gGeo.trim().toUpperCase());
       if (gCarrier.trim()) params.set("carrier", gCarrier.trim());
       const res = await fetch(`${API_BASE}/api/cpa-reports?${params}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -194,6 +199,10 @@ export default function CpaReports() {
           <option value="">All Publishers</option>
           {publishers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
+        <select style={filterSelect} value={campaignId} onChange={e => { const v = e.target.value; setCampaignId(v); load({ campaignId: v }); }}>
+          <option value="">All Campaigns</option>
+          {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
         <select style={{ ...filterSelect, width: 100 }} value={geo} onChange={e => { const v = e.target.value; setGeo(v); load({ geo: v }); }}>
           <option value="">All Geo</option>
           {geoOptions.map(g => <option key={g} value={g}>{g}</option>)}
@@ -245,18 +254,18 @@ export default function CpaReports() {
                   <td style={{ ...td, color: item.row.margin >= 0 ? GREEN : RED, fontWeight: 700 }}>{money(item.row.margin)}</td>
                 </tr>
               ) : (
-                <tr key={`s${i}`} style={{ background: "#f5eef8" }}>
-                  <td style={{ ...td, fontWeight: 800 }} colSpan={5}>
-                    Subtotal — {GROUP_LABEL[groupBy]}: {item.key}
+                <tr key={`s${i}`} style={{ background: "#fff4dc", borderLeft: "4px solid #e8a940" }}>
+                  <td style={{ ...td, fontWeight: 800, color: "#8a5a00", background: "transparent" }} colSpan={5}>
+                    🔶 Subtotal — {GROUP_LABEL[groupBy]}: {item.key}
                   </td>
-                  <td style={{ ...td, fontWeight: 800 }}>{item.sums.clicks}</td>
-                  <td style={{ ...td, fontWeight: 800 }}>{item.sums.conversions_in}</td>
-                  <td style={{ ...td, fontWeight: 800 }}>{item.sums.clicks ? ((item.sums.conversions_in / item.sums.clicks) * 100).toFixed(2) : "0.00"}%</td>
-                  <td style={{ ...td, fontWeight: 800 }}>{item.sums.conversions_out}</td>
-                  <td style={{ ...td, fontWeight: 800 }}>{item.sums.clicks ? ((item.sums.conversions_out / item.sums.clicks) * 100).toFixed(2) : "0.00"}%</td>
-                  <td style={{ ...td, color: GREEN, fontWeight: 800 }}>{money(item.sums.revenue)}</td>
-                  <td style={{ ...td, color: RED, fontWeight: 800 }}>{money(item.sums.publisher_cost)}</td>
-                  <td style={{ ...td, color: item.sums.margin >= 0 ? GREEN : RED, fontWeight: 800 }}>{money(item.sums.margin)}</td>
+                  <td style={{ ...td, fontWeight: 800, background: "transparent" }}>{item.sums.clicks}</td>
+                  <td style={{ ...td, fontWeight: 800, background: "transparent" }}>{item.sums.conversions_in}</td>
+                  <td style={{ ...td, fontWeight: 800, background: "transparent" }}>{item.sums.clicks ? ((item.sums.conversions_in / item.sums.clicks) * 100).toFixed(2) : "0.00"}%</td>
+                  <td style={{ ...td, fontWeight: 800, background: "transparent" }}>{item.sums.conversions_out}</td>
+                  <td style={{ ...td, fontWeight: 800, background: "transparent" }}>{item.sums.clicks ? ((item.sums.conversions_out / item.sums.clicks) * 100).toFixed(2) : "0.00"}%</td>
+                  <td style={{ ...td, color: GREEN, fontWeight: 800, background: "transparent" }}>{money(item.sums.revenue)}</td>
+                  <td style={{ ...td, color: RED, fontWeight: 800, background: "transparent" }}>{money(item.sums.publisher_cost)}</td>
+                  <td style={{ ...td, color: item.sums.margin >= 0 ? GREEN : RED, fontWeight: 800, background: "transparent" }}>{money(item.sums.margin)}</td>
                 </tr>
               ))}
               {!flattened.length && (
