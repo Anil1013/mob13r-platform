@@ -18,8 +18,10 @@ const GROUP_FIELD = {
   campaign: "campaign_name",
   geo: "geo",
   carrier: "carrier",
+  date: "date",
+  hour: "hour",
 };
-const GROUP_LABEL = { advertiser: "Advertiser", publisher: "Publisher", campaign: "Campaign", geo: "Geo", carrier: "Carrier" };
+const GROUP_LABEL = { advertiser: "Advertiser", publisher: "Publisher", campaign: "Campaign", geo: "Geo", carrier: "Carrier", date: "Date", hour: "Hour" };
 
 function emptySums() {
   return { clicks: 0, conversions_in: 0, conversions_out: 0, revenue: 0, publisher_cost: 0, margin: 0 };
@@ -142,6 +144,11 @@ export default function CpaReports() {
   }, [rows, sort]);
 
   const groupField = GROUP_FIELD[groupBy];
+  const hasTimeCol = groupBy === "date" || groupBy === "hour";
+  const timeColLabel = groupBy === "hour" ? "Hour" : "Date";
+  const baseColCount = 13; // Advertiser, Publisher, Campaign, Geo, Carrier + 8 metrics
+  const colCount = hasTimeCol ? baseColCount + 1 : baseColCount;
+  const labelColSpan = hasTimeCol ? 6 : 5; // Advertiser..Carrier (+Date/Hour when present)
 
   const flattened = useMemo(() => {
     if (!groupField) return displayRows.map(row => ({ type: "row", row }));
@@ -170,7 +177,7 @@ export default function CpaReports() {
       {toast && <div style={{ position: "fixed", top: 80, right: 24, zIndex: 9999, background: "rgba(239,68,68,0.08)", border: "1px solid #fca5a5", color: "#dc2626", padding: "12px 20px", borderRadius: 12, fontSize: 13 }}>{toast}</div>}
       <h1 style={pageTitle}>Reports</h1>
       <p style={{ color: "#9b7faa", fontSize: 13, marginTop: -12, marginBottom: 18 }}>
-        Advertiser, Publisher, Campaign, Geo and Carrier always show together · "Group by" adds a subtotal row per group · click a column header to sort
+        Advertiser, Publisher, Campaign, Geo and Carrier always show together · "Group by" adds a subtotal row per group · for Hour, narrow the date range to one day first · click a column header to sort
       </p>
 
       <div style={{ ...statRow, marginBottom: 18 }}>
@@ -190,6 +197,8 @@ export default function CpaReports() {
           <option value="campaign">Group by Campaign</option>
           <option value="geo">Group by Geo</option>
           <option value="carrier">Group by Carrier</option>
+          <option value="date">Group by Date</option>
+          <option value="hour">Group by Hour</option>
         </select>
         <select style={filterSelect} value={advertiserId} onChange={e => { const v = e.target.value; setAdvertiserId(v); load({ advertiserId: v }); }}>
           <option value="">All Advertisers</option>
@@ -226,6 +235,7 @@ export default function CpaReports() {
                 <SortTh label="Campaign" sortKey="campaign_name" />
                 <SortTh label="Geo" sortKey="geo" />
                 <SortTh label="Carrier" sortKey="carrier" />
+                {hasTimeCol && <SortTh label={timeColLabel} sortKey={groupBy} />}
                 <SortTh label="Clicks" sortKey="clicks" />
                 <SortTh label="Conv. In" sortKey="conversions_in" />
                 <SortTh label="CR In" sortKey="cr_in" />
@@ -244,6 +254,7 @@ export default function CpaReports() {
                   <td style={td}>{item.row.campaign_name}</td>
                   <td style={td}>{item.row.geo}</td>
                   <td style={td}>{item.row.carrier}</td>
+                  {hasTimeCol && <td style={td}>{item.row.date || item.row.hour}</td>}
                   <td style={td}>{item.row.clicks}</td>
                   <td style={td}>{item.row.conversions_in}</td>
                   <td style={td}>{item.row.cr_in}%</td>
@@ -255,7 +266,7 @@ export default function CpaReports() {
                 </tr>
               ) : (
                 <tr key={`s${i}`} style={{ background: "#fff4dc", borderLeft: "4px solid #e8a940" }}>
-                  <td style={{ ...td, fontWeight: 800, color: "#8a5a00", background: "transparent" }} colSpan={5}>
+                  <td style={{ ...td, fontWeight: 800, color: "#8a5a00", background: "transparent" }} colSpan={labelColSpan}>
                     🔶 Subtotal — {GROUP_LABEL[groupBy]}: {item.key}
                   </td>
                   <td style={{ ...td, fontWeight: 800, background: "transparent" }}>{item.sums.clicks}</td>
@@ -269,13 +280,13 @@ export default function CpaReports() {
                 </tr>
               ))}
               {!flattened.length && (
-                <tr><td style={td} colSpan={13}>{loading ? "Loading..." : "No data for this range."}</td></tr>
+                <tr><td style={td} colSpan={colCount}>{loading ? "Loading..." : "No data for this range."}</td></tr>
               )}
             </tbody>
             {rows.length > 0 && (
               <tfoot>
                 <tr style={{ background: "#fdf6f9", fontWeight: 800 }}>
-                  <td style={td} colSpan={5}>GRAND TOTAL</td>
+                  <td style={td} colSpan={labelColSpan}>GRAND TOTAL</td>
                   <td style={td}>{totals.clicks}</td>
                   <td style={td}>{totals.conversions_in}</td>
                   <td style={td}>{totalCrIn}%</td>
