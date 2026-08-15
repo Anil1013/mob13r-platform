@@ -10,8 +10,8 @@ router.get("/", orgAuth, async (req, res) => {
     const { affiliate_id, campaign_id, group_id } = req.query;
     let query = `
       SELECT pa.*, af.name AS affiliate_name,
-        c.name AS campaign_name, c.payout AS advertiser_payout, c.currency,
-        g.name AS group_name
+        c.name AS campaign_name, c.payout AS advertiser_payout, c.currency, c.status AS campaign_status,
+        g.name AS group_name, g.status AS group_status
       FROM publisher_assignments pa
       JOIN affiliates af ON af.id = pa.affiliate_id
       LEFT JOIN campaigns c ON c.id = pa.campaign_id

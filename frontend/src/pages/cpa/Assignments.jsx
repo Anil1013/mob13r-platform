@@ -203,12 +203,16 @@ export default function Assignments() {
                 <th style={th}>Publisher Payout</th>
                 <th style={th}>Margin</th>
                 <th style={th}>Hold %</th>
-                <th style={th}>Status</th>
+                <th style={th}>Assignment</th>
+                <th style={th}>Campaign/Group Status</th>
                 <th style={th}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {assignments.map(a => (
+              {assignments.map(a => {
+                const targetStatus = a.campaign_id ? a.campaign_status : a.group_status;
+                const targetLive = targetStatus === "active";
+                return (
                 <tr key={a.id}>
                   <td style={td}>{a.affiliate_name}</td>
                   <td style={td}>{a.campaign_id ? `📢 ${a.campaign_name}` : `🔀 ${a.group_name} (group)`}</td>
@@ -217,17 +221,26 @@ export default function Assignments() {
                   <td style={td}>{a.campaign_id ? (Number(a.advertiser_payout) - Number(a.publisher_payout)).toFixed(2) : "—"}</td>
                   <td style={td}>{a.hold_percent}%</td>
                   <td style={td}>
-                    <span style={badge(a.status === "active" ? "green" : "red")} onClick={() => toggleStatus(a)} title="Click to toggle">
+                    <span style={badge(a.status === "active" ? "green" : "red")} onClick={() => toggleStatus(a)} title="Click to toggle — this only controls whether WE want this assignment active; it doesn't override the campaign's own paused state below">
                       {a.status === "active" ? "● Active" : "● Paused"}
                     </span>
+                  </td>
+                  <td style={td}>
+                    <span style={badge(targetLive ? "green" : "red")} title="Live status of the underlying campaign/group — traffic actually stops here when paused, regardless of the Assignment toggle">
+                      {targetLive ? "● Running" : "⏸ Paused"}
+                    </span>
+                    {a.status === "active" && !targetLive && (
+                      <div style={{ fontSize: 10, color: "#dc2626", marginTop: 4 }}>⚠️ No traffic flowing — {a.campaign_id ? "campaign" : "group"} is paused</div>
+                    )}
                   </td>
                   <td style={td}>
                     <button style={{ ...btnRed, padding: "4px 10px", fontSize: 11 }} onClick={() => remove(a.id)}>Remove</button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {!assignments.length && (
-                <tr><td style={td} colSpan={8}>No assignments yet — create one above.</td></tr>
+                <tr><td style={td} colSpan={9}>No assignments yet — create one above.</td></tr>
               )}
             </tbody>
           </table>
