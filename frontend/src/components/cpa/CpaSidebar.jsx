@@ -89,6 +89,15 @@ export default function CpaSidebar() {
         </div>
       </div>
 
+      <div style={{ padding: "0 10px 6px" }}>
+        <div
+          style={{ ...S.navLink, ...(isPathActive("/cpa/overview") ? S.navLinkActive : {}), display: "flex", alignItems: "center" }}
+          onClick={() => navigate("/cpa/overview")}
+        >
+          <span style={{ marginRight: 10 }}>📊</span>Overview — All Verticals Revenue
+        </div>
+      </div>
+
       {error && <div style={S.errorBox}>{error}</div>}
 
       <div style={S.sectionLabel}>

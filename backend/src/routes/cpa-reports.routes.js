@@ -15,6 +15,7 @@ const ORDER_MAP = {
   campaign: "c.name ASC, clicks DESC",
   geo: "geo ASC, clicks DESC",
   carrier: "carrier ASC, clicks DESC",
+  vertical: "vertical_name ASC, clicks DESC",
   detailed: "clicks DESC",
 };
 
@@ -36,7 +37,7 @@ router.get("/", orgAuth, async (req, res) => {
     let query = `
       SELECT a.name AS advertiser_name, COALESCE(af.name, 'Direct / Unknown') AS publisher_name,
         c.name AS campaign_name, COALESCE(NULLIF(c.geo, ''), 'Unknown') AS geo,
-        COALESCE(NULLIF(c.carrier, ''), 'Unknown') AS carrier${timeDim ? `,\n        ${timeDim.select}` : ""},
+        COALESCE(NULLIF(c.carrier, ''), 'Unknown') AS carrier, v.name AS vertical_name${timeDim ? `,\n        ${timeDim.select}` : ""},
         COUNT(DISTINCT cl.id) AS clicks,
         COUNT(DISTINCT cv.id) FILTER (WHERE cv.status = 'approved') AS conversions_in,
         COUNT(DISTINCT cv.id) FILTER (WHERE cv.status = 'approved' AND cv.is_held = FALSE) AS conversions_out,
@@ -67,7 +68,7 @@ router.get("/", orgAuth, async (req, res) => {
       query += ` AND EXTRACT(HOUR FROM cl.created_at AT TIME ZONE 'Asia/Kolkata') = $${params.length}`;
     }
 
-    query += ` GROUP BY a.id, a.name, af.id, af.name, c.id, c.name, c.geo, c.carrier${timeDim ? `, ${timeDim.groupBy}` : ""}
+    query += ` GROUP BY a.id, a.name, af.id, af.name, c.id, c.name, c.geo, c.carrier, v.id, v.name${timeDim ? `, ${timeDim.groupBy}` : ""}
                ORDER BY ${orderBy} LIMIT 1000`;
 
     const result = await pool.query(query, params);
@@ -77,6 +78,7 @@ router.get("/", orgAuth, async (req, res) => {
       campaign_name: r.campaign_name,
       geo: r.geo,
       carrier: r.carrier,
+      vertical_name: r.vertical_name,
       date: r.date_label ? new Date(r.date_label).toISOString().slice(0, 10) : undefined,
       hour: r.hour_label ? formatHourLabel(r.hour_label) : undefined,
       clicks: Number(r.clicks),
