@@ -43,6 +43,8 @@ export default function CpaReports() {
   const [to, setTo] = useState(today());
   const [advertisers, setAdvertisers] = useState([]);
   const [publishers, setPublishers] = useState([]);
+  const [geoOptions, setGeoOptions] = useState([]);
+  const [carrierOptions, setCarrierOptions] = useState([]);
   const [advertiserId, setAdvertiserId] = useState("");
   const [affiliateId, setAffiliateId] = useState("");
   const [geo, setGeo] = useState("");
@@ -53,7 +55,7 @@ export default function CpaReports() {
   const [toast, setToast] = useState(null);
   const [sort, setSort] = useState(null);
 
-  useEffect(() => { if (!token) navigate("/login"); else { load(); loadAdvertisers(); loadPublishers(); } }, []);
+  useEffect(() => { if (!token) navigate("/login"); else { load(); loadAdvertisers(); loadPublishers(); loadGeoCarrierOptions(); } }, []);
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2800); };
 
   const loadAdvertisers = async () => {
@@ -68,6 +70,18 @@ export default function CpaReports() {
       const res = await fetch(`${API_BASE}/api/affiliates`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (data.status === "SUCCESS") setPublishers(data.data);
+    } catch { /* non-blocking */ }
+  };
+  const loadGeoCarrierOptions = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/campaigns`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (data.status === "SUCCESS") {
+        const geos = [...new Set(data.data.map(c => c.geo).filter(Boolean))].sort();
+        const carriers = [...new Set(data.data.map(c => c.carrier).filter(Boolean))].sort();
+        setGeoOptions(geos);
+        setCarrierOptions(carriers);
+      }
     } catch { /* non-blocking */ }
   };
 
@@ -180,8 +194,14 @@ export default function CpaReports() {
           <option value="">All Publishers</option>
           {publishers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <input style={{ ...filterInput, width: 90 }} placeholder="Geo" value={geo} onChange={e => setGeo(e.target.value)} />
-        <input style={{ ...filterInput, width: 110 }} placeholder="Carrier" value={carrier} onChange={e => setCarrier(e.target.value)} />
+        <select style={{ ...filterSelect, width: 100 }} value={geo} onChange={e => { const v = e.target.value; setGeo(v); load({ geo: v }); }}>
+          <option value="">All Geo</option>
+          {geoOptions.map(g => <option key={g} value={g}>{g}</option>)}
+        </select>
+        <select style={{ ...filterSelect, width: 130 }} value={carrier} onChange={e => { const v = e.target.value; setCarrier(v); load({ carrier: v }); }}>
+          <option value="">All Carriers</option>
+          {carrierOptions.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
         <input style={filterInput} type="date" value={from} onChange={e => setFrom(e.target.value)} />
         <input style={filterInput} type="date" value={to} onChange={e => setTo(e.target.value)} />
         <button style={applyBtn} onClick={() => load()} disabled={loading}>{loading ? "Loading..." : "Apply"}</button>
