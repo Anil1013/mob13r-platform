@@ -58,15 +58,24 @@ export default function CpaReports() {
     } catch { /* non-blocking */ }
   };
 
-  const load = async () => {
-    if (from && to && from > to) return showToast("From date must be before To date");
+  const load = async (overrides = {}) => {
+    const gGroupBy = overrides.groupBy ?? groupBy;
+    const gAdvertiserId = overrides.advertiserId ?? advertiserId;
+    const gAffiliateId = overrides.affiliateId ?? affiliateId;
+    const gGeo = overrides.geo ?? geo;
+    const gCarrier = overrides.carrier ?? carrier;
+    const gFrom = overrides.from ?? from;
+    const gTo = overrides.to ?? to;
+
+    if (gFrom && gTo && gFrom > gTo) return showToast("From date must be before To date");
+    setRows([]); // clear stale rows immediately so mismatched old-shape data never renders under new columns
     setLoading(true);
     try {
-      const params = new URLSearchParams({ group_by: groupBy, from, to });
-      if (advertiserId) params.set("advertiser_id", advertiserId);
-      if (affiliateId) params.set("affiliate_id", affiliateId);
-      if (geo.trim()) params.set("geo", geo.trim().toUpperCase());
-      if (carrier.trim()) params.set("carrier", carrier.trim());
+      const params = new URLSearchParams({ group_by: gGroupBy, from: gFrom, to: gTo });
+      if (gAdvertiserId) params.set("advertiser_id", gAdvertiserId);
+      if (gAffiliateId) params.set("affiliate_id", gAffiliateId);
+      if (gGeo.trim()) params.set("geo", gGeo.trim().toUpperCase());
+      if (gCarrier.trim()) params.set("carrier", gCarrier.trim());
       const res = await fetch(`${API_BASE}/api/cpa-reports?${params}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (data.status === "SUCCESS") {
@@ -127,7 +136,7 @@ export default function CpaReports() {
       </div>
 
       <div style={{ ...filterBar, flexWrap: "wrap" }}>
-        <select style={filterSelect} value={groupBy} onChange={e => setGroupBy(e.target.value)}>
+        <select style={filterSelect} value={groupBy} onChange={e => { const v = e.target.value; setGroupBy(v); load({ groupBy: v }); }}>
           <option value="advertiser_publisher">Detailed (Advertiser × Publisher × Campaign)</option>
           <option value="advertiser">Group by Advertiser</option>
           <option value="publisher">Group by Publisher</option>
@@ -137,11 +146,11 @@ export default function CpaReports() {
           <option value="vertical">Group by Vertical</option>
           <option value="date">Group by Date</option>
         </select>
-        <select style={filterSelect} value={advertiserId} onChange={e => setAdvertiserId(e.target.value)}>
+        <select style={filterSelect} value={advertiserId} onChange={e => { const v = e.target.value; setAdvertiserId(v); load({ advertiserId: v }); }}>
           <option value="">All Advertisers</option>
           {advertisers.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <select style={filterSelect} value={affiliateId} onChange={e => setAffiliateId(e.target.value)}>
+        <select style={filterSelect} value={affiliateId} onChange={e => { const v = e.target.value; setAffiliateId(v); load({ affiliateId: v }); }}>
           <option value="">All Publishers</option>
           {publishers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
