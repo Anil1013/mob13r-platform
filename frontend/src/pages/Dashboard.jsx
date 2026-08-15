@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Navbar from "../components/Navbar";
+import CpaSidebar from "../components/cpa/CpaSidebar";
 import {
   page, pageTitle, topRow, viewTabs, tabBtn, tabBtnActive,
   statRow, statCard, statLabel, statValue,
@@ -162,7 +163,9 @@ export default function Dashboard() {
   return (
     <>
       <Navbar />
-      <div style={page}>
+      <div style={{ display: "flex" }}>
+        <CpaSidebar />
+        <div style={page}>
         <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16}}>
           <h1 style={{...pageTitle, margin:0}}>Traffic Dashboard</h1>
           <div style={{display:"flex", gap:8, alignItems:"center"}}>
@@ -380,6 +383,7 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+      </div>
       </div>
     </>
   );
