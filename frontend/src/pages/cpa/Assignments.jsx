@@ -17,6 +17,9 @@ export default function Assignments() {
   const [saving, setSaving] = useState(false);
   const [targetType, setTargetType] = useState("campaign");
   const [form, setForm] = useState({ affiliate_id: "", target_id: "", publisher_payout: "", hold_percent: "0" });
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     if (!token) { navigate("/login"); return; }
@@ -132,6 +135,43 @@ export default function Assignments() {
     }
   };
 
+  const startEdit = (a) => {
+    setEditingId(a.id);
+    setEditForm({ publisher_payout: a.publisher_payout, hold_percent: a.hold_percent });
+  };
+  const cancelEdit = () => { setEditingId(null); setEditForm(null); };
+
+  const saveEdit = async (a) => {
+    if (editForm.publisher_payout === "" || isNaN(Number(editForm.publisher_payout)) || Number(editForm.publisher_payout) < 0) {
+      return showToast("Publisher payout must be a positive number", "error");
+    }
+    const hold = Number(editForm.hold_percent) || 0;
+    if (hold < 0 || hold > 100) return showToast("Hold % must be between 0 and 100", "error");
+    if (a.campaign_id && Number(editForm.publisher_payout) > Number(a.advertiser_payout)) {
+      return showToast(`Publisher payout can't exceed the advertiser payout ($${a.advertiser_payout})`, "error");
+    }
+
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/publisher-assignments/${a.id}`, {
+        method: "PATCH", headers: authHeaders,
+        body: JSON.stringify({ publisher_payout: Number(editForm.publisher_payout), hold_percent: hold }),
+      });
+      const data = await res.json();
+      if (data.status === "SUCCESS") {
+        setAssignments(list => list.map(x => x.id === a.id ? { ...x, publisher_payout: data.data.publisher_payout, hold_percent: data.data.hold_percent } : x));
+        cancelEdit();
+        showToast("Assignment updated");
+      } else {
+        showToast(data.message || "Failed to update assignment", "error");
+      }
+    } catch {
+      showToast("Network error while updating assignment", "error");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   return (
     <CpaLayout>
       {toast && <div style={{ position: "fixed", top: 80, right: 24, zIndex: 9999, background: toast.type === "error" ? "rgba(239,68,68,0.08)" : "rgba(34,197,94,0.08)", border: `1px solid ${toast.type === "error" ? "#fca5a5" : "#86efac"}`, color: toast.type === "error" ? "#dc2626" : "#16a34a", padding: "12px 20px", borderRadius: 12, fontSize: 13, maxWidth: 400 }}>{toast.msg}</div>}
@@ -212,6 +252,21 @@ export default function Assignments() {
               {assignments.map(a => {
                 const targetStatus = a.campaign_id ? a.campaign_status : a.group_status;
                 const targetLive = targetStatus === "active";
+                if (editingId === a.id) {
+                  return (
+                    <tr key={a.id}>
+                      <td style={td} colSpan={9}>
+                        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 12, color: "#9b7faa" }}>{a.affiliate_name} — {a.campaign_id ? a.campaign_name : `${a.group_name} (group)`}</span>
+                          <input style={{ ...input, width: 160 }} placeholder="Publisher payout" type="number" min="0" step="0.01" value={editForm.publisher_payout} onChange={e => setEditForm(f => ({ ...f, publisher_payout: e.target.value }))} />
+                          <input style={{ ...input, width: 140 }} placeholder="Hold %" type="number" min="0" max="100" step="1" value={editForm.hold_percent} onChange={e => setEditForm(f => ({ ...f, hold_percent: e.target.value }))} />
+                          <button style={{ ...btn, opacity: savingEdit ? 0.7 : 1 }} disabled={savingEdit} onClick={() => saveEdit(a)}>{savingEdit ? "Saving..." : "Save"}</button>
+                          <button style={btnRed} onClick={cancelEdit}>Cancel</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
                 return (
                 <tr key={a.id}>
                   <td style={td}>{a.affiliate_name}</td>
@@ -234,6 +289,7 @@ export default function Assignments() {
                     )}
                   </td>
                   <td style={td}>
+                    <button style={{ ...btn, padding: "4px 10px", fontSize: 11, marginRight: 6 }} onClick={() => startEdit(a)}>Edit</button>
                     <button style={{ ...btnRed, padding: "4px 10px", fontSize: 11 }} onClick={() => remove(a.id)}>Remove</button>
                   </td>
                 </tr>

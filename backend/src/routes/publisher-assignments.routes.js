@@ -94,6 +94,21 @@ router.patch("/:id", orgAuth, async (req, res) => {
       return res.status(400).json({ status: "FAILED", message: "Invalid status" });
     }
 
+    // Same guardrail as creation: a campaign-level assignment's publisher payout
+    // can never exceed what the advertiser pays us for that campaign (no negative
+    // margin). Group-level assignments skip this check — campaigns inside a group
+    // can have different payouts, same as at creation time.
+    if (publisher_payout !== undefined && publisher_payout !== null) {
+      const existing = await pool.query(`SELECT campaign_id FROM publisher_assignments WHERE id = $1 AND org_id = $2`, [req.params.id, req.orgId]);
+      if (!existing.rows.length) return res.status(404).json({ status: "FAILED", message: "Assignment not found" });
+      if (existing.rows[0].campaign_id) {
+        const c = await pool.query(`SELECT payout FROM campaigns WHERE id = $1`, [existing.rows[0].campaign_id]);
+        if (c.rows.length && Number(publisher_payout) > Number(c.rows[0].payout)) {
+          return res.status(400).json({ status: "FAILED", message: `Publisher payout ($${publisher_payout}) can't exceed the advertiser payout ($${c.rows[0].payout}) — that would be a negative margin` });
+        }
+      }
+    }
+
     const result = await pool.query(
       `UPDATE publisher_assignments SET
         publisher_payout = COALESCE($1, publisher_payout),
