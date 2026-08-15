@@ -61,14 +61,6 @@ export default function Assignments() {
     } catch { /* non-blocking */ }
   };
 
-  const selectedTargetPayout = () => {
-    if (targetType === "campaign") {
-      const c = campaigns.find(x => x.id === Number(form.target_id));
-      return c ? Number(c.payout) : null;
-    }
-    return null; // groups can mix campaigns with different payouts, validated server-side per campaign instead
-  };
-
   const create = async () => {
     if (!form.affiliate_id) return showToast("Select a publisher", "error");
     if (!form.target_id) return showToast(targetType === "campaign" ? "Select a campaign" : "Select a traffic group", "error");
@@ -77,11 +69,6 @@ export default function Assignments() {
     }
     const hold = Number(form.hold_percent) || 0;
     if (hold < 0 || hold > 100) return showToast("Hold % must be between 0 and 100", "error");
-
-    const advPayout = selectedTargetPayout();
-    if (advPayout !== null && Number(form.publisher_payout) > advPayout) {
-      return showToast(`Publisher payout can't exceed the advertiser payout ($${advPayout})`, "error");
-    }
 
     setSaving(true);
     try {
@@ -147,9 +134,6 @@ export default function Assignments() {
     }
     const hold = Number(editForm.hold_percent) || 0;
     if (hold < 0 || hold > 100) return showToast("Hold % must be between 0 and 100", "error");
-    if (a.campaign_id && Number(editForm.publisher_payout) > Number(a.advertiser_payout)) {
-      return showToast(`Publisher payout can't exceed the advertiser payout ($${a.advertiser_payout})`, "error");
-    }
 
     setSavingEdit(true);
     try {
@@ -225,7 +209,7 @@ export default function Assignments() {
             </div>
           )}
           <div style={{ fontSize: 11, color: "#9b7faa", marginTop: 4 }}>
-            Hold % = the share of this publisher's conversions we intentionally do NOT forward to their postback (quality control / margin holdback). They still count in our own reporting.
+            Publisher payout can be higher than the advertiser payout — Hold % is how margin is protected in that case (held-back conversions aren't paid out to the publisher, but still count in our own reporting). A red Margin below means this assignment relies on the hold % to stay profitable.
           </div>
 
           <button style={{ ...btn, marginTop: 14, opacity: saving ? 0.7 : 1 }} onClick={create} disabled={saving}>{saving ? "Creating..." : "Create Assignment"}</button>
@@ -273,7 +257,9 @@ export default function Assignments() {
                   <td style={td}>{a.campaign_id ? `📢 ${a.campaign_name}` : `🔀 ${a.group_name} (group)`}</td>
                   <td style={td}>{a.campaign_id ? `${a.currency} ${a.advertiser_payout}` : "varies by campaign"}</td>
                   <td style={td}>{a.currency || ""} {a.publisher_payout}</td>
-                  <td style={td}>{a.campaign_id ? (Number(a.advertiser_payout) - Number(a.publisher_payout)).toFixed(2) : "—"}</td>
+                  <td style={{ ...td, color: (a.campaign_id && Number(a.advertiser_payout) - Number(a.publisher_payout) < 0) ? "#dc2626" : "#16a34a", fontWeight: 700 }}>
+                    {a.campaign_id ? (Number(a.advertiser_payout) - Number(a.publisher_payout)).toFixed(2) : "—"}
+                  </td>
                   <td style={td}>{a.hold_percent}%</td>
                   <td style={td}>
                     <span style={badge(a.status === "active" ? "green" : "red")} onClick={() => toggleStatus(a)} title="Click to toggle — this only controls whether WE want this assignment active; it doesn't override the campaign's own paused state below">
