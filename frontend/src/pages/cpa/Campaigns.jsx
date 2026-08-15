@@ -1,5 +1,5 @@
 import { useEffect, useState, Fragment } from "react";
-import { useNavigate, NavLink } from "react-router-dom";
+import { useNavigate, useSearchParams, NavLink } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
 import { btn, btnRed, input, table, th, td, badge, pageTitle, filterBar, filterSelect } from "../../styles/shared.js";
 
@@ -15,6 +15,7 @@ const emptyForm = { vertical_id: "", advertiser_id: "", name: "", destination_ur
 
 export default function Campaigns() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const token = localStorage.getItem("token");
   const [campaigns, setCampaigns] = useState([]);
   const [verticals, setVerticals] = useState([]);
@@ -26,10 +27,22 @@ export default function Campaigns() {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(null);
   const [form, setForm] = useState(emptyForm);
-  const [filters, setFilters] = useState({ vertical_id: "", advertiser_id: "", status: "" });
+  const [filters, setFilters] = useState({ vertical_id: searchParams.get("vertical_id") || "", advertiser_id: "", status: "" });
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { if (!token) navigate("/login"); else { load(); loadVerticals(); loadAdvertisers(); } }, []);
+  useEffect(() => {
+    if (!token) { navigate("/login"); return; }
+    const vid = searchParams.get("vertical_id") || "";
+    const openNew = searchParams.get("new") === "1";
+    setFilters(f => ({ ...f, vertical_id: vid }));
+    load({ vertical_id: vid, advertiser_id: "", status: "" });
+    loadVerticals();
+    loadAdvertisers();
+    if (openNew) {
+      setForm(f => ({ ...f, vertical_id: vid }));
+      setShowForm(true);
+    }
+  }, []);
 
   const showToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2800); };
   const authHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
