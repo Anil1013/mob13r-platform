@@ -13,15 +13,18 @@ const GROUP_MAP = {
   vertical: { label: "v.name", groupCol: "v.id, v.name" },
 };
 
-// GET /api/cpa-reports?group_by=campaign|affiliate|geo|date|vertical|advertiser_publisher&from=&to=&vertical_id=&campaign_id=&affiliate_id=
+// GET /api/cpa-reports?group_by=campaign|affiliate|geo|date|vertical|advertiser_publisher&from=&to=&vertical_id=&campaign_id=&affiliate_id=&advertiser_id=&geo=&carrier=
 router.get("/", orgAuth, async (req, res) => {
   try {
-    const { group_by = "campaign", from, to, vertical_id, campaign_id, affiliate_id } = req.query;
+    const { group_by = "campaign", from, to, vertical_id, campaign_id, affiliate_id, advertiser_id, geo, carrier } = req.query;
 
-    // Advertiser × Publisher breakdown needs two label columns instead of one.
+    // Advertiser × Publisher breakdown — grouped down to campaign level, so
+    // Campaign Name / Geo / Carrier come along for free (each campaign has exactly one of each).
     if (group_by === "advertiser_publisher") {
       let query = `
         SELECT a.name AS advertiser_name, COALESCE(af.name, 'Direct / Unknown') AS publisher_name,
+          c.name AS campaign_name, COALESCE(NULLIF(c.geo, ''), 'Unknown') AS geo,
+          COALESCE(NULLIF(c.carrier, ''), 'Unknown') AS carrier,
           COUNT(DISTINCT cl.id) AS clicks,
           COUNT(DISTINCT cv.id) FILTER (WHERE cv.status = 'approved') AS conversions_in,
           COUNT(DISTINCT cv.id) FILTER (WHERE cv.status = 'approved' AND cv.is_held = FALSE) AS conversions_out,
@@ -40,12 +43,18 @@ router.get("/", orgAuth, async (req, res) => {
       if (vertical_id) { params.push(vertical_id); query += ` AND c.vertical_id = $${params.length}`; }
       if (campaign_id) { params.push(campaign_id); query += ` AND cl.campaign_id = $${params.length}`; }
       if (affiliate_id) { params.push(affiliate_id); query += ` AND cl.affiliate_id = $${params.length}`; }
-      query += ` GROUP BY a.id, a.name, af.id, af.name ORDER BY clicks DESC LIMIT 500`;
+      if (advertiser_id) { params.push(advertiser_id); query += ` AND c.advertiser_id = $${params.length}`; }
+      if (geo) { params.push(geo); query += ` AND c.geo = $${params.length}`; }
+      if (carrier) { params.push(carrier); query += ` AND c.carrier = $${params.length}`; }
+      query += ` GROUP BY a.id, a.name, af.id, af.name, c.id, c.name, c.geo, c.carrier ORDER BY clicks DESC LIMIT 500`;
 
       const result = await pool.query(query, params);
       const data = result.rows.map(r => ({
         advertiser_name: r.advertiser_name,
         publisher_name: r.publisher_name,
+        campaign_name: r.campaign_name,
+        geo: r.geo,
+        carrier: r.carrier,
         clicks: Number(r.clicks),
         conversions_in: Number(r.conversions_in),
         conversions_out: Number(r.conversions_out),
@@ -89,6 +98,9 @@ router.get("/", orgAuth, async (req, res) => {
     if (vertical_id) { params.push(vertical_id); query += ` AND c.vertical_id = $${params.length}`; }
     if (campaign_id) { params.push(campaign_id); query += ` AND cl.campaign_id = $${params.length}`; }
     if (affiliate_id) { params.push(affiliate_id); query += ` AND cl.affiliate_id = $${params.length}`; }
+    if (advertiser_id) { params.push(advertiser_id); query += ` AND c.advertiser_id = $${params.length}`; }
+    if (geo) { params.push(geo); query += ` AND c.geo = $${params.length}`; }
+    if (carrier) { params.push(carrier); query += ` AND c.carrier = $${params.length}`; }
 
     query += ` GROUP BY ${g.groupCol} ORDER BY clicks DESC LIMIT 500`;
 
