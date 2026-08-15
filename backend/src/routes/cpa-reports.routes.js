@@ -21,8 +21,8 @@ const ORDER_MAP = {
 // date/hour need an EXTRA time dimension added to the grouping grain — every
 // other mode keeps clicks at (advertiser, publisher, campaign) grain only.
 const TIME_DIM = {
-  date: { select: "(cl.created_at AT TIME ZONE 'Asia/Kolkata')::date AS date_label", groupBy: "(cl.created_at AT TIME ZONE 'Asia/Kolkata')::date", order: "date_label ASC, clicks DESC" },
-  hour: { select: "date_trunc('hour', cl.created_at AT TIME ZONE 'Asia/Kolkata') AS hour_label", groupBy: "date_trunc('hour', cl.created_at AT TIME ZONE 'Asia/Kolkata')", order: "hour_label ASC, clicks DESC" },
+  date: { select: "(cl.created_at AT TIME ZONE 'Asia/Kolkata')::date AS date_label", groupBy: "(cl.created_at AT TIME ZONE 'Asia/Kolkata')::date", order: "date_label DESC, clicks DESC" },
+  hour: { select: "date_trunc('hour', cl.created_at AT TIME ZONE 'Asia/Kolkata') AS hour_label", groupBy: "date_trunc('hour', cl.created_at AT TIME ZONE 'Asia/Kolkata')", order: "hour_label DESC, clicks DESC" },
 };
 
 // GET /api/cpa-reports?group_by=detailed|advertiser|publisher|campaign|geo|carrier|date|hour

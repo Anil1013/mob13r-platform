@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
-import { table, th, td, pageTitle, filterBar, filterInput, filterSelect, applyBtn, statRow, statCard, statLabel, statValue } from "../../styles/shared.js";
+import { table, th, td, pageTitle, statRow, statCard, statLabel, statValue } from "../../styles/shared.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 const today = () => new Date().toISOString().slice(0, 10);
@@ -10,6 +10,11 @@ const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0
 const GREEN = "#16a34a";
 const RED = "#dc2626";
 const money = (n) => Number(n || 0).toFixed(2);
+
+// Compact overrides so the whole filter row fits on one line instead of wrapping.
+const compactSelect = { background: "#fff", border: "1px solid rgba(210,160,180,0.35)", color: "#4a2f3f", padding: "6px 8px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontFamily: "'Lora',serif", minWidth: 0 };
+const compactInput = { ...compactSelect, cursor: "text" };
+const compactBtn = { background: "linear-gradient(135deg,#e8856a,#d4709a)", color: "#fff", border: "none", padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Lora',serif", whiteSpace: "nowrap" };
 
 const GROUP_FIELD = {
   detailed: null,
@@ -193,46 +198,46 @@ export default function CpaReports() {
         <div style={statCard}><div style={statLabel}>Margin</div><div style={{ ...statValue, color: totals.margin >= 0 ? GREEN : RED }}>{money(totals.margin)}</div></div>
       </div>
 
-      <div style={{ ...filterBar, flexWrap: "wrap" }}>
-        <select style={filterSelect} value={groupBy} onChange={e => { const v = e.target.value; setGroupBy(v); load({ groupBy: v }); }}>
-          <option value="detailed">No grouping (all rows)</option>
-          <option value="advertiser">Group by Advertiser</option>
-          <option value="publisher">Group by Publisher</option>
-          <option value="campaign">Group by Campaign</option>
-          <option value="geo">Group by Geo</option>
-          <option value="carrier">Group by Carrier</option>
-          <option value="date">Group by Date</option>
-          <option value="hour">Group by Hour</option>
+      <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", overflowX: "auto", alignItems: "center", marginBottom: 18, paddingBottom: 4 }}>
+        <select style={{ ...compactSelect, minWidth: 118 }} value={groupBy} onChange={e => { const v = e.target.value; setGroupBy(v); load({ groupBy: v }); }}>
+          <option value="detailed">No grouping</option>
+          <option value="advertiser">By Advertiser</option>
+          <option value="publisher">By Publisher</option>
+          <option value="campaign">By Campaign</option>
+          <option value="geo">By Geo</option>
+          <option value="carrier">By Carrier</option>
+          <option value="date">By Date</option>
+          <option value="hour">By Hour</option>
         </select>
-        <select style={filterSelect} value={advertiserId} onChange={e => { const v = e.target.value; setAdvertiserId(v); load({ advertiserId: v }); }}>
+        <select style={{ ...compactSelect, maxWidth: 130 }} value={advertiserId} onChange={e => { const v = e.target.value; setAdvertiserId(v); load({ advertiserId: v }); }}>
           <option value="">All Advertisers</option>
           {advertisers.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <select style={filterSelect} value={affiliateId} onChange={e => { const v = e.target.value; setAffiliateId(v); load({ affiliateId: v }); }}>
+        <select style={{ ...compactSelect, maxWidth: 120 }} value={affiliateId} onChange={e => { const v = e.target.value; setAffiliateId(v); load({ affiliateId: v }); }}>
           <option value="">All Publishers</option>
           {publishers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <select style={filterSelect} value={campaignId} onChange={e => { const v = e.target.value; setCampaignId(v); load({ campaignId: v }); }}>
+        <select style={{ ...compactSelect, maxWidth: 130 }} value={campaignId} onChange={e => { const v = e.target.value; setCampaignId(v); load({ campaignId: v }); }}>
           <option value="">All Campaigns</option>
           {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select style={{ ...filterSelect, width: 100 }} value={geo} onChange={e => { const v = e.target.value; setGeo(v); load({ geo: v }); }}>
-          <option value="">All Geo</option>
+        <select style={{ ...compactSelect, width: 70 }} value={geo} onChange={e => { const v = e.target.value; setGeo(v); load({ geo: v }); }}>
+          <option value="">Geo</option>
           {geoOptions.map(g => <option key={g} value={g}>{g}</option>)}
         </select>
-        <select style={{ ...filterSelect, width: 130 }} value={carrier} onChange={e => { const v = e.target.value; setCarrier(v); load({ carrier: v }); }}>
-          <option value="">All Carriers</option>
+        <select style={{ ...compactSelect, width: 90 }} value={carrier} onChange={e => { const v = e.target.value; setCarrier(v); load({ carrier: v }); }}>
+          <option value="">Carrier</option>
           {carrierOptions.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select style={{ ...filterSelect, width: 110 }} value={hourFilter} onChange={e => { const v = e.target.value; setHourFilter(v); load({ hourFilter: v }); }}>
-          <option value="">All Hours</option>
+        <select style={{ ...compactSelect, width: 85 }} value={hourFilter} onChange={e => { const v = e.target.value; setHourFilter(v); load({ hourFilter: v }); }}>
+          <option value="">Hour</option>
           {Array.from({ length: 24 }, (_, h) => (
-            <option key={h} value={h}>{String(h).padStart(2, "0")}:00 IST</option>
+            <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
           ))}
         </select>
-        <input style={filterInput} type="date" value={from} onChange={e => setFrom(e.target.value)} />
-        <input style={filterInput} type="date" value={to} onChange={e => setTo(e.target.value)} />
-        <button style={applyBtn} onClick={() => load()} disabled={loading}>{loading ? "Loading..." : "Apply"}</button>
+        <input style={{ ...compactInput, width: 128 }} type="date" value={from} onChange={e => setFrom(e.target.value)} />
+        <input style={{ ...compactInput, width: 128 }} type="date" value={to} onChange={e => setTo(e.target.value)} />
+        <button style={compactBtn} onClick={() => load()} disabled={loading}>{loading ? "..." : "Apply"}</button>
       </div>
 
       <div style={{ background: "#fff", border: "1px solid #e8d0dc", borderRadius: 16, overflow: "hidden" }}>
