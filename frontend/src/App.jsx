@@ -17,6 +17,11 @@ import CarrierPrefixes from "./pages/CarrierPrefixes";
 import OfferGroups from "./pages/OfferGroups";
 import EmailLogs from "./pages/EmailLogs";
 
+// ---- CPA MODULE (additive) ----
+import CpaCampaigns from "./pages/cpa/Campaigns";
+import CpaAffiliates from "./pages/cpa/Affiliates";
+import CpaConversions from "./pages/cpa/Conversions";
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -42,6 +47,11 @@ export default function App() {
           <Route path="/carrier-prefixes" element={<CarrierPrefixes />} />
           <Route path="/offer-groups" element={<OfferGroups />} />
           <Route path="/email-logs" element={<EmailLogs />} />
+
+          {/* CPA MODULE (additive) */}
+          <Route path="/cpa/campaigns" element={<CpaCampaigns />} />
+          <Route path="/cpa/affiliates" element={<CpaAffiliates />} />
+          <Route path="/cpa/conversions" element={<CpaConversions />} />
         </Route>
 
         {/* Default */}

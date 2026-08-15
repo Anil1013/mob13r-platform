@@ -23,6 +23,14 @@ import saasAuthRoutes from "./routes/saas/auth.routes.js";
 import saasOrgRoutes from "./routes/saas/org.routes.js";
 import saasAdminRoutes from "./routes/saas/admin.routes.js";
 
+// ---- CPA MODULE (additive — verticals / campaigns / affiliates / tracking / postback) ----
+import verticalsRoutes from "./routes/verticals.routes.js";
+import campaignsRoutes from "./routes/campaigns.routes.js";
+import affiliatesRoutes from "./routes/affiliates.routes.js";
+import conversionsRoutes from "./routes/conversions.routes.js";
+import trackRoutes from "./routes/track.routes.js";
+import postbackRoutes from "./routes/postback.routes.js";
+
 const app = express();
 
 app.set("trust proxy", 1);
@@ -104,6 +112,14 @@ app.use("/api", docsRoutes);
 app.use("/api/saas", saasAuthRoutes);
 app.use("/api/saas", saasOrgRoutes);
 app.use("/api/saas", saasAdminRoutes);
+
+// ---- CPA MODULE (additive) ----
+app.use("/api/verticals", verticalsRoutes);
+app.use("/api/campaigns", campaignsRoutes);
+app.use("/api/affiliates", affiliatesRoutes);
+app.use("/api/conversions", conversionsRoutes);
+app.use("/", trackRoutes);     // GET /click?cid=...&aff_id=...
+app.use("/", postbackRoutes);  // GET /postback?click_id=...
 
 // 404 Handler
 app.use((req, res) => {
