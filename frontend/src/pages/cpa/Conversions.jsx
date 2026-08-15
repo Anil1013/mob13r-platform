@@ -10,22 +10,30 @@ export default function Conversions() {
   const token = localStorage.getItem("token");
   const [conversions, setConversions] = useState([]);
   const [summary, setSummary] = useState({ total_conversions: 0, total_payout: 0, today_conversions: 0 });
+  const [toast, setToast] = useState(null);
 
   useEffect(() => { if (!token) navigate("/login"); else load(); }, []);
+  const showToast = (msg, type = "error") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2800); };
 
   const load = async () => {
-    const [cRes, sRes] = await Promise.all([
-      fetch(`${API_BASE}/api/conversions`, { headers: { Authorization: `Bearer ${token}` } }),
-      fetch(`${API_BASE}/api/conversions/summary`, { headers: { Authorization: `Bearer ${token}` } }),
-    ]);
-    const cData = await cRes.json();
-    const sData = await sRes.json();
-    if (cData.status === "SUCCESS") setConversions(cData.data);
-    if (sData.status === "SUCCESS") setSummary(sData.data);
+    try {
+      const [cRes, sRes] = await Promise.all([
+        fetch(`${API_BASE}/api/conversions`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE}/api/conversions/summary`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      const cData = await cRes.json();
+      const sData = await sRes.json();
+      if (cData.status === "SUCCESS") setConversions(cData.data);
+      else showToast(cData.message || "Failed to load conversions");
+      if (sData.status === "SUCCESS") setSummary(sData.data);
+    } catch {
+      showToast("Network error while loading conversions");
+    }
   };
 
   return (
     <CpaLayout>
+      {toast && <div style={{ position: "fixed", top: 80, right: 24, zIndex: 9999, background: "rgba(239,68,68,0.08)", border: "1px solid #fca5a5", color: "#dc2626", padding: "12px 20px", borderRadius: 12, fontSize: 13 }}>{toast.msg}</div>}
       <h1 style={pageTitle}>Conversions</h1>
 
       <div style={{ ...statRow, marginBottom: 20 }}>

@@ -34,12 +34,15 @@ router.get("/", orgAuth, async (req, res) => {
 router.post("/", orgAuth, async (req, res) => {
   try {
     const { name, email } = req.body;
-    if (!name) return res.status(400).json({ status: "FAILED", message: "Affiliate name required" });
+    if (!name || !name.trim()) return res.status(400).json({ status: "FAILED", message: "Affiliate name required" });
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      return res.status(400).json({ status: "FAILED", message: "Invalid email address" });
+    }
     const key = generateAffiliateKey();
     const result = await pool.query(
       `INSERT INTO affiliates (org_id, name, email, affiliate_key, status)
        VALUES ($1,$2,$3,$4,'active') RETURNING *`,
-      [req.orgId, name, email || null, key]
+      [req.orgId, name.trim(), email ? email.trim() : null, key]
     );
     res.json({ status: "SUCCESS", data: result.rows[0] });
   } catch (err) {
@@ -107,12 +110,17 @@ router.get("/:id/postback-urls", orgAuth, async (req, res) => {
 router.post("/:id/postback-urls", orgAuth, async (req, res) => {
   try {
     const { postback_url, campaign_id } = req.body;
-    if (!postback_url) return res.status(400).json({ status: "FAILED", message: "postback_url required" });
+    if (!postback_url || !/^https?:\/\/.+/i.test(postback_url.trim())) {
+      return res.status(400).json({ status: "FAILED", message: "postback_url must start with http:// or https://" });
+    }
+    if (!postback_url.includes("{click_id}")) {
+      return res.status(400).json({ status: "FAILED", message: "postback_url must include the {click_id} macro so we can identify the conversion" });
+    }
     const affCheck = await pool.query(`SELECT id FROM affiliates WHERE id = $1 AND org_id = $2`, [req.params.id, req.orgId]);
     if (!affCheck.rows.length) return res.status(404).json({ status: "FAILED", message: "Affiliate not found" });
     const result = await pool.query(
       `INSERT INTO affiliate_postbacks (affiliate_id, campaign_id, postback_url) VALUES ($1,$2,$3) RETURNING *`,
-      [req.params.id, campaign_id || null, postback_url]
+      [req.params.id, campaign_id || null, postback_url.trim()]
     );
     res.json({ status: "SUCCESS", data: result.rows[0] });
   } catch (err) {

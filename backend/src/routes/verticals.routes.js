@@ -27,14 +27,17 @@ router.get("/", orgAuth, async (req, res) => {
 router.post("/", orgAuth, async (req, res) => {
   try {
     const { name, code, icon, display_order } = req.body;
-    if (!name || !code) {
-      return res.status(400).json({ status: "FAILED", message: "name and code are required" });
+    if (!name || !name.trim()) {
+      return res.status(400).json({ status: "FAILED", message: "name is required" });
+    }
+    if (!code || !/^[A-Za-z0-9_-]{2,20}$/.test(code.trim())) {
+      return res.status(400).json({ status: "FAILED", message: "code must be 2-20 letters/numbers (e.g. CPA, CPI2)" });
     }
     const result = await pool.query(
       `INSERT INTO verticals (org_id, name, code, icon, display_order)
        VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (org_id, code) DO NOTHING RETURNING *`,
-      [req.orgId, name, code.toUpperCase(), icon || "📁", display_order || 0]
+      [req.orgId, name.trim(), code.trim().toUpperCase(), icon || "📁", Number(display_order) || 0]
     );
     if (!result.rows.length) {
       return res.status(400).json({ status: "FAILED", message: "Vertical with this code already exists" });

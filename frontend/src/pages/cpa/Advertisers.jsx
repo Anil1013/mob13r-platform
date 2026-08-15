@@ -4,6 +4,7 @@ import CpaLayout from "../../components/cpa/CpaLayout";
 import { btn, input, table, th, td, badge, pageTitle } from "../../styles/shared.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
+function isValidEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()); }
 
 export default function CpaAdvertisers() {
   const navigate = useNavigate();
@@ -18,31 +19,48 @@ export default function CpaAdvertisers() {
   const showToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2800); };
 
   const load = async () => {
-    const res = await fetch(`${API_BASE}/api/advertisers`, { headers: { Authorization: `Bearer ${token}` } });
-    const data = await res.json();
-    if (Array.isArray(data)) setAdvertisers(data);
+    try {
+      const res = await fetch(`${API_BASE}/api/advertisers`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (Array.isArray(data)) setAdvertisers(data);
+      else showToast(data.message || "Failed to load advertisers", "error");
+    } catch {
+      showToast("Network error while loading advertisers", "error");
+    }
   };
 
   const add = async () => {
     if (!name.trim()) return showToast("Advertiser name required", "error");
+    if (email.trim() && !isValidEmail(email)) return showToast("Enter a valid email address", "error");
     setSaving(true);
-    const res = await fetch(`${API_BASE}/api/advertisers`, {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ name, email }),
-    });
-    const data = await res.json();
-    setSaving(false);
-    if (data && data.id) { setAdvertisers(a => [data, ...a]); setName(""); setEmail(""); showToast("Advertiser added"); }
-    else showToast(data.message || "Failed to add advertiser", "error");
+    try {
+      const res = await fetch(`${API_BASE}/api/advertisers`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: name.trim(), email: email.trim() || null }),
+      });
+      const data = await res.json();
+      if (data && data.id) { setAdvertisers(a => [data, ...a]); setName(""); setEmail(""); showToast("Advertiser added"); }
+      else showToast(data.message || "Failed to add advertiser", "error");
+    } catch {
+      showToast("Network error while adding advertiser", "error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggle = async (a) => {
     const ns = a.status === "active" ? "inactive" : "active";
+    const prev = advertisers;
     setAdvertisers(l => l.map(x => x.id === a.id ? { ...x, status: ns } : x));
-    const res = await fetch(`${API_BASE}/api/advertisers/${a.id}/toggle`, {
-      method: "PATCH", headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) load();
+    try {
+      const res = await fetch(`${API_BASE}/api/advertisers/${a.id}/toggle`, {
+        method: "PATCH", headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { setAdvertisers(prev); showToast("Failed to update status", "error"); }
+    } catch {
+      setAdvertisers(prev);
+      showToast("Network error while updating status", "error");
+    }
   };
 
   return (

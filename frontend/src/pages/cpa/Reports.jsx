@@ -16,22 +16,32 @@ export default function CpaReports() {
   const [rows, setRows] = useState([]);
   const [totals, setTotals] = useState({ clicks: 0, conversions: 0, revenue: 0 });
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState(null);
 
   useEffect(() => { if (!token) navigate("/login"); else load(); }, []);
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2800); };
 
   const load = async () => {
+    if (from && to && from > to) return showToast("From date must be before To date");
     setLoading(true);
-    const params = new URLSearchParams({ group_by: groupBy, from, to });
-    const res = await fetch(`${API_BASE}/api/cpa-reports?${params}`, { headers: { Authorization: `Bearer ${token}` } });
-    const data = await res.json();
-    if (data.status === "SUCCESS") { setRows(data.data); setTotals(data.totals); }
-    setLoading(false);
+    try {
+      const params = new URLSearchParams({ group_by: groupBy, from, to });
+      const res = await fetch(`${API_BASE}/api/cpa-reports?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (data.status === "SUCCESS") { setRows(data.data); setTotals(data.totals); }
+      else showToast(data.message || "Failed to load report");
+    } catch {
+      showToast("Network error while loading report");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const groupLabel = { campaign: "Campaign", affiliate: "Publisher", geo: "Geo", date: "Date", vertical: "Vertical" }[groupBy];
 
   return (
     <CpaLayout>
+      {toast && <div style={{ position: "fixed", top: 80, right: 24, zIndex: 9999, background: "rgba(239,68,68,0.08)", border: "1px solid #fca5a5", color: "#dc2626", padding: "12px 20px", borderRadius: 12, fontSize: 13 }}>{toast}</div>}
       <h1 style={pageTitle}>Reports</h1>
       <p style={{ color: "#9b7faa", fontSize: 13, marginTop: -12, marginBottom: 18 }}>Affise-style breakdown — clicks, conversions, CR%, revenue</p>
 

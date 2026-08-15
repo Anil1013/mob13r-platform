@@ -66,6 +66,15 @@ router.post("/", orgAuth, async (req, res) => {
     if (!vertical_id || !advertiser_id || !name || !destination_url) {
       return res.status(400).json({ status: "FAILED", message: "vertical_id, advertiser_id, name and destination_url are required" });
     }
+    if (!/^https?:\/\/.+/i.test(destination_url.trim())) {
+      return res.status(400).json({ status: "FAILED", message: "destination_url must start with http:// or https://" });
+    }
+    if (payout !== undefined && payout !== null && payout !== "" && (isNaN(Number(payout)) || Number(payout) < 0)) {
+      return res.status(400).json({ status: "FAILED", message: "payout must be a positive number" });
+    }
+    if (daily_cap !== undefined && daily_cap !== null && daily_cap !== "" && (!Number.isInteger(Number(daily_cap)) || Number(daily_cap) < 1)) {
+      return res.status(400).json({ status: "FAILED", message: "daily_cap must be a whole number ≥ 1" });
+    }
 
     let slug = generateSlug();
     // extremely unlikely collision, but guard anyway
@@ -79,13 +88,16 @@ router.post("/", orgAuth, async (req, res) => {
       `INSERT INTO campaigns
         (org_id, vertical_id, advertiser_id, name, tracking_slug, destination_url, payout, currency, geo, daily_cap, status, last_reset_date)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'active',CURRENT_DATE) RETURNING *`,
-      [req.orgId, vertical_id, advertiser_id, name, slug, destination_url,
-       payout || 0, currency || "USD", geo || "", daily_cap || null]
+      [req.orgId, vertical_id, advertiser_id, name.trim(), slug, destination_url.trim(),
+       Number(payout) || 0, (currency || "USD").trim().toUpperCase(), (geo || "").trim().toUpperCase(), daily_cap || null]
     );
     const row = result.rows[0];
     res.json({ status: "SUCCESS", data: { ...row, tracking_url: buildTrackingUrl(row.tracking_slug) } });
   } catch (err) {
     console.error("CREATE CAMPAIGN ERROR:", err.message);
+    if (err.code === "23503") {
+      return res.status(400).json({ status: "FAILED", message: "Invalid vertical or advertiser selected" });
+    }
     res.status(500).json({ status: "FAILED", message: "Failed to create campaign" });
   }
 });
@@ -93,6 +105,24 @@ router.post("/", orgAuth, async (req, res) => {
 router.patch("/:id", orgAuth, async (req, res) => {
   try {
     const { name, destination_url, payout, currency, geo, daily_cap, status } = req.body;
+
+    if (destination_url !== undefined && destination_url !== null && !/^https?:\/\/.+/i.test(String(destination_url).trim())) {
+      return res.status(400).json({ status: "FAILED", message: "destination_url must start with http:// or https://" });
+    }
+    if (payout !== undefined && payout !== null && (isNaN(Number(payout)) || Number(payout) < 0)) {
+      return res.status(400).json({ status: "FAILED", message: "payout must be a positive number" });
+    }
+    if (daily_cap !== undefined && daily_cap !== null && (!Number.isInteger(Number(daily_cap)) || Number(daily_cap) < 1)) {
+      return res.status(400).json({ status: "FAILED", message: "daily_cap must be a whole number ≥ 1" });
+    }
+    if (status !== undefined && status !== null && !["active", "paused"].includes(status)) {
+      return res.status(400).json({ status: "FAILED", message: "Invalid status" });
+    }
+
+    // daily_cap intentionally allows explicit null (clears the cap) — so we only
+    // fall back to the existing value when the key is entirely absent from the request.
+    const hasDailyCap = Object.prototype.hasOwnProperty.call(req.body, "daily_cap");
+
     const result = await pool.query(
       `UPDATE campaigns SET
         name = COALESCE($1, name),
@@ -100,11 +130,13 @@ router.patch("/:id", orgAuth, async (req, res) => {
         payout = COALESCE($3, payout),
         currency = COALESCE($4, currency),
         geo = COALESCE($5, geo),
-        daily_cap = $6,
-        status = COALESCE($7, status)
-       WHERE id = $8 AND org_id = $9 RETURNING *`,
-      [name || null, destination_url || null, payout ?? null, currency || null, geo || null,
-       daily_cap !== undefined ? daily_cap : null, status || null, req.params.id, req.orgId]
+        daily_cap = CASE WHEN $6 THEN $7 ELSE daily_cap END,
+        status = COALESCE($8, status)
+       WHERE id = $9 AND org_id = $10 RETURNING *`,
+      [name?.trim() || null, destination_url?.trim() || null, payout ?? null,
+       currency?.trim().toUpperCase() || null, geo?.trim().toUpperCase() || null,
+       hasDailyCap, hasDailyCap ? (daily_cap === "" ? null : daily_cap) : null,
+       status || null, req.params.id, req.orgId]
     );
     if (!result.rows.length) return res.status(404).json({ status: "FAILED", message: "Campaign not found" });
     const row = result.rows[0];

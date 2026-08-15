@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
+const CODE_RE = /^[A-Za-z0-9_-]{2,20}$/;
 
 export default function CpaSidebar({ onVerticalSelect, selectedVerticalId }) {
   const [verticals, setVerticals] = useState([]);
@@ -9,35 +10,53 @@ export default function CpaSidebar({ onVerticalSelect, selectedVerticalId }) {
   const [newName, setNewName] = useState("");
   const [newCode, setNewCode] = useState("");
   const [adding, setAdding] = useState(false);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
 
+  const flashError = (msg) => { setError(msg); setTimeout(() => setError(null), 3000); };
+
   const load = async () => {
-    const res = await fetch(`${API_BASE}/api/verticals`, { headers: { Authorization: `Bearer ${token}` } });
-    const data = await res.json();
-    if (data.status === "SUCCESS") setVerticals(data.data);
+    try {
+      const res = await fetch(`${API_BASE}/api/verticals`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (data.status === "SUCCESS") setVerticals(data.data);
+    } catch { /* sidebar stays empty, non-blocking for rest of the app */ }
   };
   useEffect(() => { load(); }, []);
 
   const toggle = async (id) => {
+    const prev = verticals;
     setVerticals(v => v.map(x => x.id === id ? { ...x, is_active: !x.is_active } : x));
-    const res = await fetch(`${API_BASE}/api/verticals/${id}/toggle`, {
-      method: "PATCH", headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) load();
+    try {
+      const res = await fetch(`${API_BASE}/api/verticals/${id}/toggle`, {
+        method: "PATCH", headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { setVerticals(prev); flashError("Failed to toggle vertical"); }
+    } catch {
+      setVerticals(prev);
+      flashError("Network error");
+    }
   };
 
   const addVertical = async () => {
-    if (!newName.trim() || !newCode.trim()) return;
+    if (!newName.trim()) return flashError("Enter a name");
+    if (!CODE_RE.test(newCode.trim())) return flashError("Code: 2-20 letters/numbers, e.g. CPL");
     setAdding(true);
-    const res = await fetch(`${API_BASE}/api/verticals`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ name: newName, code: newCode }),
-    });
-    const data = await res.json();
-    if (data.status === "SUCCESS") { setVerticals(v => [...v, data.data]); setNewName(""); setNewCode(""); }
-    setAdding(false);
+    try {
+      const res = await fetch(`${API_BASE}/api/verticals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: newName.trim(), code: newCode.trim() }),
+      });
+      const data = await res.json();
+      if (data.status === "SUCCESS") { setVerticals(v => [...v, data.data]); setNewName(""); setNewCode(""); }
+      else flashError(data.message || "Failed to add vertical");
+    } catch {
+      flashError("Network error");
+    } finally {
+      setAdding(false);
+    }
   };
 
   const visible = verticals.filter(v => showHidden || v.is_active);
@@ -50,6 +69,8 @@ export default function CpaSidebar({ onVerticalSelect, selectedVerticalId }) {
           {showHidden ? "👁️" : "👁️‍🗨️"}
         </button>
       </div>
+
+      {error && <div style={S.errorBox}>{error}</div>}
 
       <div style={S.list}>
         {visible.map(v => (
@@ -68,9 +89,9 @@ export default function CpaSidebar({ onVerticalSelect, selectedVerticalId }) {
       </div>
 
       <div style={S.addRow}>
-        <input style={S.smallInput} placeholder="Name (e.g. CPL)" value={newName} onChange={e => setNewName(e.target.value)} />
-        <input style={{ ...S.smallInput, width: 60 }} placeholder="Code" value={newCode} onChange={e => setNewCode(e.target.value.toUpperCase())} />
-        <button style={S.addBtn} onClick={addVertical} disabled={adding}>+</button>
+        <input style={S.smallInput} placeholder="Name (e.g. CPL)" value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === "Enter" && addVertical()} />
+        <input style={{ ...S.smallInput, width: 60 }} placeholder="Code" maxLength={20} value={newCode} onChange={e => setNewCode(e.target.value.toUpperCase())} onKeyDown={e => e.key === "Enter" && addVertical()} />
+        <button style={{ ...S.addBtn, opacity: adding ? 0.7 : 1 }} onClick={addVertical} disabled={adding}>{adding ? "…" : "+"}</button>
       </div>
 
       <div style={S.divider} />
@@ -91,6 +112,7 @@ const S = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 16px 8px" },
   headerTitle: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#9b7faa" },
   eyeBtn: { background: "none", border: "none", cursor: "pointer", fontSize: 14 },
+  errorBox: { margin: "0 16px 8px", padding: "6px 10px", fontSize: 11, color: "#dc2626", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 8 },
   list: { flex: "0 0 auto", padding: "0 8px", display: "flex", flexDirection: "column", gap: 2, maxHeight: 260, overflowY: "auto" },
   item: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", borderRadius: 10, cursor: "pointer" },
   itemLeft: { display: "flex", alignItems: "center", flex: 1, fontSize: 13, color: "#4a2f3f", fontWeight: 600 },
