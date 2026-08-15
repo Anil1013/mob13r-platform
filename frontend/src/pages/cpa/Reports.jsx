@@ -11,6 +11,17 @@ const GREEN = "#16a34a";
 const RED = "#dc2626";
 const money = (n) => Number(n || 0).toFixed(2);
 
+const MODE_LABEL = {
+  advertiser_publisher: null, // has its own multi-column header, handled separately
+  advertiser: "Advertiser",
+  publisher: "Publisher",
+  campaign: "Campaign",
+  geo: "Geo",
+  carrier: "Carrier",
+  vertical: "Vertical",
+  date: "Date",
+};
+
 export default function CpaReports() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
@@ -18,7 +29,9 @@ export default function CpaReports() {
   const [from, setFrom] = useState(daysAgo(7));
   const [to, setTo] = useState(today());
   const [advertisers, setAdvertisers] = useState([]);
+  const [publishers, setPublishers] = useState([]);
   const [advertiserId, setAdvertiserId] = useState("");
+  const [affiliateId, setAffiliateId] = useState("");
   const [geo, setGeo] = useState("");
   const [carrier, setCarrier] = useState("");
   const [rows, setRows] = useState([]);
@@ -27,7 +40,7 @@ export default function CpaReports() {
   const [toast, setToast] = useState(null);
   const [sort, setSort] = useState({ key: "clicks", dir: "desc" });
 
-  useEffect(() => { if (!token) navigate("/login"); else { load(); loadAdvertisers(); } }, []);
+  useEffect(() => { if (!token) navigate("/login"); else { load(); loadAdvertisers(); loadPublishers(); } }, []);
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2800); };
 
   const loadAdvertisers = async () => {
@@ -37,6 +50,13 @@ export default function CpaReports() {
       if (Array.isArray(data)) setAdvertisers(data);
     } catch { /* non-blocking */ }
   };
+  const loadPublishers = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/affiliates`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (data.status === "SUCCESS") setPublishers(data.data);
+    } catch { /* non-blocking */ }
+  };
 
   const load = async () => {
     if (from && to && from > to) return showToast("From date must be before To date");
@@ -44,6 +64,7 @@ export default function CpaReports() {
     try {
       const params = new URLSearchParams({ group_by: groupBy, from, to });
       if (advertiserId) params.set("advertiser_id", advertiserId);
+      if (affiliateId) params.set("affiliate_id", affiliateId);
       if (geo.trim()) params.set("geo", geo.trim().toUpperCase());
       if (carrier.trim()) params.set("carrier", carrier.trim());
       const res = await fetch(`${API_BASE}/api/cpa-reports?${params}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -61,7 +82,7 @@ export default function CpaReports() {
 
   const isAdvPub = groupBy === "advertiser_publisher";
   const isCampaign = groupBy === "campaign";
-  const groupLabel = { campaign: "Campaign", affiliate: "Publisher", vertical: "Vertical", geo: "Geo", date: "Date" }[groupBy];
+  const groupLabel = MODE_LABEL[groupBy] || "Group";
   const totalCrIn = totals.clicks ? ((totals.conversions_in / totals.clicks) * 100).toFixed(2) : "0.00";
   const totalCrOut = totals.clicks ? ((totals.conversions_out / totals.clicks) * 100).toFixed(2) : "0.00";
 
@@ -86,6 +107,8 @@ export default function CpaReports() {
     </th>
   );
 
+  const colCount = isAdvPub ? 12 : (isCampaign ? 9 : 8);
+
   return (
     <CpaLayout>
       {toast && <div style={{ position: "fixed", top: 80, right: 24, zIndex: 9999, background: "rgba(239,68,68,0.08)", border: "1px solid #fca5a5", color: "#dc2626", padding: "12px 20px", borderRadius: 12, fontSize: 13 }}>{toast}</div>}
@@ -99,22 +122,28 @@ export default function CpaReports() {
         <div style={statCard}><div style={statLabel}>CR In</div><div style={statValue}>{totalCrIn}%</div></div>
         <div style={statCard}><div style={statLabel}>CR Out</div><div style={statValue}>{totalCrOut}%</div></div>
         <div style={statCard}><div style={statLabel}>Revenue</div><div style={{ ...statValue, color: GREEN }}>{money(totals.revenue)}</div></div>
-        {isAdvPub && <div style={statCard}><div style={statLabel}>Publisher Cost</div><div style={{ ...statValue, color: RED }}>{money(totals.publisher_cost)}</div></div>}
-        {isAdvPub && <div style={statCard}><div style={statLabel}>Margin</div><div style={{ ...statValue, color: totals.margin >= 0 ? GREEN : RED }}>{money(totals.margin)}</div></div>}
+        <div style={statCard}><div style={statLabel}>Publisher Cost</div><div style={{ ...statValue, color: RED }}>{money(totals.publisher_cost)}</div></div>
+        <div style={statCard}><div style={statLabel}>Margin</div><div style={{ ...statValue, color: totals.margin >= 0 ? GREEN : RED }}>{money(totals.margin)}</div></div>
       </div>
 
       <div style={{ ...filterBar, flexWrap: "wrap" }}>
         <select style={filterSelect} value={groupBy} onChange={e => setGroupBy(e.target.value)}>
-          <option value="advertiser_publisher">Advertiser × Publisher</option>
+          <option value="advertiser_publisher">Detailed (Advertiser × Publisher × Campaign)</option>
+          <option value="advertiser">Group by Advertiser</option>
+          <option value="publisher">Group by Publisher</option>
           <option value="campaign">Group by Campaign</option>
-          <option value="affiliate">Group by Publisher</option>
-          <option value="vertical">Group by Vertical</option>
           <option value="geo">Group by Geo</option>
+          <option value="carrier">Group by Carrier</option>
+          <option value="vertical">Group by Vertical</option>
           <option value="date">Group by Date</option>
         </select>
         <select style={filterSelect} value={advertiserId} onChange={e => setAdvertiserId(e.target.value)}>
           <option value="">All Advertisers</option>
           {advertisers.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        <select style={filterSelect} value={affiliateId} onChange={e => setAffiliateId(e.target.value)}>
+          <option value="">All Publishers</option>
+          {publishers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <input style={{ ...filterInput, width: 90 }} placeholder="Geo" value={geo} onChange={e => setGeo(e.target.value)} />
         <input style={{ ...filterInput, width: 110 }} placeholder="Carrier" value={carrier} onChange={e => setCarrier(e.target.value)} />
@@ -148,8 +177,8 @@ export default function CpaReports() {
                 <SortTh label="Conv. Out" sortKey="conversions_out" />
                 <SortTh label="CR Out" sortKey="cr_out" />
                 <SortTh label="Revenue" sortKey="revenue" />
-                {isAdvPub && <SortTh label="Publisher Cost" sortKey="publisher_cost" />}
-                {isAdvPub && <SortTh label="Margin" sortKey="margin" />}
+                <SortTh label="Publisher Cost" sortKey="publisher_cost" />
+                <SortTh label="Margin" sortKey="margin" />
               </tr>
             </thead>
             <tbody>
@@ -175,12 +204,12 @@ export default function CpaReports() {
                   <td style={td}>{r.conversions_out}</td>
                   <td style={td}>{r.cr_out}%</td>
                   <td style={{ ...td, color: GREEN, fontWeight: 600 }}>{money(r.revenue)}</td>
-                  {isAdvPub && <td style={{ ...td, color: RED, fontWeight: 600 }}>{money(r.publisher_cost)}</td>}
-                  {isAdvPub && <td style={{ ...td, color: r.margin >= 0 ? GREEN : RED, fontWeight: 700 }}>{money(r.margin)}</td>}
+                  <td style={{ ...td, color: RED, fontWeight: 600 }}>{money(r.publisher_cost)}</td>
+                  <td style={{ ...td, color: r.margin >= 0 ? GREEN : RED, fontWeight: 700 }}>{money(r.margin)}</td>
                 </tr>
               ))}
               {!sortedRows.length && (
-                <tr><td style={td} colSpan={isAdvPub ? 12 : (isCampaign ? 8 : 7)}>{loading ? "Loading..." : "No data for this range."}</td></tr>
+                <tr><td style={td} colSpan={colCount}>{loading ? "Loading..." : "No data for this range."}</td></tr>
               )}
             </tbody>
             {sortedRows.length > 0 && (
@@ -206,8 +235,8 @@ export default function CpaReports() {
                   <td style={td}>{totals.conversions_out}</td>
                   <td style={td}>{totalCrOut}%</td>
                   <td style={{ ...td, color: GREEN }}>{money(totals.revenue)}</td>
-                  {isAdvPub && <td style={{ ...td, color: RED }}>{money(totals.publisher_cost)}</td>}
-                  {isAdvPub && <td style={{ ...td, color: totals.margin >= 0 ? GREEN : RED }}>{money(totals.margin)}</td>}
+                  <td style={{ ...td, color: RED }}>{money(totals.publisher_cost)}</td>
+                  <td style={{ ...td, color: totals.margin >= 0 ? GREEN : RED }}>{money(totals.margin)}</td>
                 </tr>
               </tfoot>
             )}
