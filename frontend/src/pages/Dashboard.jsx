@@ -231,7 +231,7 @@ export default function Dashboard() {
               <div style={{fontSize:11, color:"#64748b", fontWeight:700, textTransform:"uppercase", marginBottom:8}}>🏆 Top Offer (by conversions)</div>
               {(() => {
                 const grouped = data.reduce((acc, r) => {
-                  const key = r.offer || r.service_name || "-";
+                  const key = r.offer_name || r.offer || r.service_name || "Unknown";
                   if (!acc[key]) acc[key] = { conversions: 0, revenue: 0 };
                   acc[key].conversions += Number(r.verified || 0);
                   acc[key].revenue += Number(r.revenue || 0);
@@ -240,7 +240,7 @@ export default function Dashboard() {
                 const top = Object.entries(grouped).sort((a,b) => b[1].conversions - a[1].conversions)[0];
                 return top ? (
                   <div>
-                    <div style={{color:"#f1f5f9", fontWeight:700, fontSize:14}}>{top[0]}</div>
+                    <div style={{color:"#ffffff", fontWeight:700, fontSize:15}}>{top[0]}</div>
                     <div style={{color:"#22c55e", fontSize:13}}>{top[1].conversions} conversions · ${top[1].revenue.toFixed(2)}</div>
                   </div>
                 ) : <div style={{color:"#64748b"}}>No data</div>;
@@ -251,7 +251,7 @@ export default function Dashboard() {
               <div style={{fontSize:11, color:"#64748b", fontWeight:700, textTransform:"uppercase", marginBottom:8}}>⭐ Top Publisher (by revenue)</div>
               {(() => {
                 const grouped = data.reduce((acc, r) => {
-                  const key = r.publisher || "-";
+                  const key = r.publisher_name || r.publisher || "Unknown";
                   if (!acc[key]) acc[key] = { revenue: 0, conversions: 0 };
                   acc[key].revenue += Number(r.publisher_revenue || 0);
                   acc[key].conversions += Number(r.publisher_verified || 0);
@@ -260,7 +260,7 @@ export default function Dashboard() {
                 const top = Object.entries(grouped).sort((a,b) => b[1].revenue - a[1].revenue)[0];
                 return top ? (
                   <div>
-                    <div style={{color:"#f1f5f9", fontWeight:700, fontSize:14}}>{top[0]}</div>
+                    <div style={{color:"#ffffff", fontWeight:700, fontSize:15}}>{top[0]}</div>
                     <div style={{color:"#f59e0b", fontSize:13}}>${top[1].revenue.toFixed(2)} revenue · {top[1].conversions} conv</div>
                   </div>
                 ) : <div style={{color:"#64748b"}}>No data</div>;
@@ -274,8 +274,8 @@ export default function Dashboard() {
                 const top = rows.sort((a,b) => Number(b.cr || 0) - Number(a.cr || 0))[0];
                 return top ? (
                   <div>
-                    <div style={{color:"#f1f5f9", fontWeight:700, fontSize:14}}>{top.offer || top.service_name || "-"}</div>
-                    <div style={{color:"#8b5cf6", fontSize:13}}>{Number(top.cr || 0).toFixed(1)}% CR · {top.carrier} {top.geo}</div>
+                    <div style={{color:"#ffffff", fontWeight:700, fontSize:15}}>{top.offer_name || top.offer || top.service_name || "Unknown"}</div>
+                    <div style={{color:"#8b5cf6", fontSize:13, marginTop:4}}>{Number(top.cr || 0).toFixed(1)}% CR · {top.carrier} {top.geo}</div>
                   </div>
                 ) : <div style={{color:"#64748b"}}>No data</div>;
               })()}
