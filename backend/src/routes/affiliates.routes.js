@@ -12,18 +12,33 @@ function generateAffiliateKey() {
 
 router.get("/", orgAuth, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT af.id, af.name, af.email, af.affiliate_key, af.status, af.created_at, af.postback_url,
+    const { vertical_id } = req.query;
+    const params = [req.orgId];
+    let query = `SELECT af.id, af.name, af.email, af.affiliate_key, af.status, af.created_at, af.postback_url,
          COUNT(DISTINCT cl.id) AS total_clicks,
          COUNT(DISTINCT cv.id) FILTER (WHERE cv.status = 'approved') AS total_conversions,
          COALESCE(SUM(cv.payout) FILTER (WHERE cv.status = 'approved'), 0) AS total_revenue
        FROM affiliates af
        LEFT JOIN clicks cl ON cl.affiliate_id = af.id
        LEFT JOIN conversions cv ON cv.affiliate_id = af.id
-       WHERE af.org_id = $1
-       GROUP BY af.id ORDER BY af.id DESC`,
-      [req.orgId]
-    );
+       WHERE af.org_id = $1`;
+    if (vertical_id) {
+      // A publisher "belongs" to a vertical if they've sent traffic there OR
+      // have an assignment (direct campaign, or a group containing a campaign) in it.
+      params.push(vertical_id);
+      query += ` AND (
+        EXISTS (SELECT 1 FROM clicks c2 JOIN campaigns camp ON camp.id = c2.campaign_id WHERE c2.affiliate_id = af.id AND camp.vertical_id = $${params.length})
+        OR EXISTS (
+          SELECT 1 FROM publisher_assignments pa
+          LEFT JOIN campaigns pc ON pc.id = pa.campaign_id
+          LEFT JOIN campaign_group_items gi ON gi.group_id = pa.group_id
+          LEFT JOIN campaigns gc ON gc.id = gi.campaign_id
+          WHERE pa.affiliate_id = af.id AND (pc.vertical_id = $${params.length} OR gc.vertical_id = $${params.length})
+        )
+      )`;
+    }
+    query += ` GROUP BY af.id ORDER BY af.id DESC`;
+    const result = await pool.query(query, params);
     res.json({ status: "SUCCESS", data: result.rows });
   } catch (err) {
     console.error("GET AFFILIATES ERROR:", err.message);

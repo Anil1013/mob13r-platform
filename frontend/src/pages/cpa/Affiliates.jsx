@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
 import { btn, input, badge, pageTitle } from "../../styles/shared.js";
 
@@ -10,7 +10,9 @@ function isValidUrl(v) { return /^https?:\/\/.+/i.test(v.trim()); }
 
 export default function Affiliates() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const token = localStorage.getItem("token");
+  const verticalId = searchParams.get("vertical_id") || "";
   const [affiliates, setAffiliates] = useState([]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -22,13 +24,14 @@ export default function Affiliates() {
   const [postbackDraft, setPostbackDraft] = useState("");
   const [savingPb, setSavingPb] = useState(false);
 
-  useEffect(() => { if (!token) navigate("/login"); else load(); }, []);
+  useEffect(() => { if (!token) navigate("/login"); else load(); }, [searchParams.get("vertical_id")]);
   const showToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2800); };
   const authHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
 
   const load = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/affiliates`, { headers: { Authorization: `Bearer ${token}` } });
+      const params = verticalId ? `?vertical_id=${verticalId}` : "";
+      const res = await fetch(`${API_BASE}/api/affiliates${params}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (data.status === "SUCCESS") setAffiliates(data.data);
       else showToast(data.message || "Failed to load publishers", "error");
@@ -131,6 +134,7 @@ export default function Affiliates() {
         <div>
           <h1 style={pageTitle}>Publishers</h1>
           <p style={{ color: "#9b7faa", fontSize: 13 }}>{affiliates.length} publishers · each has one postback URL — editable anytime, never duplicated</p>
+          {verticalId && <p style={{ color: "#9b7faa", fontSize: 12, marginTop: 2 }}>Filtered to the vertical selected in the sidebar (only publishers with traffic/assignments there) — click it again to clear.</p>}
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <input style={{ ...input, width: 200 }} placeholder="Publisher name *" value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} />

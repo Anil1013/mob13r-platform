@@ -1,5 +1,5 @@
 import { useEffect, useState, Fragment } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
 import { btn, input, table, th, td, badge, pageTitle } from "../../styles/shared.js";
 
@@ -11,7 +11,9 @@ function buildPostbackUrl(advKey) {
 
 export default function CpaAdvertisers() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const token = localStorage.getItem("token");
+  const verticalId = searchParams.get("vertical_id") || "";
   const [advertisers, setAdvertisers] = useState([]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -20,12 +22,13 @@ export default function CpaAdvertisers() {
   const [expandedId, setExpandedId] = useState(null);
   const [regenerating, setRegenerating] = useState(false);
 
-  useEffect(() => { if (!token) navigate("/login"); else load(); }, []);
+  useEffect(() => { if (!token) navigate("/login"); else load(); }, [searchParams.get("vertical_id")]);
   const showToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2800); };
 
   const load = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/advertisers`, { headers: { Authorization: `Bearer ${token}` } });
+      const params = verticalId ? `?vertical_id=${verticalId}` : "";
+      const res = await fetch(`${API_BASE}/api/advertisers${params}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (Array.isArray(data)) setAdvertisers(data);
       else showToast(data.message || "Failed to load advertisers", "error");
@@ -98,6 +101,7 @@ export default function CpaAdvertisers() {
         <div>
           <h1 style={pageTitle}>Advertisers</h1>
           <p style={{ color: "#9b7faa", fontSize: 13 }}>{advertisers.length} advertisers · each has its own unique postback URL</p>
+          {verticalId && <p style={{ color: "#9b7faa", fontSize: 12, marginTop: 2 }}>Filtered to the vertical selected in the sidebar (only advertisers with a campaign there) — click it again to clear.</p>}
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <input style={{ ...input, width: 220 }} placeholder="Advertiser name *" value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} />

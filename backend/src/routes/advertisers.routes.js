@@ -7,10 +7,15 @@ const router = express.Router();
 
 router.get("/", orgAuth, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT *, ROW_NUMBER() OVER (ORDER BY created_at ASC) AS seq_id FROM advertisers WHERE org_id = $1 ORDER BY created_at DESC`,
-      [req.orgId]
-    );
+    const { vertical_id } = req.query;
+    const params = [req.orgId];
+    let query = `SELECT *, ROW_NUMBER() OVER (ORDER BY created_at ASC) AS seq_id FROM advertisers WHERE org_id = $1`;
+    if (vertical_id) {
+      params.push(vertical_id);
+      query += ` AND EXISTS (SELECT 1 FROM campaigns c WHERE c.advertiser_id = advertisers.id AND c.vertical_id = $${params.length})`;
+    }
+    query += ` ORDER BY created_at DESC`;
+    const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ message: "Server error" });
