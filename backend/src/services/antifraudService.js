@@ -131,18 +131,25 @@ export const executeWorkflowSteps = async (offer, runtime) => {
     if (offer.has_status_check && offer.check_status_url) {
       const sUrl = resolveWorkflowUrl(offer.check_status_url, runtime);
       const sCheck = await axios.get(sUrl, { timeout: 5000 });
-      
-      const body = sCheck.data;
-      const bodyStr = JSON.stringify(body).toLowerCase();
 
-      // Check for common subscription keywords
-      if (
-        bodyStr.includes("already") ||
-        bodyStr.includes("subscribed") ||
-        bodyStr.includes("active") ||
-        body?.status === "active" ||
-        body?.subscribed === true
-      ) {
+      const body = sCheck.data || {};
+
+      // IMPORTANT: only trust precise, structured fields here — NOT naive
+      // substring matching on JSON.stringify(body). A response like
+      // {"status":"inactive"} or {"subscribed":false} contains the
+      // substrings "active"/"subscribed" too, which would wrongly block
+      // a brand-new, never-subscribed user as "already subscribed" and
+      // silently kill real conversions.
+      const statusStr = String(body?.status ?? "").toLowerCase();
+      const isAlreadySubscribed =
+        statusStr === "active" ||
+        statusStr === "subscribed" ||
+        statusStr === "already_subscribed" ||
+        body?.subscribed === true ||
+        body?.is_subscribed === true ||
+        body?.already_subscribed === true;
+
+      if (isAlreadySubscribed) {
         result.block = true; // User already subscribed, block the flow
         return result;
       }
