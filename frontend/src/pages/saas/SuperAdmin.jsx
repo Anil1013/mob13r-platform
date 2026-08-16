@@ -248,11 +248,11 @@ export default function SuperAdmin() {
             <tbody>
               {loading ? (
                 <tr><td colSpan="11" style={{...S.td,textAlign:"center",padding:40,color:"#475569"}}>Loading...</td></tr>
-              ) : orgs.map(org => {
+              ) : orgs.map((org, idx) => {
                 const primaryUser = (org.users || []).find(u => u.id) || {};
                 return (
                   <tr key={org.id} style={{opacity: org.status==="suspended"?0.6:1}}>
-                    <td style={S.td}><span style={S.idBadge}>{org.id}</span></td>
+                    <td style={S.td}><span style={S.idBadge} title={`Database ID: ${org.id}`}>{idx + 1}</span></td>
                     <td style={S.td}>
                       <div style={{color:"#f1f5f9",fontWeight:500}}>{org.name}</div>
                       <div style={{color:"#475569",fontSize:11}}>{org.slug}</div>
