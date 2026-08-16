@@ -88,13 +88,21 @@ router.get("/click", async (req, res) => {
       if (!campaign) return res.status(429).send("No eligible campaign in this traffic group right now (all paused or capped)");
     }
 
-    // reset daily counter at IST midnight
-    await pool.query(
+    // reset daily counter at IST midnight — and refresh our in-memory copy so the
+    // cap check right below sees the FRESH count, not the value from before reset
+    // (without this, the first click of a new day on a campaign that hit its cap
+    // yesterday would be wrongly rejected as still capped).
+    const resetRes = await pool.query(
       `UPDATE campaigns SET today_clicks = 0, today_conversions = 0,
          last_reset_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
-       WHERE id = $1 AND last_reset_date < (NOW() AT TIME ZONE 'Asia/Kolkata')::date`,
+       WHERE id = $1 AND last_reset_date < (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+       RETURNING today_clicks, today_conversions`,
       [campaign.id]
     );
+    if (resetRes.rows.length) {
+      campaign.today_clicks = resetRes.rows[0].today_clicks;
+      campaign.today_conversions = resetRes.rows[0].today_conversions;
+    }
 
     if (campaign.daily_cap && campaign.today_clicks >= campaign.daily_cap) {
       return res.status(429).send("Daily cap reached");
