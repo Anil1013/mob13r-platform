@@ -202,6 +202,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       ua,
       userAgent: ua,
       publisher_id: publisher.id,
+      pub_id: publisher.id,
       offer_id: offer.id,
       headers_b64: encodeHeadersB64(req.headers)
     };
@@ -216,6 +217,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     // Build payload — only is_active=true params
     const sessionToken = uuidv4();
     runtime.session_token = sessionToken;
+    runtime.click_id = sessionToken;
 
     const payload = buildPayload(allParams, runtime, true); // pin_send: skip otp/pin
 
