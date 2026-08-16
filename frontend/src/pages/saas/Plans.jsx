@@ -1,136 +1,164 @@
 import { useEffect, useState } from "react";
 import Navbar from "../../components/Navbar";
 const API_BASE = "https://backend.mob13r.com";
-const PLANS = [
-  { id:"starter", name:"Starter", price:49, publishers:5, offers:15, conversions:"2,500", monthly_conversions:2500, max_publishers:5, max_offers:15, features:["5 Publishers","15 Offers","2.5K Conversions/mo","Basic Dashboard","Landing Builder"], color:"#3b82f6" },
-  { id:"growth", name:"Growth", price:99, publishers:25, offers:50, conversions:"7,500", monthly_conversions:7500, max_publishers:25, max_offers:50, features:["25 Publishers","50 Offers","7.5K Conversions/mo","Advanced Analytics","Landing Builder","Priority Support"], color:"#8b5cf6", popular:true },
-  { id:"pro", name:"Pro", price:199, publishers:"Unlimited", offers:"Unlimited", conversions:"30,000", monthly_conversions:30000, max_publishers:999, max_offers:999, features:["Unlimited Publishers","Unlimited Offers","30K Conversions/mo","All Features","Dedicated Support","Custom Integrations"], color:"#22c55e" },
-];
+
+const ICONS = { CPA: "💰", CPI: "📲", CPS: "🛒", DCB: "📶", MVAS: "📱" };
+
 export default function Plans() {
-  const [currentPlan, setCurrentPlan] = useState("starter");
-  const [orgStatus, setOrgStatus] = useState("active");
-  const [requested, setRequested] = useState(null);
+  const [modulePlans, setModulePlans] = useState([]);
+  const [activeCodes, setActiveCodes] = useState([]);
+  const [selected, setSelected] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
+
+  const showToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3500); };
+
   useEffect(() => {
-    const org = JSON.parse(localStorage.getItem("org") || "{}");
-    if (org.plan) setCurrentPlan(org.plan);
-    if (org.status) setOrgStatus(org.status);
+    const token = localStorage.getItem("token");
+    Promise.all([
+      fetch(`${API_BASE}/api/saas/module-plans`).then(r => r.json()),
+      fetch(`${API_BASE}/api/saas/my-modules`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+    ]).then(([plansRes, myRes]) => {
+      if (plansRes.success) setModulePlans(plansRes.data);
+      if (myRes.success) { setActiveCodes(myRes.data.active_codes); setSelected(myRes.data.active_codes); }
+    }).catch(() => showToast("Failed to load plans", "error"))
+      .finally(() => setLoading(false));
   }, []);
-  const showToast = (msg, type="success") => {
-    setToast({msg, type});
-    setTimeout(() => setToast(null), 3000);
-  };
-  const handleRequest = async (plan) => {
-    if (plan.id === currentPlan) return;
-    setRequested(plan.id);
+
+  const toggle = (code) => setSelected(s => s.includes(code) ? s.filter(c => c !== code) : [...s, code]);
+  const total = modulePlans.filter(m => selected.includes(m.code)).reduce((sum, m) => sum + Number(m.price_monthly), 0);
+  const changed = JSON.stringify([...selected].sort()) !== JSON.stringify([...activeCodes].sort());
+
+  const requestChange = async () => {
+    if (!selected.length) return showToast("Select at least one module", "error");
+    setSubmitting(true);
     try {
       const token = localStorage.getItem("token");
-      const org = JSON.parse(localStorage.getItem("org") || "{}");
-      await fetch(`${API_BASE}/api/saas/plan-request`, {
+      const res = await fetch(`${API_BASE}/api/saas/plan-request`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ plan: plan.id, org_id: org.id, org_name: org.name }),
+        body: JSON.stringify({ modules: selected }),
       });
-      showToast(`Plan upgrade request sent! Admin will approve shortly.`);
+      const data = await res.json();
+      if (data.success) showToast(data.message || "Request sent — admin will review shortly");
+      else showToast(data.message || "Failed to submit request", "error");
     } catch {
-      showToast("Request sent! Admin will contact you soon.");
+      showToast("Network error while submitting request", "error");
+    } finally {
+      setSubmitting(false);
     }
   };
+
   return (
     <>
       <Navbar />
       <div style={S.page}>
         <div style={S.glow1}/><div style={S.glow2}/>
-      {toast && (
-        <div style={{position:"fixed",top:24,right:24,zIndex:9999,background:toast.type==="error"?"rgba(239,68,68,0.15)":"rgba(34,197,94,0.15)",border:`1px solid ${toast.type==="error"?"rgba(239,68,68,0.3)":"rgba(34,197,94,0.3)"}`,color:toast.type==="error"?"#ef4444":"#22c55e",padding:"12px 20px",borderRadius:12,fontSize:13,fontWeight:500}}>
-          {toast.msg}
-        </div>
-      )}
-      <div style={S.inner}>
-        <div style={{textAlign:"center",marginBottom:48}}>
-          <h1 style={S.title}>Choose Your Plan</h1>
-          <p style={S.sub}>Scale your affiliate marketing platform</p>
-          {orgStatus === "pending" && (
-            <div style={S.pendingBanner}>
-              ⏳ Your account is pending approval. Admin will activate it shortly.
-            </div>
-          )}
-        </div>
-        <div style={S.grid}>
-          {PLANS.map((plan) => {
-            const isCurrent = currentPlan === plan.id;
-            const isRequested = requested === plan.id;
-            return (
-              <div key={plan.name} style={{...S.card, border:`1px solid ${plan.popular?"rgba(139,92,246,0.4)":"rgba(255,255,255,0.07)"}`, position:"relative"}}>
-                {plan.popular && <div style={{...S.badge, background:plan.color}}>Most Popular</div>}
-                <div style={{...S.planIcon, background:`${plan.color}20`, color:plan.color}}>{plan.name[0]}</div>
-                <h2 style={{...S.planName, color:plan.color}}>{plan.name}</h2>
-                <div style={S.price}>
-                  <span style={S.dollar}>$</span>
-                  <span style={S.amount}>{plan.price}</span>
-                  <span style={S.period}>/mo</span>
-                </div>
-                <div style={S.divider}/>
-                <ul style={S.features}>
-                  {plan.features.map(f => (
-                    <li key={f} style={S.feature}>
-                      <span style={{color:plan.color}}>✓</span> {f}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  onClick={() => handleRequest(plan)}
-                  disabled={isCurrent || isRequested}
-                  style={{
-                    ...S.btn,
-                    background: isCurrent ? `${plan.color}20` : isRequested ? "rgba(255,255,255,0.05)" : plan.color,
-                    color: isCurrent ? plan.color : isRequested ? "#475569" : "#fff",
-                    border: isCurrent ? `1px solid ${plan.color}` : "none",
-                    cursor: isCurrent || isRequested ? "default" : "pointer",
-                    opacity: isRequested ? 0.7 : 1,
-                  }}
-                >
-                  {isCurrent ? "✓ Current Plan" : isRequested ? "⏳ Request Sent" : "Request Upgrade"}
-                </button>
+        {toast && (
+          <div style={{position:"fixed",top:24,right:24,zIndex:9999,background:toast.type==="error"?"rgba(239,68,68,0.15)":"rgba(34,197,94,0.15)",border:`1px solid ${toast.type==="error"?"rgba(239,68,68,0.3)":"rgba(34,197,94,0.3)"}`,color:toast.type==="error"?"#ef4444":"#22c55e",padding:"12px 20px",borderRadius:12,fontSize:13,fontWeight:500,maxWidth:380}}>
+            {toast.msg}
+          </div>
+        )}
+        <div style={S.inner}>
+          <div style={{textAlign:"center",marginBottom:40}}>
+            <h1 style={S.title}>Your Modules</h1>
+            <p style={S.sub}>Pay only for what you use — toggle modules on or off, we'll review and apply your change</p>
+          </div>
+
+          {loading ? (
+            <p style={{textAlign:"center",color:"#475569"}}>Loading...</p>
+          ) : (
+            <>
+              <div style={S.grid}>
+                {modulePlans.map(m => {
+                  const isActive = activeCodes.includes(m.code);
+                  const isSelected = selected.includes(m.code);
+                  return (
+                    <div key={m.code} onClick={() => toggle(m.code)}
+                      style={{...S.card, border:`1px solid ${isSelected ? "rgba(34,197,94,0.4)" : "rgba(255,255,255,0.07)"}`, cursor:"pointer", position:"relative"}}>
+                      {isActive && <div style={S.currentBadge}>Currently Active</div>}
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{fontSize:24}}>{ICONS[m.code] || "📦"}</span>
+                        <h2 style={S.planName}>{m.name}</h2>
+                        <span style={{marginLeft:"auto", width:22, height:22, borderRadius:6, border:`2px solid ${isSelected?"#22c55e":"rgba(255,255,255,0.15)"}`, background: isSelected?"#22c55e":"transparent", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:13, fontWeight:800}}>
+                          {isSelected ? "✓" : ""}
+                        </span>
+                      </div>
+                      <div style={S.price}>
+                        <span style={S.dollar}>$</span>
+                        <span style={S.amount}>{m.price_monthly}</span>
+                        <span style={S.period}>/mo</span>
+                      </div>
+                      <p style={S.desc}>{m.description}</p>
+                      <div style={S.limitsRow}>
+                        {m.max_campaigns != null && <span style={S.limitPill}>{m.max_campaigns} campaigns</span>}
+                        {m.max_publishers != null && <span style={S.limitPill}>{m.max_publishers} publishers</span>}
+                        {m.max_offers != null && <span style={S.limitPill}>{m.max_offers} offers</span>}
+                        {m.monthly_conversions != null && <span style={S.limitPill}>{m.monthly_conversions.toLocaleString()} conv/mo</span>}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
-        <div style={S.infoBox}>
-          <h3 style={{color:"#f1f5f9",marginBottom:12,fontSize:16}}>💡 How it works</h3>
-          <p style={{color:"#475569",fontSize:13,lineHeight:1.7,margin:0}}>
-            Click "Request Upgrade" on any plan. Our team will review and activate your plan manually —
-            no automatic payment required. We'll contact you via email to confirm.
-          </p>
-        </div>
-        <div style={{textAlign:"center",marginTop:24}}>
-          <a href="/dashboard" style={{color:"#475569",fontSize:14,textDecoration:"none"}}>← Back to Dashboard</a>
-        </div>
+
+              <div style={S.summaryBar}>
+                <div>
+                  <div style={{fontSize:12,color:"#94a3b8"}}>Selected modules</div>
+                  <div style={{fontSize:14,color:"#f1f5f9",fontWeight:600}}>{selected.length ? selected.join(", ") : "None selected"}</div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:12,color:"#94a3b8"}}>Estimated total</div>
+                  <div style={{fontSize:24,color:"#22c55e",fontWeight:800}}>${total}/mo</div>
+                </div>
+              </div>
+
+              <button
+                onClick={requestChange}
+                disabled={submitting || !changed}
+                style={{...S.btn, opacity: (submitting || !changed) ? 0.5 : 1, cursor: (submitting || !changed) ? "default" : "pointer"}}
+              >
+                {submitting ? "Sending..." : !changed ? "No changes to request" : "Request This Change"}
+              </button>
+
+              <div style={S.infoBox}>
+                <h3 style={{color:"#f1f5f9",marginBottom:12,fontSize:16}}>💡 How it works</h3>
+                <p style={{color:"#475569",fontSize:13,lineHeight:1.7,margin:0}}>
+                  Toggle the modules you want, then click "Request This Change". Our team reviews and activates it
+                  manually — no automatic payment required. We'll follow up by email to confirm and arrange billing.
+                </p>
+              </div>
+            </>
+          )}
+
+          <div style={{textAlign:"center",marginTop:24}}>
+            <a href="/dashboard" style={{color:"#475569",fontSize:14,textDecoration:"none"}}>← Back to Dashboard</a>
+          </div>
         </div>
       </div>
     </>
   );
 }
+
 const S = {
   page:{minHeight:"100vh",background:"#050810",padding:"60px 20px",position:"relative",overflow:"hidden"},
   glow1:{position:"absolute",width:600,height:600,borderRadius:"50%",background:"radial-gradient(circle,rgba(59,130,246,0.08) 0%,transparent 70%)",top:-200,left:-200,pointerEvents:"none"},
   glow2:{position:"absolute",width:400,height:400,borderRadius:"50%",background:"radial-gradient(circle,rgba(139,92,246,0.08) 0%,transparent 70%)",bottom:-100,right:0,pointerEvents:"none"},
   inner:{maxWidth:1100,margin:"0 auto",position:"relative",zIndex:1},
   title:{fontFamily:"Syne,sans-serif",fontSize:40,fontWeight:700,color:"#f1f5f9",marginBottom:12},
-  sub:{color:"#475569",fontSize:16},
-  pendingBanner:{background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.3)",color:"#f59e0b",padding:"12px 20px",borderRadius:12,fontSize:13,fontWeight:500,marginTop:16,display:"inline-block"},
-  grid:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:24},
-  card:{background:"#0d1326",borderRadius:24,padding:32,display:"flex",flexDirection:"column",gap:16},
-  badge:{position:"absolute",top:-12,left:"50%",transform:"translateX(-50%)",padding:"4px 16px",borderRadius:999,fontSize:12,fontWeight:700,color:"#fff",whiteSpace:"nowrap"},
-  planIcon:{width:48,height:48,borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:800},
-  planName:{fontSize:22,fontWeight:700,margin:0},
-  price:{display:"flex",alignItems:"baseline",gap:4},
-  dollar:{fontSize:20,color:"#94a3b8",fontWeight:600},
-  amount:{fontSize:48,fontWeight:800,color:"#f1f5f9"},
-  period:{fontSize:14,color:"#475569"},
-  divider:{height:1,background:"rgba(255,255,255,0.06)"},
-  features:{listStyle:"none",padding:0,margin:0,display:"flex",flexDirection:"column",gap:10,flex:1},
-  feature:{color:"#94a3b8",fontSize:14,display:"flex",gap:8,alignItems:"center"},
-  btn:{width:"100%",padding:"14px",borderRadius:12,fontSize:15,fontWeight:600,marginTop:8},
-  infoBox:{background:"#0d1326",border:"1px solid rgba(255,255,255,0.07)",borderRadius:16,padding:24,marginTop:32},
+  sub:{color:"#475569",fontSize:15},
+  grid:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:20,marginBottom:24},
+  card:{background:"#0d1326",borderRadius:20,padding:24,display:"flex",flexDirection:"column",gap:10},
+  currentBadge:{position:"absolute",top:-10,left:16,padding:"3px 12px",borderRadius:999,fontSize:10,fontWeight:700,color:"#0b1220",background:"#22c55e"},
+  planName:{fontSize:17,fontWeight:700,margin:0,color:"#f1f5f9"},
+  price:{display:"flex",alignItems:"baseline",gap:3},
+  dollar:{fontSize:16,color:"#94a3b8",fontWeight:600},
+  amount:{fontSize:32,fontWeight:800,color:"#f1f5f9"},
+  period:{fontSize:12,color:"#475569"},
+  desc:{color:"#94a3b8",fontSize:12.5,lineHeight:1.5,margin:0},
+  limitsRow:{display:"flex",flexWrap:"wrap",gap:6,marginTop:4},
+  limitPill:{fontSize:10.5,color:"#64748b",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.06)",padding:"3px 8px",borderRadius:8},
+  summaryBar:{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0d1326",border:"1px solid rgba(255,255,255,0.07)",borderRadius:16,padding:"18px 24px",marginBottom:16},
+  btn:{width:"100%",padding:"14px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#3b82f6,#6366f1)",color:"#fff",fontSize:15,fontWeight:600},
+  infoBox:{background:"#0d1326",border:"1px solid rgba(255,255,255,0.07)",borderRadius:16,padding:24,marginTop:24},
 };

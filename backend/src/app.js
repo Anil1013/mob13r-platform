@@ -22,6 +22,7 @@ import dashboardReportRoutes from "./routes/dashboard.report.routes.js";
 import saasAuthRoutes from "./routes/saas/auth.routes.js";
 import saasOrgRoutes from "./routes/saas/org.routes.js";
 import saasAdminRoutes from "./routes/saas/admin.routes.js";
+import moduleplansRoutes from "./routes/saas/module-plans.routes.js";
 
 // ---- CPA MODULE (additive — verticals / campaigns / affiliates / tracking / postback) ----
 import verticalsRoutes from "./routes/verticals.routes.js";
@@ -115,6 +116,7 @@ app.use("/api", docsRoutes);
 app.use("/api/saas", saasAuthRoutes);
 app.use("/api/saas", saasOrgRoutes);
 app.use("/api/saas", saasAdminRoutes);
+app.use("/api/saas", moduleplansRoutes);
 
 // ---- CPA MODULE (additive) ----
 app.use("/api/verticals", verticalsRoutes);

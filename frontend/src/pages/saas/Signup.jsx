@@ -1,25 +1,38 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 const API_BASE = "https://backend.mob13r.com";
 
-const MODULES = [
-  { code: "CPA", label: "CPA", icon: "💰", desc: "Cost-per-action campaigns — advertiser payout, publisher payout, hold %." },
-  { code: "CPI", label: "CPI", icon: "📲", desc: "Cost-per-install campaigns for app installs." },
-  { code: "CPS", label: "CPS", icon: "🛒", desc: "Cost-per-sale campaigns for ecommerce/affiliate sales." },
-  { code: "DCB", label: "DCB", icon: "📶", desc: "Direct carrier billing campaigns (CPA-suite version)." },
-  { code: "MVAS", label: "In-app MVAS", icon: "📱", desc: "The full OTP/PIN-based mobile billing suite — Offers, Publishers, Assign Offers, Landing Builder, Carriers, Pin sessions and more." },
-];
+const MODULE_DESC = {
+  CPA: { icon: "💰", desc: "Cost-per-action campaigns — advertiser payout, publisher payout, hold %." },
+  CPI: { icon: "📲", desc: "Cost-per-install campaigns for app installs." },
+  CPS: { icon: "🛒", desc: "Cost-per-sale campaigns for ecommerce/affiliate sales." },
+  DCB: { icon: "📶", desc: "Direct carrier billing campaigns (CPA-suite version)." },
+  MVAS: { icon: "📱", desc: "The full OTP/PIN-based mobile billing suite — Offers, Publishers, Assign Offers, Landing Builder, Carriers, Pin sessions and more." },
+};
 
 export default function Signup() {
   const [form, setForm] = useState({ company_name: "", email: "", password: "", confirm: "" });
   const [selected, setSelected] = useState([]);
+  const [modulePlans, setModulePlans] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/saas/module-plans`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setModulePlans(d.data); })
+      .catch(() => {});
+  }, []);
+
+  const MODULES = modulePlans.length
+    ? modulePlans.map(p => ({ code: p.code, label: p.name, price: Number(p.price_monthly), ...MODULE_DESC[p.code] }))
+    : Object.keys(MODULE_DESC).map(code => ({ code, label: code, price: null, ...MODULE_DESC[code] }));
 
   const toggleModule = (code) => {
     setSelected(s => s.includes(code) ? s.filter(c => c !== code) : [...s, code]);
   };
   const selectAll = () => setSelected(MODULES.map(m => m.code));
   const allSelected = selected.length === MODULES.length;
+  const totalPrice = MODULES.filter(m => selected.includes(m.code)).reduce((sum, m) => sum + (m.price || 0), 0);
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -81,14 +94,21 @@ export default function Signup() {
                     <div style={{display:"flex",alignItems:"center",gap:8}}>
                       <span style={{fontSize:16}}>{m.icon}</span>
                       <span style={{fontWeight:700,fontSize:13,color: active ? "#f1f5f9" : "#cbd5e1"}}>{m.label}</span>
-                      {active && <span style={{marginLeft:"auto",color:"#22c55e",fontSize:14}}>✓</span>}
+                      {m.price !== null && <span style={{marginLeft:"auto",fontSize:11,fontWeight:700,color: active ? "#22c55e" : "#64748b"}}>${m.price}/mo</span>}
+                      {active && <span style={{marginLeft:6,color:"#22c55e",fontSize:14}}>✓</span>}
                     </div>
                     <p style={S.moduleDesc}>{m.desc}</p>
                   </div>
                 );
               })}
             </div>
-            <p style={{fontSize:11,color:"#475569",marginTop:2}}>You'll only see the modules you select — nothing else clutters your dashboard. You can ask us to add more later.</p>
+            {selected.length > 0 && (
+              <div style={S.totalBar}>
+                <span style={{color:"#94a3b8",fontSize:12}}>Estimated total</span>
+                <span style={{color:"#22c55e",fontWeight:800,fontSize:16}}>${totalPrice}/mo</span>
+              </div>
+            )}
+            <p style={{fontSize:11,color:"#475569",marginTop:2}}>You'll only see the modules you select — nothing else clutters your dashboard. Your 7-day free trial includes everything you pick, no card required.</p>
           </div>
           <div style={S.field}>
             <label style={S.label}>Password</label>
@@ -128,6 +148,7 @@ const S = {
   moduleCard:{padding:"10px 12px",borderRadius:12,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.02)",cursor:"pointer",transition:"all 0.15s"},
   moduleCardActive:{border:"1px solid rgba(34,197,94,0.4)",background:"rgba(34,197,94,0.06)"},
   moduleDesc:{fontSize:10.5,color:"#64748b",margin:"4px 0 0",lineHeight:1.4},
+  totalBar:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",borderRadius:10,background:"rgba(34,197,94,0.06)",border:"1px solid rgba(34,197,94,0.2)",marginTop:8},
   input:{width:"100%",padding:"12px 16px",borderRadius:12,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.04)",color:"#f1f5f9",fontSize:14,outline:"none"},
   btn:{width:"100%",padding:"14px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#3b82f6,#6366f1)",color:"#fff",fontSize:15,fontWeight:600,cursor:"pointer",marginTop:8},
 };

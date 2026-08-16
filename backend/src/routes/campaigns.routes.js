@@ -2,6 +2,7 @@ import express from "express";
 import crypto from "crypto";
 import pool from "../db.js";
 import orgAuth from "../middleware/orgAuth.js";
+import { getCpaLimits } from "../utils/planLimits.js";
 
 const router = express.Router();
 
@@ -74,6 +75,14 @@ router.post("/", orgAuth, async (req, res) => {
     }
     if (daily_cap !== undefined && daily_cap !== null && daily_cap !== "" && (!Number.isInteger(Number(daily_cap)) || Number(daily_cap) < 1)) {
       return res.status(400).json({ status: "FAILED", message: "daily_cap must be a whole number ≥ 1" });
+    }
+
+    const { maxCampaigns } = await getCpaLimits(pool, req.orgId);
+    if (maxCampaigns !== null) {
+      const countRes = await pool.query(`SELECT COUNT(*)::int AS n FROM campaigns WHERE org_id = $1`, [req.orgId]);
+      if (countRes.rows[0].n >= maxCampaigns) {
+        return res.status(403).json({ status: "FAILED", message: `Campaign limit reached (${maxCampaigns} on your current plan). Visit the Plans page to add more capacity.` });
+      }
     }
 
     let slug = generateSlug();

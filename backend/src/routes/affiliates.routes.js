@@ -2,6 +2,7 @@ import express from "express";
 import crypto from "crypto";
 import pool from "../db.js";
 import orgAuth from "../middleware/orgAuth.js";
+import { getCpaLimits } from "../utils/planLimits.js";
 
 const router = express.Router();
 const TRACK_BASE_URL = process.env.TRACK_BASE_URL || "https://backend.mob13r.com";
@@ -53,6 +54,15 @@ router.post("/", orgAuth, async (req, res) => {
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       return res.status(400).json({ status: "FAILED", message: "Invalid email address" });
     }
+
+    const { maxPublishers } = await getCpaLimits(pool, req.orgId);
+    if (maxPublishers !== null) {
+      const countRes = await pool.query(`SELECT COUNT(*)::int AS n FROM affiliates WHERE org_id = $1`, [req.orgId]);
+      if (countRes.rows[0].n >= maxPublishers) {
+        return res.status(403).json({ status: "FAILED", message: `Publisher limit reached (${maxPublishers} on your current plan). Visit the Plans page to add more capacity.` });
+      }
+    }
+
     const key = generateAffiliateKey();
     const result = await pool.query(
       `INSERT INTO affiliates (org_id, name, email, affiliate_key, status)
