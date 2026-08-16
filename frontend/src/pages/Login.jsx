@@ -44,6 +44,10 @@ export default function Login() {
           </div>
           <button type="submit" style={{...S.btn,opacity:loading?0.7:1}} disabled={loading}>{loading?"Signing in...":"Sign In"}</button>
         </form>
+        <p style={{textAlign:"center",marginTop:20,color:"#475569",fontSize:13}}>
+          Don't have an account?{" "}
+          <a href="/signup" style={{color:"#3b82f6",textDecoration:"none",fontWeight:600}}>Sign Up</a>
+        </p>
       </div>
     </div>
   );
