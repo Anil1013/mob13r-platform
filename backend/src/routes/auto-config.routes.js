@@ -1,5 +1,6 @@
 import express from "express";
 import pool from "../db.js";
+import orgAuth from "../middleware/orgAuth.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import mammoth from "mammoth";
 import fs from "fs/promises";
@@ -128,10 +129,13 @@ function detectAntifraudType(docText) {
  * MAIN ROUTE
  * =========================
  */
-router.post("/auto-integrate/:offerId", async (req, res) => {
+router.post("/auto-integrate/:offerId", orgAuth, async (req, res) => {
   try {
     const { offerId } = req.params;
     console.log(`🚀 FINAL AI SYNC for ID: ${offerId}`);
+
+    const ownCheck = await pool.query(`SELECT 1 FROM offers WHERE id = $1 AND org_id = $2`, [offerId, req.orgId]);
+    if (!ownCheck.rows.length) return res.status(404).json({ error: "Offer not found in your organization" });
 
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("Missing GEMINI_API_KEY");

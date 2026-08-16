@@ -43,6 +43,7 @@ const DEFAULT_FORM = {
 };
 
 export default function LandingBuilder() {
+  const token = localStorage.getItem("token");
   const [offers, setOffers] = useState([]);
   const [landings, setLandings] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -112,7 +113,7 @@ export default function LandingBuilder() {
   const deleteLanding = async (id, title) => {
     if (!confirm("Delete '" + title + "'?")) return;
     try {
-      const res = await fetch(`${API_BASE}/api/landing/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API_BASE}/api/landing/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (data.status === "SUCCESS") {
         showToast("Deleted!");
@@ -144,7 +145,7 @@ export default function LandingBuilder() {
       const fd = new FormData();
       appendFormFields(fd);
 
-      const res = await fetch(`${API_BASE}/api/landing/${editingId}`, { method: "PATCH", body: fd });
+      const res = await fetch(`${API_BASE}/api/landing/${editingId}`, { method: "PATCH", headers: { Authorization: `Bearer ${token}` }, body: fd });
       const data = await res.json();
       if (res.ok && (data.status === "SUCCESS" || data.id)) {
         showToast("Updated!");
@@ -205,7 +206,7 @@ export default function LandingBuilder() {
 
   const loadOffers = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/landing/publisher-offers`);
+      const res = await fetch(`${API_BASE}/api/landing/publisher-offers`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (res.ok && data.status === "SUCCESS") {
         setOffers(data.data || []);
@@ -217,7 +218,7 @@ export default function LandingBuilder() {
 
   const loadAssignablePublishers = async (item) => {
     try {
-      const res = await fetch(`${API_BASE}/api/landing/assignable-publishers/${item.id}`);
+      const res = await fetch(`${API_BASE}/api/landing/assignable-publishers/${item.id}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (data.status === "SUCCESS") {
         setAssignState(prev => ({
@@ -230,7 +231,7 @@ export default function LandingBuilder() {
 
   const loadLandings = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/landing`);
+      const res = await fetch(`${API_BASE}/api/landing`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (res.ok && data.status === "SUCCESS") {
         setLandings(data.data || []);
@@ -271,7 +272,7 @@ export default function LandingBuilder() {
       const fd = new FormData();
       appendFormFields(fd);
 
-      const res = await fetch(`${API_BASE}/api/landing`, { method: "POST", body: fd });
+      const res = await fetch(`${API_BASE}/api/landing`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
       const data = await res.json();
 
       if (res.ok && data.status === "SUCCESS") {

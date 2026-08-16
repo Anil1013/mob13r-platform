@@ -1,9 +1,12 @@
 import express from "express";
 import PDFDocument from "pdfkit";
+import jwt from "jsonwebtoken";
 import pool from "../db.js";
+import orgAuth from "../middleware/orgAuth.js";
 
 const router = express.Router();
 const BASE = "https://backend.mob13r.com";
+const DOCS_TOKEN_SECRET = process.env.JWT_SECRET || "mob13r_secret";
 
 // Color constants (module level - accessible everywhere)
 const RED   = "#e94560";
@@ -204,8 +207,47 @@ function drawTable(doc, rows, x) {
   doc.y = y;
 }
 
+/* ── SIGNED LINK GENERATOR (auth required) ──────────────
+   Was previously wide open: anyone who guessed a small sequential
+   pubId/offerId in the URL could view that publisher's live api_key.
+   Now the docs pages below require a short-lived signed token instead —
+   this endpoint (behind orgAuth) is how the dashboard gets one before
+   opening the docs page in a new tab. */
+router.get("/publisher/:pubId/offer/:offerId/docs-link", orgAuth, async (req, res) => {
+  try {
+    const { pubId, offerId } = req.params;
+    const check = await pool.query(
+      `SELECT 1 FROM publishers WHERE id = $1 AND org_id = $2`,
+      [pubId, req.orgId]
+    );
+    if (!check.rows.length) return res.status(404).json({ error: "Publisher not found in your organization" });
+
+    const token = jwt.sign({ pubId: Number(pubId), offerId: Number(offerId) }, DOCS_TOKEN_SECRET, { expiresIn: "10m" });
+    res.json({
+      html_url: `${BASE}/api/publisher/${pubId}/offer/${offerId}/docs?token=${token}`,
+      pdf_url: `${BASE}/api/publisher/${pubId}/offer/${offerId}/download-pdf?token=${token}`,
+    });
+  } catch (err) {
+    console.error("Docs link error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+function requireDocsToken(req, res, next) {
+  try {
+    const { pubId, offerId } = req.params;
+    const decoded = jwt.verify(req.query.token || "", DOCS_TOKEN_SECRET);
+    if (Number(decoded.pubId) !== Number(pubId) || Number(decoded.offerId) !== Number(offerId)) {
+      return res.status(403).json({ error: "Token does not match this publisher/offer" });
+    }
+    next();
+  } catch {
+    return res.status(401).json({ error: "Missing or expired docs link — generate a new one from Assign Offers" });
+  }
+}
+
 /* ── HTML DOCS ─────────────────────────────────────── */
-router.get("/publisher/:pubId/offer/:offerId/docs", async (req, res) => {
+router.get("/publisher/:pubId/offer/:offerId/docs", requireDocsToken, async (req, res) => {
   try {
     const { pubId, offerId } = req.params;
     const { format } = req.query;
@@ -315,7 +357,7 @@ router.get("/publisher/:pubId/offer/:offerId/docs", async (req, res) => {
 });
 
 /* ── PDF DOWNLOAD ───────────────────────────────────── */
-router.get("/publisher/:pubId/offer/:offerId/download-pdf", async (req, res) => {
+router.get("/publisher/:pubId/offer/:offerId/download-pdf", requireDocsToken, async (req, res) => {
   try {
     const { pubId, offerId } = req.params;
     const data = await getDocsData(pubId, offerId);

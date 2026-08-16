@@ -561,15 +561,19 @@ export default function PublisherAssignOffers() {
 
                       <button
                         style={{...styles.smallBtn, marginLeft: 6}}
-                        onClick={() => {
+                        onClick={async () => {
                           if (!a.publisher_id || !a.offer_id) {
                             alert("Missing publisher or offer ID");
                             return;
                           }
-                          window.open(
-                            `${API_BASE}/api/publisher/${a.publisher_id}/offer/${a.offer_id}/docs`,
-                            "__blank"
-                          );
+                          try {
+                            const res = await fetch(`${API_BASE}/api/publisher/${a.publisher_id}/offer/${a.offer_id}/docs-link`, {
+                              headers: { Authorization: `Bearer ${token}` },
+                            });
+                            const data = await res.json();
+                            if (!res.ok) { alert(data.error || "Failed to generate docs link"); return; }
+                            window.open(data.html_url, "__blank");
+                          } catch { alert("Network error while generating docs link"); }
                         }}
                       >
                         📄 API Docs
@@ -577,15 +581,19 @@ export default function PublisherAssignOffers() {
 
                       <button
                         style={{...styles.smallBtn, marginLeft: 6, background:"rgba(220,38,38,0.06)", borderColor:"rgba(220,38,38,0.2)", color:"#dc2626"}}
-                        onClick={() => {
+                        onClick={async () => {
                           if (!a.publisher_id || !a.offer_id) {
                             alert("Missing publisher or offer ID");
                             return;
                           }
-                          window.open(
-                            `${API_BASE}/api/publisher/${a.publisher_id}/offer/${a.offer_id}/download-pdf`,
-                            "__blank"
-                          );
+                          try {
+                            const res = await fetch(`${API_BASE}/api/publisher/${a.publisher_id}/offer/${a.offer_id}/docs-link`, {
+                              headers: { Authorization: `Bearer ${token}` },
+                            });
+                            const data = await res.json();
+                            if (!res.ok) { alert(data.error || "Failed to generate docs link"); return; }
+                            window.open(data.pdf_url, "__blank");
+                          } catch { alert("Network error while generating docs link"); }
                         }}
                       >
                         📥 PDF

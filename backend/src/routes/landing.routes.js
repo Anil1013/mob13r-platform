@@ -1,5 +1,6 @@
 import express from "express";
 import pool from "../db.js";
+import orgAuth from "../middleware/orgAuth.js";
 import { uploadToS3 } from "../services/s3Upload.js";
 
 const router = express.Router();
@@ -17,8 +18,8 @@ const validateImage = (file) => {
   return null;
 };
 
-/* GET PUBLISHER OFFERS */
-router.get("/publisher-offers", async (req, res) => {
+/* GET PUBLISHER OFFERS — admin management (Landing Builder dropdown) */
+router.get("/publisher-offers", orgAuth, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT po.id, po.offer_id, po.publisher_cpa,
@@ -28,9 +29,9 @@ router.get("/publisher-offers", async (req, res) => {
       FROM publisher_offers po
       LEFT JOIN publishers p ON p.id = po.publisher_id
       LEFT JOIN offers o ON o.id = po.offer_id
-      WHERE po.status='active'
+      WHERE po.status='active' AND po.org_id = $1
       ORDER BY po.id DESC
-    `);
+    `, [req.orgId]);
     res.json({ status: "SUCCESS", data: result.rows });
   } catch (err) {
     res.status(500).json({ status: "FAILED", error: err.message });
@@ -38,7 +39,7 @@ router.get("/publisher-offers", async (req, res) => {
 });
 
 /* CREATE LANDING */
-router.post("/", async (req, res) => {
+router.post("/", orgAuth, async (req, res) => {
   try {
     const body = req.body || {};
     const { publisher_offer_id, title } = body;
@@ -46,6 +47,9 @@ router.post("/", async (req, res) => {
     if (!publisher_offer_id || !title) {
       return res.status(400).json({ status: "FAILED", error: "publisher_offer_id and title required" });
     }
+
+    const ownCheck = await pool.query(`SELECT 1 FROM publisher_offers WHERE id = $1 AND org_id = $2`, [publisher_offer_id, req.orgId]);
+    if (!ownCheck.rows.length) return res.status(404).json({ status: "FAILED", error: "publisher_offer_id not found in your organization" });
 
     const heroFile = req.files?.heroFile;
     const logoFile = req.files?.logoFile;
@@ -92,6 +96,7 @@ router.post("/", async (req, res) => {
       body.otp_box_style || "boxed", parseBool(body.maintenance_mode),
       body.maintenance_message || "Service temporarily unavailable",
       Number(body.priority) || 0,
+      req.orgId,
     ];
 
     const placeholders = values.map((_, i) => `$${i + 1}`).join(",");
@@ -110,7 +115,7 @@ router.post("/", async (req, res) => {
         enable_status_polling, polling_interval_seconds, max_polling_attempts,
         enable_portal_redirect, rtl_enabled, language_code, font_family,
         button_radius, card_radius, background_overlay, animation_enabled,
-        otp_box_style, maintenance_mode, maintenance_message, priority
+        otp_box_style, maintenance_mode, maintenance_message, priority, org_id
       ) VALUES (${placeholders}) RETURNING *
     `, values);
 
@@ -148,10 +153,9 @@ router.post("/", async (req, res) => {
 });
 
 /* GET ASSIGNABLE PUBLISHERS — publishers who have this offer but landing not yet assigned */
-router.get("/assignable-publishers/:id", async (req, res) => {
+router.get("/assignable-publishers/:id", orgAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    // Get offer_id for this landing
     const result = await pool.query(`
       SELECT DISTINCT p.id, p.name, p.api_key
       FROM publisher_offers po
@@ -159,19 +163,19 @@ router.get("/assignable-publishers/:id", async (req, res) => {
       WHERE po.offer_id = (
         SELECT po2.offer_id FROM landing_pages lp
         JOIN publisher_offers po2 ON po2.id = lp.publisher_offer_id
-        WHERE lp.id = $1
+        WHERE lp.id = $1 AND lp.org_id = $2
       )
-      AND po.status = 'active'
+      AND po.status = 'active' AND po.org_id = $2
       ORDER BY p.name
-    `, [id]);
+    `, [id, req.orgId]);
     res.json({ status: "SUCCESS", data: result.rows });
   } catch (err) {
     res.status(500).json({ status: "FAILED", error: err.message });
   }
 });
 
-/* GET ALL LANDINGS */
-router.get("/", async (req, res) => {
+/* GET ALL LANDINGS — admin management list */
+router.get("/", orgAuth, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT lp.*, o.service_name AS offer_name, o.portal_url,
@@ -182,15 +186,21 @@ router.get("/", async (req, res) => {
       LEFT JOIN publisher_offers po ON po.id = lp.publisher_offer_id
       LEFT JOIN offers o ON o.id = po.offer_id
       LEFT JOIN publishers p ON p.id = po.publisher_id
+      WHERE lp.org_id = $1
       ORDER BY lp.id DESC
-    `);
+    `, [req.orgId]);
     res.json({ status: "SUCCESS", data: result.rows });
   } catch (err) {
     res.status(500).json({ status: "FAILED", error: err.message });
   }
 });
 
-/* GET LANDING BY PUBLISHER NAME — /landing/:publisher/:id */
+/* GET LANDING BY PUBLISHER NAME — /landing/:publisher/:id
+   INTENTIONALLY PUBLIC — this backs the actual landing page a mobile
+   subscriber lands on after clicking a publisher's link, so it can't
+   require a dashboard login. It must never expose the publisher's
+   api_key though — that's a live credential, not something a consumer's
+   browser needs. */
 router.get("/:publisher/:id", async (req, res) => {
   try {
     const { publisher, id } = req.params;
@@ -206,7 +216,7 @@ router.get("/:publisher/:id", async (req, res) => {
         o.af_trigger_point, o.af_prepare_url, o.check_status_url,
         o.pin_send_url, o.pin_verify_url,
         o.encode_headers_base64, o.encode_ip_base64,
-        p.api_key, p.name AS publisher_name
+        p.name AS publisher_name
       FROM landing_pages lp
       JOIN publisher_offers po_orig ON po_orig.id = lp.publisher_offer_id
       JOIN publisher_offers po ON po.offer_id = po_orig.offer_id
@@ -240,7 +250,7 @@ router.get("/:publisher/:id", async (req, res) => {
   }
 });
 
-/* GET SINGLE LANDING */
+/* GET SINGLE LANDING — public fallback used by the /:publisher/:id route above */
 router.get("/:id", async (req, res) => {
   try {
     const result = await pool.query(`
@@ -250,7 +260,7 @@ router.get("/:id", async (req, res) => {
         o.af_trigger_point, o.af_prepare_url, o.check_status_url,
         o.pin_send_url, o.pin_verify_url,
         o.encode_headers_base64, o.encode_ip_base64,
-        p.api_key, p.name AS publisher_name
+        p.name AS publisher_name
       FROM landing_pages lp
       LEFT JOIN publisher_offers po ON po.id = lp.publisher_offer_id
       LEFT JOIN offers o ON o.id = po.offer_id
@@ -277,7 +287,7 @@ router.get("/:id", async (req, res) => {
 });
 
 /* UPDATE LANDING */
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", orgAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const body = req.body || {};
@@ -309,7 +319,7 @@ router.patch("/:id", async (req, res) => {
         rtl_enabled = COALESCE($13, rtl_enabled),
         language_code = COALESCE($14, language_code),
         status = COALESCE($15, status)
-      WHERE id = $16 RETURNING *
+      WHERE id = $16 AND org_id = $17 RETURNING *
     `, [
       body.publisher_offer_id || null, body.title || null,
       body.subtitle || null, body.description || null,
@@ -318,10 +328,10 @@ router.patch("/:id", async (req, res) => {
       body.theme_color || null, body.text_color || null,
       body.show_timer === "true" ? true : body.show_timer === "false" ? false : null,
       body.rtl_enabled === "true" ? true : body.rtl_enabled === "false" ? false : null,
-      body.language_code || null, body.status || null, id,
+      body.language_code || null, body.status || null, id, req.orgId,
     ]);
 
-    if (!result.rows.length) return res.status(404).json({ status: "FAILED", error: "Landing not found" });
+    if (!result.rows.length) return res.status(404).json({ status: "FAILED", error: "Landing not found in your organization" });
     res.json({ status: "SUCCESS", data: result.rows[0] });
   } catch (err) {
     console.error("UPDATE LANDING ERROR:", err);
@@ -330,9 +340,10 @@ router.patch("/:id", async (req, res) => {
 });
 
 /* DELETE LANDING */
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", orgAuth, async (req, res) => {
   try {
-    await pool.query(`DELETE FROM landing_pages WHERE id=$1`, [req.params.id]);
+    const result = await pool.query(`DELETE FROM landing_pages WHERE id=$1 AND org_id=$2 RETURNING id`, [req.params.id, req.orgId]);
+    if (!result.rows.length) return res.status(404).json({ status: "FAILED", error: "Landing not found in your organization" });
     res.json({ status: "SUCCESS", message: "Landing deleted" });
   } catch (err) {
     res.status(500).json({ status: "FAILED", error: err.message });

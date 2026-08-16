@@ -26,6 +26,7 @@ const PRESET_GEOS = [
 const GEO_NAMES = Object.fromEntries(PRESET_GEOS.map(g => [g.code, g.name]));
 
 export default function CarrierPrefixes() {
+  const token = localStorage.getItem("token");
   const [rows, setRows] = useState([]);
   const [filterGeo, setFilterGeo] = useState("");
   const [filterCarrier, setFilterCarrier] = useState("");
@@ -62,7 +63,7 @@ export default function CarrierPrefixes() {
     }
     const res = await fetch(`${API_BASE}/api/carrier-prefixes`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ carrier: finalCarrier, geo: finalGeo, prefix: form.prefix }),
     });
     const data = await res.json();
@@ -79,7 +80,7 @@ export default function CarrierPrefixes() {
 
   const remove = async (id, carrier, geo) => {
     if (!confirm(`Delete ${carrier} (${geo})?`)) return;
-    await fetch(`${API_BASE}/api/carrier-prefixes/${id}`, { method: "DELETE" });
+    await fetch(`${API_BASE}/api/carrier-prefixes/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
     load();
   };
 

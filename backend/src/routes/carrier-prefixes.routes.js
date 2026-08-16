@@ -1,5 +1,6 @@
 import express from "express";
 import pool from "../db.js";
+import orgAuth from "../middleware/orgAuth.js";
 
 const router = express.Router();
 
@@ -25,7 +26,7 @@ router.get("/carrier-prefixes", async (req, res) => {
 });
 
 /* ADD NEW PREFIX */
-router.post("/carrier-prefixes", async (req, res) => {
+router.post("/carrier-prefixes", orgAuth, async (req, res) => {
   try {
     const { carrier, geo, prefix } = req.body;
     if (!carrier || !geo || !prefix)
@@ -49,7 +50,7 @@ router.post("/carrier-prefixes", async (req, res) => {
 });
 
 /* DELETE PREFIX */
-router.delete("/carrier-prefixes/:id", async (req, res) => {
+router.delete("/carrier-prefixes/:id", orgAuth, async (req, res) => {
   try {
     await pool.query(`DELETE FROM carrier_prefixes WHERE id = $1`, [req.params.id]);
     res.json({ status: "SUCCESS" });
