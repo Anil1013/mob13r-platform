@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Navbar from "../../components/Navbar";
 const API_BASE = "https://backend.mob13r.com";
 export default function SuperAdmin() {
@@ -55,6 +55,18 @@ export default function SuperAdmin() {
     } catch { showToast("Failed to load","error"); }
     setLoading(false);
   };
+
+  // Number = signup order (oldest org = 1, i.e. the Default Org), independent
+  // of how the table itself is sorted/displayed (newest-first). New orgs get
+  // the next number up as they sign up — since the table lists newest first,
+  // numbers appear in decreasing order top-to-bottom, with the Default Org's
+  // "1" always at the very bottom.
+  const rankById = useMemo(() => {
+    const byCreated = [...orgs].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    const map = {};
+    byCreated.forEach((o, i) => { map[o.id] = i + 1; });
+    return map;
+  }, [orgs]);
 
   const updateOrg = async (id, payload) => {
     try {
@@ -248,11 +260,11 @@ export default function SuperAdmin() {
             <tbody>
               {loading ? (
                 <tr><td colSpan="11" style={{...S.td,textAlign:"center",padding:40,color:"#475569"}}>Loading...</td></tr>
-              ) : orgs.map((org, idx) => {
+              ) : orgs.map(org => {
                 const primaryUser = (org.users || []).find(u => u.id) || {};
                 return (
                   <tr key={org.id} style={{opacity: org.status==="suspended"?0.6:1}}>
-                    <td style={S.td}><span style={S.idBadge} title={`Database ID: ${org.id}`}>{idx + 1}</span></td>
+                    <td style={S.td}><span style={S.idBadge} title={`Database ID: ${org.id}`}>{rankById[org.id]}</span></td>
                     <td style={S.td}>
                       <div style={{color:"#f1f5f9",fontWeight:500}}>{org.name}</div>
                       <div style={{color:"#475569",fontSize:11}}>{org.slug}</div>
