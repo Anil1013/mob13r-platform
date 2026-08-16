@@ -24,7 +24,7 @@ export default function Signup() {
   }, []);
 
   const MODULES = modulePlans.length
-    ? modulePlans.map(p => ({ code: p.code, label: p.name, price: Number(p.price_monthly), ...MODULE_DESC[p.code] }))
+    ? modulePlans.filter(p => p.tier === "basic").map(p => ({ code: p.code, label: p.name.replace(/ — Basic$/i, ""), price: Number(p.price_monthly), ...MODULE_DESC[p.code] }))
     : Object.keys(MODULE_DESC).map(code => ({ code, label: code, price: null, ...MODULE_DESC[code] }));
 
   const toggleModule = (code) => {
