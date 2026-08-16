@@ -75,11 +75,18 @@ router.get("/postback", async (req, res) => {
     const finalStatus = status || "approved";
 
     // Look up the publisher's own payout + hold % for this campaign/group.
-    let publisherPayout = advertiserPayout; // fallback: pass the full amount if no assignment exists
+    // SAFE DEFAULT: if no assignment exists between this publisher and this
+    // campaign, publisher_payout is 0 and we do NOT forward the postback to
+    // them — no assignment means no payout obligation. (Previously this
+    // defaulted to the FULL advertiser payout, silently zeroing out margin
+    // on any conversion where an assignment was forgotten — that was risky.)
+    let publisherPayout = 0;
     let holdPercent = 0;
+    let hasAssignment = false;
     if (click.affiliate_id) {
       const assignment = await findAssignment(click.affiliate_id, click.campaign_id);
       if (assignment) {
+        hasAssignment = true;
         publisherPayout = Number(assignment.publisher_payout);
         holdPercent = Number(assignment.hold_percent) || 0;
       }
@@ -88,7 +95,8 @@ router.get("/postback", async (req, res) => {
     // Hold logic: randomly withhold hold_percent% of conversions from the publisher
     // (they still count as a valid conversion for our own revenue/reporting — they
     // just don't get forwarded, e.g. for quality control or margin management).
-    const isHeld = holdPercent > 0 && Math.random() * 100 < holdPercent;
+    // No assignment at all is treated the same as "fully held" — nothing forwarded.
+    const isHeld = !hasAssignment || (holdPercent > 0 && Math.random() * 100 < holdPercent);
 
     const insertRes = await pool.query(
       `INSERT INTO conversions
@@ -123,7 +131,12 @@ router.get("/postback", async (req, res) => {
       }
     }
 
-    res.json({ status: "SUCCESS", message: "Conversion recorded", held: isHeld, forwarded_to_publisher: forwarded });
+    res.json({
+      status: "SUCCESS", message: "Conversion recorded", held: isHeld, forwarded_to_publisher: forwarded,
+      ...(click.affiliate_id && !hasAssignment
+        ? { warning: "No publisher assignment exists for this affiliate+campaign — publisher_payout recorded as 0 and nothing was forwarded. Create an assignment on /cpa/assignments to start paying/forwarding this publisher." }
+        : {}),
+    });
   } catch (err) {
     console.error("POSTBACK ERROR:", err.message);
     res.status(500).json({ status: "FAILED", message: "Postback processing error" });
