@@ -135,6 +135,7 @@ router.delete("/:id", orgAuth, async (req, res) => {
     if (!result.rows.length) return res.status(404).json({ status: "FAILED", message: "Assignment not found" });
     res.json({ status: "SUCCESS", message: "Assignment removed" });
   } catch (err) {
+    console.error("DELETE PUBLISHER ASSIGNMENT ERROR:", err.message);
     res.status(500).json({ status: "FAILED", message: "Failed to remove assignment" });
   }
 });

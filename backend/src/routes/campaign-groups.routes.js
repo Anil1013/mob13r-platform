@@ -77,6 +77,7 @@ router.patch("/:id/status", orgAuth, async (req, res) => {
     if (!result.rows.length) return res.status(404).json({ status: "FAILED", message: "Group not found" });
     res.json({ status: "SUCCESS", data: result.rows[0] });
   } catch (err) {
+    console.error("UPDATE GROUP STATUS ERROR:", err.message);
     res.status(500).json({ status: "FAILED", message: "Failed to update status" });
   }
 });
@@ -164,6 +165,7 @@ router.delete("/items/:itemId", orgAuth, async (req, res) => {
     if (!result.rows.length) return res.status(404).json({ status: "FAILED", message: "Item not found" });
     res.json({ status: "SUCCESS", message: "Removed from group" });
   } catch (err) {
+    console.error("REMOVE GROUP ITEM ERROR:", err.message);
     res.status(500).json({ status: "FAILED", message: "Failed to remove item" });
   }
 });

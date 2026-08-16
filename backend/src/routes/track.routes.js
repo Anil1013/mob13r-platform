@@ -26,6 +26,31 @@ async function pickCampaignFromGroup(groupId) {
      WHERE gi.group_id = $1 AND gi.status = 'active' AND c.status = 'active'`,
     [groupId]
   );
+  if (!itemsRes.rows.length) return null;
+
+  // Reset any member campaign whose daily counter is still from a previous IST
+  // day BEFORE checking caps — otherwise a fresh campaign can look wrongly
+  // "capped" using yesterday's leftover today_clicks (the reset used to only
+  // run for whichever campaign click.routes.js ended up picking, too late to
+  // affect this eligibility check).
+  const staleIds = itemsRes.rows.filter(c => {
+    const resetDate = new Date(c.last_reset_date).toISOString().slice(0, 10);
+    return resetDate !== new Date().toISOString().slice(0, 10); // cheap pre-filter; DB does the authoritative IST check below
+  }).map(c => c.id);
+  if (staleIds.length) {
+    const resetRes = await pool.query(
+      `UPDATE campaigns SET today_clicks = 0, today_conversions = 0,
+         last_reset_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+       WHERE id = ANY($1) AND last_reset_date < (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+       RETURNING id`,
+      [staleIds]
+    );
+    const resetIds = new Set(resetRes.rows.map(r => r.id));
+    for (const c of itemsRes.rows) {
+      if (resetIds.has(c.id)) { c.today_clicks = 0; c.today_conversions = 0; }
+    }
+  }
+
   let eligible = itemsRes.rows.filter(c => !c.daily_cap || c.today_clicks < c.daily_cap);
   if (!eligible.length) return null;
 

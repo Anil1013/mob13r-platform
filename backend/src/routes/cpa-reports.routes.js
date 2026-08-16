@@ -34,6 +34,25 @@ router.get("/", orgAuth, async (req, res) => {
     const timeDim = TIME_DIM[group_by];
     const orderBy = timeDim ? timeDim.order : (ORDER_MAP[group_by] || ORDER_MAP.detailed);
 
+    let whereClause = `WHERE cl.org_id = $1`;
+    const params = [req.orgId];
+
+    // IMPORTANT: these boundaries must use the SAME timezone (Asia/Kolkata) as the
+    // Date/Hour grouping below — otherwise a UTC-based cutoff leaks a few hours of
+    // the next/previous IST day into results even when From/To pick a single date.
+    if (from) { params.push(from); whereClause += ` AND (cl.created_at AT TIME ZONE 'Asia/Kolkata') >= $${params.length}::date`; }
+    if (to) { params.push(to); whereClause += ` AND (cl.created_at AT TIME ZONE 'Asia/Kolkata') < $${params.length}::date + interval '1 day'`; }
+    if (vertical_id) { params.push(vertical_id); whereClause += ` AND c.vertical_id = $${params.length}`; }
+    if (campaign_id) { params.push(campaign_id); whereClause += ` AND cl.campaign_id = $${params.length}`; }
+    if (affiliate_id) { params.push(affiliate_id); whereClause += ` AND cl.affiliate_id = $${params.length}`; }
+    if (advertiser_id) { params.push(advertiser_id); whereClause += ` AND c.advertiser_id = $${params.length}`; }
+    if (geo) { params.push(geo); whereClause += ` AND c.geo = $${params.length}`; }
+    if (carrier) { params.push(carrier); whereClause += ` AND c.carrier = $${params.length}`; }
+    if (hour !== undefined && hour !== "") {
+      params.push(Number(hour));
+      whereClause += ` AND EXTRACT(HOUR FROM cl.created_at AT TIME ZONE 'Asia/Kolkata') = $${params.length}`;
+    }
+
     let query = `
       SELECT a.name AS advertiser_name, COALESCE(af.name, 'Direct / Unknown') AS publisher_name,
         c.name AS campaign_name, COALESCE(NULLIF(c.geo, ''), 'Unknown') AS geo,
@@ -49,29 +68,29 @@ router.get("/", orgAuth, async (req, res) => {
       JOIN verticals v ON v.id = c.vertical_id
       LEFT JOIN affiliates af ON af.id = cl.affiliate_id
       LEFT JOIN conversions cv ON cv.click_id = cl.click_id
-      WHERE cl.org_id = $1`;
-    const params = [req.orgId];
+      ${whereClause}
+      GROUP BY a.id, a.name, af.id, af.name, c.id, c.name, c.geo, c.carrier, v.id, v.name${timeDim ? `, ${timeDim.groupBy}` : ""}
+      ORDER BY ${orderBy} LIMIT 1000`;
 
-    // IMPORTANT: these boundaries must use the SAME timezone (Asia/Kolkata) as the
-    // Date/Hour grouping below — otherwise a UTC-based cutoff leaks a few hours of
-    // the next/previous IST day into results even when From/To pick a single date.
-    if (from) { params.push(from); query += ` AND (cl.created_at AT TIME ZONE 'Asia/Kolkata') >= $${params.length}::date`; }
-    if (to) { params.push(to); query += ` AND (cl.created_at AT TIME ZONE 'Asia/Kolkata') < $${params.length}::date + interval '1 day'`; }
-    if (vertical_id) { params.push(vertical_id); query += ` AND c.vertical_id = $${params.length}`; }
-    if (campaign_id) { params.push(campaign_id); query += ` AND cl.campaign_id = $${params.length}`; }
-    if (affiliate_id) { params.push(affiliate_id); query += ` AND cl.affiliate_id = $${params.length}`; }
-    if (advertiser_id) { params.push(advertiser_id); query += ` AND c.advertiser_id = $${params.length}`; }
-    if (geo) { params.push(geo); query += ` AND c.geo = $${params.length}`; }
-    if (carrier) { params.push(carrier); query += ` AND c.carrier = $${params.length}`; }
-    if (hour !== undefined && hour !== "") {
-      params.push(Number(hour));
-      query += ` AND EXTRACT(HOUR FROM cl.created_at AT TIME ZONE 'Asia/Kolkata') = $${params.length}`;
-    }
+    // Totals are computed from a SEPARATE, unlimited aggregate query — the row
+    // list above is capped at 1000 for the UI, but Grand Total must stay
+    // accurate even when a date range has more than 1000 unique combos.
+    const totalsQuery = `
+      SELECT
+        COUNT(DISTINCT cl.id) AS clicks,
+        COUNT(DISTINCT cv.id) FILTER (WHERE cv.status = 'approved') AS conversions_in,
+        COUNT(DISTINCT cv.id) FILTER (WHERE cv.status = 'approved' AND cv.is_held = FALSE) AS conversions_out,
+        COALESCE(SUM(cv.advertiser_payout) FILTER (WHERE cv.status = 'approved'), 0) AS revenue,
+        COALESCE(SUM(cv.publisher_payout) FILTER (WHERE cv.status = 'approved' AND cv.is_held = FALSE), 0) AS publisher_cost
+      FROM clicks cl
+      JOIN campaigns c ON c.id = cl.campaign_id
+      LEFT JOIN conversions cv ON cv.click_id = cl.click_id
+      ${whereClause}`;
 
-    query += ` GROUP BY a.id, a.name, af.id, af.name, c.id, c.name, c.geo, c.carrier, v.id, v.name${timeDim ? `, ${timeDim.groupBy}` : ""}
-               ORDER BY ${orderBy} LIMIT 1000`;
-
-    const result = await pool.query(query, params);
+    const [result, totalsResult] = await Promise.all([
+      pool.query(query, params),
+      pool.query(totalsQuery, params),
+    ]);
     const data = result.rows.map(r => ({
       advertiser_name: r.advertiser_name,
       publisher_name: r.publisher_name,
@@ -91,16 +110,17 @@ router.get("/", orgAuth, async (req, res) => {
       margin: Number(r.revenue) - Number(r.publisher_cost),
     }));
 
-    const totals = data.reduce((acc, r) => ({
-      clicks: acc.clicks + r.clicks,
-      conversions_in: acc.conversions_in + r.conversions_in,
-      conversions_out: acc.conversions_out + r.conversions_out,
-      revenue: acc.revenue + r.revenue,
-      publisher_cost: acc.publisher_cost + r.publisher_cost,
-      margin: acc.margin + r.margin,
-    }), { clicks: 0, conversions_in: 0, conversions_out: 0, revenue: 0, publisher_cost: 0, margin: 0 });
+    const t = totalsResult.rows[0];
+    const totals = {
+      clicks: Number(t.clicks),
+      conversions_in: Number(t.conversions_in),
+      conversions_out: Number(t.conversions_out),
+      revenue: Number(t.revenue),
+      publisher_cost: Number(t.publisher_cost),
+      margin: Number(t.revenue) - Number(t.publisher_cost),
+    };
 
-    res.json({ status: "SUCCESS", data, totals, mode: group_by });
+    res.json({ status: "SUCCESS", data, totals, mode: group_by, truncated: result.rows.length >= 1000 });
   } catch (err) {
     console.error("CPA REPORTS ERROR:", err.message);
     res.status(500).json({ status: "FAILED", message: "Failed to load report" });

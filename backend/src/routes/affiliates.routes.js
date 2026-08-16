@@ -85,16 +85,18 @@ router.patch("/:id/status", orgAuth, async (req, res) => {
 // Personalized tracking links for this affiliate across all active campaigns
 router.get("/:id/campaigns", orgAuth, async (req, res) => {
   try {
+    const { vertical_id } = req.query;
     const affRes = await pool.query(`SELECT * FROM affiliates WHERE id = $1 AND org_id = $2`, [req.params.id, req.orgId]);
     if (!affRes.rows.length) return res.status(404).json({ status: "FAILED", message: "Affiliate not found" });
     const affiliate = affRes.rows[0];
 
-    const camps = await pool.query(
-      `SELECT c.*, v.name AS vertical_name FROM campaigns c
+    const params = [req.orgId];
+    let query = `SELECT c.*, v.name AS vertical_name FROM campaigns c
        JOIN verticals v ON v.id = c.vertical_id
-       WHERE c.org_id = $1 AND c.status = 'active' ORDER BY c.id DESC`,
-      [req.orgId]
-    );
+       WHERE c.org_id = $1 AND c.status = 'active'`;
+    if (vertical_id) { params.push(vertical_id); query += ` AND c.vertical_id = $${params.length}`; }
+    query += ` ORDER BY c.id DESC`;
+    const camps = await pool.query(query, params);
     const data = camps.rows.map(c => ({
       ...c,
       tracking_url: `${TRACK_BASE_URL}/click?cid=${c.tracking_slug}&aff_id=${affiliate.affiliate_key}`,

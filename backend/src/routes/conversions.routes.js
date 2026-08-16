@@ -39,14 +39,23 @@ router.get("/", orgAuth, async (req, res) => {
 
 router.get("/summary", orgAuth, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT
-         COUNT(*) FILTER (WHERE status = 'approved') AS total_conversions,
-         COALESCE(SUM(payout) FILTER (WHERE status = 'approved'), 0) AS total_payout,
-         COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE AND status = 'approved') AS today_conversions
-       FROM conversions WHERE org_id = $1`,
-      [req.orgId]
-    );
+    const { campaign_id, affiliate_id, advertiser_id, vertical_id, from, to } = req.query;
+    let query = `
+      SELECT
+         COUNT(*) FILTER (WHERE cv.status = 'approved') AS total_conversions,
+         COALESCE(SUM(cv.payout) FILTER (WHERE cv.status = 'approved'), 0) AS total_payout,
+         COUNT(*) FILTER (WHERE (cv.created_at AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date AND cv.status = 'approved') AS today_conversions
+       FROM conversions cv
+       JOIN campaigns c ON c.id = cv.campaign_id
+       WHERE cv.org_id = $1`;
+    const params = [req.orgId];
+    if (campaign_id) { params.push(campaign_id); query += ` AND cv.campaign_id = $${params.length}`; }
+    if (affiliate_id) { params.push(affiliate_id); query += ` AND cv.affiliate_id = $${params.length}`; }
+    if (advertiser_id) { params.push(advertiser_id); query += ` AND c.advertiser_id = $${params.length}`; }
+    if (vertical_id) { params.push(vertical_id); query += ` AND c.vertical_id = $${params.length}`; }
+    if (from) { params.push(from); query += ` AND (cv.created_at AT TIME ZONE 'Asia/Kolkata') >= $${params.length}::date`; }
+    if (to) { params.push(to); query += ` AND (cv.created_at AT TIME ZONE 'Asia/Kolkata') < $${params.length}::date + interval '1 day'`; }
+    const result = await pool.query(query, params);
     res.json({ status: "SUCCESS", data: result.rows[0] });
   } catch (err) {
     console.error("CONVERSIONS SUMMARY ERROR:", err.message);

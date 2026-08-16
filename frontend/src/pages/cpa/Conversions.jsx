@@ -66,7 +66,7 @@ export default function Conversions() {
       if (gCampaignId) params.set("campaign_id", gCampaignId);
       const [cRes, sRes] = await Promise.all([
         fetch(`${API_BASE}/api/conversions?${params}`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_BASE}/api/conversions/summary`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE}/api/conversions/summary?${params}`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       const cData = await cRes.json();
       const sData = await sRes.json();

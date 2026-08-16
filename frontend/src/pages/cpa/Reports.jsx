@@ -65,6 +65,7 @@ export default function CpaReports() {
   const [totals, setTotals] = useState(emptySums());
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [truncated, setTruncated] = useState(false);
   const [sort, setSort] = useState(null);
 
   useEffect(() => { if (!token) navigate("/login"); else { load(); loadAdvertisers(); loadPublishers(); loadGeoCarrierOptions(); } }, [searchParams.get("vertical_id")]);
@@ -127,6 +128,7 @@ export default function CpaReports() {
       if (data.status === "SUCCESS") {
         setRows(data.data);
         setTotals({ ...emptySums(), ...data.totals });
+        setTruncated(!!data.truncated);
       } else showToast(data.message || "Failed to load report");
     } catch {
       showToast("Network error while loading report");
@@ -192,6 +194,7 @@ export default function CpaReports() {
         Group by Hour works for any date range, not just today · Hour filter narrows to that hour-of-day (IST) across the whole range · click a column header to sort
       </p>
       {verticalId && <p style={{ color: "#9b7faa", fontSize: 12, marginBottom: 14 }}>Filtered to the vertical selected in the sidebar — click it again to clear.</p>}
+      {truncated && <p style={{ color: "#dc2626", fontSize: 12, marginBottom: 14 }}>⚠️ Showing the first 1000 rows — narrow the date range or add filters to see everything. (The summary cards and GRAND TOTAL above are always accurate regardless.)</p>}
 
       <div style={{ ...statRow, marginBottom: 18 }}>
         <div style={statCard}><div style={statLabel}>Clicks</div><div style={statValue}>{totals.clicks}</div></div>

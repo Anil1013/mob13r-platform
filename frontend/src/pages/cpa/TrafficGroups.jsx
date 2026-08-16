@@ -146,7 +146,7 @@ export default function TrafficGroups() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
           <h1 style={pageTitle}>Traffic Groups</h1>
-          <p style={{ color: "#9b7faa", fontSize: 13 }}>One tracking URL, split by weight % across multiple campaigns (e.g. same Geo + Carrier)</p>
+          <p style={{ color: "#9b7faa", fontSize: 13 }}>One tracking URL, split by relative weight across multiple campaigns (e.g. same Geo + Carrier) — weights don't need to sum to 100</p>
           {verticalId && <p style={{ color: "#9b7faa", fontSize: 12, marginTop: 2 }}>Filtered to the vertical selected in the sidebar — click it again to clear.</p>}
         </div>
         <button style={btn} onClick={() => setShowForm(s => !s)}>{showForm ? "Cancel" : "+ New Traffic Group"}</button>
@@ -183,19 +183,24 @@ export default function TrafficGroups() {
             {expandedId === g.id && (
               <div style={{ borderTop: "1px solid #f0e0e8", padding: "16px 18px", background: "#fdf6f9" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#9b7faa", textTransform: "uppercase", marginBottom: 8 }}>
-                  Campaigns in this group — traffic splits proportionally by weight
+                  Campaigns in this group — traffic splits by relative weight (doesn't need to add up to 100)
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
-                  {items.map(it => (
+                  {items.map(it => {
+                    const totalWeight = items.reduce((s, x) => s + Number(x.weight || 0), 0);
+                    const effectiveShare = totalWeight > 0 ? ((Number(it.weight || 0) / totalWeight) * 100).toFixed(1) : "0.0";
+                    return (
                     <div key={it.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", padding: "8px 12px", borderRadius: 10, border: "1px solid #eedde8", flexWrap: "wrap", gap: 8 }}>
                       <span style={{ fontSize: 12, color: "#4a2f3f" }}>{it.campaign_name} <span style={{ color: "#b89ab0" }}>({it.advertiser_name} · {it.currency} {it.payout})</span></span>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 10, color: "#16a34a", background: "rgba(34,197,94,0.1)", padding: "2px 8px", borderRadius: 10 }}>≈{effectiveShare}% of traffic</span>
                         <input type="number" min="0" max="100" style={{ ...input, width: 70, padding: "5px 8px" }} value={it.weight} onChange={e => updateWeight(it.id, e.target.value)} />
-                        <span style={{ fontSize: 11, color: "#9b7faa" }}>%</span>
+                        <span style={{ fontSize: 11, color: "#9b7faa" }}>weight</span>
                         <button style={{ ...btnRed, padding: "3px 10px", fontSize: 11 }} onClick={() => removeItem(it.id, g.id)}>Remove</button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                   {!items.length && <div style={{ fontSize: 12, color: "#b89ab0" }}>No campaigns in this group yet.</div>}
                 </div>
 
@@ -206,7 +211,7 @@ export default function TrafficGroups() {
                       <option key={c.id} value={c.id}>{c.name} ({c.advertiser_name})</option>
                     ))}
                   </select>
-                  <input type="number" min="0" max="100" style={{ ...input, width: 90 }} placeholder="Weight %" value={addWeight} onChange={e => setAddWeight(e.target.value)} />
+                  <input type="number" min="0" max="100" style={{ ...input, width: 90 }} placeholder="Weight" value={addWeight} onChange={e => setAddWeight(e.target.value)} />
                   <button style={btn} onClick={() => addItem(g.id)}>+ Add</button>
                 </div>
               </div>

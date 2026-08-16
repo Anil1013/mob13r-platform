@@ -91,7 +91,8 @@ export default function Affiliates() {
     setPostbackDraft(a.postback_url || "");
     setPanelLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/affiliates/${a.id}/campaigns`, { headers: { Authorization: `Bearer ${token}` } });
+      const params = verticalId ? `?vertical_id=${verticalId}` : "";
+      const res = await fetch(`${API_BASE}/api/affiliates/${a.id}/campaigns${params}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       setLinks(data.status === "SUCCESS" ? data.data : []);
     } catch {

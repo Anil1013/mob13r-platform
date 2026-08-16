@@ -120,8 +120,10 @@ router.patch("/:id", orgAuth, async (req, res) => {
       return res.status(400).json({ status: "FAILED", message: "Invalid status" });
     }
 
-    // daily_cap intentionally allows explicit null (clears the cap) — so we only
+    // geo/carrier/daily_cap intentionally allow explicit clearing — so we only
     // fall back to the existing value when the key is entirely absent from the request.
+    const hasGeo = Object.prototype.hasOwnProperty.call(req.body, "geo");
+    const hasCarrier = Object.prototype.hasOwnProperty.call(req.body, "carrier");
     const hasDailyCap = Object.prototype.hasOwnProperty.call(req.body, "daily_cap");
 
     const result = await pool.query(
@@ -130,13 +132,15 @@ router.patch("/:id", orgAuth, async (req, res) => {
         destination_url = COALESCE($2, destination_url),
         payout = COALESCE($3, payout),
         currency = COALESCE($4, currency),
-        geo = COALESCE($5, geo),
-        carrier = COALESCE($6, carrier),
-        daily_cap = CASE WHEN $7 THEN $8 ELSE daily_cap END,
-        status = COALESCE($9, status)
-       WHERE id = $10 AND org_id = $11 RETURNING *`,
+        geo = CASE WHEN $5 THEN $6 ELSE geo END,
+        carrier = CASE WHEN $7 THEN $8 ELSE carrier END,
+        daily_cap = CASE WHEN $9 THEN $10 ELSE daily_cap END,
+        status = COALESCE($11, status)
+       WHERE id = $12 AND org_id = $13 RETURNING *`,
       [name?.trim() || null, destination_url?.trim() || null, payout ?? null,
-       currency?.trim().toUpperCase() || null, geo?.trim().toUpperCase() || null, carrier?.trim() || null,
+       currency?.trim().toUpperCase() || null,
+       hasGeo, hasGeo ? (geo || "").trim().toUpperCase() || null : null,
+       hasCarrier, hasCarrier ? (carrier || "").trim() || null : null,
        hasDailyCap, hasDailyCap ? (daily_cap === "" ? null : daily_cap) : null,
        status || null, req.params.id, req.orgId]
     );

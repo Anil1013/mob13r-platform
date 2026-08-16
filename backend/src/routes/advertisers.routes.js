@@ -18,6 +18,7 @@ router.get("/", orgAuth, async (req, res) => {
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {
+    console.error("GET ADVERTISERS ERROR:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -25,13 +26,18 @@ router.get("/", orgAuth, async (req, res) => {
 router.post("/", orgAuth, async (req, res) => {
   const { name, email } = req.body;
   try {
+    if (!name || !name.trim()) return res.status(400).json({ message: "Advertiser name required" });
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) {
+      return res.status(400).json({ message: "Invalid email address" });
+    }
     const postbackKey = crypto.randomBytes(20).toString("hex");
     const result = await pool.query(
       `INSERT INTO advertisers (name, email, org_id, postback_key) VALUES ($1, $2, $3, $4) RETURNING *`,
-      [name, email, req.orgId, postbackKey]
+      [name.trim(), email ? String(email).trim() : null, req.orgId, postbackKey]
     );
     res.json(result.rows[0]);
   } catch (err) {
+    console.error("CREATE ADVERTISER ERROR:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -44,8 +50,10 @@ router.patch("/:id/toggle", orgAuth, async (req, res) => {
        WHERE id = $1 AND org_id = $2 RETURNING *`,
       [id, req.orgId]
     );
+    if (!result.rows.length) return res.status(404).json({ message: "Advertiser not found" });
     res.json(result.rows[0]);
   } catch (err) {
+    console.error("TOGGLE ADVERTISER ERROR:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -62,6 +70,7 @@ router.patch("/:id/regenerate-postback-key", orgAuth, async (req, res) => {
     if (!result.rows.length) return res.status(404).json({ message: "Advertiser not found" });
     res.json(result.rows[0]);
   } catch (err) {
+    console.error("REGENERATE ADVERTISER KEY ERROR:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 });
