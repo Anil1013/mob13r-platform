@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
 import { btn, btnRed, input, table, th, td, badge, pageTitle } from "../../styles/shared.js";
 
@@ -7,7 +7,9 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.co
 
 export default function Assignments() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const token = localStorage.getItem("token");
+  const verticalId = searchParams.get("vertical_id") || "";
   const [assignments, setAssignments] = useState([]);
   const [affiliates, setAffiliates] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
@@ -24,14 +26,15 @@ export default function Assignments() {
   useEffect(() => {
     if (!token) { navigate("/login"); return; }
     load(); loadAffiliates(); loadCampaigns(); loadGroups();
-  }, []);
+  }, [searchParams.get("vertical_id")]);
 
   const showToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2800); };
   const authHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
 
   const load = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/publisher-assignments`, { headers: { Authorization: `Bearer ${token}` } });
+      const params = verticalId ? `?vertical_id=${verticalId}` : "";
+      const res = await fetch(`${API_BASE}/api/publisher-assignments${params}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (data.status === "SUCCESS") setAssignments(data.data);
       else showToast(data.message || "Failed to load assignments", "error");
@@ -48,14 +51,16 @@ export default function Assignments() {
   };
   const loadCampaigns = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/campaigns?status=active`, { headers: { Authorization: `Bearer ${token}` } });
+      const vParam = verticalId ? `&vertical_id=${verticalId}` : "";
+      const res = await fetch(`${API_BASE}/api/campaigns?status=active${vParam}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (data.status === "SUCCESS") setCampaigns(data.data);
     } catch { /* non-blocking */ }
   };
   const loadGroups = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/campaign-groups`, { headers: { Authorization: `Bearer ${token}` } });
+      const vParam = verticalId ? `?vertical_id=${verticalId}` : "";
+      const res = await fetch(`${API_BASE}/api/campaign-groups${vParam}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (data.status === "SUCCESS") setGroups(data.data.filter(g => g.status === "active"));
     } catch { /* non-blocking */ }
@@ -164,6 +169,7 @@ export default function Assignments() {
         <div>
           <h1 style={pageTitle}>Assignments</h1>
           <p style={{ color: "#9b7faa", fontSize: 13 }}>Assign a publisher to a campaign or traffic group — their payout and hold % live here</p>
+          {verticalId && <p style={{ color: "#9b7faa", fontSize: 12, marginTop: 2 }}>Filtered to the vertical selected in the sidebar — click it again to clear.</p>}
         </div>
         <button style={btn} onClick={() => setShowForm(s => !s)}>{showForm ? "Cancel" : "+ New Assignment"}</button>
       </div>

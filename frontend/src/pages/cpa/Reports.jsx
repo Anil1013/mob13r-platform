@@ -67,7 +67,7 @@ export default function CpaReports() {
   const [toast, setToast] = useState(null);
   const [sort, setSort] = useState(null);
 
-  useEffect(() => { if (!token) navigate("/login"); else { load(); loadAdvertisers(); loadPublishers(); loadGeoCarrierOptions(); } }, []);
+  useEffect(() => { if (!token) navigate("/login"); else { load(); loadAdvertisers(); loadPublishers(); loadGeoCarrierOptions(); } }, [searchParams.get("vertical_id")]);
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2800); };
 
   const loadAdvertisers = async () => {

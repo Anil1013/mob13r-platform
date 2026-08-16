@@ -43,7 +43,7 @@ export default function Campaigns() {
       setForm(f => ({ ...f, vertical_id: vid }));
       setShowForm(true);
     }
-  }, []);
+  }, [searchParams.get("vertical_id")]);
 
   const showToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2800); };
   const authHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };

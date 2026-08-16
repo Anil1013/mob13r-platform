@@ -29,7 +29,7 @@ export default function Conversions() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
 
-  useEffect(() => { if (!token) navigate("/login"); else { load(); loadFilterOptions(); } }, []);
+  useEffect(() => { if (!token) navigate("/login"); else { load(); loadFilterOptions(); } }, [searchParams.get("vertical_id")]);
   const showToast = (msg, type = "error") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2800); };
 
   const loadFilterOptions = async () => {

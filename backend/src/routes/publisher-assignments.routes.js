@@ -4,10 +4,10 @@ import orgAuth from "../middleware/orgAuth.js";
 
 const router = express.Router();
 
-// GET /api/publisher-assignments?affiliate_id=&campaign_id=&group_id=
+// GET /api/publisher-assignments?affiliate_id=&campaign_id=&group_id=&vertical_id=
 router.get("/", orgAuth, async (req, res) => {
   try {
-    const { affiliate_id, campaign_id, group_id } = req.query;
+    const { affiliate_id, campaign_id, group_id, vertical_id } = req.query;
     let query = `
       SELECT pa.*, af.name AS affiliate_name,
         c.name AS campaign_name, c.payout AS advertiser_payout, c.currency, c.status AS campaign_status,
@@ -21,6 +21,19 @@ router.get("/", orgAuth, async (req, res) => {
     if (affiliate_id) { params.push(affiliate_id); query += ` AND pa.affiliate_id = $${params.length}`; }
     if (campaign_id) { params.push(campaign_id); query += ` AND pa.campaign_id = $${params.length}`; }
     if (group_id) { params.push(group_id); query += ` AND pa.group_id = $${params.length}`; }
+    if (vertical_id) {
+      // Direct campaign assignments: match campaign's own vertical.
+      // Group assignments: match if ANY campaign bundled in that group is in the vertical.
+      params.push(vertical_id);
+      query += ` AND (
+        c.vertical_id = $${params.length}
+        OR EXISTS (
+          SELECT 1 FROM campaign_group_items gi
+          JOIN campaigns gc ON gc.id = gi.campaign_id
+          WHERE gi.group_id = pa.group_id AND gc.vertical_id = $${params.length}
+        )
+      )`;
+    }
     query += ` ORDER BY pa.id DESC`;
     const result = await pool.query(query, params);
     res.json({ status: "SUCCESS", data: result.rows });

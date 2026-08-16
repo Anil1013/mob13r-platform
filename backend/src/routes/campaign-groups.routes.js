@@ -15,15 +15,24 @@ function buildTrackingUrl(slug) {
 
 router.get("/", orgAuth, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT g.*,
+    const { vertical_id } = req.query;
+    const params = [req.orgId];
+    let query = `
+      SELECT g.*,
          COUNT(DISTINCT gi.id) FILTER (WHERE gi.status = 'active') AS campaign_count
        FROM campaign_groups g
        LEFT JOIN campaign_group_items gi ON gi.group_id = g.id
-       WHERE g.org_id = $1
-       GROUP BY g.id ORDER BY g.id DESC`,
-      [req.orgId]
-    );
+       WHERE g.org_id = $1`;
+    if (vertical_id) {
+      params.push(vertical_id);
+      query += ` AND EXISTS (
+        SELECT 1 FROM campaign_group_items gi2
+        JOIN campaigns gc ON gc.id = gi2.campaign_id
+        WHERE gi2.group_id = g.id AND gc.vertical_id = $${params.length}
+      )`;
+    }
+    query += ` GROUP BY g.id ORDER BY g.id DESC`;
+    const result = await pool.query(query, params);
     const data = result.rows.map(r => ({ ...r, tracking_url: buildTrackingUrl(r.tracking_slug) }));
     res.json({ status: "SUCCESS", data });
   } catch (err) {

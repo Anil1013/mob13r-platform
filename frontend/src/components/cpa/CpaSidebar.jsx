@@ -156,16 +156,16 @@ export default function CpaSidebar() {
       <div style={S.sectionLabel}><span>GENERAL</span></div>
       {expandedId && (
         <div style={{ margin: "0 10px 8px", fontSize: 10, color: "#94a3b8", background: "#1f2637", padding: "6px 10px", borderRadius: 8 }}>
-          Showing <b style={{ color: "#e2e8f0" }}>{verticals.find(v => v.id === expandedId)?.name}</b> only in Campaigns/Conversions/Reports below
+          Showing <b style={{ color: "#e2e8f0" }}>{verticals.find(v => v.id === expandedId)?.name}</b> only in Campaigns/Traffic Groups/Assignments/Conversions/Reports below
         </div>
       )}
       <div style={S.navSection}>
         {[
           { to: "/cpa/advertisers", icon: "🏢", label: "Advertisers", scoped: false },
           { to: "/cpa/campaigns", icon: "📢", label: "All Campaigns", scoped: true },
-          { to: "/cpa/traffic-groups", icon: "🔀", label: "Traffic Groups", scoped: false },
+          { to: "/cpa/traffic-groups", icon: "🔀", label: "Traffic Groups", scoped: true },
           { to: "/cpa/affiliates", icon: "🤝", label: "Publishers", scoped: false },
-          { to: "/cpa/assignments", icon: "🎯", label: "Assignments", scoped: false },
+          { to: "/cpa/assignments", icon: "🎯", label: "Assignments", scoped: true },
           { to: "/cpa/conversions", icon: "✅", label: "Conversions", scoped: true },
           { to: "/cpa/reports", icon: "📊", label: "Reports", scoped: true },
         ].map(item => {
