@@ -27,12 +27,15 @@ const TIME_DIM = {
 };
 
 // GET /api/cpa-reports?group_by=detailed|advertiser|publisher|campaign|geo|carrier|date|hour
-//                       &from=&to=&vertical_id=&campaign_id=&affiliate_id=&advertiser_id=&geo=&carrier=
+//                       &from=&to=&vertical_id=&campaign_id=&affiliate_id=&advertiser_id=&geo=&carrier=&page=
 router.get("/", orgAuth, async (req, res) => {
   try {
-    const { group_by = "detailed", from, to, vertical_id, campaign_id, affiliate_id, advertiser_id, geo, carrier, hour } = req.query;
+    const { group_by = "detailed", from, to, vertical_id, campaign_id, affiliate_id, advertiser_id, geo, carrier, hour, page } = req.query;
     const timeDim = TIME_DIM[group_by];
     const orderBy = timeDim ? timeDim.order : (ORDER_MAP[group_by] || ORDER_MAP.detailed);
+    const PAGE_SIZE = 1000;
+    const currentPage = Math.max(1, parseInt(page, 10) || 1);
+    const offset = (currentPage - 1) * PAGE_SIZE;
 
     let whereClause = `WHERE cl.org_id = $1`;
     const params = [req.orgId];
@@ -70,7 +73,22 @@ router.get("/", orgAuth, async (req, res) => {
       LEFT JOIN conversions cv ON cv.click_id = cl.click_id
       ${whereClause}
       GROUP BY a.id, a.name, af.id, af.name, c.id, c.name, c.geo, c.carrier, v.id, v.name${timeDim ? `, ${timeDim.groupBy}` : ""}
-      ORDER BY ${orderBy} LIMIT 1000`;
+      ORDER BY ${orderBy} LIMIT ${PAGE_SIZE} OFFSET ${offset}`;
+
+    // Total number of GROUPED rows (not clicks) across every page — powers the
+    // page-number UI. Same WHERE clause and grouping, just counted instead of
+    // fetched, so it stays correct regardless of which page is being viewed.
+    const countQuery = `
+      SELECT COUNT(*) AS total_rows FROM (
+        SELECT 1
+        FROM clicks cl
+        JOIN campaigns c ON c.id = cl.campaign_id
+        JOIN advertisers a ON a.id = c.advertiser_id
+        JOIN verticals v ON v.id = c.vertical_id
+        LEFT JOIN affiliates af ON af.id = cl.affiliate_id
+        ${whereClause}
+        GROUP BY a.id, af.id, c.id${timeDim ? `, ${timeDim.groupBy}` : ""}
+      ) sub`;
 
     // Totals are computed from a SEPARATE, unlimited aggregate query — the row
     // list above is capped at 1000 for the UI, but Grand Total must stay
@@ -87,9 +105,10 @@ router.get("/", orgAuth, async (req, res) => {
       LEFT JOIN conversions cv ON cv.click_id = cl.click_id
       ${whereClause}`;
 
-    const [result, totalsResult] = await Promise.all([
+    const [result, totalsResult, countResult] = await Promise.all([
       pool.query(query, params),
       pool.query(totalsQuery, params),
+      pool.query(countQuery, params),
     ]);
     const data = result.rows.map(r => ({
       advertiser_name: r.advertiser_name,
@@ -120,7 +139,14 @@ router.get("/", orgAuth, async (req, res) => {
       margin: Number(t.revenue) - Number(t.publisher_cost),
     };
 
-    res.json({ status: "SUCCESS", data, totals, mode: group_by, truncated: result.rows.length >= 1000 });
+    const totalRows = Number(countResult.rows[0].total_rows);
+    const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+
+    res.json({
+      status: "SUCCESS", data, totals, mode: group_by,
+      truncated: result.rows.length >= PAGE_SIZE,
+      pagination: { page: currentPage, pageSize: PAGE_SIZE, totalRows, totalPages },
+    });
   } catch (err) {
     console.error("CPA REPORTS ERROR:", err.message);
     res.status(500).json({ status: "FAILED", message: "Failed to load report" });

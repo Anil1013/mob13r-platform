@@ -66,6 +66,9 @@ export default function CpaReports() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [truncated, setTruncated] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRows, setTotalRows] = useState(0);
   const [sort, setSort] = useState(null);
 
   useEffect(() => { if (!token) navigate("/login"); else { load(); loadAdvertisers(); loadPublishers(); loadGeoCarrierOptions(); } }, [searchParams.get("vertical_id")]);
@@ -109,13 +112,16 @@ export default function CpaReports() {
     const gHourFilter = overrides.hourFilter ?? hourFilter;
     const gFrom = overrides.from ?? from;
     const gTo = overrides.to ?? to;
+    // Any load() call resets to page 1 unless a page number is explicitly passed —
+    // only the Prev/Next/page-number controls pass page explicitly.
+    const gPage = overrides.page ?? 1;
 
     if (gFrom && gTo && gFrom > gTo) return showToast("From date must be before To date");
     setRows([]);
     setSort(null);
     setLoading(true);
     try {
-      const params = new URLSearchParams({ group_by: gGroupBy, from: gFrom, to: gTo });
+      const params = new URLSearchParams({ group_by: gGroupBy, from: gFrom, to: gTo, page: gPage });
       if (verticalId) params.set("vertical_id", verticalId);
       if (gAdvertiserId) params.set("advertiser_id", gAdvertiserId);
       if (gAffiliateId) params.set("affiliate_id", gAffiliateId);
@@ -129,6 +135,9 @@ export default function CpaReports() {
         setRows(data.data);
         setTotals({ ...emptySums(), ...data.totals });
         setTruncated(!!data.truncated);
+        setPage(data.pagination?.page || gPage);
+        setTotalPages(data.pagination?.totalPages || 1);
+        setTotalRows(data.pagination?.totalRows || data.data.length);
       } else showToast(data.message || "Failed to load report");
     } catch {
       showToast("Network error while loading report");
@@ -194,7 +203,7 @@ export default function CpaReports() {
         Group by Hour works for any date range, not just today · Hour filter narrows to that hour-of-day (IST) across the whole range · click a column header to sort
       </p>
       {verticalId && <p style={{ color: "#9b7faa", fontSize: 12, marginBottom: 14 }}>Filtered to the vertical selected in the sidebar — click it again to clear.</p>}
-      {truncated && <p style={{ color: "#dc2626", fontSize: 12, marginBottom: 14 }}>⚠️ Showing the first 1000 rows — narrow the date range or add filters to see everything. (The summary cards and GRAND TOTAL above are always accurate regardless.)</p>}
+      {truncated && <p style={{ color: "#9b7faa", fontSize: 12, marginBottom: 14 }}>Showing 1000 rows per page — use the page numbers below the table to see the rest. (Summary cards and GRAND TOTAL are always accurate across every page.)</p>}
 
       <div style={{ ...statRow, marginBottom: 18 }}>
         <div style={statCard}><div style={statLabel}>Clicks</div><div style={statValue}>{totals.clicks}</div></div>
@@ -323,6 +332,37 @@ export default function CpaReports() {
           </table>
         </div>
       </div>
+
+      {totalPages > 1 && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14, flexWrap: "wrap", gap: 10 }}>
+          <span style={{ fontSize: 12, color: "#9b7faa" }}>
+            {totalRows.toLocaleString()} rows total · page {page} of {totalPages}
+          </span>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <button style={{ ...compactBtn, opacity: page <= 1 || loading ? 0.5 : 1 }} disabled={page <= 1 || loading} onClick={() => load({ page: page - 1 })}>← Prev</button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+              .reduce((acc, p, i, arr) => {
+                if (i > 0 && p - arr[i - 1] > 1) acc.push("…");
+                acc.push(p);
+                return acc;
+              }, [])
+              .map((p, i) => p === "…" ? (
+                <span key={`gap${i}`} style={{ fontSize: 12, color: "#b89ab0", padding: "0 4px" }}>…</span>
+              ) : (
+                <button
+                  key={p}
+                  style={{ ...compactBtn, background: p === page ? "linear-gradient(135deg,#e8856a,#d4709a)" : "#fff", color: p === page ? "#fff" : "#4a2f3f", minWidth: 32, opacity: loading ? 0.7 : 1 }}
+                  disabled={loading}
+                  onClick={() => load({ page: p })}
+                >
+                  {p}
+                </button>
+              ))}
+            <button style={{ ...compactBtn, opacity: page >= totalPages || loading ? 0.5 : 1 }} disabled={page >= totalPages || loading} onClick={() => load({ page: page + 1 })}>Next →</button>
+          </div>
+        </div>
+      )}
     </CpaLayout>
   );
 }
