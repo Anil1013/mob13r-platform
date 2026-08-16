@@ -3,6 +3,7 @@ import Navbar from "../../components/Navbar";
 const API_BASE = "https://backend.mob13r.com";
 export default function SuperAdmin() {
   const [orgs, setOrgs] = useState([]);
+  const [planRequests, setPlanRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -17,7 +18,34 @@ export default function SuperAdmin() {
   useEffect(() => {
     if (user.email !== "admin@mob13r.com") { window.location.href = "/dashboard"; return; }
     loadOrgs();
+    loadPlanRequests();
   }, []);
+
+  const loadPlanRequests = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/saas/admin/plan-requests`, { headers:{ Authorization:`Bearer ${token}` }});
+      const data = await res.json();
+      setPlanRequests(data.data || []);
+    } catch { /* non-blocking */ }
+  };
+
+  const approveRequest = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/saas/admin/plan-requests/${id}/approve`, { method:"POST", headers:{ Authorization:`Bearer ${token}` }});
+      const data = await res.json();
+      if (data.success) { showToast("Request approved and applied!"); loadPlanRequests(); loadOrgs(); }
+      else showToast(data.error || "Failed to approve", "error");
+    } catch { showToast("Failed to approve", "error"); }
+  };
+
+  const rejectRequest = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/saas/admin/plan-requests/${id}/reject`, { method:"POST", headers:{ Authorization:`Bearer ${token}` }});
+      const data = await res.json();
+      if (data.success) { showToast("Request rejected"); loadPlanRequests(); }
+      else showToast(data.error || "Failed to reject", "error");
+    } catch { showToast("Failed to reject", "error"); }
+  };
 
   const loadOrgs = async () => {
     try {
@@ -175,6 +203,30 @@ export default function SuperAdmin() {
           </div>
         )}
 
+        {/* PENDING PLAN REQUESTS */}
+        {planRequests.length > 0 && (
+          <div style={{background:"#0d1326", border:"1px solid rgba(245,158,11,0.3)", borderRadius:16, padding:20, marginBottom:24}}>
+            <h3 style={{color:"#f59e0b", marginBottom:14, fontSize:15}}>⏳ Pending Plan Requests ({planRequests.length})</h3>
+            <div style={{display:"flex", flexDirection:"column", gap:10}}>
+              {planRequests.map(pr => (
+                <div key={pr.id} style={{display:"flex", justifyContent:"space-between", alignItems:"center", background:"#0a0f1e", borderRadius:12, padding:"12px 16px", flexWrap:"wrap", gap:10}}>
+                  <div>
+                    <div style={{color:"#f1f5f9", fontWeight:600, fontSize:13}}>{pr.org_name} <span style={{color:"#475569", fontWeight:400}}>({pr.requested_by || "unknown"})</span></div>
+                    <div style={{color:"#94a3b8", fontSize:12, marginTop:2}}>
+                      Requesting: {(pr.requested_modules_tiered || pr.requested_modules.map(c => ({code:c,tier:"basic"}))).map(m => `${m.code} (${m.tier})`).join(", ")}
+                      {" · "}<span style={{color:"#22c55e", fontWeight:600}}>${pr.total_price}/mo</span>
+                    </div>
+                  </div>
+                  <div style={{display:"flex", gap:8}}>
+                    <button onClick={() => approveRequest(pr.id)} style={S.approveBtn}>✓ Approve & Apply</button>
+                    <button onClick={() => rejectRequest(pr.id)} style={S.deleteBtn}>✕ Reject</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* HEADER */}
         <div style={S.header}>
           <h1 style={S.title}>⚙️ Super Admin Panel</h1>
@@ -191,11 +243,11 @@ export default function SuperAdmin() {
         <div style={S.tableWrap}>
           <table style={S.table}>
             <thead>
-              <tr>{["ID","Org Name","Email","Plan","Trial","Status","Publishers","Offers","Conversions/mo","Total Sessions","Actions"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr>
+              <tr>{["ID","Org Name","Email","Modules","Plan","Trial","Status","Publishers","Offers","Conversions/mo","Total Sessions","Actions"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="10" style={{...S.td,textAlign:"center",padding:40,color:"#475569"}}>Loading...</td></tr>
+                <tr><td colSpan="11" style={{...S.td,textAlign:"center",padding:40,color:"#475569"}}>Loading...</td></tr>
               ) : orgs.map(org => {
                 const primaryUser = (org.users || []).find(u => u.id) || {};
                 return (
@@ -207,6 +259,15 @@ export default function SuperAdmin() {
                     </td>
                     <td style={S.td}>
                       <div style={{color:"#94a3b8",fontSize:13}}>{primaryUser.email || "-"}</div>
+                    </td>
+                    <td style={S.td}>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:4,maxWidth:160}}>
+                        {(org.active_verticals || []).map(v => (
+                          <span key={v.code} style={S.moduleBadge}>{v.code}·{v.tier}</span>
+                        ))}
+                        {org.mvas_enabled !== false && <span style={{...S.moduleBadge, background:"rgba(139,92,246,0.15)", color:"#8b5cf6"}}>MVAS·{org.mvas_tier || "basic"}</span>}
+                        {!(org.active_verticals || []).length && org.mvas_enabled === false && <span style={{color:"#ef4444",fontSize:11}}>None</span>}
+                      </div>
                     </td>
                     <td style={S.td}>
                       <select defaultValue={org.plan} onChange={e => updateOrg(org.id, { plan: e.target.value })} style={S.select}>
@@ -269,6 +330,7 @@ const S = {
   th:{padding:"12px 16px",textAlign:"left",fontSize:11,fontWeight:600,color:"#475569",textTransform:"uppercase",letterSpacing:"0.08em",borderBottom:"1px solid rgba(255,255,255,0.07)",background:"#0a0f1e"},
   td:{padding:"14px 16px",borderBottom:"1px solid rgba(255,255,255,0.04)",color:"#94a3b8",fontSize:13},
   idBadge:{background:"rgba(59,130,246,0.1)",color:"#3b82f6",padding:"2px 8px",borderRadius:6,fontSize:12,fontWeight:600},
+  moduleBadge:{background:"rgba(34,197,94,0.12)",color:"#22c55e",padding:"1px 7px",borderRadius:6,fontSize:10,fontWeight:600,whiteSpace:"nowrap"},
   select:{background:"#0a0f1e",border:"1px solid rgba(255,255,255,0.08)",color:"#f1f5f9",padding:"6px 10px",borderRadius:8,fontSize:12,cursor:"pointer"},
   numInput:{width:80,background:"#0a0f1e",border:"1px solid rgba(255,255,255,0.08)",color:"#f1f5f9",padding:"6px 10px",borderRadius:8,fontSize:12,textAlign:"center"},
   viewBtn:{background:"rgba(59,130,246,0.1)",border:"1px solid rgba(59,130,246,0.3)",color:"#3b82f6",padding:"6px 12px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600},
