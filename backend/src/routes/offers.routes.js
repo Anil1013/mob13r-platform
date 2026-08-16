@@ -47,14 +47,13 @@ router.get("/", orgAuth, async (req, res) => {
                  FROM offers o
                  JOIN advertisers a ON a.id = o.advertiser_id
                  LEFT JOIN publisher_offers po ON po.offer_id = o.id
-                 WHERE o.org_id = $1
-                 GROUP BY o.id, a.name`;
+                 WHERE o.org_id = $1`;
     const params = [req.orgId];
     if (advertiser_id) {
       query += ` AND o.advertiser_id = $2`;
       params.push(advertiser_id);
     }
-    query += ` ORDER BY o.id DESC`;
+    query += ` GROUP BY o.id, a.name ORDER BY o.id DESC`;
     const result = await pool.query(query, params);
     return res.json(result.rows);
   } catch (err) {
