@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
 import { table, th, td, badge, pageTitle, statRow, statCard, statLabel, statValue } from "../../styles/shared.js";
 
@@ -13,7 +13,9 @@ const compactBtn = { background: "linear-gradient(135deg,#e8856a,#d4709a)", colo
 
 export default function Conversions() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const token = localStorage.getItem("token");
+  const verticalId = searchParams.get("vertical_id") || "";
   const [conversions, setConversions] = useState([]);
   const [summary, setSummary] = useState({ total_conversions: 0, total_payout: 0, today_conversions: 0 });
   const [advertisers, setAdvertisers] = useState([]);
@@ -32,10 +34,11 @@ export default function Conversions() {
 
   const loadFilterOptions = async () => {
     try {
+      const campParams = verticalId ? `?vertical_id=${verticalId}` : "";
       const [advRes, pubRes, campRes] = await Promise.all([
         fetch(`${API_BASE}/api/advertisers`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${API_BASE}/api/affiliates`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_BASE}/api/campaigns`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE}/api/campaigns${campParams}`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       const advData = await advRes.json();
       const pubData = await pubRes.json();
@@ -57,6 +60,7 @@ export default function Conversions() {
     setLoading(true);
     try {
       const params = new URLSearchParams({ from: gFrom, to: gTo });
+      if (verticalId) params.set("vertical_id", verticalId);
       if (gAdvertiserId) params.set("advertiser_id", gAdvertiserId);
       if (gAffiliateId) params.set("affiliate_id", gAffiliateId);
       if (gCampaignId) params.set("campaign_id", gCampaignId);
@@ -80,6 +84,7 @@ export default function Conversions() {
     <CpaLayout>
       {toast && <div style={{ position: "fixed", top: 80, right: 24, zIndex: 9999, background: "rgba(239,68,68,0.08)", border: "1px solid #fca5a5", color: "#dc2626", padding: "12px 20px", borderRadius: 12, fontSize: 13 }}>{toast.msg}</div>}
       <h1 style={pageTitle}>Conversions</h1>
+      {verticalId && <p style={{ color: "#9b7faa", fontSize: 12, marginTop: -8, marginBottom: 14 }}>Filtered to the vertical selected in the sidebar — click it again to clear.</p>}
 
       <div style={{ ...statRow, marginBottom: 18 }}>
         <div style={statCard}><div style={statLabel}>Total Conversions</div><div style={statValue}>{summary.total_conversions}</div></div>

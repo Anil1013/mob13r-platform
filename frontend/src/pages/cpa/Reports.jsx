@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
 import { table, th, td, pageTitle, statRow, statCard, statLabel, statValue } from "../../styles/shared.js";
 
@@ -44,7 +44,9 @@ function addSums(a, r) {
 
 export default function CpaReports() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const token = localStorage.getItem("token");
+  const verticalId = searchParams.get("vertical_id") || "";
   const [groupBy, setGroupBy] = useState("detailed");
   const [from, setFrom] = useState(daysAgo(7));
   const [to, setTo] = useState(today());
@@ -84,7 +86,7 @@ export default function CpaReports() {
   };
   const loadGeoCarrierOptions = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/campaigns`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE}/api/campaigns${verticalId ? `?vertical_id=${verticalId}` : ""}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (data.status === "SUCCESS") {
         const geos = [...new Set(data.data.map(c => c.geo).filter(Boolean))].sort();
@@ -113,6 +115,7 @@ export default function CpaReports() {
     setLoading(true);
     try {
       const params = new URLSearchParams({ group_by: gGroupBy, from: gFrom, to: gTo });
+      if (verticalId) params.set("vertical_id", verticalId);
       if (gAdvertiserId) params.set("advertiser_id", gAdvertiserId);
       if (gAffiliateId) params.set("affiliate_id", gAffiliateId);
       if (gCampaignId) params.set("campaign_id", gCampaignId);
@@ -184,10 +187,11 @@ export default function CpaReports() {
     <CpaLayout>
       {toast && <div style={{ position: "fixed", top: 80, right: 24, zIndex: 9999, background: "rgba(239,68,68,0.08)", border: "1px solid #fca5a5", color: "#dc2626", padding: "12px 20px", borderRadius: 12, fontSize: 13 }}>{toast}</div>}
       <h1 style={pageTitle}>Reports</h1>
-      <p style={{ color: "#9b7faa", fontSize: 13, marginTop: -12, marginBottom: 18 }}>
+      <p style={{ color: "#9b7faa", fontSize: 13, marginTop: -12, marginBottom: 4 }}>
         Advertiser, Publisher, Campaign, Geo and Carrier always show together · "Group by" adds a subtotal row per group ·
         Group by Hour works for any date range, not just today · Hour filter narrows to that hour-of-day (IST) across the whole range · click a column header to sort
       </p>
+      {verticalId && <p style={{ color: "#9b7faa", fontSize: 12, marginBottom: 14 }}>Filtered to the vertical selected in the sidebar — click it again to clear.</p>}
 
       <div style={{ ...statRow, marginBottom: 18 }}>
         <div style={statCard}><div style={statLabel}>Clicks</div><div style={statValue}>{totals.clicks}</div></div>

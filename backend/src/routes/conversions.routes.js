@@ -4,10 +4,10 @@ import orgAuth from "../middleware/orgAuth.js";
 
 const router = express.Router();
 
-// GET /api/conversions?campaign_id=&affiliate_id=&advertiser_id=&status=&from=&to=
+// GET /api/conversions?campaign_id=&affiliate_id=&advertiser_id=&vertical_id=&status=&from=&to=
 router.get("/", orgAuth, async (req, res) => {
   try {
-    const { campaign_id, affiliate_id, advertiser_id, status, from, to } = req.query;
+    const { campaign_id, affiliate_id, advertiser_id, vertical_id, status, from, to } = req.query;
     let query = `SELECT cv.*, c.name AS campaign_name, a.name AS advertiser_name, af.name AS affiliate_name
                  FROM conversions cv
                  JOIN campaigns c ON c.id = cv.campaign_id
@@ -18,6 +18,7 @@ router.get("/", orgAuth, async (req, res) => {
     if (campaign_id) { params.push(campaign_id); query += ` AND cv.campaign_id = $${params.length}`; }
     if (affiliate_id) { params.push(affiliate_id); query += ` AND cv.affiliate_id = $${params.length}`; }
     if (advertiser_id) { params.push(advertiser_id); query += ` AND c.advertiser_id = $${params.length}`; }
+    if (vertical_id) { params.push(vertical_id); query += ` AND c.vertical_id = $${params.length}`; }
     if (status) { params.push(status); query += ` AND cv.status = $${params.length}`; }
     // IST-aware boundaries, matching the Reports page's date filtering (avoids the
     // UTC-cutoff bug where a single-day range leaked hours from the next IST day).
