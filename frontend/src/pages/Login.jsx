@@ -14,8 +14,10 @@ export default function Login() {
       if(!res.ok){ setError(data.message||"Login failed"); setLoading(false); return; }
       localStorage.setItem("token",data.token);
       localStorage.setItem("user",JSON.stringify(data.user));
+      localStorage.setItem("org",JSON.stringify(data.org || {}));
       localStorage.setItem("token_expiry",Date.now()+24*60*60*1000);
-      window.location.href="/dashboard";
+      const org = data.org || {};
+      window.location.href = (org.mvas_enabled === false && org.has_cpa_access) ? "/cpa/overview" : "/dashboard";
     } catch { setError("Server error"); setLoading(false); }
   };
   return (

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import CpaSidebar from "../components/cpa/CpaSidebar";
 import {
@@ -54,6 +55,14 @@ function crColor(cr) {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+  const org = JSON.parse(localStorage.getItem("org")) || {};
+  const mvasEnabled = org.mvas_enabled !== false;
+  const hasCpaAccess = org.has_cpa_access !== false; // undefined/missing = enabled, backward-compatible with older sessions
+  useEffect(() => {
+    if (!mvasEnabled && hasCpaAccess) navigate("/cpa/overview", { replace: true });
+  }, []);
+
   const today = todayIST();
   const [data, setData] = useState([]);
   const [stats, setStats] = useState({});
@@ -164,7 +173,7 @@ export default function Dashboard() {
     <>
       <Navbar />
       <div style={{ display: "flex" }}>
-        <CpaSidebar />
+        {hasCpaAccess && <CpaSidebar />}
         <div style={page}>
         <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16}}>
           <h1 style={{...pageTitle, margin:0}}>Traffic Dashboard</h1>

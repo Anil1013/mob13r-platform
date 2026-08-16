@@ -27,7 +27,8 @@ export default function Navbar() {
     navigate("/login", { replace: true });
   };
   if (!token) { navigate("/login", { replace: true }); return null; }
-  const links = [
+  const mvasEnabled = org.mvas_enabled !== false; // undefined/missing = enabled, for backward compatibility with older sessions
+  const links = mvasEnabled ? [
     { to:"/dashboard", label:"Dashboard" },
     { to:"/advertisers", label:"Advertisers" },
     { to:"/offers", label:"Offers" },
@@ -39,7 +40,7 @@ export default function Navbar() {
     { to:"/plans", label:"📦 Plans" },
     ...(isOrgAdmin ? [{ to:"/carrier-prefixes", label:"📡 Carriers" }, { to:"/offer-groups", label:"🔀 Offer Groups" }, { to:"/email-logs", label:"📧 Email Logs" }] : []),
     ...(isSuperAdmin ? [{ to:"/super-admin", label:"⚙️ Super Admin" }] : []),
-  ];
+  ] : [];
   return (
     <>
       <nav style={S.nav}>

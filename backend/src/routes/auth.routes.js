@@ -16,7 +16,7 @@ router.post("/login", async (req, res) => {
     // 1. Pehle users table mein check karo (SaaS users)
     try {
       const userResult = await pool.query(
-        `SELECT u.*, o.name as org_name, o.plan, o.status as org_status
+        `SELECT u.*, o.name as org_name, o.plan, o.status as org_status, o.mvas_enabled
          FROM users u
          JOIN organizations o ON o.id = u.org_id
          WHERE u.email = $1 AND u.status = 'active'`,
@@ -30,6 +30,7 @@ router.post("/login", async (req, res) => {
         }
         const isMatch = await bcrypt.compare(password, user.password_hash);
         if (isMatch) {
+          const verticalCount = await pool.query(`SELECT COUNT(*)::int AS n FROM verticals WHERE org_id = $1`, [user.org_id]);
           const token = jwt.sign(
             { id: user.id, email: user.email, role: user.role, org_id: user.org_id },
             process.env.JWT_SECRET || "mob13r_secret",
@@ -38,7 +39,8 @@ router.post("/login", async (req, res) => {
           return res.json({
             success: true, token, expiresIn: 86400,
             user: { email: user.email, role: user.role },
-            org: { id: user.org_id, name: user.org_name, plan: user.plan }
+            org: { id: user.org_id, name: user.org_name, plan: user.plan,
+              mvas_enabled: user.mvas_enabled !== false, has_cpa_access: verticalCount.rows[0].n > 0 }
           });
         }
       }
@@ -62,7 +64,7 @@ router.post("/login", async (req, res) => {
         return res.json({
           success: true, token, expiresIn: 86400,
           user: { email: ADMIN_EMAIL, role: "admin" },
-          org: { id: 1, name: "Default Org", plan: "pro" }
+          org: { id: 1, name: "Default Org", plan: "pro", mvas_enabled: true, has_cpa_access: true }
         });
       }
     }

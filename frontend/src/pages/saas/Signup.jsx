@@ -1,20 +1,40 @@
 import { useState } from "react";
 const API_BASE = "https://backend.mob13r.com";
+
+const MODULES = [
+  { code: "CPA", label: "CPA", icon: "💰", desc: "Cost-per-action campaigns — advertiser payout, publisher payout, hold %." },
+  { code: "CPI", label: "CPI", icon: "📲", desc: "Cost-per-install campaigns for app installs." },
+  { code: "CPS", label: "CPS", icon: "🛒", desc: "Cost-per-sale campaigns for ecommerce/affiliate sales." },
+  { code: "DCB", label: "DCB", icon: "📶", desc: "Direct carrier billing campaigns (CPA-suite version)." },
+  { code: "MVAS", label: "In-app MVAS", icon: "📱", desc: "The full OTP/PIN-based mobile billing suite — Offers, Publishers, Assign Offers, Landing Builder, Carriers, Pin sessions and more." },
+];
+
 export default function Signup() {
   const [form, setForm] = useState({ company_name: "", email: "", password: "", confirm: "" });
+  const [selected, setSelected] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const toggleModule = (code) => {
+    setSelected(s => s.includes(code) ? s.filter(c => c !== code) : [...s, code]);
+  };
+  const selectAll = () => setSelected(MODULES.map(m => m.code));
+  const allSelected = selected.length === MODULES.length;
+
   const handleSignup = async (e) => {
     e.preventDefault();
     setError("");
     if (form.password !== form.confirm) return setError("Passwords do not match");
     if (form.password.length < 6) return setError("Password min 6 characters");
+    if (!selected.length) return setError("Select at least one vertical or In-app MVAS to continue");
     setLoading(true);
     try {
+      const verticals = selected.filter(c => c !== "MVAS");
+      const mvas = selected.includes("MVAS");
       const res = await fetch(`${API_BASE}/api/saas/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_name: form.company_name, email: form.email, password: form.password }),
+        body: JSON.stringify({ company_name: form.company_name, email: form.email, password: form.password, verticals, mvas }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.message || "Signup failed"); setLoading(false); return; }
@@ -22,7 +42,8 @@ export default function Signup() {
       localStorage.setItem("user", JSON.stringify(data.user));
       localStorage.setItem("org", JSON.stringify(data.org));
       localStorage.setItem("token_expiry", Date.now() + 24 * 60 * 60 * 1000);
-      window.location.href = "/dashboard";
+      const org = data.org || {};
+      window.location.href = (org.mvas_enabled === false && org.has_cpa_access) ? "/cpa/overview" : "/dashboard";
     } catch { setError("Server error"); setLoading(false); }
   };
   return (
@@ -45,6 +66,29 @@ export default function Signup() {
             <label style={S.label}>Email</label>
             <input type="email" style={S.input} placeholder="you@company.com" value={form.email}
               onChange={e=>setForm({...form,email:e.target.value})} required/>
+          </div>
+
+          <div style={S.field}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <label style={S.label}>Which do you want to use?</label>
+              <span style={S.selectAllBtn} onClick={selectAll}>{allSelected ? "All selected ✓" : "Select all"}</span>
+            </div>
+            <div style={S.moduleGrid}>
+              {MODULES.map(m => {
+                const active = selected.includes(m.code);
+                return (
+                  <div key={m.code} style={{...S.moduleCard, ...(active ? S.moduleCardActive : {})}} onClick={() => toggleModule(m.code)}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:16}}>{m.icon}</span>
+                      <span style={{fontWeight:700,fontSize:13,color: active ? "#f1f5f9" : "#cbd5e1"}}>{m.label}</span>
+                      {active && <span style={{marginLeft:"auto",color:"#22c55e",fontSize:14}}>✓</span>}
+                    </div>
+                    <p style={S.moduleDesc}>{m.desc}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <p style={{fontSize:11,color:"#475569",marginTop:2}}>You'll only see the modules you select — nothing else clutters your dashboard. You can ask us to add more later.</p>
           </div>
           <div style={S.field}>
             <label style={S.label}>Password</label>
@@ -79,6 +123,11 @@ const S = {
   error:{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",color:"#ef4444",padding:"10px 14px",borderRadius:10,marginBottom:16,fontSize:13},
   field:{display:"flex",flexDirection:"column",gap:8},
   label:{fontSize:12,fontWeight:600,color:"#94a3b8",letterSpacing:"0.05em",textTransform:"uppercase"},
+  selectAllBtn:{fontSize:11,color:"#3b82f6",cursor:"pointer",fontWeight:600},
+  moduleGrid:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:4},
+  moduleCard:{padding:"10px 12px",borderRadius:12,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.02)",cursor:"pointer",transition:"all 0.15s"},
+  moduleCardActive:{border:"1px solid rgba(34,197,94,0.4)",background:"rgba(34,197,94,0.06)"},
+  moduleDesc:{fontSize:10.5,color:"#64748b",margin:"4px 0 0",lineHeight:1.4},
   input:{width:"100%",padding:"12px 16px",borderRadius:12,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.04)",color:"#f1f5f9",fontSize:14,outline:"none"},
   btn:{width:"100%",padding:"14px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#3b82f6,#6366f1)",color:"#fff",fontSize:15,fontWeight:600,cursor:"pointer",marginTop:8},
 };
