@@ -89,15 +89,11 @@ export default function Affiliates() {
     catch { showToast("Could not copy — please copy manually", "error"); }
   };
 
-  const openAffiliate = async (a) => {
-    if (expanded === a.id) { setExpanded(null); return; }
-    setExpanded(a.id);
-    setPostbackDraft(a.postback_url || "");
-    setLinkSearch(""); setLinkGeo(""); setLinkCarrier(""); setLinkSort({ field: "id", dir: "desc" });
+  const loadLinksFor = async (affiliateId) => {
     setPanelLoading(true);
     try {
       const params = verticalId ? `?vertical_id=${verticalId}` : "";
-      const res = await fetch(`${API_BASE}/api/affiliates/${a.id}/campaigns${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE}/api/affiliates/${affiliateId}/campaigns${params}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       setLinks(data.status === "SUCCESS" ? data.data : []);
     } catch {
@@ -105,6 +101,22 @@ export default function Affiliates() {
     } finally {
       setPanelLoading(false);
     }
+  };
+
+  // If a publisher's panel is already open when the sidebar's vertical
+  // selection changes, its tracking-links table would otherwise keep
+  // showing whatever it last loaded (nothing re-triggers openAffiliate for
+  // an already-expanded row) — this keeps it in sync too.
+  useEffect(() => {
+    if (expanded) loadLinksFor(expanded);
+  }, [searchParams.get("vertical_id")]);
+
+  const openAffiliate = async (a) => {
+    if (expanded === a.id) { setExpanded(null); return; }
+    setExpanded(a.id);
+    setPostbackDraft(a.postback_url || "");
+    setLinkSearch(""); setLinkGeo(""); setLinkCarrier(""); setLinkSort({ field: "id", dir: "desc" });
+    await loadLinksFor(a.id);
   };
 
   // One postback per publisher — this always updates the same field, never adds a new one.

@@ -3,6 +3,11 @@ import { useNavigate, useLocation } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 const CODE_RE = /^[A-Za-z0-9_-]{2,20}$/;
+// Pages whose data is filtered by the sidebar's selected vertical — if the
+// user is already ON one of these when they click a vertical header, that
+// page's own URL needs updating too (not just the sidebar's local state),
+// otherwise its data silently keeps showing the OLD/no vertical filter.
+const SCOPED_PATHS = ["/cpa/campaigns", "/cpa/traffic-groups", "/cpa/affiliates", "/cpa/assignments", "/cpa/conversions", "/cpa/reports", "/cpa/advertisers"];
 
 export default function CpaSidebar() {
   const [verticals, setVerticals] = useState([]);
@@ -19,6 +24,19 @@ export default function CpaSidebar() {
   const user = JSON.parse(localStorage.getItem("user")) || { email: "Admin" };
 
   const flashError = (msg) => { setError(msg); setTimeout(() => setError(null), 3000); };
+
+  // Expanding/collapsing a vertical updates local sidebar state as before —
+  // but if we're already sitting on a scoped page (Publishers, Campaigns,
+  // Reports, etc.), that page's own URL needs the vertical_id too, or its
+  // data keeps showing whatever it last loaded (no re-fetch happens
+  // otherwise, since nothing about that page's own state changed).
+  const toggleVertical = (id) => {
+    const newId = expandedId === id ? null : id;
+    setExpandedId(newId);
+    if (SCOPED_PATHS.includes(location.pathname)) {
+      navigate(newId ? `${location.pathname}?vertical_id=${newId}` : location.pathname, { replace: true });
+    }
+  };
 
   const load = async () => {
     try {
@@ -112,7 +130,7 @@ export default function CpaSidebar() {
           const open = expandedId === v.id;
           return (
             <div key={v.id} style={{ opacity: v.is_active ? 1 : 0.4 }}>
-              <div style={{ ...S.accHeader, ...(open ? S.accHeaderOpen : {}) }} onClick={() => setExpandedId(open ? null : v.id)}>
+              <div style={{ ...S.accHeader, ...(open ? S.accHeaderOpen : {}) }} onClick={() => toggleVertical(v.id)}>
                 <span style={S.accIcon}>{v.icon}</span>
                 <span style={S.accLabel}>{v.name}</span>
                 <span style={S.accCount}>{v.active_campaigns || 0}</span>
