@@ -101,8 +101,9 @@ router.get("/:id/campaigns", orgAuth, async (req, res) => {
     const affiliate = affRes.rows[0];
 
     const params = [req.orgId];
-    let query = `SELECT c.*, v.name AS vertical_name FROM campaigns c
+    let query = `SELECT c.*, v.name AS vertical_name, a.name AS advertiser_name FROM campaigns c
        JOIN verticals v ON v.id = c.vertical_id
+       JOIN advertisers a ON a.id = c.advertiser_id
        WHERE c.org_id = $1 AND c.status = 'active'`;
     if (vertical_id) { params.push(vertical_id); query += ` AND c.vertical_id = $${params.length}`; }
     query += ` ORDER BY c.id DESC`;

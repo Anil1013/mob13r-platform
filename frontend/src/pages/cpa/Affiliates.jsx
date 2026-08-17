@@ -20,6 +20,10 @@ export default function Affiliates() {
   const [toast, setToast] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [links, setLinks] = useState([]);
+  const [linkSearch, setLinkSearch] = useState("");
+  const [linkGeo, setLinkGeo] = useState("");
+  const [linkCarrier, setLinkCarrier] = useState("");
+  const [linkSort, setLinkSort] = useState({ field: "id", dir: "desc" });
   const [panelLoading, setPanelLoading] = useState(false);
   const [postbackDraft, setPostbackDraft] = useState("");
   const [savingPb, setSavingPb] = useState(false);
@@ -89,6 +93,7 @@ export default function Affiliates() {
     if (expanded === a.id) { setExpanded(null); return; }
     setExpanded(a.id);
     setPostbackDraft(a.postback_url || "");
+    setLinkSearch(""); setLinkGeo(""); setLinkCarrier(""); setLinkSort({ field: "id", dir: "desc" });
     setPanelLoading(true);
     try {
       const params = verticalId ? `?vertical_id=${verticalId}` : "";
@@ -177,18 +182,82 @@ export default function Affiliates() {
                 </div>
 
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#9b7faa", textTransform: "uppercase", marginBottom: 6 }}>Personalized Tracking Links</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 18 }}>
-                  {links.map(l => (
-                    <div key={l.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", padding: "8px 12px", borderRadius: 10, border: "1px solid #eedde8", flexWrap: "wrap", gap: 8 }}>
-                      <span style={{ fontSize: 12, color: "#4a2f3f" }}>{l.name} <span style={{ color: "#b89ab0" }}>({l.vertical_name})</span></span>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <code style={{ fontSize: 11, color: "#9b7faa", wordBreak: "break-all" }}>{l.tracking_url}</code>
-                        <button style={{ ...btn, padding: "3px 10px", fontSize: 11 }} onClick={() => copy(l.tracking_url, "Tracking link")}>Copy</button>
+                {(() => {
+                  const geoOptions = [...new Set(links.map(l => l.geo).filter(Boolean))].sort();
+                  const carrierOptions = [...new Set(links.map(l => l.carrier).filter(Boolean))].sort();
+                  const filtered = links.filter(l => {
+                    if (linkGeo && l.geo !== linkGeo) return false;
+                    if (linkCarrier && l.carrier !== linkCarrier) return false;
+                    if (linkSearch.trim()) {
+                      const q = linkSearch.trim().toLowerCase();
+                      if (!l.name?.toLowerCase().includes(q) && !l.advertiser_name?.toLowerCase().includes(q)) return false;
+                    }
+                    return true;
+                  });
+                  const sorted = [...filtered].sort((a2, b2) => {
+                    const { field, dir } = linkSort;
+                    const av = (field === "advertiser_name" ? a2.advertiser_name : field === "geo" ? a2.geo : field === "carrier" ? a2.carrier : field === "name" ? a2.name : a2.id) || "";
+                    const bv = (field === "advertiser_name" ? b2.advertiser_name : field === "geo" ? b2.geo : field === "carrier" ? b2.carrier : field === "name" ? b2.name : b2.id) || "";
+                    const cmp = typeof av === "number" ? av - bv : String(av).localeCompare(String(bv));
+                    return dir === "asc" ? cmp : -cmp;
+                  });
+                  const toggleSort = (field) => setLinkSort(s => ({ field, dir: s.field === field && s.dir === "desc" ? "asc" : "desc" }));
+                  const arrow = (field) => linkSort.field === field ? (linkSort.dir === "desc" ? " ▼" : " ▲") : "";
+                  const total = sorted.length;
+                  const colHeader = { padding: "8px 10px", fontSize: 10, fontWeight: 700, color: "#9b7faa", textTransform: "uppercase", textAlign: "left", cursor: "pointer", whiteSpace: "nowrap" };
+                  const colCell = { padding: "8px 10px", fontSize: 12, color: "#4a2f3f", borderTop: "1px solid #f0e0e8" };
+                  return (
+                    <>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                        <input style={{ ...input, maxWidth: 180, padding: "5px 10px", fontSize: 12 }} placeholder="Search campaign/advertiser..." value={linkSearch} onChange={e => setLinkSearch(e.target.value)} />
+                        <select style={{ ...input, maxWidth: 90, padding: "5px 8px", fontSize: 12 }} value={linkGeo} onChange={e => setLinkGeo(e.target.value)}>
+                          <option value="">Geo</option>
+                          {geoOptions.map(g => <option key={g} value={g}>{g}</option>)}
+                        </select>
+                        <select style={{ ...input, maxWidth: 110, padding: "5px 8px", fontSize: 12 }} value={linkCarrier} onChange={e => setLinkCarrier(e.target.value)}>
+                          <option value="">Carrier</option>
+                          {carrierOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
                       </div>
-                    </div>
-                  ))}
-                  {!links.length && <div style={{ fontSize: 12, color: "#b89ab0" }}>No active campaigns yet.</div>}
-                </div>
+                      <div style={{ background: "#fff", border: "1px solid #eedde8", borderRadius: 10, overflow: "hidden", marginBottom: 18 }}>
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                            <thead>
+                              <tr style={{ background: "#fdf6f9" }}>
+                                <th style={colHeader}>S.No</th>
+                                <th style={colHeader} onClick={() => toggleSort("advertiser_name")}>Advertiser{arrow("advertiser_name")}</th>
+                                <th style={colHeader} onClick={() => toggleSort("geo")}>Geo{arrow("geo")}</th>
+                                <th style={colHeader} onClick={() => toggleSort("carrier")}>Carrier{arrow("carrier")}</th>
+                                <th style={colHeader} onClick={() => toggleSort("name")}>Campaign{arrow("name")}</th>
+                                <th style={colHeader}>Tracking URL</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sorted.map((l, i) => (
+                                <tr key={l.id}>
+                                  <td style={colCell}>{total - i}</td>
+                                  <td style={colCell}>{l.advertiser_name || "—"}</td>
+                                  <td style={colCell}>{l.geo || "—"}</td>
+                                  <td style={colCell}>{l.carrier || "—"}</td>
+                                  <td style={colCell}>{l.name} <span style={{ color: "#b89ab0" }}>({l.vertical_name})</span></td>
+                                  <td style={{ ...colCell, minWidth: 240 }}>
+                                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                      <code style={{ fontSize: 10.5, color: "#9b7faa", wordBreak: "break-all" }}>{l.tracking_url}</code>
+                                      <button style={{ ...btn, padding: "3px 10px", fontSize: 11, whiteSpace: "nowrap" }} onClick={() => copy(l.tracking_url, "Tracking link")}>Copy</button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                              {!sorted.length && (
+                                <tr><td colSpan={6} style={{ ...colCell, textAlign: "center", color: "#b89ab0" }}>{links.length ? "No links match your filters." : "No active campaigns yet."}</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
 
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#9b7faa", textTransform: "uppercase", marginBottom: 6 }}>
                   Postback URL — we forward every conversion here (S2S). One per publisher — saving just updates it.
