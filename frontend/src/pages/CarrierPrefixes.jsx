@@ -44,7 +44,7 @@ export default function CarrierPrefixes() {
     try {
       const res = await fetch(`${API_BASE}/api/geos`);
       const data = await res.json();
-      if (data.status === "SUCCESS") setGeos([...data.data].sort((a, b) => a.name.localeCompare(b.name)));
+      if (data.status === "SUCCESS") setGeos([...data.data].sort((a, b) => a.code.localeCompare(b.code)));
     } catch (e) { console.error(e); }
   };
 
