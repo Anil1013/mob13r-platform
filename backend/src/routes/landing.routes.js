@@ -128,8 +128,8 @@ router.post("/", orgAuth, async (req, res) => {
        WHERE po.id = $1 LIMIT 1`,
       [publisher_offer_id]
     );
-    const pubName = pubRes.rows[0]?.name
-      ? encodeURIComponent(pubRes.rows[0].name)
+    const pubName = pubRes.rows[0]?.name?.trim()
+      ? encodeURIComponent(pubRes.rows[0].name.trim())
       : "publisher";
 
     // Get publisher api_key

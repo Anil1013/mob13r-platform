@@ -36,7 +36,7 @@ router.get("/", orgAuth, async (req, res) => {
 router.post("/", orgAuth, async (req, res) => {
   try {
     const { name, email } = req.body;
-    if (!name) return res.status(400).json({ status: "FAILED", message: "Publisher name required" });
+    if (!name || !name.trim()) return res.status(400).json({ status: "FAILED", message: "Publisher name required" });
 
     const countRes = await pool.query(
       `SELECT COUNT(*)::int AS count FROM publishers WHERE org_id = $1`,
@@ -52,7 +52,7 @@ router.post("/", orgAuth, async (req, res) => {
     const apiKey = generatePublisherKey();
     const result = await pool.query(
       `INSERT INTO publishers (name, api_key, status, org_id, email) VALUES ($1, $2, 'active', $3, $4) RETURNING *`,
-      [name, apiKey, req.orgId, email || null]
+      [name.trim(), apiKey, req.orgId, email || null]
     );
     res.json({ status: "SUCCESS", data: result.rows[0] });
   } catch (err) {
