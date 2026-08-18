@@ -38,6 +38,9 @@ export default function DynamicLanding() {
   const [msisdn, setMsisdn] =
     useState("");
 
+  const [countryCode, setCountryCode] =
+    useState("+964");
+
   const [prefixOptions, setPrefixOptions] =
     useState([]);
 
