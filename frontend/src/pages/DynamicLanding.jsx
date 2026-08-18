@@ -1023,14 +1023,15 @@ export default function DynamicLanding() {
                 value={countryCode}
                 onChange={(e) => setCountryCode(e.target.value)}
                 style={styles.countryCodeSelect}
+                disabled={geoCallingCodes.filter(g => g.calling_code && g.code === landing.geo).length <= 1}
               >
-                {geoCallingCodes.filter(g => g.calling_code).length ? (
-                  geoCallingCodes.filter(g => g.calling_code).map(g => (
+                {(() => {
+                  const ownGeoOptions = geoCallingCodes.filter(g => g.calling_code && g.code === landing.geo);
+                  const optionsToShow = ownGeoOptions.length ? ownGeoOptions : [{ id: "fallback", calling_code: countryCode }];
+                  return optionsToShow.map(g => (
                     <option key={g.id} value={g.calling_code} style={{ color: "#111827", background: "#ffffff" }}>{g.calling_code}</option>
-                  ))
-                ) : (
-                  <option value={countryCode} style={{ color: "#111827", background: "#ffffff" }}>{countryCode}</option>
-                )}
+                  ));
+                })()}
               </select>
               <input
                 type="tel"
