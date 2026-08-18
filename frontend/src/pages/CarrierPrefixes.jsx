@@ -29,14 +29,22 @@ export default function CarrierPrefixes() {
   const [editingGeoId, setEditingGeoId] = useState(null);
   const [editingGeoDraft, setEditingGeoDraft] = useState({ name: "", calling_code: "" });
   const [geoMsg, setGeoMsg] = useState(null);
+  const [geoFilterCountry, setGeoFilterCountry] = useState("");
+  const [geoFilterCallingCode, setGeoFilterCallingCode] = useState("");
 
   const GEO_NAMES = Object.fromEntries(geos.map(g => [g.code, g.name]));
+
+  const filteredGeos = geos.filter(g => {
+    if (geoFilterCountry && g.code !== geoFilterCountry) return false;
+    if (geoFilterCallingCode.trim() && !(g.calling_code || "").toLowerCase().includes(geoFilterCallingCode.trim().toLowerCase())) return false;
+    return true;
+  });
 
   const loadGeos = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/geos`);
       const data = await res.json();
-      if (data.status === "SUCCESS") setGeos(data.data);
+      if (data.status === "SUCCESS") setGeos([...data.data].sort((a, b) => a.name.localeCompare(b.name)));
     } catch (e) { console.error(e); }
   };
 
@@ -174,7 +182,7 @@ export default function CarrierPrefixes() {
       <div style={s.card}>
         <div style={s.sectionTitle}>
           🌍 Countries &amp; Calling Codes
-          <span style={{ color: "#999", fontWeight: "400", fontSize: "13px" }}>({geos.length} total)</span>
+          <span style={{ color: "#999", fontWeight: "400", fontSize: "13px" }}>({filteredGeos.length} total)</span>
         </div>
         <div style={{ color: "#999", fontSize: "12px", marginBottom: "14px" }}>
           Ye list landing pages ke mobile-number dropdown (jaise +964) me directly use hoti hai — naya country add karo, kahi bhi code edit karne ki zaroorat nahi.
@@ -199,6 +207,21 @@ export default function CarrierPrefixes() {
         </div>
         <button style={s.btn} onClick={addGeo}>+ Add Country</button>
 
+        <div style={{ ...s.grid2, marginTop: "18px", marginBottom: "0" }}>
+          <div>
+            <span style={s.label}>Filter by Country</span>
+            <select style={s.select} value={geoFilterCountry} onChange={e => setGeoFilterCountry(e.target.value)}>
+              <option value="">All Countries</option>
+              {geos.map(g => <option key={g.code} value={g.code}>{g.code} — {g.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <span style={s.label}>Filter by Calling Code</span>
+            <input style={s.input} placeholder="Search calling code... e.g. +964" value={geoFilterCallingCode}
+              onChange={e => setGeoFilterCallingCode(e.target.value)} />
+          </div>
+        </div>
+
         <table style={{ ...s.table, marginTop: "18px" }}>
           <thead>
             <tr>
@@ -209,7 +232,7 @@ export default function CarrierPrefixes() {
             </tr>
           </thead>
           <tbody>
-            {geos.map((g, i) => (
+            {filteredGeos.map((g, i) => (
               <tr key={g.id} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
                 <td style={s.td}><span style={s.geoBadge}>{g.code}</span></td>
                 <td style={s.td}>
@@ -241,8 +264,8 @@ export default function CarrierPrefixes() {
                 </td>
               </tr>
             ))}
-            {!geos.length && (
-              <tr><td colSpan={4} style={{ ...s.td, textAlign: "center", color: "#aaa" }}>No countries added yet.</td></tr>
+            {!filteredGeos.length && (
+              <tr><td colSpan={4} style={{ ...s.td, textAlign: "center", color: "#aaa" }}>{geos.length ? "No countries match your filters." : "No countries added yet."}</td></tr>
             )}
           </tbody>
         </table>
