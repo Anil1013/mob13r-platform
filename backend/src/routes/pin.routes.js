@@ -236,6 +236,9 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     const sessionToken = uuidv4();
     runtime.session_token = sessionToken;
     runtime.click_id = sessionToken;
+    // ClickID for antifraud must be unique, alphanumeric-only, ≤50 chars —
+    // a raw UUID has hyphens, so strip them.
+    runtime.txid = sessionToken.replace(/-/g, "");
 
     const payload = buildPayload(allParams, runtime, true); // pin_send: skip otp/pin
 
@@ -306,6 +309,64 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 });
 
 /* =====================================================
+   PREPARE ANTIFRAUD FOR VERIFY (page-load timing)
+   Called by the landing page right when it shows the OTP-entry screen —
+   BEFORE the user submits — so any antifraud-provider script that needs
+   to observe behavior leading up to the submit click (e.g. cgparcel's
+   Zain integration, which attaches to elements with class "AFsubmitbtn")
+   gets a chance to actually run. The actual /pin/verify call later reuses
+   whatever this generates instead of minting a second, late one.
+   Completely harmless no-op for any offer not using BEFORE_VERIFY.
+===================================================== */
+router.all("/pin/prepare-verify", async (req, res) => {
+  try {
+    const { session_token, referer, accept_language } = { ...req.query, ...req.body };
+    if (!session_token) return res.json({ status: "FAILED", message: "session_token required" });
+
+    const sRes = await pool.query(`SELECT * FROM pin_sessions WHERE session_token=$1`, [session_token]);
+    if (!sRes.rows.length) return res.json({ status: "INVALID_SESSION" });
+    const session = sRes.rows[0];
+
+    const offerRes = await pool.query(`SELECT * FROM offers WHERE id=$1`, [session.offer_id]);
+    const offer = offerRes.rows[0];
+
+    if (!offer?.has_antifraud || offer.af_trigger_point !== "BEFORE_VERIFY") {
+      return res.json({ status: "SUCCESS", antifraud_uniqid: null, injected_script: null });
+    }
+
+    const ua = session.params?.user_agent || req.headers["user-agent"] || "";
+    const ip = session.params?.ip || req.headers["x-forwarded-for"] || req.ip || "";
+    const verifyRowToken = uuidv4();
+
+    const runtime = {
+      ...session.params,
+      ip, user_ip: ip, user_agent: ua, ua, userAgent: ua,
+      txid: verifyRowToken.replace(/-/g, ""),
+      headers_b64: encodeHeadersB64({
+        "User-Agent": ua,
+        "Referer": referer || session.params?.referer || "",
+        "Accept-Language": accept_language || session.params?.accept_language || "",
+      }),
+    };
+
+    const workflow = await executeWorkflowSteps(offer, runtime, "verify");
+
+    // Persist so the real /pin/verify call (which may happen seconds later,
+    // after the user types their OTP) reuses this exact value instead of
+    // generating a second one.
+    await pool.query(
+      `UPDATE pin_sessions SET params = params || $1::jsonb WHERE session_token = $2`,
+      [JSON.stringify({ antifraud_uniqid: workflow.afId, af_id: workflow.afId }), session_token]
+    );
+
+    return res.json({ status: "SUCCESS", antifraud_uniqid: workflow.afId, injected_script: workflow.injectedScript });
+  } catch (err) {
+    console.error("PREPARE VERIFY ERROR:", err);
+    return res.json({ status: "SUCCESS", antifraud_uniqid: null, injected_script: null }); // fail open — never block the OTP flow over this
+  }
+});
+
+/* =====================================================
    PIN VERIFY
 ===================================================== */
 
@@ -368,16 +429,21 @@ router.all("/pin/verify", async (req, res) => {
       }),
     };
 
-    // Antifraud at VERIFY point — some advertiser integrations (e.g. Zain/
-    // Puretech via cgparcel) require the antifraud token to be freshly
-    // generated right here, on the verify step, not at send. Runs only
-    // when the offer is explicitly configured for it (af_trigger_point =
-    // BEFORE_VERIFY) — no effect on offers using the existing BEFORE_SEND
-    // flow.
-    const verifyWorkflow = await executeWorkflowSteps(offer, runtime, "verify");
-    if (verifyWorkflow.afId) {
-      runtime.af_id = verifyWorkflow.afId;
-      runtime.antifraud_uniqid = verifyWorkflow.afId;
+    // Antifraud at VERIFY point — prefer whatever /pin/prepare-verify already
+    // generated (correct timing per Puretech/cgparcel's docs — before the
+    // user submits, not during). Only generate fresh here as a fallback, in
+    // case the landing page never called prepare-verify for some reason —
+    // this keeps the flow working either way rather than failing.
+    if (session.params?.antifraud_uniqid) {
+      runtime.af_id = session.params.antifraud_uniqid;
+      runtime.antifraud_uniqid = session.params.antifraud_uniqid;
+    } else {
+      runtime.txid = uuidv4().replace(/-/g, "");
+      const verifyWorkflow = await executeWorkflowSteps(offer, runtime, "verify");
+      if (verifyWorkflow.afId) {
+        runtime.af_id = verifyWorkflow.afId;
+        runtime.antifraud_uniqid = verifyWorkflow.afId;
+      }
     }
 
     // Build payload — only is_active=true params (skipOtp=false for VERIFY so pin/otp IS included)

@@ -290,4 +290,28 @@ if (!verifyRow.rows.length) {
   }
 });
 
+/* =====================================================
+   📤 PREPARE ANTIFRAUD FOR VERIFY
+   Called by the landing page right when it shows the OTP-entry screen
+   (before the user submits) — see pin.routes.js for the full explanation.
+   No crediting/geo/cap logic needed here, just forward through.
+===================================================== */
+router.all("/pin/prepare-verify", publisherAuth, async (req, res) => {
+  try {
+    const params = { ...req.query, ...req.body };
+    const internal = await axios({
+      method: req.method,
+      url: `${INTERNAL_API_BASE}/api/pin/prepare-verify`,
+      timeout: AXIOS_TIMEOUT,
+      params: req.method === "GET" ? params : undefined,
+      data: req.method !== "GET" ? params : undefined,
+      validateStatus: () => true,
+    });
+    return res.json(internal.data);
+  } catch (err) {
+    console.error("PUBLISHER PREPARE VERIFY ERROR:", err);
+    return res.json({ status: "SUCCESS", antifraud_uniqid: null, injected_script: null }); // fail open
+  }
+});
+
 export default router;

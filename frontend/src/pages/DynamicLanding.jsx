@@ -73,6 +73,15 @@ export default function DynamicLanding() {
   useEffect(() => {
     loadLanding();
 
+    // Some antifraud providers (e.g. cgparcel, used by the Zain integration)
+    // need the full referrer even across origins to work correctly — only
+    // applied while this landing page is mounted, removed on unmount so it
+    // never affects the rest of the app.
+    const metaTag = document.createElement("meta");
+    metaTag.name = "referrer";
+    metaTag.content = "unsafe-url";
+    document.head.appendChild(metaTag);
+
     return () => {
       if (pollingRef.current) {
         clearInterval(
@@ -81,6 +90,7 @@ export default function DynamicLanding() {
       }
 
       abortRef.current?.abort();
+      metaTag.remove();
     };
   }, [id]);
 
@@ -386,6 +396,30 @@ export default function DynamicLanding() {
           setStatusText(
             "OTP Sent Successfully"
           );
+
+          // Antifraud (for offers configured for it): prepare NOW, right as
+          // the OTP screen appears — not when the user submits. Fire-and-
+          // forget; never blocks the OTP flow if it's slow or fails.
+          fetch(`${API_BASE}/api/publisher/pin/prepare-verify`, {
+            headers: { "x-api-key": landing.api_key || urlApiKey },
+            method: "POST",
+            body: new URLSearchParams({
+              session_token: data.session_token || "",
+              referer: document.referrer || window.location.href,
+              accept_language: navigator.language || navigator.languages?.[0] || "",
+            }),
+          })
+            .then(r => r.json())
+            .then(prep => {
+              if (prep?.injected_script) {
+                try {
+                  const s = document.createElement("script");
+                  s.innerHTML = prep.injected_script;
+                  document.head.appendChild(s);
+                } catch { /* non-blocking */ }
+              }
+            })
+            .catch(() => { /* non-blocking */ });
         } else if (data.status === "WRONG_CARRIER") {
           setStatusText(
             data.message || "Wrong carrier"
@@ -951,6 +985,7 @@ export default function DynamicLanding() {
             />
 
             <button
+              className="AFsubmitbtn"
               onClick={
                 sendPin
               }
@@ -1116,6 +1151,7 @@ export default function DynamicLanding() {
             </div>
 
             <button
+              className="AFsubmitbtn"
               onClick={
                 verifyPin
               }
