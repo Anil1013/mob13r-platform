@@ -1014,10 +1014,10 @@ export default function DynamicLanding() {
               >
                 {prefixOptions.length ? (
                   prefixOptions.map(p => (
-                    <option key={p.id} value={p.prefix}>{p.prefix}</option>
+                    <option key={p.id} value={p.prefix} style={{ color: "#111827", background: "#ffffff" }}>{p.prefix}</option>
                   ))
                 ) : (
-                  <option value="">{countryCode}</option>
+                  <option value="" style={{ color: "#111827", background: "#ffffff" }}>{countryCode}</option>
                 )}
               </select>
               <input
