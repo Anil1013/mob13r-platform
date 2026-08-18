@@ -20,7 +20,7 @@ const DEFAULT_FORM = {
   verify_button_text: "Confirm",
   disclaimer: "",
   theme_color: "#22c55e",
-  text_color: "#1e293b", // Updated default for readability on light cards
+  text_color: "#ffffff", // was #1e293b (dark navy) — invisible on the real page's semi-transparent card; see DynamicLanding.jsx's actual card background
   card_color: "#ffffff",
   success_redirect_url: "",
   show_timer: true,
@@ -77,7 +77,7 @@ export default function LandingBuilder() {
       verify_button_text: item.verify_button_text || "Confirm",
       disclaimer: item.disclaimer || "",
       theme_color: item.theme_color || "#22c55e",
-      text_color: item.text_color || "#1e293b",
+      text_color: item.text_color || "#ffffff",
       card_color: item.card_color || "#ffffff",
       success_redirect_url: item.success_redirect_url || "",
       show_timer: item.show_timer ?? true,
@@ -352,6 +352,20 @@ export default function LandingBuilder() {
                 value={form.description}
                 onChange={(e) => handleChange("description", e.target.value)}
               />
+              <textarea
+                style={styles.textarea}
+                placeholder="Disclaimer (pricing/subscription terms — shown near the bottom, smaller text)"
+                value={form.disclaimer}
+                onChange={(e) => handleChange("disclaimer", e.target.value)}
+              />
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#475569" }}>
+                <input
+                  type="checkbox"
+                  checked={form.show_disclaimer}
+                  onChange={(e) => handleChange("show_disclaimer", e.target.checked)}
+                />
+                Show disclaimer on the page
+              </label>
               <input
                 style={styles.input}
                 placeholder="Button Text"
@@ -491,8 +505,12 @@ export default function LandingBuilder() {
               {/* Core Overlay covering full area background */}
               <div style={{ ...styles.overlay, background: form.background_overlay }} />
               
-              {/* Dynamic content card stretched as a real page view container */}
-              <div style={{ ...styles.previewContent, background: form.card_color, borderRadius: form.card_radius, color: form.text_color }}>
+              {/* Dynamic content card stretched as a real page view container.
+                  Uses the SAME formula as DynamicLanding.jsx's real card
+                  background (card_color at ~12% opacity, not solid) — a
+                  solid preview here previously hid text-contrast problems
+                  that only showed up on the actual live page. */}
+              <div style={{ ...styles.previewContent, background: form.card_color?.startsWith("#") ? `${form.card_color}20` : "rgba(255,255,255,0.08)", borderRadius: form.card_radius, color: form.text_color }}>
                 
                 <div style={styles.previewHeaderContainer}>
                   {previewLogo.url ? (
@@ -590,7 +608,7 @@ const styles = {
     backgroundPosition: "center",
     display: "flex",
     flexDirection: "column",
-    background: "#f5eef8"
+    background: "linear-gradient(135deg,#020617,#111827)" // matches DynamicLanding.jsx's real page background, not a light placeholder — so text-contrast issues show up here too
   },
   overlay: { position: "absolute", inset: 0, zIndex: 1 },
   previewContent: {
