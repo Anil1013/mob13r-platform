@@ -65,6 +65,7 @@ export default function LandingBuilder() {
   const [backgroundFile, setBackgroundFile] = useState(null);
 
   const [form, setForm] = useState(DEFAULT_FORM);
+  const [previewLang, setPreviewLang] = useState("en");
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 900 : false);
   const [editingId, setEditingId] = useState(null);
   const [assignState, setAssignState] = useState({}); // { landingId: { open, publishers, selectedPub } }
@@ -414,49 +415,49 @@ export default function LandingBuilder() {
                   style={styles.input}
                   placeholder="Title (Arabic)"
                   value={form.title_ar}
-                  onChange={(e) => handleChange("title_ar", e.target.value)}
+                  onChange={(e) => { handleChange("title_ar", e.target.value); setPreviewLang("ar"); }}
                 />
                 <input
                   style={styles.input}
                   placeholder="Subtitle (Arabic)"
                   value={form.subtitle_ar}
-                  onChange={(e) => handleChange("subtitle_ar", e.target.value)}
+                  onChange={(e) => { handleChange("subtitle_ar", e.target.value); setPreviewLang("ar"); }}
                 />
                 <textarea
                   style={styles.textarea}
                   placeholder="Description (Arabic)"
                   value={form.description_ar}
-                  onChange={(e) => handleChange("description_ar", e.target.value)}
+                  onChange={(e) => { handleChange("description_ar", e.target.value); setPreviewLang("ar"); }}
                 />
                 <textarea
                   style={styles.textarea}
                   placeholder="Disclaimer (Arabic)"
                   value={form.disclaimer_ar}
-                  onChange={(e) => handleChange("disclaimer_ar", e.target.value)}
+                  onChange={(e) => { handleChange("disclaimer_ar", e.target.value); setPreviewLang("ar"); }}
                 />
                 <input
                   style={styles.input}
                   placeholder="Button Text (Arabic)"
                   value={form.button_text_ar}
-                  onChange={(e) => handleChange("button_text_ar", e.target.value)}
+                  onChange={(e) => { handleChange("button_text_ar", e.target.value); setPreviewLang("ar"); }}
                 />
                 <input
                   style={styles.input}
                   placeholder="Verify Button Text (Arabic)"
                   value={form.verify_button_text_ar}
-                  onChange={(e) => handleChange("verify_button_text_ar", e.target.value)}
+                  onChange={(e) => { handleChange("verify_button_text_ar", e.target.value); setPreviewLang("ar"); }}
                 />
                 <input
                   style={styles.input}
                   placeholder="Success Title (Arabic)"
                   value={form.success_title_ar}
-                  onChange={(e) => handleChange("success_title_ar", e.target.value)}
+                  onChange={(e) => { handleChange("success_title_ar", e.target.value); setPreviewLang("ar"); }}
                 />
                 <textarea
                   style={styles.textarea}
                   placeholder="Success Message (Arabic)"
                   value={form.success_message_ar}
-                  onChange={(e) => handleChange("success_message_ar", e.target.value)}
+                  onChange={(e) => { handleChange("success_message_ar", e.target.value); setPreviewLang("ar"); }}
                 />
               </div>
 
@@ -614,6 +615,15 @@ export default function LandingBuilder() {
 
           {/* RIGHT PANEL: LIVE PREVIEW */}
           <div style={styles.previewPanel}>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8, gap: 6 }}>
+              <span style={{ fontSize: 11, color: "#64748b", alignSelf: "center" }}>Preview:</span>
+              <button
+                onClick={() => setPreviewLang(l => l === "ar" ? "en" : "ar")}
+                style={{ padding: "4px 12px", borderRadius: 999, border: "1px solid #cbd5e1", background: "#fff", color: "#334155", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+              >
+                {previewLang === "ar" ? "🇬🇧 Show English" : "🇮🇶 Show Arabic"}
+              </button>
+            </div>
             <div style={{ ...styles.previewCard, backgroundImage: previewBackground.url ? `url(${previewBackground.url})` : "none" }}>
               
               {/* Core Overlay covering full area background */}
@@ -627,35 +637,47 @@ export default function LandingBuilder() {
               <div style={{ ...styles.previewContent, background: form.card_color?.startsWith("#") ? `${form.card_color}20` : "rgba(255,255,255,0.08)", borderRadius: form.card_radius, color: form.text_color }}>
                 
                 <div style={styles.previewHeaderContainer}>
-                  {previewLogo.url ? (
-                    <img src={previewLogo.url} alt="Logo" style={styles.logo} />
-                  ) : (
-                    <div style={{...styles.logo, background: form.theme_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#fff'}}>Brand</div>
+                  {form.show_logo_badge && (
+                    previewLogo.url ? (
+                      <img src={previewLogo.url} alt="Logo" style={styles.logo} />
+                    ) : (
+                      <div style={{...styles.logo, background: form.theme_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#fff'}}>Brand</div>
+                    )
                   )}
                   {form.show_carrier_logo && <div style={styles.carrierPlaceholder}>⚡ Carrier Partner</div>}
                 </div>
 
                 {previewHero.url && <img src={previewHero.url} alt="Hero Asset" style={styles.hero} />}
-                
-                <div style={{ textAlign: form.rtl_enabled ? "right" : "left", direction: form.rtl_enabled ? "rtl" : "ltr" }}>
-                  <h2 style={{ fontSize: 24, fontWeight: 800, margin: "10px 0", color: form.text_color }}>{form.title || "Premium Subscription Title"}</h2>
-                  <p style={{ fontSize: 14, margin: "5px 0", color: form.text_color, opacity: 0.85, fontWeight: 500 }}>{form.subtitle || "Access unlimited contents immediately"}</p>
-                  
+
+                <div style={{ textAlign: (previewLang === "ar" ? "right" : form.rtl_enabled ? "right" : "left"), direction: (previewLang === "ar" ? "rtl" : form.rtl_enabled ? "rtl" : "ltr") }}>
+                  {form.show_title && (
+                    <h2 style={{ fontSize: 24, fontWeight: 800, margin: "10px 0", color: form.text_color }}>
+                      {(previewLang === "ar" && form.title_ar) || form.title || "Premium Subscription Title"}
+                    </h2>
+                  )}
+                  <p style={{ fontSize: 14, margin: "5px 0", color: form.text_color, opacity: 0.85, fontWeight: 500 }}>
+                    {(previewLang === "ar" && form.subtitle_ar) || form.subtitle || "Access unlimited contents immediately"}
+                  </p>
+
                   {form.show_timer && (
                     <div style={{...styles.timerBox, borderColor: form.theme_color, color: form.theme_color}}>
                       ⏳ Offer expires in: <strong>{form.timer_seconds}s</strong>
                     </div>
                   )}
 
-                  <p style={{...styles.previewDescription, color: form.text_color, opacity: 0.75}}>{form.description || "Enter your mobile information inside the next steps to start authentication."}</p>
+                  <p style={{...styles.previewDescription, color: form.text_color, opacity: 0.75}}>
+                    {(previewLang === "ar" && form.description_ar) || form.description || "Enter your mobile information inside the next steps to start authentication."}
+                  </p>
                 </div>
 
                 <div style={styles.actionSection}>
                   <button style={{ ...styles.previewButton, background: form.theme_color, borderRadius: form.button_radius, color: "#ffffff" }}>
-                    {form.button_text}
+                    {(previewLang === "ar" && form.button_text_ar) || form.button_text}
                   </button>
                   {form.show_disclaimer && (
-                    <p style={styles.disclaimerText}>{form.disclaimer || "Terms & Conditions apply. Premium value services charged weekly."}</p>
+                    <p style={styles.disclaimerText}>
+                      {(previewLang === "ar" && form.disclaimer_ar) || form.disclaimer || "Terms & Conditions apply. Premium value services charged weekly."}
+                    </p>
                   )}
                 </div>
 
