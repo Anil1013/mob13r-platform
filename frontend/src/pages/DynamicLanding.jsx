@@ -1002,7 +1002,7 @@ export default function DynamicLanding() {
         {step ===
           "msisdn" && (
           <>
-            <div style={styles.msisdnRow}>
+            <div dir="ltr" style={styles.msisdnRow}>
               <select
                 value={selectedPrefix}
                 onChange={(e) => setSelectedPrefix(e.target.value)}
@@ -1086,6 +1086,7 @@ export default function DynamicLanding() {
           "otp" && (
           <>
             <div
+              dir="ltr"
               style={
                 styles.otpContainer
               }
