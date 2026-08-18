@@ -130,7 +130,7 @@ router.post("/:publisherId/offers", orgAuth, async (req, res) => {
     const insert = await pool.query(
       `INSERT INTO publisher_offers (publisher_id, offer_id, publisher_cpa, daily_cap, pass_percent, weight, status, org_id, pub_offer_name)
        VALUES ($1,$2,$3,$4,$5,$6,'active',$7,$8) RETURNING *`,
-      [publisherId, offer_id, publisher_cpa, daily_cap, pass_percent, weight, req.orgId, pub_offer_name || null]
+      [publisherId, offer_id, publisher_cpa, daily_cap, pass_percent, weight, req.orgId, pub_offer_name?.trim() || null]
     );
     res.json({ status: "SUCCESS", data: insert.rows[0] });
   } catch (err) {

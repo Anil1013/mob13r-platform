@@ -49,7 +49,7 @@ router.get("/offer-groups", orgAuth, async (req, res) => {
 router.post("/offer-groups", orgAuth, async (req, res) => {
   try {
     const { name, geo, carrier, description, items = [], publisher_ids = [] } = req.body;
-    if (!name) return res.status(400).json({ status: "FAILED", error: "name required" });
+    if (!name || !name.trim()) return res.status(400).json({ status: "FAILED", error: "name required" });
 
     // Validate weights sum
     const totalWeight = items.reduce((s, i) => s + Number(i.weight), 0);
@@ -64,7 +64,7 @@ router.post("/offer-groups", orgAuth, async (req, res) => {
       const groupRes = await client.query(`
         INSERT INTO offer_groups (org_id, name, geo, carrier, description)
         VALUES ($1,$2,$3,$4,$5) RETURNING *
-      `, [req.orgId, name, geo || null, carrier || null, description || null]);
+      `, [req.orgId, name.trim(), (geo || "").trim() || null, (carrier || "").trim() || null, description || null]);
 
       const group = groupRes.rows[0];
 

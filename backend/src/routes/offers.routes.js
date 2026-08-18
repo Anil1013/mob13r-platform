@@ -66,7 +66,7 @@ router.post("/", orgAuth, async (req, res) => {
   try {
     const { advertiser_id, service_name, cpa, daily_cap, geo, carrier, service_type,
             has_antifraud, has_status_check, af_trigger_point, encode_headers_base64, otp_length } = req.body;
-    if (!advertiser_id || !service_name) {
+    if (!advertiser_id || !service_name || !service_name.trim()) {
       return res.status(400).json({ status: "FAILED", message: "Missing required fields" });
     }
 
@@ -86,7 +86,7 @@ router.post("/", orgAuth, async (req, res) => {
         today_hits, last_reset_date, status, has_antifraud, has_status_check, af_trigger_point,
         encode_headers_base64, otp_length, org_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,0,CURRENT_DATE,'active',$8,$9,$10,$11,$12,$13) RETURNING *`,
-      [advertiser_id, service_name, cpa||0, daily_cap||null, geo||"", carrier||"",
+      [advertiser_id, service_name.trim(), cpa||0, daily_cap||null, geo||"", carrier||"",
        service_type||"NORMAL", has_antifraud||false, has_status_check||false,
        af_trigger_point||'BEFORE_SEND', encode_headers_base64||false, otp_length||4, req.orgId]
     );
