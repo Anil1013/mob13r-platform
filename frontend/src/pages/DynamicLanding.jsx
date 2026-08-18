@@ -38,6 +38,9 @@ export default function DynamicLanding() {
   const [msisdn, setMsisdn] =
     useState("");
 
+  const [lang, setLang] =
+    useState("en");
+
   const [countryCode, setCountryCode] =
     useState("+964");
 
@@ -155,6 +158,10 @@ export default function DynamicLanding() {
           setLanding(
             landingData
           );
+
+          if (landingData.show_language_toggle) {
+            setLang(landingData.default_language === "ar" ? "ar" : "en");
+          }
 
           const matchedGeo = GEO_CALLING_CODES.find(g => g.geo === landingData.geo);
           if (matchedGeo) setCountryCode(matchedGeo.code);
@@ -828,10 +835,16 @@ export default function DynamicLanding() {
     );
   }
 
+  // Bilingual helper — returns the Arabic version when the toggle is active
+  // and set to 'ar' AND an Arabic value actually exists, else falls back to
+  // the English value (so an offer can fill in only SOME Arabic fields).
+  const t = (enVal, arVal) => (lang === "ar" && arVal) ? arVal : (enVal || "");
+  const isRtl = landing.show_language_toggle ? lang === "ar" : landing.rtl_enabled;
+
   return (
     <div
       dir={
-        landing.rtl_enabled
+        isRtl
           ? "rtl"
           : "ltr"
       }
@@ -905,9 +918,20 @@ export default function DynamicLanding() {
           </div>
         )}
 
+        {/* LANGUAGE TOGGLE */}
+
+        {landing.show_language_toggle && (
+          <button
+            onClick={() => setLang(l => l === "ar" ? "en" : "ar")}
+            style={styles.langToggle}
+          >
+            {lang === "ar" ? "English" : "العربية"}
+          </button>
+        )}
+
         {/* LOGO */}
 
-        {landing.logo_url && (
+        {landing.show_logo_badge !== false && landing.logo_url && (
           <img
             src={
               landing.logo_url
@@ -938,22 +962,24 @@ export default function DynamicLanding() {
 
         {/* TITLE */}
 
-        <h1
-          style={
-            styles.title
-          }
-        >
-          {landing.title}
-        </h1>
+        {landing.show_title !== false && (
+          <h1
+            style={
+              styles.title
+            }
+          >
+            {t(landing.title, landing.title_ar)}
+          </h1>
+        )}
 
-        {landing.subtitle && (
+        {t(landing.subtitle, landing.subtitle_ar) && (
           <p
             style={
               styles.subtitle
             }
           >
             {
-              landing.subtitle
+              t(landing.subtitle, landing.subtitle_ar)
             }
           </p>
         )}
@@ -964,7 +990,7 @@ export default function DynamicLanding() {
           }
         >
           {
-            landing.description
+            t(landing.description, landing.description_ar)
           }
         </p>
 
@@ -1046,9 +1072,9 @@ export default function DynamicLanding() {
               />
             </div>
 
-            {landing.show_disclaimer && landing.disclaimer && (
+            {landing.show_disclaimer && t(landing.disclaimer, landing.disclaimer_ar) && (
               <div style={styles.disclaimer}>
-                {landing.disclaimer}
+                {t(landing.disclaimer, landing.disclaimer_ar)}
               </div>
             )}
 
@@ -1087,7 +1113,7 @@ export default function DynamicLanding() {
             >
               {loading
                 ? "Sending..."
-                : landing.button_text ||
+                : t(landing.button_text, landing.button_text_ar) ||
                   "Continue"}
             </button>
           </>
@@ -1223,9 +1249,9 @@ export default function DynamicLanding() {
               )}
             </div>
 
-            {landing.show_disclaimer && landing.disclaimer && (
+            {landing.show_disclaimer && t(landing.disclaimer, landing.disclaimer_ar) && (
               <div style={styles.disclaimer}>
-                {landing.disclaimer}
+                {t(landing.disclaimer, landing.disclaimer_ar)}
               </div>
             )}
 
@@ -1264,7 +1290,7 @@ export default function DynamicLanding() {
             >
               {loading
                 ? "Verifying..."
-                : landing.verify_button_text ||
+                : t(landing.verify_button_text, landing.verify_button_text_ar) ||
                   "Confirm"}
             </button>
 
@@ -1320,12 +1346,12 @@ export default function DynamicLanding() {
             </div>
 
             <h2>
-              {landing.success_title ||
+              {t(landing.success_title, landing.success_title_ar) ||
                 "Subscription Successful"}
             </h2>
 
             <p>
-              {landing.success_message}
+              {t(landing.success_message, landing.success_message_ar)}
             </p>
 
             {landing.enable_redirect && (
@@ -1463,6 +1489,21 @@ const styles = {
     borderRadius: 20,
 
     marginBottom: 20,
+  },
+
+  langToggle: {
+    position: "absolute",
+    top: 20,
+    insetInlineEnd: 20,
+    padding: "6px 14px",
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,0.25)",
+    background: "rgba(255,255,255,0.08)",
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    zIndex: 2,
   },
 
   hero: {

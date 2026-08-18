@@ -40,6 +40,18 @@ const DEFAULT_FORM = {
   background_overlay: "rgba(0,0,0,0.45)",
   otp_box_style: "boxed",
   status: "active",
+  title_ar: "",
+  subtitle_ar: "",
+  description_ar: "",
+  disclaimer_ar: "",
+  button_text_ar: "",
+  verify_button_text_ar: "",
+  success_title_ar: "",
+  success_message_ar: "",
+  default_language: "en",
+  show_language_toggle: false,
+  show_logo_badge: true,
+  show_title: true,
 };
 
 export default function LandingBuilder() {
@@ -97,6 +109,18 @@ export default function LandingBuilder() {
       background_overlay: item.background_overlay || "rgba(0,0,0,0.45)",
       otp_box_style: item.otp_box_style || "boxed",
       status: item.status || "active",
+      title_ar: item.title_ar || "",
+      subtitle_ar: item.subtitle_ar || "",
+      description_ar: item.description_ar || "",
+      disclaimer_ar: item.disclaimer_ar || "",
+      button_text_ar: item.button_text_ar || "",
+      verify_button_text_ar: item.verify_button_text_ar || "",
+      success_title_ar: item.success_title_ar || "",
+      success_message_ar: item.success_message_ar || "",
+      default_language: item.default_language || "en",
+      show_language_toggle: item.show_language_toggle ?? false,
+      show_logo_badge: item.show_logo_badge ?? true,
+      show_title: item.show_title ?? true,
     });
     setHeroFile(null);
     setLogoFile(null);
@@ -354,7 +378,7 @@ export default function LandingBuilder() {
               />
               <textarea
                 style={styles.textarea}
-                placeholder="Disclaimer (pricing/subscription terms — shown near the bottom, smaller text)"
+                placeholder="Disclaimer (pricing/subscription terms — shown right above the CTA button)"
                 value={form.disclaimer}
                 onChange={(e) => handleChange("disclaimer", e.target.value)}
               />
@@ -366,6 +390,96 @@ export default function LandingBuilder() {
                 />
                 Show disclaimer on the page
               </label>
+
+              <div style={{ borderTop: "1px solid #e2e8f0", margin: "8px 0", paddingTop: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#334155", marginBottom: 8 }}>🌐 Arabic Translations</div>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#475569", marginBottom: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={form.show_language_toggle}
+                    onChange={(e) => handleChange("show_language_toggle", e.target.checked)}
+                  />
+                  Show EN / AR toggle button on the page
+                </label>
+                {form.show_language_toggle && (
+                  <>
+                    <label style={{ display: "block", fontSize: 12, color: "#64748b", marginBottom: 4 }}>Default language when the page loads</label>
+                    <select style={{ ...styles.select, marginBottom: 10 }} value={form.default_language} onChange={(e) => handleChange("default_language", e.target.value)}>
+                      <option value="en">English</option>
+                      <option value="ar">Arabic</option>
+                    </select>
+                  </>
+                )}
+                <input
+                  style={styles.input}
+                  placeholder="Title (Arabic)"
+                  value={form.title_ar}
+                  onChange={(e) => handleChange("title_ar", e.target.value)}
+                />
+                <input
+                  style={styles.input}
+                  placeholder="Subtitle (Arabic)"
+                  value={form.subtitle_ar}
+                  onChange={(e) => handleChange("subtitle_ar", e.target.value)}
+                />
+                <textarea
+                  style={styles.textarea}
+                  placeholder="Description (Arabic)"
+                  value={form.description_ar}
+                  onChange={(e) => handleChange("description_ar", e.target.value)}
+                />
+                <textarea
+                  style={styles.textarea}
+                  placeholder="Disclaimer (Arabic)"
+                  value={form.disclaimer_ar}
+                  onChange={(e) => handleChange("disclaimer_ar", e.target.value)}
+                />
+                <input
+                  style={styles.input}
+                  placeholder="Button Text (Arabic)"
+                  value={form.button_text_ar}
+                  onChange={(e) => handleChange("button_text_ar", e.target.value)}
+                />
+                <input
+                  style={styles.input}
+                  placeholder="Verify Button Text (Arabic)"
+                  value={form.verify_button_text_ar}
+                  onChange={(e) => handleChange("verify_button_text_ar", e.target.value)}
+                />
+                <input
+                  style={styles.input}
+                  placeholder="Success Title (Arabic)"
+                  value={form.success_title_ar}
+                  onChange={(e) => handleChange("success_title_ar", e.target.value)}
+                />
+                <textarea
+                  style={styles.textarea}
+                  placeholder="Success Message (Arabic)"
+                  value={form.success_message_ar}
+                  onChange={(e) => handleChange("success_message_ar", e.target.value)}
+                />
+              </div>
+
+              <div style={{ borderTop: "1px solid #e2e8f0", margin: "8px 0", paddingTop: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#334155", marginBottom: 8 }}>👁️ Visibility</div>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#475569", marginBottom: 6 }}>
+                  <input
+                    type="checkbox"
+                    checked={form.show_logo_badge}
+                    onChange={(e) => handleChange("show_logo_badge", e.target.checked)}
+                  />
+                  Show small logo badge (top-right)
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#475569" }}>
+                  <input
+                    type="checkbox"
+                    checked={form.show_title}
+                    onChange={(e) => handleChange("show_title", e.target.checked)}
+                  />
+                  Show title heading (below hero image)
+                </label>
+              </div>
+
               <input
                 style={styles.input}
                 placeholder="Button Text"

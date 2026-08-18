@@ -97,6 +97,12 @@ router.post("/", orgAuth, async (req, res) => {
       body.maintenance_message || "Service temporarily unavailable",
       Number(body.priority) || 0,
       req.orgId,
+      body.title_ar || null, body.subtitle_ar || null, body.description_ar || null,
+      body.disclaimer_ar || null, body.button_text_ar || null, body.verify_button_text_ar || null,
+      body.success_title_ar || null, body.success_message_ar || null,
+      body.default_language || "en", parseBool(body.show_language_toggle),
+      body.show_logo_badge === undefined ? true : parseBool(body.show_logo_badge),
+      body.show_title === undefined ? true : parseBool(body.show_title),
     ];
 
     const placeholders = values.map((_, i) => `$${i + 1}`).join(",");
@@ -115,7 +121,10 @@ router.post("/", orgAuth, async (req, res) => {
         enable_status_polling, polling_interval_seconds, max_polling_attempts,
         enable_portal_redirect, rtl_enabled, language_code, font_family,
         button_radius, card_radius, background_overlay, animation_enabled,
-        otp_box_style, maintenance_mode, maintenance_message, priority, org_id
+        otp_box_style, maintenance_mode, maintenance_message, priority, org_id,
+        title_ar, subtitle_ar, description_ar, disclaimer_ar, button_text_ar,
+        verify_button_text_ar, success_title_ar, success_message_ar,
+        default_language, show_language_toggle, show_logo_badge, show_title
       ) VALUES (${placeholders}) RETURNING *
     `, values);
 
@@ -318,8 +327,30 @@ router.patch("/:id", orgAuth, async (req, res) => {
         show_timer = COALESCE($12, show_timer),
         rtl_enabled = COALESCE($13, rtl_enabled),
         language_code = COALESCE($14, language_code),
-        status = COALESCE($15, status)
-      WHERE id = $16 AND org_id = $17 RETURNING *
+        status = COALESCE($15, status),
+        disclaimer = COALESCE($16, disclaimer),
+        show_disclaimer = COALESCE($17, show_disclaimer),
+        card_color = COALESCE($18, card_color),
+        card_radius = COALESCE($19, card_radius),
+        timer_seconds = COALESCE($20, timer_seconds),
+        show_carrier_logo = COALESCE($21, show_carrier_logo),
+        show_geo = COALESCE($22, show_geo),
+        success_title = COALESCE($23, success_title),
+        success_message = COALESCE($24, success_message),
+        success_redirect_url = COALESCE($25, success_redirect_url),
+        title_ar = COALESCE($26, title_ar),
+        subtitle_ar = COALESCE($27, subtitle_ar),
+        description_ar = COALESCE($28, description_ar),
+        disclaimer_ar = COALESCE($29, disclaimer_ar),
+        button_text_ar = COALESCE($30, button_text_ar),
+        verify_button_text_ar = COALESCE($31, verify_button_text_ar),
+        success_title_ar = COALESCE($32, success_title_ar),
+        success_message_ar = COALESCE($33, success_message_ar),
+        default_language = COALESCE($34, default_language),
+        show_language_toggle = COALESCE($35, show_language_toggle),
+        show_logo_badge = COALESCE($36, show_logo_badge),
+        show_title = COALESCE($37, show_title)
+      WHERE id = $38 AND org_id = $39 RETURNING *
     `, [
       body.publisher_offer_id || null, body.title || null,
       body.subtitle || null, body.description || null,
@@ -328,7 +359,22 @@ router.patch("/:id", orgAuth, async (req, res) => {
       body.theme_color || null, body.text_color || null,
       body.show_timer === "true" ? true : body.show_timer === "false" ? false : null,
       body.rtl_enabled === "true" ? true : body.rtl_enabled === "false" ? false : null,
-      body.language_code || null, body.status || null, id, req.orgId,
+      body.language_code || null, body.status || null,
+      body.disclaimer ?? null,
+      body.show_disclaimer === "true" ? true : body.show_disclaimer === "false" ? false : null,
+      body.card_color || null, Number(body.card_radius) || null,
+      Number(body.timer_seconds) || null,
+      body.show_carrier_logo === "true" ? true : body.show_carrier_logo === "false" ? false : null,
+      body.show_geo === "true" ? true : body.show_geo === "false" ? false : null,
+      body.success_title || null, body.success_message || null, body.success_redirect_url || null,
+      body.title_ar ?? null, body.subtitle_ar ?? null, body.description_ar ?? null, body.disclaimer_ar ?? null,
+      body.button_text_ar ?? null, body.verify_button_text_ar ?? null,
+      body.success_title_ar ?? null, body.success_message_ar ?? null,
+      body.default_language || null,
+      body.show_language_toggle === "true" ? true : body.show_language_toggle === "false" ? false : null,
+      body.show_logo_badge === "true" ? true : body.show_logo_badge === "false" ? false : null,
+      body.show_title === "true" ? true : body.show_title === "false" ? false : null,
+      id, req.orgId,
     ]);
 
     if (!result.rows.length) return res.status(404).json({ status: "FAILED", error: "Landing not found in your organization" });
