@@ -13,18 +13,6 @@ const CARRIERS_BY_GEO = {
   OM: ["Ooredoo", "Omantel", "Vodafone"],
 };
 
-const PRESET_GEOS = [
-  { code: "AE", name: "UAE" },
-  { code: "PS", name: "Palestine" },
-  { code: "SA", name: "Saudi Arabia (KSA)" },
-  { code: "IQ", name: "Iraq" },
-  { code: "LK", name: "Sri Lanka" },
-  { code: "QA", name: "Qatar" },
-  { code: "OM", name: "Oman" },
-];
-
-const GEO_NAMES = Object.fromEntries(PRESET_GEOS.map(g => [g.code, g.name]));
-
 export default function CarrierPrefixes() {
   const token = localStorage.getItem("token");
   const [rows, setRows] = useState([]);
@@ -34,6 +22,23 @@ export default function CarrierPrefixes() {
   const [customCarrier, setCustomCarrier] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
+
+  // Geos + calling codes — live from the dashboard, not hardcoded
+  const [geos, setGeos] = useState([]);
+  const [geoForm, setGeoForm] = useState({ code: "", name: "", calling_code: "" });
+  const [editingGeoId, setEditingGeoId] = useState(null);
+  const [editingGeoDraft, setEditingGeoDraft] = useState({ name: "", calling_code: "" });
+  const [geoMsg, setGeoMsg] = useState(null);
+
+  const GEO_NAMES = Object.fromEntries(geos.map(g => [g.code, g.name]));
+
+  const loadGeos = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/geos`);
+      const data = await res.json();
+      if (data.status === "SUCCESS") setGeos(data.data);
+    } catch (e) { console.error(e); }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -50,6 +55,7 @@ export default function CarrierPrefixes() {
     setLoading(false);
   };
 
+  useEffect(() => { loadGeos(); }, []);
   useEffect(() => { load(); }, [filterGeo, filterCarrier]);
 
   const finalCarrier = form.carrier === "__custom__" ? customCarrier : form.carrier;
@@ -84,6 +90,54 @@ export default function CarrierPrefixes() {
     load();
   };
 
+  const addGeo = async () => {
+    if (!geoForm.code.trim() || !geoForm.name.trim()) {
+      setGeoMsg({ type: "error", text: "Country code aur name required hain" });
+      setTimeout(() => setGeoMsg(null), 3000);
+      return;
+    }
+    const res = await fetch(`${API_BASE}/api/geos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(geoForm),
+    });
+    const data = await res.json();
+    if (data.status === "SUCCESS") {
+      setGeoMsg({ type: "success", text: `✅ ${geoForm.name} add ho gaya!` });
+      setGeoForm({ code: "", name: "", calling_code: "" });
+      loadGeos();
+    } else {
+      setGeoMsg({ type: "error", text: data.error || "Failed" });
+    }
+    setTimeout(() => setGeoMsg(null), 3000);
+  };
+
+  const startEditGeo = (g) => {
+    setEditingGeoId(g.id);
+    setEditingGeoDraft({ name: g.name, calling_code: g.calling_code || "" });
+  };
+
+  const saveEditGeo = async (id) => {
+    const res = await fetch(`${API_BASE}/api/geos/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(editingGeoDraft),
+    });
+    const data = await res.json();
+    if (data.status === "SUCCESS") {
+      setEditingGeoId(null);
+      loadGeos();
+    } else {
+      alert(data.error || "Failed to save");
+    }
+  };
+
+  const removeGeo = async (id, name) => {
+    if (!confirm(`Delete ${name}? Existing offers using this geo won't be affected, but it will disappear from dropdowns.`)) return;
+    await fetch(`${API_BASE}/api/geos/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    loadGeos();
+  };
+
   const s = {
     page: { padding: "24px", fontFamily: "'Inter', sans-serif", background: "#f5f6fa", minHeight: "100vh" },
     title: { fontSize: "22px", fontWeight: "700", marginBottom: "2px", color: "#1a1a2e" },
@@ -94,12 +148,14 @@ export default function CarrierPrefixes() {
     select: { width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e0e0e0", fontSize: "14px", background: "#fff", boxSizing: "border-box" },
     btn: { padding: "10px 22px", borderRadius: "8px", border: "none", background: "#e94560", color: "#fff", fontWeight: "600", cursor: "pointer", fontSize: "14px" },
     btnDel: { padding: "4px 10px", borderRadius: "6px", border: "none", background: "#fff0f0", color: "#dc2626", cursor: "pointer", fontSize: "12px", fontWeight: "600" },
+    btnEdit: { padding: "4px 10px", borderRadius: "6px", border: "none", background: "#eef2ff", color: "#4f46e5", cursor: "pointer", fontSize: "12px", fontWeight: "600", marginRight: "6px" },
     grid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" },
     grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" },
     table: { width: "100%", borderCollapse: "collapse" },
     th: { textAlign: "left", fontSize: "11px", color: "#aaa", fontWeight: "700", padding: "8px 14px", borderBottom: "2px solid #f0f0f0", textTransform: "uppercase", letterSpacing: "0.5px" },
     td: { padding: "10px 14px", borderBottom: "1px solid #f7f7f7", fontSize: "14px" },
     geoBadge: { display: "inline-block", padding: "3px 10px", borderRadius: "20px", background: "#eef2ff", color: "#4f46e5", fontSize: "12px", fontWeight: "700" },
+    callingCodeBadge: { display: "inline-block", padding: "3px 10px", borderRadius: "20px", background: "#dcfce7", color: "#16a34a", fontSize: "12px", fontWeight: "700", fontFamily: "monospace" },
     prefixCode: { background: "#f5f5f5", padding: "2px 8px", borderRadius: "4px", fontFamily: "monospace", fontSize: "13px" },
     msg: (t) => ({ padding: "10px 16px", borderRadius: "8px", marginBottom: "14px", fontSize: "13px", fontWeight: "500", background: t === "success" ? "#dcfce7" : "#fee2e2", color: t === "success" ? "#16a34a" : "#dc2626" }),
     sectionTitle: { fontWeight: "600", marginBottom: "14px", fontSize: "15px", display: "flex", alignItems: "center", gap: "8px" },
@@ -107,23 +163,94 @@ export default function CarrierPrefixes() {
 
   const suggestedCarriers = form.geo ? (CARRIERS_BY_GEO[form.geo] || []) : [];
 
-  // Group rows by GEO for display
-  const grouped = rows.reduce((acc, r) => {
-    if (!acc[r.geo]) acc[r.geo] = [];
-    acc[r.geo].push(r);
-    return acc;
-  }, {});
-
   return (
     <>
       <Navbar />
       <div style={s.page}>
       <div style={s.title}>📡 Carrier Prefix Manager</div>
-      <div style={s.sub}>MSISDN validation ke liye carrier prefixes manage karo</div>
+      <div style={s.sub}>Countries, calling codes, aur carrier prefixes — sab dashboard se manage karo</div>
 
-      {/* ADD FORM */}
+      {/* GEOS / CALLING CODES */}
       <div style={s.card}>
-        <div style={s.sectionTitle}>➕ Add New Prefix</div>
+        <div style={s.sectionTitle}>
+          🌍 Countries &amp; Calling Codes
+          <span style={{ color: "#999", fontWeight: "400", fontSize: "13px" }}>({geos.length} total)</span>
+        </div>
+        <div style={{ color: "#999", fontSize: "12px", marginBottom: "14px" }}>
+          Ye list landing pages ke mobile-number dropdown (jaise +964) me directly use hoti hai — naya country add karo, kahi bhi code edit karne ki zaroorat nahi.
+        </div>
+        {geoMsg && <div style={s.msg(geoMsg.type)}>{geoMsg.text}</div>}
+        <div style={s.grid3}>
+          <div>
+            <span style={s.label}>Country Code (e.g. EG)</span>
+            <input style={s.input} placeholder="EG" value={geoForm.code}
+              onChange={e => setGeoForm({ ...geoForm, code: e.target.value.toUpperCase().slice(0, 3) })} />
+          </div>
+          <div>
+            <span style={s.label}>Country Name</span>
+            <input style={s.input} placeholder="Egypt" value={geoForm.name}
+              onChange={e => setGeoForm({ ...geoForm, name: e.target.value })} />
+          </div>
+          <div>
+            <span style={s.label}>Calling Code (e.g. +20)</span>
+            <input style={s.input} placeholder="+20" value={geoForm.calling_code}
+              onChange={e => setGeoForm({ ...geoForm, calling_code: e.target.value })} />
+          </div>
+        </div>
+        <button style={s.btn} onClick={addGeo}>+ Add Country</button>
+
+        <table style={{ ...s.table, marginTop: "18px" }}>
+          <thead>
+            <tr>
+              <th style={s.th}>Code</th>
+              <th style={s.th}>Country</th>
+              <th style={s.th}>Calling Code</th>
+              <th style={s.th}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {geos.map((g, i) => (
+              <tr key={g.id} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                <td style={s.td}><span style={s.geoBadge}>{g.code}</span></td>
+                <td style={s.td}>
+                  {editingGeoId === g.id ? (
+                    <input style={{ ...s.input, padding: "5px 8px" }} value={editingGeoDraft.name}
+                      onChange={e => setEditingGeoDraft({ ...editingGeoDraft, name: e.target.value })} />
+                  ) : <strong>{g.name}</strong>}
+                </td>
+                <td style={s.td}>
+                  {editingGeoId === g.id ? (
+                    <input style={{ ...s.input, padding: "5px 8px", width: "100px" }} value={editingGeoDraft.calling_code}
+                      onChange={e => setEditingGeoDraft({ ...editingGeoDraft, calling_code: e.target.value })} />
+                  ) : (
+                    g.calling_code ? <span style={s.callingCodeBadge}>{g.calling_code}</span> : <span style={{ color: "#ccc" }}>—</span>
+                  )}
+                </td>
+                <td style={s.td}>
+                  {editingGeoId === g.id ? (
+                    <>
+                      <button style={s.btnEdit} onClick={() => saveEditGeo(g.id)}>💾 Save</button>
+                      <button style={s.btnDel} onClick={() => setEditingGeoId(null)}>Cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <button style={s.btnEdit} onClick={() => startEditGeo(g)}>✏️ Edit</button>
+                      <button style={s.btnDel} onClick={() => removeGeo(g.id, g.name)}>🗑 Delete</button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {!geos.length && (
+              <tr><td colSpan={4} style={{ ...s.td, textAlign: "center", color: "#aaa" }}>No countries added yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ADD PREFIX FORM */}
+      <div style={s.card}>
+        <div style={s.sectionTitle}>➕ Add New Carrier Prefix</div>
         {msg && <div style={s.msg(msg.type)}>{msg.text}</div>}
         <div style={s.grid3}>
           <div>
@@ -131,7 +258,7 @@ export default function CarrierPrefixes() {
             <select style={s.select} value={form.geo}
               onChange={e => setForm({ ...form, geo: e.target.value, carrier: "", customGeo: "" })}>
               <option value="">-- Select Country --</option>
-              {PRESET_GEOS.map(g => (
+              {geos.map(g => (
                 <option key={g.code} value={g.code}>{g.code} — {g.name}</option>
               ))}
               <option value="__other__">Other (type below)</option>
@@ -185,7 +312,7 @@ export default function CarrierPrefixes() {
             <span style={s.label}>Filter by Country</span>
             <select style={s.select} value={filterGeo} onChange={e => setFilterGeo(e.target.value)}>
               <option value="">All Countries</option>
-              {PRESET_GEOS.map(g => <option key={g.code} value={g.code}>{g.code} — {g.name}</option>)}
+              {geos.map(g => <option key={g.code} value={g.code}>{g.code} — {g.name}</option>)}
             </select>
           </div>
           <div>

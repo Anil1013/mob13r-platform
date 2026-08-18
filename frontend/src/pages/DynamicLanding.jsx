@@ -9,19 +9,6 @@ import { useParams } from "react-router-dom";
 const API_BASE =
   "https://backend.mob13r.com";
 
-// International calling codes for the geos our system supports (matches the
-// PRESET_GEOS list in CarrierPrefixes.jsx). These are fixed, standard
-// country codes — not something that varies per offer/carrier config.
-const GEO_CALLING_CODES = [
-  { geo: "IQ", name: "Iraq", code: "+964" },
-  { geo: "AE", name: "UAE", code: "+971" },
-  { geo: "SA", name: "Saudi Arabia (KSA)", code: "+966" },
-  { geo: "PS", name: "Palestine", code: "+970" },
-  { geo: "LK", name: "Sri Lanka", code: "+94" },
-  { geo: "QA", name: "Qatar", code: "+974" },
-  { geo: "OM", name: "Oman", code: "+968" },
-];
-
 export default function DynamicLanding() {
   const { id, publisher } = useParams();
 
@@ -40,6 +27,9 @@ export default function DynamicLanding() {
 
   const [lang, setLang] =
     useState("en");
+
+  const [geoCallingCodes, setGeoCallingCodes] =
+    useState([]);
 
   const [countryCode, setCountryCode] =
     useState("+964");
@@ -92,6 +82,11 @@ export default function DynamicLanding() {
   useEffect(() => {
     loadLanding();
 
+    fetch(`${API_BASE}/api/geos`)
+      .then(r => r.json())
+      .then(d => { if (d.status === "SUCCESS") setGeoCallingCodes(d.data); })
+      .catch(() => { /* non-blocking — dropdown falls back to whatever countryCode default is already set */ });
+
     // Some antifraud providers (e.g. cgparcel, used by the Zain integration)
     // need the full referrer even across origins to work correctly — only
     // applied while this landing page is mounted, removed on unmount so it
@@ -112,6 +107,15 @@ export default function DynamicLanding() {
       metaTag.remove();
     };
   }, [id]);
+
+  // Set the calling code only once BOTH the offer config and the live geos
+  // list have loaded — these are two separate parallel fetches, so we can't
+  // safely do this match inside either one alone.
+  useEffect(() => {
+    if (!landing || !geoCallingCodes.length) return;
+    const matchedGeo = geoCallingCodes.find(g => g.code === landing.geo);
+    if (matchedGeo?.calling_code) setCountryCode(matchedGeo.calling_code);
+  }, [landing, geoCallingCodes]);
 
   const loadLanding =
     async () => {
@@ -156,9 +160,6 @@ export default function DynamicLanding() {
           if (landingData.show_language_toggle) {
             setLang(landingData.default_language === "ar" ? "ar" : "en");
           }
-
-          const matchedGeo = GEO_CALLING_CODES.find(g => g.geo === landingData.geo);
-          if (matchedGeo) setCountryCode(matchedGeo.code);
 
           setTimer(
             Number(
@@ -1023,9 +1024,13 @@ export default function DynamicLanding() {
                 onChange={(e) => setCountryCode(e.target.value)}
                 style={styles.countryCodeSelect}
               >
-                {GEO_CALLING_CODES.map(g => (
-                  <option key={g.geo} value={g.code} style={{ color: "#111827", background: "#ffffff" }}>{g.code}</option>
-                ))}
+                {geoCallingCodes.filter(g => g.calling_code).length ? (
+                  geoCallingCodes.filter(g => g.calling_code).map(g => (
+                    <option key={g.id} value={g.calling_code} style={{ color: "#111827", background: "#ffffff" }}>{g.calling_code}</option>
+                  ))
+                ) : (
+                  <option value={countryCode} style={{ color: "#111827", background: "#ffffff" }}>{countryCode}</option>
+                )}
               </select>
               <input
                 type="tel"
