@@ -323,6 +323,12 @@ export default function DynamicLanding() {
               user_agent:
                 navigator.userAgent,
 
+              referer:
+                document.referrer || window.location.href,
+
+              accept_language:
+                navigator.language || navigator.languages?.[0] || "",
+
               click_id:
                 localStorage.getItem(
                   "session_token"
@@ -461,6 +467,12 @@ export default function DynamicLanding() {
 
               user_agent:
                 navigator.userAgent,
+
+              referer:
+                document.referrer || window.location.href,
+
+              accept_language:
+                navigator.language || navigator.languages?.[0] || "",
             }
           );
 

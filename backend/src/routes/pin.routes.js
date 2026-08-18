@@ -193,6 +193,19 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const ua = incoming.user_agent || req.headers["user-agent"] || "";
     const ip = incoming.ip || req.headers["x-forwarded-for"] || req.ip || "";
+    // NOTE: encodeHeadersB64(req.headers) would encode OUR OWN internal
+    // server-to-server call's headers (generic 'axios/x.x.x' user-agent,
+    // no real referer) — not the actual end-user's browser fingerprint,
+    // which antifraud providers like the Zain/Puretech integration need
+    // for accurate fraud scoring. Build it from what the LANDING PAGE
+    // actually captured and forwarded instead (incoming.referer /
+    // incoming.accept_language, sent from DynamicLanding.jsx alongside
+    // user_agent, which was already being forwarded correctly).
+    const antifraudHeaders = {
+      "User-Agent": ua,
+      "Referer": incoming.referer || "",
+      "Accept-Language": incoming.accept_language || "",
+    };
 
     const runtime = {
       ...incoming,
@@ -204,14 +217,19 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       publisher_id: publisher.id,
       pub_id: publisher.id,
       offer_id: offer.id,
-      headers_b64: encodeHeadersB64(req.headers)
+      headers_b64: encodeHeadersB64(antifraudHeaders)
     };
 
     // Antifraud/Status workflow
     const workflow = await executeWorkflowSteps(offer, runtime);
     if (workflow.block) return res.json({ status: "ALREADY_SUBSCRIBED" });
 
+    // IMPORTANT: alias to BOTH names — offer templates written with
+    // {antifraud_uniqid} (matches the advertiser's own param naming, e.g.
+    // Puretech/Zain) were silently resolving to blank, since this used to
+    // only ever set runtime.af_id and nothing else. {af_id} keeps working too.
     runtime.af_id = workflow.afId;
+    runtime.antifraud_uniqid = workflow.afId;
     let injectedScript = workflow.injectedScript;
 
     // Build payload — only is_active=true params
