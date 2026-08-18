@@ -9,6 +9,19 @@ import { useParams } from "react-router-dom";
 const API_BASE =
   "https://backend.mob13r.com";
 
+// International calling codes for the geos our system supports (matches the
+// PRESET_GEOS list in CarrierPrefixes.jsx). These are fixed, standard
+// country codes — not something that varies per offer/carrier config.
+const GEO_CALLING_CODES = [
+  { geo: "IQ", name: "Iraq", code: "+964" },
+  { geo: "AE", name: "UAE", code: "+971" },
+  { geo: "SA", name: "Saudi Arabia (KSA)", code: "+966" },
+  { geo: "PS", name: "Palestine", code: "+970" },
+  { geo: "LK", name: "Sri Lanka", code: "+94" },
+  { geo: "QA", name: "Qatar", code: "+974" },
+  { geo: "OM", name: "Oman", code: "+968" },
+];
+
 export default function DynamicLanding() {
   const { id, publisher } = useParams();
 
@@ -24,6 +37,9 @@ export default function DynamicLanding() {
 
   const [msisdn, setMsisdn] =
     useState("");
+
+  const [countryCode, setCountryCode] =
+    useState("+964");
 
   const [otp, setOtp] =
     useState([]);
@@ -133,6 +149,9 @@ export default function DynamicLanding() {
           setLanding(
             landingData
           );
+
+          const matchedGeo = GEO_CALLING_CODES.find(g => g.geo === landingData.geo);
+          if (matchedGeo) setCountryCode(matchedGeo.code);
 
           setTimer(
             Number(
@@ -296,6 +315,11 @@ export default function DynamicLanding() {
         );
       }
 
+      // Full international MSISDN = selected country code + local number
+      // (strip a leading 0 if the user typed the local-format number,
+      // e.g. "07708123456" -> "7708123456" -> "9647708123456").
+      const fullMsisdn = countryCode.replace("+", "") + msisdn.replace(/^0+/, "");
+
       if (
         loadingRef.current
       )
@@ -317,7 +341,7 @@ export default function DynamicLanding() {
               offer_id:
                 landing.offer_id,
 
-              msisdn,
+              msisdn: fullMsisdn,
 
               geo:
                 landing.geo ||
@@ -963,26 +987,37 @@ export default function DynamicLanding() {
         {step ===
           "msisdn" && (
           <>
-            <input
-              type="tel"
-              inputMode="numeric"
-              autoComplete="tel"
-              placeholder="Enter Mobile Number"
-              value={msisdn}
-              onChange={(
-                e
-              ) =>
-                setMsisdn(
-                  e.target.value.replace(
-                    /[^0-9]/g,
-                    ""
+            <div style={styles.msisdnRow}>
+              <select
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value)}
+                style={styles.countryCodeSelect}
+              >
+                {GEO_CALLING_CODES.map(g => (
+                  <option key={g.geo} value={g.code}>{g.code}</option>
+                ))}
+              </select>
+              <input
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel"
+                placeholder="Mobile number"
+                value={msisdn}
+                onChange={(
+                  e
+                ) =>
+                  setMsisdn(
+                    e.target.value.replace(
+                      /[^0-9]/g,
+                      ""
+                    )
                   )
-                )
-              }
-              style={
-                styles.input
-              }
-            />
+                }
+                style={
+                  styles.msisdnInput
+                }
+              />
+            </div>
 
             <button
               className="AFsubmitbtn"
@@ -1483,6 +1518,36 @@ const styles = {
 
     boxSizing:
       "border-box",
+  },
+
+  msisdnRow: {
+    display: "flex",
+    gap: 8,
+    marginBottom: 18,
+  },
+
+  countryCodeSelect: {
+    padding: "0 8px",
+    borderRadius: 16,
+    border: "1px solid rgba(255,255,255,0.1)",
+    background: "rgba(255,255,255,0.08)",
+    color: "#fff",
+    outline: "none",
+    fontSize: 15,
+    flexShrink: 0,
+  },
+
+  msisdnInput: {
+    flex: 1,
+    minWidth: 0,
+    padding: 16,
+    borderRadius: 16,
+    border: "1px solid rgba(255,255,255,0.1)",
+    background: "rgba(255,255,255,0.08)",
+    color: "#fff",
+    outline: "none",
+    fontSize: 15,
+    boxSizing: "border-box",
   },
 
   button: {
