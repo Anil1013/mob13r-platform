@@ -1005,6 +1005,10 @@ export default function DynamicLanding() {
         {step ===
           "msisdn" && (
           <>
+            <p style={styles.fieldLabel}>
+              Enter your mobile number / أدخل رقم هاتفك المحمول
+            </p>
+
             <div dir="ltr" style={styles.msisdnRow}>
               <select
                 value={selectedPrefix}
@@ -1041,6 +1045,12 @@ export default function DynamicLanding() {
                 }
               />
             </div>
+
+            {landing.show_disclaimer && landing.disclaimer && (
+              <div style={styles.disclaimer}>
+                {landing.disclaimer}
+              </div>
+            )}
 
             <button
               className="AFsubmitbtn"
@@ -1088,6 +1098,10 @@ export default function DynamicLanding() {
         {step ===
           "otp" && (
           <>
+            <p style={styles.fieldLabel}>
+              Enter the PIN code sent to your phone / أدخل الرمز المرسل إلى هاتفك
+            </p>
+
             <div
               dir="ltr"
               style={
@@ -1208,6 +1222,12 @@ export default function DynamicLanding() {
                 )
               )}
             </div>
+
+            {landing.show_disclaimer && landing.disclaimer && (
+              <div style={styles.disclaimer}>
+                {landing.disclaimer}
+              </div>
+            )}
 
             <button
               className="AFsubmitbtn"
@@ -1334,20 +1354,6 @@ export default function DynamicLanding() {
             }
           >
             {statusText}
-          </div>
-        )}
-
-        {/* DISCLAIMER */}
-
-        {landing.show_disclaimer && (
-          <div
-            style={
-              styles.disclaimer
-            }
-          >
-            {
-              landing.disclaimer
-            }
           </div>
         )}
 
@@ -1702,6 +1708,13 @@ const styles = {
     opacity: 0.65,
 
     lineHeight: 1.6,
+  },
+
+  fieldLabel: {
+    fontSize: 13,
+    opacity: 0.85,
+    marginBottom: 8,
+    lineHeight: 1.5,
   },
 
   powered: {
