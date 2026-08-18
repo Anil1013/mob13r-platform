@@ -123,12 +123,20 @@ async function handleGenericAntifraud(offer, runtime) {
 /* =====================================================
    🚀 MAIN WORKFLOW ENGINE
 ===================================================== */
-export const executeWorkflowSteps = async (offer, runtime) => {
+// stage: "send" | "verify" — lets the SAME offer config drive antifraud at
+// either point in the flow. Some advertiser integrations (e.g. Zain/
+// Puretech via cgparcel) require the antifraud token to be freshly
+// generated right before PIN VERIFY specifically, not before send —
+// sending a value at request-time can be wrong there (the real
+// antifrauduniqid genuinely doesn't exist yet at that point in their
+// own reference implementation).
+export const executeWorkflowSteps = async (offer, runtime, stage = "send") => {
   let result = { injectedScript: null, afId: null, block: false };
 
   try {
-    // 1. Status Check (Pehle se subscribed hai ya nahi)
-    if (offer.has_status_check && offer.check_status_url) {
+    // 1. Status Check (Pehle se subscribed hai ya nahi) — only makes sense
+    // before we even start the OTP flow, so this stays send-only.
+    if (stage === "send" && offer.has_status_check && offer.check_status_url) {
       const sUrl = resolveWorkflowUrl(offer.check_status_url, runtime);
       const sCheck = await axios.get(sUrl, { timeout: 5000 });
 
@@ -155,8 +163,9 @@ export const executeWorkflowSteps = async (offer, runtime) => {
       }
     }
 
-    // 2. Antifraud Handling (BEFORE_SEND point)
-    if (offer.has_antifraud && offer.af_trigger_point === "BEFORE_SEND") {
+    // 2. Antifraud Handling — runs at whichever point the offer is configured for.
+    const expectedTrigger = stage === "send" ? "BEFORE_SEND" : "BEFORE_VERIFY";
+    if (offer.has_antifraud && offer.af_trigger_point === expectedTrigger) {
       const antifraudType = (offer.antifraud_type || "GENERIC").toUpperCase();
       let afResult = { injectedScript: null, afId: null };
 

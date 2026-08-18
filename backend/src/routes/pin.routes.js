@@ -221,7 +221,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     };
 
     // Antifraud/Status workflow
-    const workflow = await executeWorkflowSteps(offer, runtime);
+    const workflow = await executeWorkflowSteps(offer, runtime, "send");
     if (workflow.block) return res.json({ status: "ALREADY_SUBSCRIBED" });
 
     // IMPORTANT: alias to BOTH names — offer templates written with
@@ -314,7 +314,7 @@ router.all("/pin/verify", async (req, res) => {
     const publisher = await validatePublisher(req);
     if (!publisher) return res.status(401).json({ status: "INVALID_KEY" });
 
-    const { session_token, otp } = { ...req.query, ...req.body };
+    const { session_token, otp, referer: verifyReferer, accept_language: verifyAcceptLang } = { ...req.query, ...req.body };
     if (!session_token || !otp) return res.json({ status: "FAILED", message: "session_token and otp required" });
 
     const sRes = await pool.query(
@@ -339,6 +339,9 @@ router.all("/pin/verify", async (req, res) => {
     );
     const allParams = paramRes.rows;
 
+    const offerRes = await pool.query(`SELECT * FROM offers WHERE id=$1`, [session.offer_id]);
+    const offer = offerRes.rows[0];
+
     let advData = session.advertiser_response || {};
     if (advData?.data && typeof advData.data === "object") {
       advData = { ...advData, ...advData.data };
@@ -357,8 +360,25 @@ router.all("/pin/verify", async (req, res) => {
       user_ip: ip,
       user_agent: ua,
       ua,
-      userAgent: ua
+      userAgent: ua,
+      headers_b64: encodeHeadersB64({
+        "User-Agent": ua,
+        "Referer": verifyReferer || session.params?.referer || "",
+        "Accept-Language": verifyAcceptLang || session.params?.accept_language || "",
+      }),
     };
+
+    // Antifraud at VERIFY point — some advertiser integrations (e.g. Zain/
+    // Puretech via cgparcel) require the antifraud token to be freshly
+    // generated right here, on the verify step, not at send. Runs only
+    // when the offer is explicitly configured for it (af_trigger_point =
+    // BEFORE_VERIFY) — no effect on offers using the existing BEFORE_SEND
+    // flow.
+    const verifyWorkflow = await executeWorkflowSteps(offer, runtime, "verify");
+    if (verifyWorkflow.afId) {
+      runtime.af_id = verifyWorkflow.afId;
+      runtime.antifraud_uniqid = verifyWorkflow.afId;
+    }
 
     // Build payload — only is_active=true params (skipOtp=false for VERIFY so pin/otp IS included)
     const payload = buildPayload(allParams, runtime, false);
@@ -375,8 +395,7 @@ router.all("/pin/verify", async (req, res) => {
       ]
     );
 
-    const offerRes = await pool.query(`SELECT * FROM offers WHERE id=$1`, [session.offer_id]);
-    const offer = offerRes.rows[0];
+    // (offer already fetched above, before runtime construction)
 
     // Resolve verify URL — offer table > params
     const rawVerifyUrl = offer.pin_verify_url || getParam(allParams, "verify_pin_url");

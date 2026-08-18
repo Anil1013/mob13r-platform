@@ -306,7 +306,8 @@ export default function Offers() {
               <div>
                 <label style={styles.workflowLabel}>Workflow Mode</label>
                 <select style={{...styles.select,width:"100%",marginTop:6}} defaultValue={selectedOffer.af_trigger_point} onChange={e => updateOffer(selectedOffer.id, { af_trigger_point: e.target.value })}>
-                  <option value="BEFORE_SEND">Pre-Generate Token</option>
+                  <option value="BEFORE_SEND">Pre-Generate Token (before Pin Request)</option>
+                  <option value="BEFORE_VERIFY">Fresh Token before Pin Verify (e.g. Zain/cgparcel)</option>
                   <option value="AFTER_SEND">Inject Script in Response</option>
                 </select>
               </div>
