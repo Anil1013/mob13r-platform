@@ -44,12 +44,6 @@ export default function DynamicLanding() {
   const [countryCode, setCountryCode] =
     useState("+964");
 
-  const [prefixOptions, setPrefixOptions] =
-    useState([]);
-
-  const [selectedPrefix, setSelectedPrefix] =
-    useState("");
-
   const [otp, setOtp] =
     useState([]);
 
@@ -165,18 +159,6 @@ export default function DynamicLanding() {
 
           const matchedGeo = GEO_CALLING_CODES.find(g => g.geo === landingData.geo);
           if (matchedGeo) setCountryCode(matchedGeo.code);
-
-          if (landingData.geo && landingData.carrier) {
-            fetch(`${API_BASE}/api/carrier-prefixes?geo=${encodeURIComponent(landingData.geo)}&carrier=${encodeURIComponent(landingData.carrier)}`)
-              .then(r => r.json())
-              .then(pd => {
-                if (pd.status === "SUCCESS" && pd.data.length) {
-                  setPrefixOptions(pd.data);
-                  setSelectedPrefix(pd.data[0].prefix);
-                }
-              })
-              .catch(() => { /* non-blocking — falls back to plain number entry if this fails */ });
-          }
 
           setTimer(
             Number(
@@ -343,7 +325,7 @@ export default function DynamicLanding() {
       // Full international MSISDN = selected country code + local number
       // (strip a leading 0 if the user typed the local-format number,
       // e.g. "07708123456" -> "7708123456" -> "9647708123456").
-      const fullMsisdn = countryCode.replace("+", "") + selectedPrefix.replace(/^0+/, "") + msisdn;
+      const fullMsisdn = countryCode.replace("+", "") + msisdn.replace(/^0+/, "");
 
       if (
         loadingRef.current
@@ -1037,24 +1019,19 @@ export default function DynamicLanding() {
 
             <div dir="ltr" style={styles.msisdnRow}>
               <select
-                value={selectedPrefix}
-                onChange={(e) => setSelectedPrefix(e.target.value)}
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value)}
                 style={styles.countryCodeSelect}
-                disabled={!prefixOptions.length}
               >
-                {prefixOptions.length ? (
-                  prefixOptions.map(p => (
-                    <option key={p.id} value={p.prefix} style={{ color: "#111827", background: "#ffffff" }}>{p.prefix}</option>
-                  ))
-                ) : (
-                  <option value="" style={{ color: "#111827", background: "#ffffff" }}>{countryCode}</option>
-                )}
+                {GEO_CALLING_CODES.map(g => (
+                  <option key={g.geo} value={g.code} style={{ color: "#111827", background: "#ffffff" }}>{g.code}</option>
+                ))}
               </select>
               <input
                 type="tel"
                 inputMode="numeric"
                 autoComplete="tel"
-                placeholder={prefixOptions.length ? "Remaining digits" : "Mobile number"}
+                placeholder="Mobile number"
                 value={msisdn}
                 onChange={(
                   e
