@@ -12,12 +12,12 @@ const GREEN = "#16a34a";
 const RED = "#dc2626";
 const money = (n) => Number(n || 0).toFixed(2);
 
-const compactSelect = { background: "#fff", border: "1px solid rgba(210,160,180,0.35)", color: "#4a2f3f", padding: "6px 8px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontFamily: "'Lora',serif", minWidth: 0 };
+const compactSelect = { background: "#fff", border: "1px solid rgba(210,160,180,0.35)", color: "#4a2f3f", padding: "6px 8px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontFamily: "'Inter',sans-serif", minWidth: 0 };
 const compactInput = { ...compactSelect, cursor: "text" };
-const compactBtn = { background: "linear-gradient(135deg,#e8856a,#d4709a)", color: "#fff", border: "none", padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Lora',serif", whiteSpace: "nowrap" };
+const compactBtn = { background: "linear-gradient(135deg,#e8856a,#d4709a)", color: "#fff", border: "none", padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif", whiteSpace: "nowrap" };
 const toggleBtn = (active) => ({
   padding: "7px 16px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "1px solid rgba(210,160,180,0.35)",
-  background: active ? "linear-gradient(135deg,#e8856a,#d4709a)" : "#fff", color: active ? "#fff" : "#4a2f3f", fontFamily: "'Lora',serif",
+  background: active ? "linear-gradient(135deg,#e8856a,#d4709a)" : "#fff", color: active ? "#fff" : "#4a2f3f", fontFamily: "'Inter',sans-serif",
 });
 
 function emptySums() { return { revenue: 0, publisher_cost: 0, margin: 0 }; }

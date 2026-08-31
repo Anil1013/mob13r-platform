@@ -1,0 +1,140 @@
+/* ============================================
+   Mob13r Global Styles — Modern SaaS Foundation
+   ============================================ */
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Custom scrollbar — slim, rounded, theme-matched */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(124, 58, 237, 0.25);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 58, 237, 0.45);
+  background-clip: padding-box;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(124, 58, 237, 0.3) transparent;
+}
+
+/* Smooth, consistent transitions on common interactive elements */
+button, input, select, textarea, a {
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Nice focus ring instead of the harsh browser default */
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid rgba(124, 58, 237, 0.5);
+  outline-offset: 2px;
+}
+
+/* Buttons: subtle lift + shadow on hover, press-down on click.
+   Applied via className="m13-btn" alongside existing inline styles. */
+.m13-btn {
+  cursor: pointer;
+}
+.m13-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.25);
+}
+.m13-btn:active {
+  transform: translateY(0);
+  filter: brightness(0.97);
+}
+
+/* Cards: gentle lift on hover */
+.m13-card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.m13-card-hover:hover {
+  transform: translateY(-2px);
+}
+
+/* Table rows: soft highlight on hover */
+.m13-row-hover:hover {
+  background: rgba(124, 58, 237, 0.04) !important;
+}
+
+/* Loading spinner */
+@keyframes m13-spin {
+  to { transform: rotate(360deg); }
+}
+.m13-spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(124, 58, 237, 0.15);
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: m13-spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+/* Fade-in for page content */
+@keyframes m13-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.m13-fade-in {
+  animation: m13-fade-in 0.35s ease both;
+}
+
+/* Skeleton shimmer for loading states */
+@keyframes m13-shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+.m13-skeleton {
+  background: linear-gradient(90deg, #f0e8f5 0px, #f8f2fa 40px, #f0e8f5 80px);
+  background-size: 200px 100%;
+  animation: m13-shimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* react-datepicker: match the app's rounded, soft aesthetic */
+.react-datepicker {
+  font-family: 'Inter', sans-serif !important;
+  border-radius: 14px !important;
+  border: 1px solid #e8d0dc !important;
+  box-shadow: 0 12px 32px rgba(124, 58, 237, 0.18) !important;
+  overflow: hidden;
+}
+.react-datepicker__header {
+  background: linear-gradient(135deg, #7c3aed, #d4709a) !important;
+  border-bottom: none !important;
+}
+.react-datepicker__current-month, .react-datepicker__day-name {
+  color: #fff !important;
+}
+.react-datepicker__day--selected, .react-datepicker__day--keyboard-selected {
+  background: linear-gradient(135deg, #7c3aed, #d4709a) !important;
+  border-radius: 8px !important;
+}
+.react-datepicker__day:hover {
+  border-radius: 8px !important;
+  background: rgba(124, 58, 237, 0.12) !important;
+}

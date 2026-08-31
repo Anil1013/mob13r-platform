@@ -202,7 +202,7 @@ export default function CpaSidebar() {
 const ACCENT = "#22c55e";
 
 const S = {
-  sidebar: { width: 260, minWidth: 260, background: "#161b28", height: "calc(100vh - 64px)", position: "sticky", top: 64, display: "flex", flexDirection: "column", fontFamily: "'Lora',serif", overflowY: "auto", color: "#cbd5e1" },
+  sidebar: { width: 260, minWidth: 260, background: "#161b28", height: "calc(100vh - 64px)", position: "sticky", top: 64, display: "flex", flexDirection: "column", fontFamily: "'Inter',sans-serif", overflowY: "auto", color: "#cbd5e1" },
   brand: { display: "flex", alignItems: "center", gap: 8, padding: "18px 18px 14px" },
   brandDot: { width: 10, height: 10, borderRadius: "50%", background: ACCENT, boxShadow: `0 0 10px ${ACCENT}` },
   brandText: { fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 16, color: "#f1f5f9", letterSpacing: "-0.3px" },
@@ -227,7 +227,7 @@ const S = {
   empty: { padding: "8px 10px", fontSize: 12, color: "#475569" },
   addTrigger: { margin: "4px 18px 8px", fontSize: 12, color: "#64748b", cursor: "pointer", fontWeight: 600 },
   addRow: { display: "flex", gap: 5, padding: "6px 18px 10px" },
-  smallInput: { flex: 1, padding: "6px 8px", borderRadius: 8, border: "1px solid #2a3348", background: "#1f2637", color: "#e2e8f0", fontSize: 12, outline: "none", fontFamily: "'Lora',serif" },
+  smallInput: { flex: 1, padding: "6px 8px", borderRadius: 8, border: "1px solid #2a3348", background: "#1f2637", color: "#e2e8f0", fontSize: 12, outline: "none", fontFamily: "'Inter',sans-serif" },
   addBtn: { padding: "6px 10px", borderRadius: 8, border: "none", background: ACCENT, color: "#0b1220", cursor: "pointer", fontWeight: 800 },
   cancelBtn: { padding: "6px 10px", borderRadius: 8, border: "none", background: "#2a3348", color: "#94a3b8", cursor: "pointer", fontWeight: 700 },
   divider: { height: 1, background: "#232b3d", margin: "10px 18px" },
