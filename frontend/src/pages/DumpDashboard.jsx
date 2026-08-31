@@ -5,6 +5,45 @@ import { btn, btnRed, input, table, th, td, page as pageStyle } from "../styles/
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 const PAGE_SIZE = 100;
 
+const dateRangeStyles = {
+  container: {
+    display: "inline-block",
+    background: "#f8fafc",
+    borderRadius: 14,
+    padding: "14px 18px 12px",
+    marginBottom: 20,
+    boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+  },
+  accentBar: {
+    height: 4,
+    width: "70%",
+    margin: "0 auto 12px",
+    borderRadius: 4,
+    background: "#0f172a",
+  },
+  row: {
+    display: "flex",
+    alignItems: "center",
+    gap: 0,
+  },
+  input: {
+    border: "1px solid #cbd5e1",
+    borderRadius: 8,
+    padding: "8px 12px",
+    fontSize: 14,
+    color: "#1e293b",
+    background: "#ffffff",
+    outline: "none",
+    colorScheme: "light",
+  },
+  divider: {
+    width: 24,
+    height: 2,
+    background: "#94a3b8",
+    margin: "0 10px",
+  },
+};
+
 const todayIST = () => {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
@@ -164,23 +203,41 @@ export default function DumpDashboard() {
         </h1>
 
         {/* FILTER BAR */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10, marginBottom: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 14 }}>
           <input style={input} placeholder="MSISDN" value={msisdn} onChange={e => setMsisdn(e.target.value)} />
           <input style={input} placeholder="Offer" value={offer} onChange={e => setOffer(e.target.value)} />
           <input style={input} placeholder="Publisher" value={publisher} onChange={e => setPublisher(e.target.value)} />
           <input style={input} placeholder="Advertiser" value={advertiser} onChange={e => setAdvertiser(e.target.value)} />
-          <input style={{ ...input, colorScheme: "dark" }} type="date" value={fromDate} onChange={e => {
-            const v = e.target.value;
-            setFromDate(v);
-            setCurrentPage(0);
-            fetchData(0, { fromDate: v });
-          }} />
-          <input style={{ ...input, colorScheme: "dark" }} type="date" value={toDate} onChange={e => {
-            const v = e.target.value;
-            setToDate(v);
-            setCurrentPage(0);
-            fetchData(0, { toDate: v });
-          }} />
+        </div>
+
+        {/* DATE RANGE */}
+        <div style={dateRangeStyles.container}>
+          <div style={dateRangeStyles.accentBar} />
+          <div style={dateRangeStyles.row}>
+            <input
+              type="date"
+              value={fromDate}
+              style={dateRangeStyles.input}
+              onChange={e => {
+                const v = e.target.value;
+                setFromDate(v);
+                setCurrentPage(0);
+                fetchData(0, { fromDate: v });
+              }}
+            />
+            <div style={dateRangeStyles.divider} />
+            <input
+              type="date"
+              value={toDate}
+              style={dateRangeStyles.input}
+              onChange={e => {
+                const v = e.target.value;
+                setToDate(v);
+                setCurrentPage(0);
+                fetchData(0, { toDate: v });
+              }}
+            />
+          </div>
         </div>
 
         {/* ACTIONS */}
