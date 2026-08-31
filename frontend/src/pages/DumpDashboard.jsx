@@ -5,6 +5,16 @@ import { btn, btnRed, input, table, th, td, page as pageStyle } from "../styles/
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 const PAGE_SIZE = 100;
 
+const todayIST = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const y = parts.find(p=>p.type==="year")?.value;
+  const m = parts.find(p=>p.type==="month")?.value;
+  const d = parts.find(p=>p.type==="day")?.value;
+  return `${y}-${m}-${d}`;
+};
+
 function formatCellValue(value) {
   if (value === null || value === undefined) return "";
   if (typeof value === "object") return JSON.stringify(value);
@@ -71,19 +81,22 @@ export default function DumpDashboard() {
   const [offer, setOffer]       = useState("");
   const [publisher, setPublisher] = useState("");
   const [advertiser, setAdvertiser] = useState("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate]     = useState("");
+  const [fromDate, setFromDate] = useState(todayIST());
+  const [toDate, setToDate]     = useState(todayIST());
   const [currentPage, setCurrentPage] = useState(0);
   const [total, setTotal]       = useState(0);
 
-  const fetchData = useCallback(async (pageNum = 0) => {
+  const fetchData = useCallback(async (pageNum = 0, overrides = {}) => {
     setLoading(true);
     setError("");
     const token = localStorage.getItem("token");
+    const gMsisdn = overrides.msisdn ?? msisdn;
+    const gFrom = overrides.fromDate ?? fromDate;
+    const gTo = overrides.toDate ?? toDate;
     const params = new URLSearchParams();
-    if (msisdn)   params.set("msisdn", msisdn);
-    if (fromDate) params.set("from", fromDate);
-    if (toDate)   params.set("to", toDate);
+    if (gMsisdn) params.set("msisdn", gMsisdn);
+    if (gFrom)   params.set("from", gFrom);
+    if (gTo)     params.set("to", gTo);
     params.set("limit", PAGE_SIZE);
     params.set("offset", pageNum * PAGE_SIZE);
     try {
@@ -110,10 +123,12 @@ export default function DumpDashboard() {
   };
 
   const clearFilters = () => {
+    const freshFrom = todayIST();
+    const freshTo = todayIST();
     setMsisdn(""); setOffer(""); setPublisher("");
-    setAdvertiser(""); setFromDate(""); setToDate("");
+    setAdvertiser(""); setFromDate(freshFrom); setToDate(freshTo);
     setCurrentPage(0);
-    fetchData(0);
+    fetchData(0, { msisdn: "", fromDate: freshFrom, toDate: freshTo });
   };
 
   const filteredRows = useMemo(() => {
