@@ -320,6 +320,9 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 ===================================================== */
 router.all("/pin/prepare-verify", async (req, res) => {
   try {
+    const publisher = await validatePublisher(req);
+    if (!publisher) return res.status(401).json({ status: "INVALID_KEY" });
+
     const { session_token, referer, accept_language } = { ...req.query, ...req.body };
     if (!session_token) return res.json({ status: "FAILED", message: "session_token required" });
 

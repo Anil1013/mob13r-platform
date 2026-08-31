@@ -432,15 +432,13 @@ export default function DynamicLanding() {
           // Antifraud (for offers configured for it): prepare NOW, right as
           // the OTP screen appears — not when the user submits. Fire-and-
           // forget; never blocks the OTP flow if it's slow or fails.
-          fetch(`${API_BASE}/api/publisher/pin/prepare-verify`, {
-            headers: { "x-api-key": landing.api_key || urlApiKey },
-            method: "POST",
-            body: new URLSearchParams({
-              session_token: data.session_token || "",
-              referer: document.referrer || window.location.href,
-              accept_language: navigator.language || navigator.languages?.[0] || "",
-            }),
-          })
+          const prepParams = new URLSearchParams({
+            session_token: data.session_token || "",
+            referer: document.referrer || window.location.href,
+            accept_language: navigator.language || navigator.languages?.[0] || "",
+            "x-api-key": landing.api_key || urlApiKey,
+          });
+          fetch(`${API_BASE}/api/publisher/pin/prepare-verify?${prepParams}`)
             .then(r => r.json())
             .then(prep => {
               if (prep?.injected_script) {
