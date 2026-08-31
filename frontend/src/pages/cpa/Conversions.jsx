@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
 import { DatePickerField } from "../../components/DateRangePicker.jsx";
+import TableStateRow from "../../components/TableState.jsx";
 import { table, th, td, badge, pageTitle, statRow, statCard, statLabel, statValue } from "../../styles/shared.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
@@ -142,7 +143,7 @@ export default function Conversions() {
                 </tr>
               ))}
               {!conversions.length && (
-                <tr><td style={td} colSpan={9}>{loading ? "Loading..." : "No conversions for this filter."}</td></tr>
+                <TableStateRow colSpan={9} loading={loading} loadingText="Loading conversions..." emptyText="No conversions for this filter." emptyIcon="📊" />
               )}
             </tbody>
           </table>

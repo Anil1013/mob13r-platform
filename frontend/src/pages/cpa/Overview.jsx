@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
 import { DatePickerField } from "../../components/DateRangePicker.jsx";
+import TableStateRow from "../../components/TableState.jsx";
 import { table, th, td, pageTitle, statRow, statCard, statLabel, statValue } from "../../styles/shared.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
@@ -135,7 +136,7 @@ export default function CpaOverview() {
                 </tr>
               ))}
               {!aggregated.length && (
-                <tr><td style={td} colSpan={4}>{loading ? "Loading..." : "No data for this range."}</td></tr>
+                <TableStateRow colSpan={4} loading={loading} loadingText="Loading overview..." emptyText="No data for this range." emptyIcon="📈" />
               )}
             </tbody>
             {aggregated.length > 0 && (

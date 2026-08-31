@@ -59,7 +59,7 @@ export default function Publishers() {
           <div style={{display:"flex",gap:12,alignItems:"center"}}>
             <input style={{...input,width:240}} placeholder="Publisher name" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()}/>
             <input style={{...input,width:240}} placeholder="Publisher email" type="email" value={email} onChange={e=>setEmail(e.target.value)}/>
-            <button style={{...btn,opacity:loading?0.7:1}} onClick={add} disabled={loading}>{loading?"Adding...":"+ Add Publisher"}</button>
+            <button className="m13-btn" style={{...btn,opacity:loading?0.7:1}} onClick={add} disabled={loading}>{loading?"Adding...":"+ Add Publisher"}</button>
           </div>
         </div>
         <div style={{background:"#ffffff",border:"1px solid #e2e8f0",borderRadius:16,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}>

@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
 import { DatePickerField } from "../../components/DateRangePicker.jsx";
+import TableStateRow from "../../components/TableState.jsx";
 import { table, th, td, pageTitle, statRow, statCard, statLabel, statValue } from "../../styles/shared.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
@@ -312,7 +313,7 @@ export default function CpaReports() {
                 </tr>
               ))}
               {!flattened.length && (
-                <tr><td style={td} colSpan={colCount}>{loading ? "Loading..." : "No data for this range."}</td></tr>
+                <TableStateRow colSpan={colCount} loading={loading} loadingText="Loading report..." emptyText="No data for this range." emptyIcon="📄" />
               )}
             </tbody>
             {rows.length > 0 && (

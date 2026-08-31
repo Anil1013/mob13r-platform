@@ -1,6 +1,7 @@
 import { useEffect, useState, Fragment } from "react";
 import { useNavigate, useSearchParams, NavLink } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
+import TableStateRow from "../../components/TableState.jsx";
 import { btn, btnRed, input, table, th, td, badge, pageTitle, filterBar, filterSelect } from "../../styles/shared.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
@@ -207,7 +208,7 @@ export default function Campaigns() {
           <h1 style={pageTitle}>CPA Campaigns</h1>
           <p style={{ color: "#9b7faa", fontSize: 13 }}>{campaigns.length} campaigns · single tracking URL per campaign, pushed to advertiser</p>
         </div>
-        <button style={btn} onClick={() => setShowForm(s => !s)}>{showForm ? "Cancel" : "+ New Campaign"}</button>
+        <button className="m13-btn" style={btn} onClick={() => setShowForm(s => !s)}>{showForm ? "Cancel" : "+ New Campaign"}</button>
       </div>
 
       {showForm && (
@@ -338,7 +339,7 @@ export default function Campaigns() {
                 </Fragment>
               ))}
               {!campaigns.length && (
-                <tr><td style={td} colSpan={9}>{loading ? "Loading campaigns..." : "No campaigns yet — create one to get your first tracking URL."}</td></tr>
+                <TableStateRow colSpan={9} loading={loading} loadingText="Loading campaigns..." emptyText="No campaigns yet — create one to get your first tracking URL." emptyIcon="🚀" />
               )}
             </tbody>
           </table>
