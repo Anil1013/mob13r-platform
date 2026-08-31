@@ -318,7 +318,7 @@ export default function PublisherAssignOffers() {
       {toast && <div style={styles.toast}>{toast}</div>}
 
       <div style={page}>
-        <h2 style={{fontFamily:"Syne,sans-serif",fontSize:24,fontWeight:700,color:"#1e293b",marginBottom:20}}>
+        <h2 style={{fontFamily:"Lora,serif",fontSize:24,fontWeight:700,color:"#1e293b",marginBottom:20}}>
           Assign Offers to Publisher
         </h2>
 

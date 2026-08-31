@@ -55,7 +55,7 @@ export default function Publishers() {
       {toast&&<div style={{position:"fixed",top:80,right:24,zIndex:9999,background:toast.type==="error"?"rgba(239,68,68,0.06)":"rgba(34,197,94,0.06)",border:`1px solid ${toast.type==="error"?"rgba(239,68,68,0.3)":"rgba(34,197,94,0.3)"}`,color:toast.type==="error"?"#dc2626":"#16a34a",padding:"12px 20px",borderRadius:12,fontSize:13}}>{toast.msg}</div>}
       <div style={page}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:32,flexWrap:"wrap",gap:16}}>
-          <div><h1 style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#1e293b"}}>Publishers</h1><p style={{color:"#64748b",fontSize:13,marginTop:4}}>{publishers.length} publishers</p></div>
+          <div><h1 style={{fontFamily:"Lora,serif",fontSize:28,fontWeight:700,color:"#1e293b"}}>Publishers</h1><p style={{color:"#64748b",fontSize:13,marginTop:4}}>{publishers.length} publishers</p></div>
           <div style={{display:"flex",gap:12,alignItems:"center"}}>
             <input style={{...input,width:240}} placeholder="Publisher name" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()}/>
             <input style={{...input,width:240}} placeholder="Publisher email" type="email" value={email} onChange={e=>setEmail(e.target.value)}/>

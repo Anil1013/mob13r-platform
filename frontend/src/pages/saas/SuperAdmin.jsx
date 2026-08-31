@@ -333,7 +333,7 @@ const S = {
   page:{minHeight:"100vh",background:"#050810",padding:"32px 24px"},
   toast:{position:"fixed",top:80,right:24,zIndex:9999,padding:"12px 20px",borderRadius:12,fontSize:13,fontWeight:500},
   header:{marginBottom:32},
-  title:{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#f1f5f9"},
+  title:{fontFamily:"Lora,serif",fontSize:28,fontWeight:700,color:"#f1f5f9"},
   sub:{color:"#475569",fontSize:13,marginTop:4,marginBottom:24},
   statsRow:{display:"flex",gap:16,marginBottom:8},
   statBox:{background:"#0d1326",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"16px 24px",textAlign:"center"},

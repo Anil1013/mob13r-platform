@@ -138,7 +138,7 @@ const S = {
   glow2:{position:"absolute",width:400,height:400,borderRadius:"50%",background:"radial-gradient(circle,rgba(99,102,241,0.08) 0%,transparent 70%)",bottom:-100,right:-100,pointerEvents:"none"},
   card:{width:"100%",maxWidth:420,padding:"48px 40px",background:"#0d1326",borderRadius:24,border:"1px solid rgba(255,255,255,0.07)",boxShadow:"0 25px 60px rgba(0,0,0,0.5)",position:"relative",zIndex:1},
   logo:{width:60,height:60,borderRadius:16,background:"linear-gradient(135deg,#3b82f6,#6366f1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:800,color:"#fff",margin:"0 auto"},
-  title:{fontFamily:"Syne,sans-serif",fontSize:26,fontWeight:700,color:"#f1f5f9",textAlign:"center",marginBottom:8},
+  title:{fontFamily:"Lora,serif",fontSize:26,fontWeight:700,color:"#f1f5f9",textAlign:"center",marginBottom:8},
   sub:{color:"#475569",textAlign:"center",marginBottom:24,fontSize:14},
   error:{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",color:"#ef4444",padding:"10px 14px",borderRadius:10,marginBottom:16,fontSize:13},
   field:{display:"flex",flexDirection:"column",gap:8},

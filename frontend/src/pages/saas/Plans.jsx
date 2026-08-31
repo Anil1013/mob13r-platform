@@ -176,7 +176,7 @@ const S = {
   glow1:{position:"absolute",width:600,height:600,borderRadius:"50%",background:"radial-gradient(circle,rgba(59,130,246,0.08) 0%,transparent 70%)",top:-200,left:-200,pointerEvents:"none"},
   glow2:{position:"absolute",width:400,height:400,borderRadius:"50%",background:"radial-gradient(circle,rgba(139,92,246,0.08) 0%,transparent 70%)",bottom:-100,right:0,pointerEvents:"none"},
   inner:{maxWidth:1100,margin:"0 auto",position:"relative",zIndex:1},
-  title:{fontFamily:"Syne,sans-serif",fontSize:40,fontWeight:700,color:"#f1f5f9",marginBottom:12},
+  title:{fontFamily:"Lora,serif",fontSize:40,fontWeight:700,color:"#f1f5f9",marginBottom:12},
   sub:{color:"#475569",fontSize:15,maxWidth:520,margin:"0 auto"},
   grid:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:20,marginBottom:24},
   card:{background:"#0d1326",borderRadius:20,padding:22,display:"flex",flexDirection:"column",gap:8,position:"relative"},

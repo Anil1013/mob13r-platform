@@ -729,8 +729,8 @@ function UploadBox({ title, onFile }) {
 const styles = {
   page: { minHeight: "100vh", padding: "80px 20px", background: '#050810', color: "#f1f5f9", boxSizing: "border-box" },
   header: { marginBottom: 30 },
-  heading: { fontSize: 28, fontWeight: 700, fontFamily:"Syne,sans-serif", color:"#e2d5e5" },
-  subheading: { color:"#9b7faa", fontSize: 13, marginTop: 4, fontFamily:"'Inter', sans-serif" },
+  heading: { fontSize: 28, fontWeight: 700, fontFamily:"Lora,serif", color:"#e2d5e5" },
+  subheading: { color:"#9b7faa", fontSize: 13, marginTop: 4, fontFamily:"'Lora', sans-serif" },
   layout: { display: "grid", gap: 24, alignItems: "start" },
   builderCard: { background: "#fff", border: "1px solid rgba(210,160,180,0.25)", borderRadius: 24, padding: 24, boxShadow:"0 4px 20px rgba(210,160,180,0.08)", boxSizing: "border-box" },
 
@@ -768,22 +768,22 @@ const styles = {
   previewDescription: { lineHeight: 1.6, marginTop: 10, fontSize: 13 },
   previewButton: { width: "100%", padding: "18px", border: "none", fontWeight: 700, fontSize: 14, cursor: "pointer" },
 
-  sectionTitle: { fontSize: 16, fontWeight: 700, marginBottom: 18, marginTop: 24, color:"#4a2f3f", fontFamily:"Syne,sans-serif" },
+  sectionTitle: { fontSize: 16, fontWeight: 700, marginBottom: 18, marginTop: 24, color:"#4a2f3f", fontFamily:"Lora,serif" },
   grid: { display: "grid", gap: 14 },
   grid3: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 },
-  colorBox: { display: "flex", flexDirection: "column", gap: 10, background: "#fdf6f9", border:"1px solid rgba(210,160,180,0.2)", padding: 14, borderRadius: 16, fontSize: 13, color:"#6b4f6a", fontFamily:"'Inter', sans-serif", boxSizing: "border-box" },
-  input: { width: "100%", padding: 12, borderRadius: 10, border: "1px solid rgba(210,160,180,0.4)", background: "#fff", color: "#4a2f3f", outline: "none", fontSize: 13, fontFamily:"'Inter', sans-serif", fontWeight:600, boxSizing: "border-box" },
+  colorBox: { display: "flex", flexDirection: "column", gap: 10, background: "#fdf6f9", border:"1px solid rgba(210,160,180,0.2)", padding: 14, borderRadius: 16, fontSize: 13, color:"#6b4f6a", fontFamily:"'Lora', sans-serif", boxSizing: "border-box" },
+  input: { width: "100%", padding: 12, borderRadius: 10, border: "1px solid rgba(210,160,180,0.4)", background: "#fff", color: "#4a2f3f", outline: "none", fontSize: 13, fontFamily:"'Lora', sans-serif", fontWeight:600, boxSizing: "border-box" },
 
-  select: { width: "100%", padding: 12, borderRadius: 10, border: "1px solid rgba(210,160,180,0.4)", background: "#fff", color: "#4a2f3f", outline: "none", cursor: "pointer", fontSize: 13, fontFamily:"'Inter', sans-serif", boxSizing: "border-box" },
+  select: { width: "100%", padding: 12, borderRadius: 10, border: "1px solid rgba(210,160,180,0.4)", background: "#fff", color: "#4a2f3f", outline: "none", cursor: "pointer", fontSize: 13, fontFamily:"'Lora', sans-serif", boxSizing: "border-box" },
   selectOption: { background: "#fff", color: "#4a2f3f", padding: 12 },
 
-  textarea: { width: "100%", minHeight: 100, padding: 12, borderRadius: 10, border: "1px solid rgba(210,160,180,0.4)", background: "#fff", color: "#4a2f3f", outline: "none", fontSize: 13, fontFamily:"'Inter', sans-serif", fontWeight:600, boxSizing: "border-box" },
+  textarea: { width: "100%", minHeight: 100, padding: 12, borderRadius: 10, border: "1px solid rgba(210,160,180,0.4)", background: "#fff", color: "#4a2f3f", outline: "none", fontSize: 13, fontFamily:"'Lora', sans-serif", fontWeight:600, boxSizing: "border-box" },
   uploadGrid: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 },
   uploadBox: { border: "2px dashed rgba(210,160,180,0.4)", borderRadius: 16, padding: "12px 8px", textAlign: "center", background: "#fdf6f9", boxSizing: "border-box" },
   toggleGrid: { display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12 },
-  toggleItem: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fdf6f9", border:"1px solid rgba(210,160,180,0.2)", padding: 14, borderRadius: 14, fontSize: 13, color:"#6b4f6a", fontFamily:"'Inter', sans-serif", boxSizing: "border-box" },
-  createButton: { width: "100%", padding: 16, borderRadius: 12, border: "none", background: "linear-gradient(135deg,#e8856a,#d4709a)", color: "#fff", fontWeight: 700, fontSize: 14, fontFamily:"'Inter', sans-serif", cursor:"pointer" },
+  toggleItem: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fdf6f9", border:"1px solid rgba(210,160,180,0.2)", padding: 14, borderRadius: 14, fontSize: 13, color:"#6b4f6a", fontFamily:"'Lora', sans-serif", boxSizing: "border-box" },
+  createButton: { width: "100%", padding: 16, borderRadius: 12, border: "none", background: "linear-gradient(135deg,#e8856a,#d4709a)", color: "#fff", fontWeight: 700, fontSize: 14, fontFamily:"'Lora', sans-serif", cursor:"pointer" },
   landingList: { display: "grid", gap: 12 },
   landingItem: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fdf6f9", border:"1px solid rgba(210,160,180,0.2)", padding: 14, borderRadius: 14, boxSizing: "border-box" },
-  copyButton: { border: "1px solid rgba(210,160,180,0.35)", background: "#fff", color: "#6b4f6a", padding: "10px 14px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, fontFamily:"'Inter', sans-serif" },
+  copyButton: { border: "1px solid rgba(210,160,180,0.35)", background: "#fff", color: "#6b4f6a", padding: "10px 14px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, fontFamily:"'Lora', sans-serif" },
 };

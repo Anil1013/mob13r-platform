@@ -160,7 +160,7 @@ export default function DumpDashboard() {
     <>
       <Navbar />
       <div style={pageStyle}>
-        <h1 style={{ fontFamily: "Syne,sans-serif", fontSize: 28, fontWeight: 700, color: "#f1f5f9", marginBottom: 24 }}>
+        <h1 style={{ fontFamily: "Lora,serif", fontSize: 28, fontWeight: 700, color: "#f1f5f9", marginBottom: 24 }}>
           Main Dump Dashboard
         </h1>
 

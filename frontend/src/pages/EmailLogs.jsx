@@ -40,7 +40,7 @@ export default function EmailLogs() {
   );
 
   const s = {
-    page: { padding: "24px", fontFamily: "sans-serif", background: "#f5f6fa", minHeight: "100vh" },
+    page: { padding: "24px", fontFamily: "Lora, serif", background: "#f5f6fa", minHeight: "100vh" },
     title: { fontSize: "22px", fontWeight: 700, color: "#1a1a2e", marginBottom: 4 },
     sub: { color: "#94a3b8", fontSize: 13, marginBottom: 24 },
     card: { background: "#fff", borderRadius: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", overflow: "hidden" },

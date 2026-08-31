@@ -843,7 +843,7 @@ export default function DynamicLanding() {
 
         fontFamily:
           landing.font_family ||
-          "Inter",
+          "Lora",
       }}
     >
       {/* OVERLAY */}

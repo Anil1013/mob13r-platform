@@ -2,8 +2,8 @@
    Mob13r Shared Styles — Modern SaaS Theme
    ============================================ */
 
-const font = "'Inter', -apple-system, sans-serif";
-const headingFont = "'Syne', sans-serif";
+const font = "'Lora', serif";
+const headingFont = "'Lora', serif";
 
 const grad = "linear-gradient(135deg,#7c3aed,#d4709a)";
 

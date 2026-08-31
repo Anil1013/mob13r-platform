@@ -124,7 +124,7 @@ export default function OfferGroups() {
   };
 
   const s = {
-    page: { padding: 24, fontFamily: "sans-serif", background: "#f5f6fa", minHeight: "100vh" },
+    page: { padding: 24, fontFamily: "Lora, serif", background: "#f5f6fa", minHeight: "100vh" },
     title: { fontSize: 22, fontWeight: 700, color: "#1a1a2e", marginBottom: 4 },
     sub: { color: "#94a3b8", fontSize: 13, marginBottom: 24 },
     card: { background: "#fff", borderRadius: 12, padding: 20, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.07)" },

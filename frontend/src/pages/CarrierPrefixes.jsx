@@ -147,7 +147,7 @@ export default function CarrierPrefixes() {
   };
 
   const s = {
-    page: { padding: "24px", fontFamily: "'Inter', sans-serif", background: "#f5f6fa", minHeight: "100vh" },
+    page: { padding: "24px", fontFamily: "'Lora', sans-serif", background: "#f5f6fa", minHeight: "100vh" },
     title: { fontSize: "22px", fontWeight: "700", marginBottom: "2px", color: "#1a1a2e" },
     sub: { color: "#999", fontSize: "13px", marginBottom: "24px" },
     card: { background: "#fff", borderRadius: "12px", padding: "20px", marginBottom: "20px", boxShadow: "0 1px 4px rgba(0,0,0,0.07)" },

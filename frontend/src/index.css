@@ -15,7 +15,7 @@ html, body {
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Lora', Georgia, serif;
 }
 
 /* Custom scrollbar — slim, rounded, theme-matched */
@@ -117,7 +117,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 /* react-datepicker: match the app's rounded, soft aesthetic */
 .react-datepicker {
-  font-family: 'Inter', sans-serif !important;
+  font-family: 'Lora', serif !important;
   border-radius: 14px !important;
   border: 1px solid #e8d0dc !important;
   box-shadow: 0 12px 32px rgba(124, 58, 237, 0.18) !important;

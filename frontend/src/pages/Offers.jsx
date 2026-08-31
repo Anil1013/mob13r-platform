@@ -168,7 +168,7 @@ export default function Offers() {
     <>
       <Navbar />
       <div style={page}>
-        <h1 style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:700,color:"#4a2f3f",marginBottom:24}}>
+        <h1 style={{fontFamily:"Lora,serif",fontSize:28,fontWeight:700,color:"#4a2f3f",marginBottom:24}}>
           Universal Offer Engine
         </h1>
 
@@ -276,7 +276,7 @@ export default function Offers() {
         {selectedOffer && (
           <div style={styles.card}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-              <h3 style={{color:"#4a2f3f",fontSize:18,fontWeight:600,fontFamily:"Syne,sans-serif"}}>
+              <h3 style={{color:"#4a2f3f",fontSize:18,fontWeight:600,fontFamily:"Lora,serif"}}>
                 Configuring: {selectedOffer.service_name}
               </h3>
               <button onClick={() => setSelectedOffer(null)} style={btnRed}>Close</button>
@@ -284,8 +284,8 @@ export default function Offers() {
 
             {/* AI MAGIC INTEGRATOR */}
             <div style={styles.aiBox}>
-              <h4 style={{marginTop:0,color:"#e8856a",fontFamily:"Syne,sans-serif"}}>🚀 AI Magic Integrator</h4>
-              <p style={{fontSize:"12px",color:"#c07050",fontWeight:"bold",fontFamily:"'Inter',sans-serif"}}>Upload API Document (PDF/DOCX) to auto-configure this service</p>
+              <h4 style={{marginTop:0,color:"#e8856a",fontFamily:"Lora,serif"}}>🚀 AI Magic Integrator</h4>
+              <p style={{fontSize:"12px",color:"#c07050",fontWeight:"bold",fontFamily:"'Lora',sans-serif"}}>Upload API Document (PDF/DOCX) to auto-configure this service</p>
               <input type="file" accept=".pdf,.docx" onChange={handleAIUpload} style={{fontSize:"12px",color:"#6b4f6a"}} />
             </div>
 
@@ -355,7 +355,7 @@ export default function Offers() {
 
                 {/* Add new param → goes to Available */}
                 <div style={{padding:"10px 12px",borderTop:"1px solid #eedde8",background:"#fdf6f9"}}>
-                  <div style={{fontSize:11,fontWeight:600,color:"#9b7faa",marginBottom:6,fontFamily:"'Inter',sans-serif"}}>Add New Parameter</div>
+                  <div style={{fontSize:11,fontWeight:600,color:"#9b7faa",marginBottom:6,fontFamily:"'Lora',sans-serif"}}>Add New Parameter</div>
                   <form onSubmit={addParameter} style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                     <input style={{...styles.smallInput,flex:1,minWidth:80,padding:"6px 10px",fontSize:12}} placeholder="param_key" value={paramForm.param_key} onChange={e => setParamForm({...paramForm,param_key:e.target.value})} />
                     <input style={{...styles.smallInput,flex:1,minWidth:80,padding:"6px 10px",fontSize:12}} placeholder="param_value" value={paramForm.param_value} onChange={e => setParamForm({...paramForm,param_value:e.target.value})} />
@@ -399,34 +399,34 @@ export default function Offers() {
 const styles = {
   topBar: { display:"flex", gap:10, flexWrap:"wrap", marginBottom:20, alignItems:"center", background:"#fff", border:"1px solid #e8d0dc", padding:"16px", borderRadius:"16px", boxShadow:"0 2px 8px rgba(210,160,180,0.1)" },
   tableWrap: { background:"#fff", border:"1px solid #e8d0dc", padding:"8px", borderRadius:"16px", overflowX:"auto" },
-  smallInput: { background:"#fff", border:"1px solid #e8d0dc", color:"#4a2f3f", borderRadius:10, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"'Inter',sans-serif", fontWeight:600 },
-  cellInput: { width:"90%", textAlign:"center", padding:6, background:"#fff", border:"1px solid #e8d0dc", color:"#4a2f3f", borderRadius:8, fontSize:13, outline:"none", fontFamily:"'Inter',sans-serif", fontWeight:600 },
-  select: { background:"#fff", border:"1px solid #e8d0dc", color:"#4a2f3f", borderRadius:10, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"'Inter',sans-serif" },
-  smallBtn: { fontSize:"12px", padding:"6px 12px", background:"#fff", border:"1px solid #e8d0dc", color:"#9b7faa", borderRadius:8, cursor:"pointer", fontFamily:"'Inter',sans-serif" },
+  smallInput: { background:"#fff", border:"1px solid #e8d0dc", color:"#4a2f3f", borderRadius:10, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"'Lora',sans-serif", fontWeight:600 },
+  cellInput: { width:"90%", textAlign:"center", padding:6, background:"#fff", border:"1px solid #e8d0dc", color:"#4a2f3f", borderRadius:8, fontSize:13, outline:"none", fontFamily:"'Lora',sans-serif", fontWeight:600 },
+  select: { background:"#fff", border:"1px solid #e8d0dc", color:"#4a2f3f", borderRadius:10, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"'Lora',sans-serif" },
+  smallBtn: { fontSize:"12px", padding:"6px 12px", background:"#fff", border:"1px solid #e8d0dc", color:"#9b7faa", borderRadius:8, cursor:"pointer", fontFamily:"'Lora',sans-serif" },
   card: { background:"#fff", border:"1px solid #e8d0dc", padding:24, marginTop:24, borderRadius:"16px", boxShadow:"0 4px 20px rgba(210,160,180,0.08)" },
   aiBox: { background:"rgba(232,133,106,0.06)", padding:"20px", borderRadius:"12px", border:"2px dashed rgba(232,133,106,0.35)", marginBottom:"20px" },
   workflowGrid: { display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"20px", background:"#fdf6f9", padding:"16px", borderRadius:"12px", marginBottom:"20px", border:"1px solid #eedde8" },
-  workflowLabel: { fontSize:"12px", fontWeight:600, color:"#6b4f6a", fontFamily:"'Inter',sans-serif" },
-  badgePrimary: { color:"#2f9e60", fontWeight:600, fontSize:"11px", fontFamily:"'Inter',sans-serif" },
-  badgeFallback: { color:"#c07000", fontWeight:600, fontSize:"11px", fontFamily:"'Inter',sans-serif" },
-  badgeCap: { color:"#dc6464", fontWeight:600, fontSize:"11px", fontFamily:"'Inter',sans-serif" },
+  workflowLabel: { fontSize:"12px", fontWeight:600, color:"#6b4f6a", fontFamily:"'Lora',sans-serif" },
+  badgePrimary: { color:"#2f9e60", fontWeight:600, fontSize:"11px", fontFamily:"'Lora',sans-serif" },
+  badgeFallback: { color:"#c07000", fontWeight:600, fontSize:"11px", fontFamily:"'Lora',sans-serif" },
+  badgeCap: { color:"#dc6464", fontWeight:600, fontSize:"11px", fontFamily:"'Lora',sans-serif" },
 
-  sectionHead: { fontSize:14, fontWeight:700, color:"#4a2f3f", fontFamily:"Syne,sans-serif", margin:"20px 0 10px", paddingBottom:6, borderBottom:"2px solid #eedde8" },
+  sectionHead: { fontSize:14, fontWeight:700, color:"#4a2f3f", fontFamily:"Lora,serif", margin:"20px 0 10px", paddingBottom:6, borderBottom:"2px solid #eedde8" },
   urlGrid: { display:"grid", gap:8, marginBottom:4 },
   urlRow: { display:"grid", gridTemplateColumns:"160px 1fr", gap:10, alignItems:"center" },
-  urlLabel: { fontSize:11, fontWeight:700, color:"#9b7faa", fontFamily:"'Inter',sans-serif", textTransform:"uppercase", letterSpacing:"0.04em" },
+  urlLabel: { fontSize:11, fontWeight:700, color:"#9b7faa", fontFamily:"'Lora',sans-serif", textTransform:"uppercase", letterSpacing:"0.04em" },
 
   paramColumns: { display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginTop:8 },
   paramCol: { border:"1px solid #eedde8", borderRadius:12, overflow:"hidden", display:"flex", flexDirection:"column" },
-  colHead: { background:"#f5eef8", padding:"10px 14px", display:"flex", justifyContent:"space-between", alignItems:"center", fontWeight:700, fontSize:13, color:"#4a2f3f", fontFamily:"Syne,sans-serif", borderBottom:"1px solid #eedde8" },
+  colHead: { background:"#f5eef8", padding:"10px 14px", display:"flex", justifyContent:"space-between", alignItems:"center", fontWeight:700, fontSize:13, color:"#4a2f3f", fontFamily:"Lora,serif", borderBottom:"1px solid #eedde8" },
   paramList: { padding:8, maxHeight:340, overflowY:"auto", display:"flex", flexDirection:"column", gap:5, flex:1 },
-  emptyMsg: { textAlign:"center", color:"#b89ab0", fontSize:12, padding:"20px 10px", fontFamily:"'Inter',sans-serif", lineHeight:1.6 },
+  emptyMsg: { textAlign:"center", color:"#b89ab0", fontSize:12, padding:"20px 10px", fontFamily:"'Lora',sans-serif", lineHeight:1.6 },
 
   availableRow: { display:"flex", alignItems:"center", gap:6, background:"#fdf6f9", border:"1px solid #eedde8", borderRadius:8, padding:"6px 10px" },
   activeRow: { display:"flex", alignItems:"center", gap:8, background:"rgba(232,133,106,0.04)", border:"1px solid rgba(232,133,106,0.2)", borderRadius:8, padding:"6px 10px" },
 
-  paramKey: { fontSize:12, fontWeight:700, color:"#4a2f3f", fontFamily:"'Inter',sans-serif", minWidth:110, flexShrink:0 },
-  activateBtn: { fontSize:11, padding:"4px 10px", background:"linear-gradient(135deg,#e8856a,#d4709a)", border:"none", color:"#fff", borderRadius:6, cursor:"pointer", fontFamily:"'Inter',sans-serif", fontWeight:600, whiteSpace:"nowrap", flexShrink:0 },
+  paramKey: { fontSize:12, fontWeight:700, color:"#4a2f3f", fontFamily:"'Lora',sans-serif", minWidth:110, flexShrink:0 },
+  activateBtn: { fontSize:11, padding:"4px 10px", background:"linear-gradient(135deg,#e8856a,#d4709a)", border:"none", color:"#fff", borderRadius:6, cursor:"pointer", fontFamily:"'Lora',sans-serif", fontWeight:600, whiteSpace:"nowrap", flexShrink:0 },
   removeBtn: { fontSize:11, padding:"4px 8px", background:"rgba(220,100,100,0.08)", border:"1px solid rgba(220,100,100,0.2)", color:"#dc6464", borderRadius:6, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 },
   deleteBtn: { fontSize:11, padding:"4px 8px", background:"none", border:"none", color:"#b89ab0", borderRadius:6, cursor:"pointer", flexShrink:0 },
 };
