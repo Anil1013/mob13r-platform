@@ -35,10 +35,11 @@ export default function Navbar() {
     { to:"/publishers", label:"Publishers" },
     { to:"/publishers/assign", label:"Assign Offers" },
     { to:"/landing-builder", label:"Landing Builder" },
+    ...(isOrgAdmin ? [{ to:"/offer-groups", label:"🔀 Offer Groups" }] : []),
     { to:"/dashboard/dump", label:"Dump Logs" },
     { to:"/publisher/dashboard", label:"Pub Dashboard" },
     { to:"/plans", label:"📦 Plans" },
-    ...(isOrgAdmin ? [{ to:"/carrier-prefixes", label:"📡 Carriers" }, { to:"/offer-groups", label:"🔀 Offer Groups" }, { to:"/email-logs", label:"📧 Email Logs" }] : []),
+    ...(isOrgAdmin ? [{ to:"/carrier-prefixes", label:"📡 Carriers" }, { to:"/email-logs", label:"📧 Email Logs" }] : []),
     ...(isSuperAdmin ? [{ to:"/super-admin", label:"⚙️ Super Admin" }] : []),
   ] : [];
   return (
