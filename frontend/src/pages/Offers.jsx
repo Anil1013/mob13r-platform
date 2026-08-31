@@ -212,7 +212,7 @@ export default function Offers() {
             <thead>
               <tr>
                 {["ID","Advertiser","Service","CPA ($)","Geo","Carrier","OTP Len","Cap","Used","Publishers","Remain","Today Rev","Status","Route","Control","Params"].map(h => (
-                  <th key={h} style={{...th, ...(["Service","Carrier"].includes(h) ? {minWidth:110} : ["CPA ($)","Geo","Cap","Used","Remain"].includes(h) ? {minWidth:80} : {})}}>{h}</th>
+                  <th key={h} style={{...th, whiteSpace:"nowrap"}}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -222,29 +222,29 @@ export default function Offers() {
                   <td style={td}>
                     <span style={{background:"rgba(232,133,106,0.12)",color:"#e8856a",padding:"2px 8px",borderRadius:6,fontSize:12,fontWeight:700}}>{o.id}</span>
                   </td>
-                  <td style={td}>{o.advertiser_name || "-"}</td>
-                  <td style={{...td, minWidth:110}}>
-                    <input style={styles.cellInput} defaultValue={o.service_name} onBlur={(e) => updateOffer(o.id, { service_name: e.target.value })} />
+                  <td style={{...td, whiteSpace:"nowrap"}}>{o.advertiser_name || "-"}</td>
+                  <td style={td}>
+                    <input style={styles.cellInput} size={Math.max(String(o.service_name || "").length, 6)} defaultValue={o.service_name} onBlur={(e) => updateOffer(o.id, { service_name: e.target.value })} />
                   </td>
-                  <td style={{...td, minWidth:80}}>
-                    <input style={styles.cellInput} defaultValue={o.cpa || ""} onBlur={(e) => updateOffer(o.id, { cpa: e.target.value })} />
+                  <td style={td}>
+                    <input style={styles.cellInput} size={Math.max(String(o.cpa || "").length, 4)} defaultValue={o.cpa || ""} onBlur={(e) => updateOffer(o.id, { cpa: e.target.value })} />
                   </td>
-                  <td style={{...td, minWidth:80}}>
-                    <input style={styles.cellInput} defaultValue={o.geo || ""} onBlur={(e) => updateOffer(o.id, { geo: e.target.value })} />
+                  <td style={td}>
+                    <input style={styles.cellInput} size={Math.max(String(o.geo || "").length, 4)} defaultValue={o.geo || ""} onBlur={(e) => updateOffer(o.id, { geo: e.target.value })} />
                   </td>
-                  <td style={{...td, minWidth:110}}>
-                    <input style={styles.cellInput} defaultValue={o.carrier || ""} onBlur={(e) => updateOffer(o.id, { carrier: e.target.value })} />
+                  <td style={td}>
+                    <input style={styles.cellInput} size={Math.max(String(o.carrier || "").length, 6)} defaultValue={o.carrier || ""} onBlur={(e) => updateOffer(o.id, { carrier: e.target.value })} />
                   </td>
                   <td style={td}>
                     <input style={{...styles.cellInput, width:50}} type="number" min="4" max="6" defaultValue={o.otp_length || 4} onBlur={(e) => updateOffer(o.id, { otp_length: Number(e.target.value) })} />
                   </td>
-                  <td style={{...td, minWidth:80}}>
-                    <input style={styles.cellInput} defaultValue={o.daily_cap === null ? "" : o.daily_cap} placeholder="0"
+                  <td style={td}>
+                    <input style={styles.cellInput} size={Math.max(String(o.daily_cap ?? "").length, 4)} defaultValue={o.daily_cap === null ? "" : o.daily_cap} placeholder="0"
                       onBlur={(e) => { const val = e.target.value === "" ? 0 : parseInt(e.target.value); updateOffer(o.id, { daily_cap: val }); }} />
                   </td>
-                  <td style={{...td, minWidth:80}}>{o.today_hits ?? 0}</td>
+                  <td style={{...td, whiteSpace:"nowrap"}}>{o.today_hits ?? 0}</td>
                   <td style={td}><span style={{background:"rgba(59,130,246,0.08)",color:"#2563eb",padding:"2px 6px",borderRadius:10,fontSize:12,fontWeight:600}}>{o.active_publishers ?? 0}</span></td>
-                  <td style={{...td, minWidth:80}}>{remaining(o)}</td>
+                  <td style={{...td, whiteSpace:"nowrap"}}>{remaining(o)}</td>
                   <td style={{...td, fontWeight:600, color:"#16a34a"}}>{autoRevenue(o)}</td>
                   <td style={td}>
                     <span style={{
@@ -400,7 +400,7 @@ const styles = {
   topBar: { display:"flex", gap:10, flexWrap:"wrap", marginBottom:20, alignItems:"center", background:"#fff", border:"1px solid #e8d0dc", padding:"16px", borderRadius:"16px", boxShadow:"0 2px 8px rgba(210,160,180,0.1)" },
   tableWrap: { background:"#fff", border:"1px solid #e8d0dc", padding:"8px", borderRadius:"16px", overflowX:"auto" },
   smallInput: { background:"#fff", border:"1px solid #e8d0dc", color:"#4a2f3f", borderRadius:10, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"'Lora',sans-serif", fontWeight:600 },
-  cellInput: { width:"90%", textAlign:"center", padding:6, background:"#fff", border:"1px solid #e8d0dc", color:"#4a2f3f", borderRadius:8, fontSize:13, outline:"none", fontFamily:"'Lora',sans-serif", fontWeight:600 },
+  cellInput: { textAlign:"center", padding:6, background:"#fff", border:"1px solid #e8d0dc", color:"#4a2f3f", borderRadius:8, fontSize:13, outline:"none", fontFamily:"'Lora',sans-serif", fontWeight:600 },
   select: { background:"#fff", border:"1px solid #e8d0dc", color:"#4a2f3f", borderRadius:10, padding:"8px 12px", fontSize:13, outline:"none", fontFamily:"'Lora',sans-serif" },
   smallBtn: { fontSize:"12px", padding:"6px 12px", background:"#fff", border:"1px solid #e8d0dc", color:"#9b7faa", borderRadius:8, cursor:"pointer", fontFamily:"'Lora',sans-serif" },
   card: { background:"#fff", border:"1px solid #e8d0dc", padding:24, marginTop:24, borderRadius:"16px", boxShadow:"0 4px 20px rgba(210,160,180,0.08)" },
