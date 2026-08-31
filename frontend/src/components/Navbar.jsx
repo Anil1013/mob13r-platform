@@ -84,7 +84,7 @@ const S = {
   inner:{ height:"100%",maxWidth:1600,margin:"0 auto",padding:"0 24px",display:"flex",alignItems:"center",gap:8 },
   brand:{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",marginRight:24,userSelect:"none" },
   dot:{ width:8,height:8,borderRadius:"50%",background:"#3b82f6",boxShadow:"0 0 12px #3b82f6" },
-  brandText:{ fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:18,color:"#f1f5f9",letterSpacing:"-0.5px" },
+  brandText:{ fontFamily:"Lora,serif",fontWeight:800,fontSize:18,color:"#f1f5f9",letterSpacing:"-0.5px" },
   links:{ display:"flex",alignItems:"center",gap:2,flex:1,overflowX:"auto" },
   link:{ padding:"6px 12px",borderRadius:8,fontSize:13,fontWeight:500,color:"#94a3b8",whiteSpace:"nowrap",textDecoration:"none" },
   active:{ color:"#f1f5f9",background:"rgba(59,130,246,0.12)" },
