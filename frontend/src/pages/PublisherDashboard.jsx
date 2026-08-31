@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Navbar from "../components/Navbar";
+import { DatePickerField } from "../components/DateRangePicker.jsx";
 import { btn, input, table, th, td, page } from "../styles/shared.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://backend.mob13r.com";
@@ -144,8 +145,8 @@ export default function PublisherDashboard() {
         </div>
 
         <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap",alignItems:"center"}}>
-          <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} style={{...input,width:"auto",colorScheme:"light"}} />
-          <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} style={{...input,width:"auto",colorScheme:"light"}} />
+          <DatePickerField value={fromDate} onChange={setFromDate} style={{...input,width:130}} />
+          <DatePickerField value={toDate} onChange={setToDate} style={{...input,width:130}} />
           <button onClick={fetchData} style={btn}>Apply</button>
           <button style={{...btn, background:"#16a34a", border:"none", color:"#fff"}} onClick={() => exportPublisherCSV(filteredRows, fromDate, toDate)}>⬇ Export CSV</button>
           <select value={filterOffer} onChange={e=>setFilterOffer(e.target.value)} style={{...input,width:"auto"}}>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
+import { DatePickerField } from "../../components/DateRangePicker.jsx";
 import { table, th, td, badge, pageTitle, statRow, statCard, statLabel, statValue } from "../../styles/shared.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
@@ -105,8 +106,8 @@ export default function Conversions() {
           <option value="">All Campaigns</option>
           {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <input style={{ ...compactInput, width: 128 }} type="date" value={from} onChange={e => setFrom(e.target.value)} />
-        <input style={{ ...compactInput, width: 128 }} type="date" value={to} onChange={e => setTo(e.target.value)} />
+        <DatePickerField value={from} onChange={setFrom} style={{ ...compactInput, width: 110 }} />
+        <DatePickerField value={to} onChange={setTo} style={{ ...compactInput, width: 110 }} />
         <button style={compactBtn} onClick={() => load()} disabled={loading}>{loading ? "..." : "Apply"}</button>
       </div>
 

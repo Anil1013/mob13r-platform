@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import CpaLayout from "../../components/cpa/CpaLayout";
+import { DatePickerField } from "../../components/DateRangePicker.jsx";
 import { table, th, td, pageTitle, statRow, statCard, statLabel, statValue } from "../../styles/shared.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
@@ -108,8 +109,8 @@ export default function CpaOverview() {
           <option value="">All Verticals</option>
           {verticals.map(v => <option key={v.id} value={v.id}>{v.icon} {v.name}</option>)}
         </select>
-        <input style={{ ...compactInput, width: 128 }} type="date" value={from} onChange={e => setFrom(e.target.value)} />
-        <input style={{ ...compactInput, width: 128 }} type="date" value={to} onChange={e => setTo(e.target.value)} />
+        <DatePickerField value={from} onChange={setFrom} style={{ ...compactInput, width: 110 }} />
+        <DatePickerField value={to} onChange={setTo} style={{ ...compactInput, width: 110 }} />
         <button style={compactBtn} onClick={() => load()} disabled={loading}>{loading ? "..." : "Apply"}</button>
       </div>
 

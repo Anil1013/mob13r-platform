@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import CpaSidebar from "../components/cpa/CpaSidebar";
+import { DatePickerField } from "../components/DateRangePicker.jsx";
 import {
   page, pageTitle, topRow, viewTabs, tabBtn, tabBtnActive,
   statRow, statCard, statLabel, statValue,
@@ -311,8 +312,8 @@ export default function Dashboard() {
         </div>
 
         <div style={filterBar}>
-          <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={filterInput} />
-          <input type="date" value={to} onChange={e => setTo(e.target.value)} style={filterInput} />
+          <DatePickerField value={from} onChange={setFrom} style={filterInput} />
+          <DatePickerField value={to} onChange={setTo} style={filterInput} />
           <select value={advertiser} onChange={e => setAdvertiser(e.target.value)} style={filterSelect}>
             <option value="">All Advertisers</option>
             {filters.advertisers.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
