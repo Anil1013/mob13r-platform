@@ -212,7 +212,7 @@ export default function Offers() {
             <thead>
               <tr>
                 {["ID","Advertiser","Service","CPA ($)","Geo","Carrier","OTP Len","Cap","Used","Publishers","Remain","Today Rev","Status","Route","Control","Params"].map(h => (
-                  <th key={h} style={th}>{h}</th>
+                  <th key={h} style={{...th, ...(["CPA ($)","Cap","Used","Remain"].includes(h) ? {minWidth:80} : {})}}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -226,7 +226,7 @@ export default function Offers() {
                   <td style={td}>
                     <input style={styles.cellInput} defaultValue={o.service_name} onBlur={(e) => updateOffer(o.id, { service_name: e.target.value })} />
                   </td>
-                  <td style={td}>
+                  <td style={{...td, minWidth:80}}>
                     <input style={styles.cellInput} defaultValue={o.cpa || ""} onBlur={(e) => updateOffer(o.id, { cpa: e.target.value })} />
                   </td>
                   <td style={td}>
@@ -238,13 +238,13 @@ export default function Offers() {
                   <td style={td}>
                     <input style={{...styles.cellInput, width:50}} type="number" min="4" max="6" defaultValue={o.otp_length || 4} onBlur={(e) => updateOffer(o.id, { otp_length: Number(e.target.value) })} />
                   </td>
-                  <td style={td}>
+                  <td style={{...td, minWidth:80}}>
                     <input style={styles.cellInput} defaultValue={o.daily_cap === null ? "" : o.daily_cap} placeholder="0"
                       onBlur={(e) => { const val = e.target.value === "" ? 0 : parseInt(e.target.value); updateOffer(o.id, { daily_cap: val }); }} />
                   </td>
-                  <td style={td}>{o.today_hits ?? 0}</td>
+                  <td style={{...td, minWidth:80}}>{o.today_hits ?? 0}</td>
                   <td style={td}><span style={{background:"rgba(59,130,246,0.08)",color:"#2563eb",padding:"2px 6px",borderRadius:10,fontSize:12,fontWeight:600}}>{o.active_publishers ?? 0}</span></td>
-                  <td style={td}>{remaining(o)}</td>
+                  <td style={{...td, minWidth:80}}>{remaining(o)}</td>
                   <td style={{...td, fontWeight:600, color:"#16a34a"}}>{autoRevenue(o)}</td>
                   <td style={td}>
                     <span style={{
