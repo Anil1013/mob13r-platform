@@ -169,8 +169,18 @@ export default function DumpDashboard() {
           <input style={input} placeholder="Offer" value={offer} onChange={e => setOffer(e.target.value)} />
           <input style={input} placeholder="Publisher" value={publisher} onChange={e => setPublisher(e.target.value)} />
           <input style={input} placeholder="Advertiser" value={advertiser} onChange={e => setAdvertiser(e.target.value)} />
-          <input style={{ ...input, colorScheme: "dark" }} type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} />
-          <input style={{ ...input, colorScheme: "dark" }} type="date" value={toDate} onChange={e => setToDate(e.target.value)} />
+          <input style={{ ...input, colorScheme: "dark" }} type="date" value={fromDate} onChange={e => {
+            const v = e.target.value;
+            setFromDate(v);
+            setCurrentPage(0);
+            fetchData(0, { fromDate: v });
+          }} />
+          <input style={{ ...input, colorScheme: "dark" }} type="date" value={toDate} onChange={e => {
+            const v = e.target.value;
+            setToDate(v);
+            setCurrentPage(0);
+            fetchData(0, { toDate: v });
+          }} />
         </div>
 
         {/* ACTIONS */}
