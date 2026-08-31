@@ -264,8 +264,8 @@ export default function Campaigns() {
                 <th style={th}>Advertiser</th>
                 <th style={th}>Geo / Carrier</th>
                 <th style={th}>Tracking URL</th>
-                <th style={th}>Payout</th>
-                <th style={th}>Today (Clicks/Conv)</th>
+                <th style={{...th, textAlign:"center"}}>Payout</th>
+                <th style={{...th, textAlign:"center"}}>Today (Clicks/Conv)</th>
                 <th style={th}>Status</th>
                 <th style={th}>Actions</th>
               </tr>
@@ -311,8 +311,12 @@ export default function Campaigns() {
                       <button style={{ ...btn, padding: "4px 10px", fontSize: 11 }} onClick={() => copyUrl(c.tracking_url, "Tracking URL")}>Copy</button>
                     </div>
                   </td>
-                  <td style={td}>{c.currency} {c.payout}</td>
-                  <td style={td}>{c.today_clicks || 0} / {c.today_conversions || 0}</td>
+                  <td style={{ ...td, textAlign: "center" }}>
+                    <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, background: "linear-gradient(135deg,#e0f2fe,#dbeafe)", color: "#1d4ed8", fontWeight: 700, fontSize: 12, fontFamily: "monospace", border: "1px solid rgba(29,78,216,0.15)" }}>
+                      {c.currency} {c.payout}
+                    </span>
+                  </td>
+                  <td style={{...td, textAlign:"center"}}>{c.today_clicks || 0} / {c.today_conversions || 0}</td>
                   <td style={td}>
                     <span style={badge(c.status === "active" ? "green" : "red")} onClick={() => toggleStatus(c)} title="Click to toggle">
                       {c.status === "active" ? "● Active" : "● Paused"}

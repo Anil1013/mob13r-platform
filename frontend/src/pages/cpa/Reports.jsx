@@ -190,8 +190,8 @@ export default function CpaReports() {
     return out;
   }, [displayRows, groupField]);
 
-  const SortTh = ({ label, sortKey }) => (
-    <th style={{ ...th, cursor: "pointer", userSelect: "none" }} onClick={() => toggleSort(sortKey)}>
+  const SortTh = ({ label, sortKey, align }) => (
+    <th style={{ ...th, cursor: "pointer", userSelect: "none", textAlign: align || "left" }} onClick={() => toggleSort(sortKey)}>
       {label} {sort?.key === sortKey ? (sort.dir === "desc" ? "▼" : "▲") : ""}
     </th>
   );
@@ -269,14 +269,14 @@ export default function CpaReports() {
                 <SortTh label="Geo" sortKey="geo" />
                 <SortTh label="Carrier" sortKey="carrier" />
                 {hasTimeCol && <SortTh label={timeColLabel} sortKey={groupBy} />}
-                <SortTh label="Clicks" sortKey="clicks" />
-                <SortTh label="Conv. In" sortKey="conversions_in" />
-                <SortTh label="CR In" sortKey="cr_in" />
-                <SortTh label="Conv. Out" sortKey="conversions_out" />
-                <SortTh label="CR Out" sortKey="cr_out" />
-                <SortTh label="Revenue" sortKey="revenue" />
-                <SortTh label="Publisher Cost" sortKey="publisher_cost" />
-                <SortTh label="Margin" sortKey="margin" />
+                <SortTh label="Clicks" sortKey="clicks" align="center" />
+                <SortTh label="Conv. In" sortKey="conversions_in" align="center" />
+                <SortTh label="CR In" sortKey="cr_in" align="center" />
+                <SortTh label="Conv. Out" sortKey="conversions_out" align="center" />
+                <SortTh label="CR Out" sortKey="cr_out" align="center" />
+                <SortTh label="Revenue" sortKey="revenue" align="center" />
+                <SortTh label="Publisher Cost" sortKey="publisher_cost" align="center" />
+                <SortTh label="Margin" sortKey="margin" align="center" />
               </tr>
             </thead>
             <tbody>
@@ -288,28 +288,28 @@ export default function CpaReports() {
                   <td style={td}>{item.row.geo}</td>
                   <td style={td}>{item.row.carrier}</td>
                   {hasTimeCol && <td style={td}>{item.row.date || item.row.hour}</td>}
-                  <td style={td}>{item.row.clicks}</td>
-                  <td style={td}>{item.row.conversions_in}</td>
-                  <td style={td}>{item.row.cr_in}%</td>
-                  <td style={td}>{item.row.conversions_out}</td>
-                  <td style={td}>{item.row.cr_out}%</td>
-                  <td style={{ ...td, color: GREEN, fontWeight: 600 }}>{money(item.row.revenue)}</td>
-                  <td style={{ ...td, color: RED, fontWeight: 600 }}>{money(item.row.publisher_cost)}</td>
-                  <td style={{ ...td, color: item.row.margin >= 0 ? GREEN : RED, fontWeight: 700 }}>{money(item.row.margin)}</td>
+                  <td style={{...td, textAlign:"center"}}>{item.row.clicks}</td>
+                  <td style={{...td, textAlign:"center"}}>{item.row.conversions_in}</td>
+                  <td style={{...td, textAlign:"center"}}>{item.row.cr_in}%</td>
+                  <td style={{...td, textAlign:"center"}}>{item.row.conversions_out}</td>
+                  <td style={{...td, textAlign:"center"}}>{item.row.cr_out}%</td>
+                  <td style={{ ...td, color: GREEN, fontWeight: 600, textAlign:"center" }}>{money(item.row.revenue)}</td>
+                  <td style={{ ...td, color: RED, fontWeight: 600, textAlign:"center" }}>{money(item.row.publisher_cost)}</td>
+                  <td style={{ ...td, color: item.row.margin >= 0 ? GREEN : RED, fontWeight: 700, textAlign:"center" }}>{money(item.row.margin)}</td>
                 </tr>
               ) : (
                 <tr key={`s${i}`} style={{ background: "#fff4dc", borderLeft: "4px solid #e8a940" }}>
                   <td style={{ ...td, fontWeight: 800, color: "#8a5a00", background: "transparent" }} colSpan={labelColSpan}>
                     🔶 Subtotal — {GROUP_LABEL[groupBy]}: {item.key}
                   </td>
-                  <td style={{ ...td, fontWeight: 800, background: "transparent" }}>{item.sums.clicks}</td>
-                  <td style={{ ...td, fontWeight: 800, background: "transparent" }}>{item.sums.conversions_in}</td>
-                  <td style={{ ...td, fontWeight: 800, background: "transparent" }}>{item.sums.clicks ? ((item.sums.conversions_in / item.sums.clicks) * 100).toFixed(2) : "0.00"}%</td>
-                  <td style={{ ...td, fontWeight: 800, background: "transparent" }}>{item.sums.conversions_out}</td>
-                  <td style={{ ...td, fontWeight: 800, background: "transparent" }}>{item.sums.clicks ? ((item.sums.conversions_out / item.sums.clicks) * 100).toFixed(2) : "0.00"}%</td>
-                  <td style={{ ...td, color: GREEN, fontWeight: 800, background: "transparent" }}>{money(item.sums.revenue)}</td>
-                  <td style={{ ...td, color: RED, fontWeight: 800, background: "transparent" }}>{money(item.sums.publisher_cost)}</td>
-                  <td style={{ ...td, color: item.sums.margin >= 0 ? GREEN : RED, fontWeight: 800, background: "transparent" }}>{money(item.sums.margin)}</td>
+                  <td style={{ ...td, fontWeight: 800, background: "transparent", textAlign:"center" }}>{item.sums.clicks}</td>
+                  <td style={{ ...td, fontWeight: 800, background: "transparent", textAlign:"center" }}>{item.sums.conversions_in}</td>
+                  <td style={{ ...td, fontWeight: 800, background: "transparent", textAlign:"center" }}>{item.sums.clicks ? ((item.sums.conversions_in / item.sums.clicks) * 100).toFixed(2) : "0.00"}%</td>
+                  <td style={{ ...td, fontWeight: 800, background: "transparent", textAlign:"center" }}>{item.sums.conversions_out}</td>
+                  <td style={{ ...td, fontWeight: 800, background: "transparent", textAlign:"center" }}>{item.sums.clicks ? ((item.sums.conversions_out / item.sums.clicks) * 100).toFixed(2) : "0.00"}%</td>
+                  <td style={{ ...td, color: GREEN, fontWeight: 800, background: "transparent", textAlign:"center" }}>{money(item.sums.revenue)}</td>
+                  <td style={{ ...td, color: RED, fontWeight: 800, background: "transparent", textAlign:"center" }}>{money(item.sums.publisher_cost)}</td>
+                  <td style={{ ...td, color: item.sums.margin >= 0 ? GREEN : RED, fontWeight: 800, background: "transparent", textAlign:"center" }}>{money(item.sums.margin)}</td>
                 </tr>
               ))}
               {!flattened.length && (
@@ -320,14 +320,14 @@ export default function CpaReports() {
               <tfoot>
                 <tr style={{ background: "#fdf6f9", fontWeight: 800 }}>
                   <td style={td} colSpan={labelColSpan}>GRAND TOTAL</td>
-                  <td style={td}>{totals.clicks}</td>
-                  <td style={td}>{totals.conversions_in}</td>
-                  <td style={td}>{totalCrIn}%</td>
-                  <td style={td}>{totals.conversions_out}</td>
-                  <td style={td}>{totalCrOut}%</td>
-                  <td style={{ ...td, color: GREEN }}>{money(totals.revenue)}</td>
-                  <td style={{ ...td, color: RED }}>{money(totals.publisher_cost)}</td>
-                  <td style={{ ...td, color: totals.margin >= 0 ? GREEN : RED }}>{money(totals.margin)}</td>
+                  <td style={{...td, textAlign:"center"}}>{totals.clicks}</td>
+                  <td style={{...td, textAlign:"center"}}>{totals.conversions_in}</td>
+                  <td style={{...td, textAlign:"center"}}>{totalCrIn}%</td>
+                  <td style={{...td, textAlign:"center"}}>{totals.conversions_out}</td>
+                  <td style={{...td, textAlign:"center"}}>{totalCrOut}%</td>
+                  <td style={{ ...td, color: GREEN, textAlign:"center" }}>{money(totals.revenue)}</td>
+                  <td style={{ ...td, color: RED, textAlign:"center" }}>{money(totals.publisher_cost)}</td>
+                  <td style={{ ...td, color: totals.margin >= 0 ? GREEN : RED, textAlign:"center" }}>{money(totals.margin)}</td>
                 </tr>
               </tfoot>
             )}

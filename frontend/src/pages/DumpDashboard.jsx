@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Navbar from "../components/Navbar";
 import DateRangePicker from "../components/DateRangePicker.jsx";
-import { btn, btnRed, input, table, th, td, page as pageStyle } from "../styles/shared.js";
+import { btn, btnRed, input, table, th, td, page as pageStyle, pageTitle } from "../styles/shared.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 const PAGE_SIZE = 100;
@@ -160,7 +160,7 @@ export default function DumpDashboard() {
     <>
       <Navbar />
       <div style={pageStyle}>
-        <h1 style={{ fontFamily: "Lora,serif", fontSize: 28, fontWeight: 700, color: "#f1f5f9", marginBottom: 24 }}>
+        <h1 style={pageTitle}>
           Main Dump Dashboard
         </h1>
 
@@ -209,8 +209,8 @@ export default function DumpDashboard() {
                     <th style={th}>Carrier</th>
                     <th style={th}>MSISDN</th>
                     <th style={th}>Status</th>
-                    <th style={th}>Payout ($)</th>
-                    <th style={th}>Pub CPA ($)</th>
+                    <th style={{...th, textAlign:"center"}}>Adv Payout</th>
+                    <th style={{...th, textAlign:"center"}}>Pub Payout</th>
                     <th style={th}>Credited</th>
                     <th style={th}>Pub Request</th>
                     <th style={th}>Pub Response</th>
@@ -233,8 +233,20 @@ export default function DumpDashboard() {
                       <td style={td}>{row.carrier || "-"}</td>
                       <td style={td}>{row.msisdn || "-"}</td>
                       <td style={td}><StatusBadge status={row.status} /></td>
-                      <td style={td}>{row.payout ? `$${Number(row.payout).toFixed(2)}` : "-"}</td>
-                      <td style={td}>{row.publisher_cpa ? `$${Number(row.publisher_cpa).toFixed(2)}` : "-"}</td>
+                      <td style={{ ...td, textAlign: "center" }}>
+                        {row.payout ? (
+                          <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, background: "linear-gradient(135deg,#e0f2fe,#dbeafe)", color: "#1d4ed8", fontWeight: 700, fontSize: 12, fontFamily: "monospace", border: "1px solid rgba(29,78,216,0.15)" }}>
+                            ${Number(row.payout).toFixed(2)}
+                          </span>
+                        ) : <span style={{ color: "#a1a8b5" }}>—</span>}
+                      </td>
+                      <td style={{ ...td, textAlign: "center" }}>
+                        {row.publisher_cpa ? (
+                          <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, background: "linear-gradient(135deg,#f3ebfa,#ede0f7)", color: "#7c3aed", fontWeight: 700, fontSize: 12, fontFamily: "monospace", border: "1px solid rgba(124,58,237,0.15)" }}>
+                            ${Number(row.publisher_cpa).toFixed(2)}
+                          </span>
+                        ) : <span style={{ color: "#a1a8b5" }}>—</span>}
+                      </td>
                       <td style={{ ...td, textAlign: "center" }}>{row.publisher_credited ? <span style={{ color: "#16a34a", fontWeight: 700 }}>✓</span> : <span style={{ color: "#dc2626" }}>✗</span>}</td>
                       <td style={td}><JsonCell data={row.publisher_request} /></td>
                       <td style={td}><JsonCell data={row.publisher_response} /></td>

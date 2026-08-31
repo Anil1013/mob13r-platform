@@ -21,7 +21,9 @@ export default function CpaLayout({ children }) {
       <Navbar />
       <div style={{ display: "flex", background: "#fdf6f9", minHeight: "calc(100vh - 64px)" }}>
         <CpaSidebar />
-        <div style={{ flex: 1, padding: "28px 24px", overflowX: "auto" }}>{children}</div>
+        <div style={{ flex: 1, padding: "28px 24px", overflowX: "auto" }}>
+          <div style={{ maxWidth: 1600, margin: "0 auto" }}>{children}</div>
+        </div>
       </div>
     </>
   );

@@ -13,7 +13,7 @@ export const input = { width:"100%", padding:"11px 15px", borderRadius:12, borde
 export const table = { width:"100%", borderCollapse:"separate", borderSpacing:0 };
 export const th = { padding:"14px 18px", textAlign:"left", fontSize:11.5, fontWeight:700, color:"#8b6a9a", textTransform:"uppercase", letterSpacing:"0.07em", background:"#faf6fb", fontFamily:font, borderBottom:"1.5px solid #eee0ea" };
 export const td = { padding:"13px 18px", color:"#3d2436", fontSize:13.5, fontFamily:font, borderBottom:"1px solid #f4ecf1", background:"#fff", fontWeight:500 };
-export const page = { minHeight:"100vh", background:"linear-gradient(180deg,#fdf8fb 0%,#fbf3f7 100%)", padding:"32px 28px", fontFamily:font };
+export const page = { minHeight:"100vh", background:"linear-gradient(180deg,#fdf8fb 0%,#fbf3f7 100%)", padding:"32px 28px", fontFamily:font, maxWidth:1440, margin:"0 auto" };
 export const badge = (color) => ({
   display:"inline-flex", alignItems:"center", gap:6,
   padding:"5px 12px", borderRadius:20, fontSize:11, fontWeight:700,
