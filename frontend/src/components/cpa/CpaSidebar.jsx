@@ -199,15 +199,16 @@ export default function CpaSidebar() {
   );
 }
 
-const ACCENT = "#22c55e";
+const ACCENT = "#7c3aed";
+const ACCENT_GRAD = "linear-gradient(135deg,#7c3aed,#d4709a)";
 
 const S = {
-  sidebar: { width: 260, minWidth: 260, background: "#161b28", height: "calc(100vh - 64px)", position: "sticky", top: 64, display: "flex", flexDirection: "column", fontFamily: "'Lora',sans-serif", overflowY: "auto", color: "#cbd5e1" },
+  sidebar: { width: 260, minWidth: 260, background: "#161b28", height: "calc(100vh - 64px)", position: "sticky", top: 64, display: "flex", flexDirection: "column", fontFamily: "'Lora',serif", overflowY: "auto", color: "#cbd5e1" },
   brand: { display: "flex", alignItems: "center", gap: 8, padding: "18px 18px 14px" },
   brandDot: { width: 10, height: 10, borderRadius: "50%", background: ACCENT, boxShadow: `0 0 10px ${ACCENT}` },
-  brandText: { fontFamily: "'Lora',sans-serif", fontWeight: 800, fontSize: 16, color: "#f1f5f9", letterSpacing: "-0.3px" },
+  brandText: { fontFamily: "'Lora',serif", fontWeight: 800, fontSize: 16, color: "#f1f5f9", letterSpacing: "-0.3px" },
   userBox: { display: "flex", alignItems: "center", gap: 10, padding: "0 18px 16px" },
-  avatar: { width: 34, height: 34, borderRadius: "50%", background: `linear-gradient(135deg, ${ACCENT}, #16a34a)`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#0b1220", fontSize: 14, flexShrink: 0 },
+  avatar: { width: 34, height: 34, borderRadius: "50%", background: ACCENT_GRAD, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "#fff", fontSize: 14, flexShrink: 0 },
   userEmail: { fontSize: 12, color: "#e2e8f0", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 170 },
   userSub: { fontSize: 10, color: "#64748b" },
   errorBox: { margin: "0 16px 10px", padding: "6px 10px", fontSize: 11, color: "#fca5a5", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8 },
@@ -218,20 +219,20 @@ const S = {
   accHeaderOpen: { background: "#1f2637" },
   accIcon: { fontSize: 14 },
   accLabel: { flex: 1 },
-  accCount: { fontSize: 10, background: "rgba(34,197,94,0.15)", color: ACCENT, padding: "1px 7px", borderRadius: 10, fontWeight: 700, marginRight: 4 },
+  accCount: { fontSize: 10, background: "rgba(124,58,237,0.15)", color: ACCENT, padding: "1px 7px", borderRadius: 10, fontWeight: 700, marginRight: 4 },
   hideBtn: { background: "none", border: "none", cursor: "pointer", fontSize: 12, opacity: 0.6, padding: 2 },
   chevron: { fontSize: 14, color: "#64748b", transition: "transform 0.15s ease" },
   accBody: { display: "flex", flexDirection: "column", paddingLeft: 30, marginTop: 2, marginBottom: 4, gap: 1 },
   subLink: { padding: "8px 10px", borderRadius: 8, fontSize: 12, color: "#94a3b8", cursor: "pointer", fontWeight: 500 },
-  subLinkActive: { color: "#f1f5f9", background: "rgba(34,197,94,0.1)" },
+  subLinkActive: { color: "#f1f5f9", background: "rgba(124,58,237,0.12)" },
   empty: { padding: "8px 10px", fontSize: 12, color: "#475569" },
   addTrigger: { margin: "4px 18px 8px", fontSize: 12, color: "#64748b", cursor: "pointer", fontWeight: 600 },
   addRow: { display: "flex", gap: 5, padding: "6px 18px 10px" },
-  smallInput: { flex: 1, padding: "6px 8px", borderRadius: 8, border: "1px solid #2a3348", background: "#1f2637", color: "#e2e8f0", fontSize: 12, outline: "none", fontFamily: "'Lora',sans-serif" },
+  smallInput: { flex: 1, padding: "6px 8px", borderRadius: 8, border: "1px solid #2a3348", background: "#1f2637", color: "#e2e8f0", fontSize: 12, outline: "none", fontFamily: "'Lora',serif" },
   addBtn: { padding: "6px 10px", borderRadius: 8, border: "none", background: ACCENT, color: "#0b1220", cursor: "pointer", fontWeight: 800 },
   cancelBtn: { padding: "6px 10px", borderRadius: 8, border: "none", background: "#2a3348", color: "#94a3b8", cursor: "pointer", fontWeight: 700 },
   divider: { height: 1, background: "#232b3d", margin: "10px 18px" },
   navSection: { display: "flex", flexDirection: "column", padding: "2px 10px 16px", gap: 2 },
   navLink: { padding: "9px 10px", borderRadius: 10, fontSize: 13, fontWeight: 600, color: "#94a3b8", cursor: "pointer" },
-  navLinkActive: { background: "rgba(34,197,94,0.12)", color: "#f1f5f9" },
+  navLinkActive: { background: "rgba(124,58,237,0.14)", color: "#f1f5f9" },
 };
