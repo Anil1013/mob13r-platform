@@ -11,8 +11,8 @@ router.get("/offer-groups", orgAuth, async (req, res) => {
       SELECT og.*,
         COUNT(ogi.id) FILTER (WHERE ogi.status='active') AS offer_count,
         COALESCE(
-          json_agg(
-            json_build_object(
+          jsonb_agg(
+            jsonb_build_object(
               'id', ogi.id,
               'offer_id', ogi.offer_id,
               'offer_name', o.service_name,
@@ -24,8 +24,8 @@ router.get("/offer-groups", orgAuth, async (req, res) => {
           ) FILTER (WHERE ogi.id IS NOT NULL), '[]'
         ) AS items,
         COALESCE(
-          json_agg(DISTINCT
-            json_build_object('id', p.id, 'name', p.name, 'api_key', p.api_key)
+          jsonb_agg(DISTINCT
+            jsonb_build_object('id', p.id, 'name', p.name, 'api_key', p.api_key)
           ) FILTER (WHERE p.id IS NOT NULL), '[]'
         ) AS publishers
       FROM offer_groups og
