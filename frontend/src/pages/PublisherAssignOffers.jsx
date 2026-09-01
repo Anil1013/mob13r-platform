@@ -366,6 +366,7 @@ export default function PublisherAssignOffers() {
                 style={{...styles.smallInput, minWidth: "140px"}}
                 type="text"
                 placeholder="Offer Name (Publisher ke liye)"
+                size={Math.max(String(form.pub_offer_name || "").length, 18)}
                 value={form.pub_offer_name}
                 onChange={(e) =>
                   setForm({ ...form, pub_offer_name: e.target.value })
@@ -377,6 +378,7 @@ export default function PublisherAssignOffers() {
                 step="0.01"
                 min="0"
                 placeholder="CPA"
+                size={Math.max(String(form.publisher_cpa || "").length, 4)}
                 value={form.publisher_cpa}
                 onChange={(e) =>
                   setForm({ ...form, publisher_cpa: e.target.value })
@@ -387,6 +389,7 @@ export default function PublisherAssignOffers() {
                 type="number"
                 min="0"
                 placeholder="Cap"
+                size={Math.max(String(form.daily_cap || "").length, 4)}
                 value={form.daily_cap}
                 onChange={(e) =>
                   setForm({ ...form, daily_cap: e.target.value })
@@ -398,6 +401,7 @@ export default function PublisherAssignOffers() {
                 min="0"
                 max="100"
                 placeholder="Pass %"
+                size={Math.max(String(form.pass_percent || "").length, 4)}
                 value={form.pass_percent}
                 onChange={(e) =>
                   setForm({ ...form, pass_percent: e.target.value })
@@ -408,6 +412,7 @@ export default function PublisherAssignOffers() {
                 type="number"
                 min="1"
                 placeholder="Weight"
+                size={Math.max(String(form.weight || "").length, 4)}
                 value={form.weight}
                 onChange={(e) =>
                   setForm({ ...form, weight: e.target.value })
@@ -679,7 +684,7 @@ export default function PublisherAssignOffers() {
 const styles = {
   formBar: { display: "flex", gap: 10, marginBottom: 20, flexWrap:"wrap", alignItems:"center", background:"#ffffff", border:"1px solid #e2e8f0", padding:16, borderRadius:16, boxShadow:"0 1px 3px rgba(0,0,0,0.05)" },
   select: { background:"#ffffff", border:"1px solid #cbd5e1", color:"#1e293b", borderRadius:10, padding:"8px 12px", fontSize:13, outline:"none" },
-  smallInput: { background:"#ffffff", border:"1px solid #cbd5e1", color:"#1e293b", borderRadius:10, padding:"8px 12px", fontSize:13, outline:"none", width:90 },
+  smallInput: { background:"#ffffff", border:"1px solid #cbd5e1", color:"#1e293b", borderRadius:10, padding:"8px 12px", fontSize:13, outline:"none" },
   cellInput: { background:"#ffffff", border:"1px solid #cbd5e1", color:"#1e293b", borderRadius:8, padding:"6px 8px", fontSize:13, outline:"none", textAlign:"center" },
   smallBtn: { fontSize:11, padding:"6px 10px", background:"#ffffff", border:"1px solid #cbd5e1", color:"#475569", borderRadius:8, cursor:"pointer" },
   toast: { position:"fixed", top:80, right:24, background:"#ffffff", border:"1px solid #cbd5e1", color:"#1e293b", padding:"12px 20px", borderRadius:12, zIndex:9999, fontSize:13, boxShadow:"0 4px 6px -1px rgba(0,0,0,0.1)" },
