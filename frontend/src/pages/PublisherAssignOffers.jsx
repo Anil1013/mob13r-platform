@@ -7,10 +7,10 @@ const API_BASE =
   import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
 
 export default function PublisherAssignOffers() {
-  // Small colored-badge helper — used to render values as nice pills
+  // Small neutral-box helper — used to render values as clean boxes
   // instead of plain text across the assignments table.
-  const pill = (text, bg, color) => (
-    <span style={{ display:"inline-block", padding:"3px 10px", borderRadius:20, background:bg, color, fontWeight:700, fontSize:12, fontFamily:"monospace", border:`1px solid ${color}26` }}>
+  const pill = (text) => (
+    <span style={{ display:"inline-block", padding:"3px 10px", borderRadius:8, background:"#f8fafc", color:"#334155", fontWeight:600, fontSize:12, fontFamily:"'Lora',serif", border:"1px solid #e2e8f0" }}>
       {text}
     </span>
   );
@@ -453,8 +453,8 @@ export default function PublisherAssignOffers() {
               <tbody>
                 {assigned.map((a) => (
                   <tr key={a.id}>
-                    {!publisherId && <td style={{...td, whiteSpace:"nowrap"}}>{pill(a.publisher_name, "#eef2ff", "#4f46e5")}</td>}
-                    <td style={{...td, whiteSpace:"nowrap"}}>{pill(a.original_name || a.name, "#f1f5f9", "#64748b")}</td>
+                    {!publisherId && <td style={{...td, whiteSpace:"nowrap"}}>{pill(a.publisher_name)}</td>}
+                    <td style={{...td, whiteSpace:"nowrap"}}>{pill(a.original_name || a.name)}</td>
                     <td style={{...td, color:"#1e293b", fontWeight:500, whiteSpace:"nowrap"}}>
                       {editingId === a.id ? (
                         <input
@@ -472,8 +472,8 @@ export default function PublisherAssignOffers() {
                         </span>
                       )}
                     </td>
-                    <td style={{...td, whiteSpace:"nowrap"}}>{pill(a.geo, "#ecfdf5", "#16a34a")}</td>
-                    <td style={{...td, whiteSpace:"nowrap"}}>{pill(a.carrier, "#eff6ff", "#1d4ed8")}</td>
+                    <td style={{...td, whiteSpace:"nowrap"}}>{pill(a.geo)}</td>
+                    <td style={{...td, whiteSpace:"nowrap"}}>{pill(a.carrier)}</td>
 
                     {editingId === a.id ? (
                       <>
@@ -542,15 +542,15 @@ export default function PublisherAssignOffers() {
                       </>
                     ) : (
                       <>
-                        <td style={{...td, whiteSpace:"nowrap"}}>{pill(`$${a.publisher_cpa}`, "#f3ebfa", "#7c3aed")}</td>
-                        <td style={{...td, whiteSpace:"nowrap"}}>{pill(a.daily_cap || "∞", "#fff7ed", "#c2650a")}</td>
-                        <td style={{...td, whiteSpace:"nowrap"}}>{pill(`${a.pass_percent}%`, "#ecfdf5", "#16a34a")}</td>
-                        <td style={{...td, whiteSpace:"nowrap"}}>{pill(a.weight, "#fdf2f8", "#c026a3")}</td>
+                        <td style={{...td, whiteSpace:"nowrap"}}>{pill(`$${a.publisher_cpa}`)}</td>
+                        <td style={{...td, whiteSpace:"nowrap"}}>{pill(a.daily_cap || "∞")}</td>
+                        <td style={{...td, whiteSpace:"nowrap"}}>{pill(`${a.pass_percent}%`)}</td>
+                        <td style={{...td, whiteSpace:"nowrap"}}>{pill(a.weight)}</td>
                       </>
                     )}
 
                     <td style={{...td, whiteSpace:"nowrap"}}>
-                      {pill(a.status.toUpperCase(), a.status === "active" ? "#ecfdf5" : "#fef2f2", a.status === "active" ? "#16a34a" : "#dc2626")}
+                      {pill(a.status.toUpperCase())}
                     </td>
 
                     <td style={{...td, whiteSpace:"nowrap"}}>
