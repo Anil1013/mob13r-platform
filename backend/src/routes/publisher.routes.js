@@ -55,32 +55,97 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
 
     const params = enrichParams(req, base);
 
-    /* Validate assignment */
-    const offerRes = await pool.query(
+    // Reset today_hits first if it's stale from a previous day — otherwise
+    // the cap check below could use yesterday's count and wrongly treat an
+    // offer as capped when today's usage is actually zero. Resets every
+    // offer sharing this one's geo+carrier in one go, so any fallback
+    // candidate checked next is also using a fresh count.
+    await pool.query(
+      `UPDATE offers SET today_hits = 0, last_reset_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+       WHERE org_id = (SELECT org_id FROM offers WHERE id = $1)
+         AND geo = (SELECT geo FROM offers WHERE id = $1)
+         AND carrier = (SELECT carrier FROM offers WHERE id = $1)
+         AND last_reset_date < (NOW() AT TIME ZONE 'Asia/Kolkata')::date`,
+      [offer_id]
+    );
+
+    /* Fetch the requested offer + this publisher's assignment to it,
+       WITHOUT filtering on active/cap yet — we need to know its geo/
+       carrier either way, to look for a same-geo/carrier fallback if
+       it turns out to be unusable. */
+    const requestedRes = await pool.query(
       `
-      SELECT 
+      SELECT
         po.id AS publisher_offer_id,
         po.publisher_cpa,
+        po.status AS assignment_status,
         o.id AS offer_id,
         o.geo,
-        o.carrier
+        o.carrier,
+        o.status AS offer_status,
+        o.service_type,
+        o.daily_cap,
+        o.today_hits
       FROM publisher_offers po
       JOIN offers o ON o.id = po.offer_id
       WHERE o.id = $1
         AND po.publisher_id = $2
-        AND po.status = 'active'
-        AND o.status = 'active'
       `,
       [offer_id, publisher.id]
     );
 
-    if (!offerRes.rows.length) {
-      return res.status(403).json({
-        status: "INVALID_OFFER",
-      });
+    if (!requestedRes.rows.length) {
+      return res.status(403).json({ status: "INVALID_OFFER" });
     }
 
-    const picked = offerRes.rows[0];
+    let picked = requestedRes.rows[0];
+
+    const isUsable = (row) =>
+      row.assignment_status === "active" &&
+      row.offer_status === "active" &&
+      (row.daily_cap === null || row.today_hits < row.daily_cap);
+
+    if (!isUsable(picked)) {
+      // Look for a FALLBACK offer — same geo+carrier, marked as
+      // FALLBACK, currently active, not capped, and this SAME publisher
+      // must already be assigned to it too (so payout/crediting still
+      // resolves correctly for whoever actually gets the redirected
+      // traffic).
+      const fallbackRes = await pool.query(
+        `
+        SELECT
+          po.id AS publisher_offer_id,
+          po.publisher_cpa,
+          po.status AS assignment_status,
+          o.id AS offer_id,
+          o.geo,
+          o.carrier,
+          o.status AS offer_status,
+          o.service_type,
+          o.daily_cap,
+          o.today_hits
+        FROM offers o
+        JOIN publisher_offers po ON po.offer_id = o.id AND po.publisher_id = $1
+        WHERE o.geo = $2 AND o.carrier = $3
+          AND o.service_type = 'FALLBACK'
+          AND o.status = 'active'
+          AND po.status = 'active'
+          AND (o.daily_cap IS NULL OR o.today_hits < o.daily_cap)
+        ORDER BY o.id ASC
+        LIMIT 1
+        `,
+        [publisher.id, picked.geo, picked.carrier]
+      );
+
+      if (!fallbackRes.rows.length) {
+        return res.status(409).json({
+          status: "OFFER_UNAVAILABLE",
+          message: "This offer is currently inactive or has reached its daily cap, and no fallback offer is available for this geo/carrier.",
+        });
+      }
+
+      picked = fallbackRes.rows[0];
+    }
 
     if (geo && picked.geo && geo !== picked.geo) {
       return res.status(400).json({ status: "GEO_MISMATCH" });
