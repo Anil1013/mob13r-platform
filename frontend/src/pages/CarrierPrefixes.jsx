@@ -147,26 +147,25 @@ export default function CarrierPrefixes() {
   };
 
   const s = {
-    page: { padding: "24px", fontFamily: "'Lora', sans-serif", background: "#f5f6fa", minHeight: "100vh" },
-    title: { fontSize: "22px", fontWeight: "700", marginBottom: "2px", color: "#1a1a2e" },
-    sub: { color: "#999", fontSize: "13px", marginBottom: "24px" },
-    card: { background: "#fff", borderRadius: "12px", padding: "20px", marginBottom: "20px", boxShadow: "0 1px 4px rgba(0,0,0,0.07)" },
-    label: { fontSize: "11px", color: "#666", marginBottom: "5px", display: "block", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px" },
-    input: { width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e0e0e0", fontSize: "14px", boxSizing: "border-box", outline: "none" },
-    select: { width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e0e0e0", fontSize: "14px", background: "#fff", boxSizing: "border-box" },
-    btn: { padding: "10px 22px", borderRadius: "8px", border: "none", background: "#e94560", color: "#fff", fontWeight: "600", cursor: "pointer", fontSize: "14px" },
-    btnDel: { padding: "4px 10px", borderRadius: "6px", border: "none", background: "#fff0f0", color: "#dc2626", cursor: "pointer", fontSize: "12px", fontWeight: "600" },
-    btnEdit: { padding: "4px 10px", borderRadius: "6px", border: "none", background: "#eef2ff", color: "#4f46e5", cursor: "pointer", fontSize: "12px", fontWeight: "600", marginRight: "6px" },
-    grid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" },
-    grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" },
-    table: { width: "100%", borderCollapse: "collapse" },
-    th: { textAlign: "left", fontSize: "11px", color: "#aaa", fontWeight: "700", padding: "8px 14px", borderBottom: "2px solid #f0f0f0", textTransform: "uppercase", letterSpacing: "0.5px" },
-    td: { padding: "10px 14px", borderBottom: "1px solid #f7f7f7", fontSize: "14px" },
-    geoBadge: { display: "inline-block", padding: "3px 10px", borderRadius: "20px", background: "#eef2ff", color: "#4f46e5", fontSize: "12px", fontWeight: "700" },
-    callingCodeBadge: { display: "inline-block", padding: "3px 10px", borderRadius: "20px", background: "#dcfce7", color: "#16a34a", fontSize: "12px", fontWeight: "700", fontFamily: "monospace" },
-    prefixCode: { background: "#f5f5f5", padding: "2px 8px", borderRadius: "4px", fontFamily: "monospace", fontSize: "13px" },
-    msg: (t) => ({ padding: "10px 16px", borderRadius: "8px", marginBottom: "14px", fontSize: "13px", fontWeight: "500", background: t === "success" ? "#dcfce7" : "#fee2e2", color: t === "success" ? "#16a34a" : "#dc2626" }),
-    sectionTitle: { fontWeight: "600", marginBottom: "14px", fontSize: "15px", display: "flex", alignItems: "center", gap: "8px" },
+    page: { padding: "32px 28px", fontFamily: "'Lora',serif", background: "linear-gradient(180deg,#fdf8fb 0%,#fbf3f7 100%)", minHeight: "100vh", maxWidth: 1440, margin: "0 auto" },
+    title: { fontSize: 26, fontWeight: 800, marginBottom: 4, color: "#2d1b30", letterSpacing: "-0.01em" },
+    sub: { color: "#a888b3", fontSize: 13, marginBottom: 22 },
+    card: { background: "#fff", border: "1px solid #f0e5ec", borderRadius: 18, padding: 24, marginBottom: 20, boxShadow: "0 8px 30px rgba(124,58,237,0.09), 0 2px 6px rgba(0,0,0,0.03)" },
+    label: { fontSize: 11, color: "#8b6a9a", marginBottom: 5, display: "block", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" },
+    input: { width: "100%", padding: "10px 13px", borderRadius: 11, border: "1.5px solid #ecdde6", fontSize: 13.5, boxSizing: "border-box", outline: "none", fontFamily: "'Lora',serif", background: "#fff", color: "#3d2436" },
+    select: { width: "100%", padding: "10px 13px", borderRadius: 11, border: "1.5px solid #ecdde6", fontSize: 13.5, background: "#fff", boxSizing: "border-box", fontFamily: "'Lora',serif", color: "#3d2436", cursor: "pointer" },
+    btn: { padding: "11px 22px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#7c3aed,#d4709a)", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 13.5, fontFamily: "'Lora',serif", boxShadow: "0 4px 14px rgba(124,58,237,0.28)" },
+    btnDel: { padding: "5px 12px", borderRadius: 8, border: "1px solid rgba(220,90,90,0.22)", background: "rgba(220,90,90,0.06)", color: "#dc5a5a", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "'Lora',serif" },
+    btnEdit: { padding: "5px 12px", borderRadius: 8, border: "1px solid rgba(124,58,237,0.2)", background: "rgba(124,58,237,0.06)", color: "#7c3aed", cursor: "pointer", fontSize: 12, fontWeight: 600, marginRight: 6, fontFamily: "'Lora',serif" },
+    grid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 14 },
+    grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 },
+    table: { width: "100%", borderCollapse: "separate", borderSpacing: 0 },
+    th: { textAlign: "left", fontSize: 11, color: "#8b6a9a", fontWeight: 700, padding: "12px 16px", borderBottom: "1.5px solid #eee0ea", textTransform: "uppercase", letterSpacing: "0.06em", background: "#faf6fb" },
+    td: { padding: "11px 16px", borderBottom: "1px solid #f4ecf1", fontSize: 13.5, color: "#3d2436" },
+    box: { display: "inline-block", padding: "3px 12px", borderRadius: 8, background: "#f8fafc", color: "#334155", fontSize: 12, fontWeight: 600, fontFamily: "'Lora',serif", border: "1px solid #e2e8f0" },
+    prefixBox: { background: "#f8fafc", padding: "3px 10px", borderRadius: 8, fontFamily: "'Lora',serif", fontSize: 13, border: "1px solid #e2e8f0", color: "#334155" },
+    msg: (t) => ({ padding: "11px 16px", borderRadius: 12, marginBottom: 14, fontSize: 13, fontWeight: 500, fontFamily: "'Lora',serif", background: t === "success" ? "#ecfdf5" : "#fef2f2", color: t === "success" ? "#16a34a" : "#dc2626", border: `1px solid ${t === "success" ? "#bbf7d0" : "#fecaca"}` }),
+    sectionTitle: { fontWeight: 700, marginBottom: 14, fontSize: 15.5, display: "flex", alignItems: "center", gap: 8, color: "#2d1b30", fontFamily: "'Lora',serif" },
   };
 
   const suggestedCarriers = form.geo ? (CARRIERS_BY_GEO[form.geo] || []) : [];
@@ -174,7 +173,7 @@ export default function CarrierPrefixes() {
   return (
     <>
       <Navbar />
-      <div style={s.page}>
+      <div style={s.page} className="m13-fade-in">
       <div style={s.title}>📡 Carrier Prefix Manager</div>
       <div style={s.sub}>Countries, calling codes, aur carrier prefixes — sab dashboard se manage karo</div>
 
@@ -182,9 +181,9 @@ export default function CarrierPrefixes() {
       <div style={s.card}>
         <div style={s.sectionTitle}>
           🌍 Countries &amp; Calling Codes
-          <span style={{ color: "#999", fontWeight: "400", fontSize: "13px" }}>({filteredGeos.length} total)</span>
+          <span style={{ color: "#a888b3", fontWeight: 400, fontSize: 13 }}>({filteredGeos.length} total)</span>
         </div>
-        <div style={{ color: "#999", fontSize: "12px", marginBottom: "14px" }}>
+        <div style={{ color: "#a888b3", fontSize: 12, marginBottom: 14 }}>
           Ye list landing pages ke mobile-number dropdown (jaise +964) me directly use hoti hai — naya country add karo, kahi bhi code edit karne ki zaroorat nahi.
         </div>
         {geoMsg && <div style={s.msg(geoMsg.type)}>{geoMsg.text}</div>}
@@ -205,9 +204,9 @@ export default function CarrierPrefixes() {
               onChange={e => setGeoForm({ ...geoForm, calling_code: e.target.value })} />
           </div>
         </div>
-        <button style={s.btn} onClick={addGeo}>+ Add Country</button>
+        <button className="m13-btn" style={s.btn} onClick={addGeo}>+ Add Country</button>
 
-        <div style={{ ...s.grid2, marginTop: "18px", marginBottom: "0" }}>
+        <div style={{ ...s.grid2, marginTop: 18, marginBottom: 0 }}>
           <div>
             <span style={s.label}>Filter by Country</span>
             <select style={s.select} value={geoFilterCountry} onChange={e => setGeoFilterCountry(e.target.value)}>
@@ -222,7 +221,8 @@ export default function CarrierPrefixes() {
           </div>
         </div>
 
-        <table style={{ ...s.table, marginTop: "18px" }}>
+        <div style={{ overflow: "hidden", borderRadius: 14, border: "1px solid #f0e5ec", marginTop: 18 }}>
+        <table style={s.table}>
           <thead>
             <tr>
               <th style={s.th}>Code</th>
@@ -233,8 +233,8 @@ export default function CarrierPrefixes() {
           </thead>
           <tbody>
             {filteredGeos.map((g, i) => (
-              <tr key={g.id} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
-                <td style={s.td}><span style={s.geoBadge}>{g.code}</span></td>
+              <tr key={g.id} className="m13-row-hover" style={{ background: i % 2 === 0 ? "#fff" : "#fdfafc" }}>
+                <td style={s.td}><span style={s.box}>{g.code}</span></td>
                 <td style={s.td}>
                   {editingGeoId === g.id ? (
                     <input style={{ ...s.input, padding: "5px 8px" }} value={editingGeoDraft.name}
@@ -246,29 +246,30 @@ export default function CarrierPrefixes() {
                     <input style={{ ...s.input, padding: "5px 8px", width: "100px" }} value={editingGeoDraft.calling_code}
                       onChange={e => setEditingGeoDraft({ ...editingGeoDraft, calling_code: e.target.value })} />
                   ) : (
-                    g.calling_code ? <span style={s.callingCodeBadge}>{g.calling_code}</span> : <span style={{ color: "#ccc" }}>—</span>
+                    g.calling_code ? <span style={s.box}>{g.calling_code}</span> : <span style={{ color: "#cbd5e1" }}>—</span>
                   )}
                 </td>
                 <td style={s.td}>
                   {editingGeoId === g.id ? (
                     <>
-                      <button style={s.btnEdit} onClick={() => saveEditGeo(g.id)}>💾 Save</button>
-                      <button style={s.btnDel} onClick={() => setEditingGeoId(null)}>Cancel</button>
+                      <button className="m13-btn" style={s.btnEdit} onClick={() => saveEditGeo(g.id)}>💾 Save</button>
+                      <button className="m13-btn" style={s.btnDel} onClick={() => setEditingGeoId(null)}>Cancel</button>
                     </>
                   ) : (
                     <>
-                      <button style={s.btnEdit} onClick={() => startEditGeo(g)}>✏️ Edit</button>
-                      <button style={s.btnDel} onClick={() => removeGeo(g.id, g.name)}>🗑 Delete</button>
+                      <button className="m13-btn" style={s.btnEdit} onClick={() => startEditGeo(g)}>✏️ Edit</button>
+                      <button className="m13-btn" style={s.btnDel} onClick={() => removeGeo(g.id, g.name)}>🗑 Delete</button>
                     </>
                   )}
                 </td>
               </tr>
             ))}
             {!filteredGeos.length && (
-              <tr><td colSpan={4} style={{ ...s.td, textAlign: "center", color: "#aaa" }}>{geos.length ? "No countries match your filters." : "No countries added yet."}</td></tr>
+              <tr><td colSpan={4} style={{ ...s.td, textAlign: "center", color: "#a888b3", padding: 30 }}>{geos.length ? "No countries match your filters." : "No countries added yet."}</td></tr>
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* ADD PREFIX FORM */}
@@ -287,7 +288,7 @@ export default function CarrierPrefixes() {
               <option value="__other__">Other (type below)</option>
             </select>
             {form.geo === "__other__" && (
-              <input style={{ ...s.input, marginTop: "6px" }}
+              <input style={{ ...s.input, marginTop: 6 }}
                 placeholder="Country code type karo e.g. BH, KW, JO"
                 value={form.customGeo || ""}
                 onChange={e => setForm({ ...form, customGeo: e.target.value.toUpperCase().slice(0,2) })} />
@@ -304,7 +305,7 @@ export default function CarrierPrefixes() {
                   <option value="__custom__">+ Other (custom)</option>
                 </select>
                 {form.carrier === "__custom__" && (
-                  <input style={{ ...s.input, marginTop: "6px" }}
+                  <input style={{ ...s.input, marginTop: 6 }}
                     placeholder="Carrier name type karo"
                     value={customCarrier}
                     onChange={e => setCustomCarrier(e.target.value)} />
@@ -321,14 +322,14 @@ export default function CarrierPrefixes() {
               value={form.prefix} onChange={e => setForm({ ...form, prefix: e.target.value })} />
           </div>
         </div>
-        <button style={s.btn} onClick={add}>+ Add Prefix</button>
+        <button className="m13-btn" style={s.btn} onClick={add}>+ Add Prefix</button>
       </div>
 
       {/* FILTER + TABLE */}
       <div style={s.card}>
         <div style={s.sectionTitle}>
           📋 All Prefixes
-          <span style={{ color: "#999", fontWeight: "400", fontSize: "13px" }}>({rows.length} total)</span>
+          <span style={{ color: "#a888b3", fontWeight: 400, fontSize: 13 }}>({rows.length} total)</span>
         </div>
         <div style={s.grid2}>
           <div>
@@ -346,10 +347,17 @@ export default function CarrierPrefixes() {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: "center", color: "#aaa", padding: "32px" }}>Loading...</div>
+          <div style={{ textAlign: "center", padding: 40 }}>
+            <span className="m13-spinner" />
+            <div style={{ marginTop: 10, color: "#a888b3", fontSize: 13 }}>Loading...</div>
+          </div>
         ) : rows.length === 0 ? (
-          <div style={{ textAlign: "center", color: "#aaa", padding: "32px" }}>No prefixes found</div>
+          <div style={{ textAlign: "center", padding: 40 }}>
+            <div style={{ fontSize: 28, opacity: 0.5, marginBottom: 6 }}>📡</div>
+            <div style={{ color: "#a888b3", fontSize: 13 }}>No prefixes found</div>
+          </div>
         ) : (
+          <div style={{ overflow: "hidden", borderRadius: 14, border: "1px solid #f0e5ec" }}>
           <table style={s.table}>
             <thead>
               <tr>
@@ -362,18 +370,19 @@ export default function CarrierPrefixes() {
             </thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={r.id} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
-                  <td style={s.td}><span style={s.geoBadge}>{r.geo}</span></td>
-                  <td style={{ ...s.td, color: "#666", fontSize: "13px" }}>{GEO_NAMES[r.geo] || r.geo}</td>
+                <tr key={r.id} className="m13-row-hover" style={{ background: i % 2 === 0 ? "#fff" : "#fdfafc" }}>
+                  <td style={s.td}><span style={s.box}>{r.geo}</span></td>
+                  <td style={{ ...s.td, color: "#8b6a9a", fontSize: 13 }}>{GEO_NAMES[r.geo] || r.geo}</td>
                   <td style={s.td}><strong>{r.carrier}</strong></td>
-                  <td style={s.td}><span style={s.prefixCode}>{r.prefix}</span></td>
+                  <td style={s.td}><span style={s.prefixBox}>{r.prefix}</span></td>
                   <td style={s.td}>
-                    <button style={s.btnDel} onClick={() => remove(r.id, r.carrier, r.geo)}>🗑 Delete</button>
+                    <button className="m13-btn" style={s.btnDel} onClick={() => remove(r.id, r.carrier, r.geo)}>🗑 Delete</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>
