@@ -424,30 +424,31 @@ export default function PublisherAssignOffers() {
             <table style={table}>
               <thead>
                 <tr>
-                  {!publisherId && <th style={th}>Publisher</th>}
-                  <th style={th}>Offer (Original)</th>
-                  <th style={th}>Pub Offer Name</th>
-                  <th style={th}>Geo</th>
-                  <th style={th}>Carrier</th>
-                  <th style={th}>CPA</th>
-                  <th style={th}>Cap</th>
-                  <th style={th}>Pass %</th>
-                  <th style={th}>Weight</th>
-                  <th style={th}>Status</th>
-                  <th style={th}>Actions</th>
+                  {!publisherId && <th style={{...th, whiteSpace:"nowrap"}}>Publisher</th>}
+                  <th style={{...th, whiteSpace:"nowrap"}}>Offer (Original)</th>
+                  <th style={{...th, whiteSpace:"nowrap"}}>Pub Offer Name</th>
+                  <th style={{...th, whiteSpace:"nowrap"}}>Geo</th>
+                  <th style={{...th, whiteSpace:"nowrap"}}>Carrier</th>
+                  <th style={{...th, whiteSpace:"nowrap"}}>CPA</th>
+                  <th style={{...th, whiteSpace:"nowrap"}}>Cap</th>
+                  <th style={{...th, whiteSpace:"nowrap"}}>Pass %</th>
+                  <th style={{...th, whiteSpace:"nowrap"}}>Weight</th>
+                  <th style={{...th, whiteSpace:"nowrap"}}>Status</th>
+                  <th style={{...th, whiteSpace:"nowrap"}}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {assigned.map((a) => (
                   <tr key={a.id}>
-                    {!publisherId && <td style={{...td, color:"#1e293b", fontWeight:500}}>{a.publisher_name}</td>}
-                    <td style={{...td, color:"#64748b", fontSize:12}}>{a.original_name || a.name}</td>
-                    <td style={{...td, color:"#1e293b", fontWeight:500}}>
+                    {!publisherId && <td style={{...td, color:"#1e293b", fontWeight:500, whiteSpace:"nowrap"}}>{a.publisher_name}</td>}
+                    <td style={{...td, color:"#64748b", fontSize:12, whiteSpace:"nowrap"}}>{a.original_name || a.name}</td>
+                    <td style={{...td, color:"#1e293b", fontWeight:500, whiteSpace:"nowrap"}}>
                       {editingId === a.id ? (
                         <input
                           style={styles.cellInput}
                           type="text"
                           placeholder="Custom name..."
+                          size={Math.max(String(editRow.pub_offer_name || "").length, 10)}
                           value={editRow.pub_offer_name || ""}
                           onChange={(e) => setEditRow({ ...editRow, pub_offer_name: e.target.value })}
                         />
@@ -458,8 +459,8 @@ export default function PublisherAssignOffers() {
                         </span>
                       )}
                     </td>
-                    <td style={td}>{a.geo}</td>
-                    <td style={td}>{a.carrier}</td>
+                    <td style={{...td, whiteSpace:"nowrap"}}>{a.geo}</td>
+                    <td style={{...td, whiteSpace:"nowrap"}}>{a.carrier}</td>
 
                     {editingId === a.id ? (
                       <>
@@ -469,6 +470,7 @@ export default function PublisherAssignOffers() {
                             type="number"
                             step="0.01"
                             min="0"
+                            size={Math.max(String(editRow.publisher_cpa ?? "").length, 4)}
                             value={editRow.publisher_cpa}
                             onChange={(e) =>
                               setEditRow({
@@ -483,6 +485,7 @@ export default function PublisherAssignOffers() {
                             style={styles.cellInput}
                             type="number"
                             min="0"
+                            size={Math.max(String(editRow.daily_cap || "").length, 4)}
                             value={editRow.daily_cap || ""}
                             onChange={(e) =>
                               setEditRow({
@@ -498,6 +501,7 @@ export default function PublisherAssignOffers() {
                             type="number"
                             min="0"
                             max="100"
+                            size={Math.max(String(editRow.pass_percent ?? "").length, 3)}
                             value={editRow.pass_percent}
                             onChange={(e) =>
                               setEditRow({
@@ -512,6 +516,7 @@ export default function PublisherAssignOffers() {
                             style={styles.cellInput}
                             type="number"
                             min="1"
+                            size={Math.max(String(editRow.weight ?? "").length, 3)}
                             value={editRow.weight}
                             onChange={(e) =>
                               setEditRow({
@@ -524,10 +529,10 @@ export default function PublisherAssignOffers() {
                       </>
                     ) : (
                       <>
-                        <td style={td}>{a.publisher_cpa}</td>
-                        <td style={td}>{a.daily_cap || "∞"}</td>
-                        <td style={td}>{a.pass_percent}</td>
-                        <td style={td}>{a.weight}</td>
+                        <td style={{...td, whiteSpace:"nowrap"}}>{a.publisher_cpa}</td>
+                        <td style={{...td, whiteSpace:"nowrap"}}>{a.daily_cap || "∞"}</td>
+                        <td style={{...td, whiteSpace:"nowrap"}}>{a.pass_percent}</td>
+                        <td style={{...td, whiteSpace:"nowrap"}}>{a.weight}</td>
                       </>
                     )}
 
@@ -536,6 +541,7 @@ export default function PublisherAssignOffers() {
                         ...td,
                         color: a.status === "active" ? "#16a34a" : "#dc2626",
                         fontWeight: 600,
+                        whiteSpace: "nowrap",
                       }}
                     >
                       {a.status.toUpperCase()}
@@ -674,7 +680,7 @@ const styles = {
   formBar: { display: "flex", gap: 10, marginBottom: 20, flexWrap:"wrap", alignItems:"center", background:"#ffffff", border:"1px solid #e2e8f0", padding:16, borderRadius:16, boxShadow:"0 1px 3px rgba(0,0,0,0.05)" },
   select: { background:"#ffffff", border:"1px solid #cbd5e1", color:"#1e293b", borderRadius:10, padding:"8px 12px", fontSize:13, outline:"none" },
   smallInput: { background:"#ffffff", border:"1px solid #cbd5e1", color:"#1e293b", borderRadius:10, padding:"8px 12px", fontSize:13, outline:"none", width:90 },
-  cellInput: { background:"#ffffff", border:"1px solid #cbd5e1", color:"#1e293b", borderRadius:8, padding:"6px 8px", fontSize:13, outline:"none", width:70, textAlign:"center" },
+  cellInput: { background:"#ffffff", border:"1px solid #cbd5e1", color:"#1e293b", borderRadius:8, padding:"6px 8px", fontSize:13, outline:"none", textAlign:"center" },
   smallBtn: { fontSize:11, padding:"6px 10px", background:"#ffffff", border:"1px solid #cbd5e1", color:"#475569", borderRadius:8, cursor:"pointer" },
   toast: { position:"fixed", top:80, right:24, background:"#ffffff", border:"1px solid #cbd5e1", color:"#1e293b", padding:"12px 20px", borderRadius:12, zIndex:9999, fontSize:13, boxShadow:"0 4px 6px -1px rgba(0,0,0,0.1)" },
 };
