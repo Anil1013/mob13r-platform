@@ -15,6 +15,15 @@ export default function SuperAdmin() {
 
   const showToast = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
+  const MODULE_COLORS = {
+    CPA: { bg:"#eff6ff", color:"#2563eb" },
+    CPI: { bg:"#f0fdf4", color:"#16a34a" },
+    CPS: { bg:"#fff7ed", color:"#c2650a" },
+    DCB: { bg:"#fdf2f8", color:"#c026a3" },
+    MVAS: { bg:"#f3ebfa", color:"#7c3aed" },
+  };
+  const moduleColor = (code) => MODULE_COLORS[code] || { bg:"#f8fafc", color:"#334155" };
+
   useEffect(() => {
     if (user.email !== "admin@mob13r.com") { window.location.href = "/dashboard"; return; }
     loadOrgs();
@@ -230,8 +239,8 @@ export default function SuperAdmin() {
                     </div>
                   </div>
                   <div style={{display:"flex", gap:8}}>
-                    <button onClick={() => approveRequest(pr.id)} style={S.approveBtn}>✓ Approve & Apply</button>
-                    <button onClick={() => rejectRequest(pr.id)} style={S.deleteBtn}>✕ Reject</button>
+                    <button className="m13-btn" onClick={() => approveRequest(pr.id)} style={S.approveBtn}>✓ Approve & Apply</button>
+                    <button className="m13-btn" onClick={() => rejectRequest(pr.id)} style={S.deleteBtn}>✕ Reject</button>
                   </div>
                 </div>
               ))}
@@ -242,12 +251,29 @@ export default function SuperAdmin() {
         {/* HEADER */}
         <div style={S.header}>
           <h1 style={S.title}>⚙️ Super Admin Panel</h1>
+          <div style={S.titleAccent} />
           <p style={S.sub}>Manage all organizations — Only visible to admin@mob13r.com</p>
           <div style={S.statsRow}>
-            <div style={S.statBox}><div style={{fontSize:24,fontWeight:700,color:"#3b82f6"}}>{orgs.length}</div><div style={{fontSize:12,color:"#a888b3"}}>Total Orgs</div></div>
-            <div style={S.statBox}><div style={{fontSize:24,fontWeight:700,color:"#22c55e"}}>{orgs.filter(o=>o.status==="active").length}</div><div style={{fontSize:12,color:"#a888b3"}}>Active</div></div>
-            <div style={S.statBox}><div style={{fontSize:24,fontWeight:700,color:"#f59e0b"}}>{orgs.filter(o=>o.status==="pending").length}</div><div style={{fontSize:12,color:"#a888b3"}}>Pending</div></div>
-            <div style={S.statBox}><div style={{fontSize:24,fontWeight:700,color:"#ef4444"}}>{orgs.filter(o=>o.status==="suspended").length}</div><div style={{fontSize:12,color:"#a888b3"}}>Suspended</div></div>
+            <div className="m13-card-hover" style={{...S.statBox, borderLeft:"4px solid #3b82f6"}}>
+              <div style={{fontSize:22}}>🏢</div>
+              <div style={{fontSize:24,fontWeight:800,color:"#3b82f6",fontFamily:"'Lora',serif"}}>{orgs.length}</div>
+              <div style={{fontSize:11,color:"#a888b3",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}}>Total Orgs</div>
+            </div>
+            <div className="m13-card-hover" style={{...S.statBox, borderLeft:"4px solid #22c55e"}}>
+              <div style={{fontSize:22}}>✅</div>
+              <div style={{fontSize:24,fontWeight:800,color:"#22c55e",fontFamily:"'Lora',serif"}}>{orgs.filter(o=>o.status==="active").length}</div>
+              <div style={{fontSize:11,color:"#a888b3",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}}>Active</div>
+            </div>
+            <div className="m13-card-hover" style={{...S.statBox, borderLeft:"4px solid #f59e0b"}}>
+              <div style={{fontSize:22}}>⏳</div>
+              <div style={{fontSize:24,fontWeight:800,color:"#f59e0b",fontFamily:"'Lora',serif"}}>{orgs.filter(o=>o.status==="pending").length}</div>
+              <div style={{fontSize:11,color:"#a888b3",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}}>Pending</div>
+            </div>
+            <div className="m13-card-hover" style={{...S.statBox, borderLeft:"4px solid #ef4444"}}>
+              <div style={{fontSize:22}}>⛔</div>
+              <div style={{fontSize:24,fontWeight:800,color:"#ef4444",fontFamily:"'Lora',serif"}}>{orgs.filter(o=>o.status==="suspended").length}</div>
+              <div style={{fontSize:11,color:"#a888b3",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}}>Suspended</div>
+            </div>
           </div>
         </div>
 
@@ -263,10 +289,10 @@ export default function SuperAdmin() {
                   <span className="m13-spinner" />
                   <div style={{marginTop:8, color:"#a888b3"}}>Loading organizations...</div>
                 </td></tr>
-              ) : orgs.map(org => {
+              ) : orgs.map((org, idx) => {
                 const primaryUser = (org.users || []).find(u => u.id) || {};
                 return (
-                  <tr key={org.id} className="m13-row-hover" style={{opacity: org.status==="suspended"?0.6:1}}>
+                  <tr key={org.id} className="m13-row-hover" style={{opacity: org.status==="suspended"?0.6:1, background: idx % 2 === 0 ? "#fff" : "#fdfafc"}}>
                     <td style={S.td}><span style={S.idBadge} title={`Database ID: ${org.id}`}>{rankById[org.id]}</span></td>
                     <td style={S.td}>
                       <div style={{color:"#2d1b30",fontWeight:500}}>{org.name}</div>
@@ -278,9 +304,9 @@ export default function SuperAdmin() {
                     <td style={S.td}>
                       <div style={{display:"flex",flexWrap:"wrap",gap:4,maxWidth:160}}>
                         {(org.active_verticals || []).map(v => (
-                          <span key={v.code} style={S.moduleBadge}>{v.code}·{v.tier}</span>
+                          <span key={v.code} style={{...S.moduleBadge, background:moduleColor(v.code).bg, color:moduleColor(v.code).color, border:`1px solid ${moduleColor(v.code).color}22`}}>{v.code}·{v.tier}</span>
                         ))}
-                        {org.mvas_enabled !== false && <span style={{...S.moduleBadge, background:"rgba(139,92,246,0.15)", color:"#8b5cf6"}}>MVAS·{org.mvas_tier || "basic"}</span>}
+                        {org.mvas_enabled !== false && <span style={{...S.moduleBadge, background:moduleColor("MVAS").bg, color:moduleColor("MVAS").color, border:`1px solid ${moduleColor("MVAS").color}22`}}>MVAS·{org.mvas_tier || "basic"}</span>}
                         {!(org.active_verticals || []).length && org.mvas_enabled === false && <span style={{color:"#ef4444",fontSize:11}}>None</span>}
                       </div>
                     </td>
@@ -317,9 +343,9 @@ export default function SuperAdmin() {
                     <td style={S.td}><span style={{color:"#2d1b30",fontWeight:600}}>{org.total_sessions || 0}</span></td>
                     <td style={S.td}>
                       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                        <button onClick={() => setSelectedOrg(org)} style={S.viewBtn}>👁 View</button>
-                        <button onClick={() => updateOrg(org.id, { status:"active", plan:"pro", max_publishers:999, max_offers:999, monthly_conversions:999999 })} style={S.approveBtn}>✓ Approve</button>
-                        {org.id !== 1 && <button onClick={() => setDeleteConfirm(org)} style={S.deleteBtn}>🗑</button>}
+                        <button className="m13-btn" onClick={() => setSelectedOrg(org)} style={S.viewBtn}>👁 View</button>
+                        <button className="m13-btn" onClick={() => updateOrg(org.id, { status:"active", plan:"pro", max_publishers:999, max_offers:999, monthly_conversions:999999 })} style={S.approveBtn}>✓ Approve</button>
+                        {org.id !== 1 && <button className="m13-btn" onClick={() => setDeleteConfirm(org)} style={S.deleteBtn}>🗑</button>}
                       </div>
                     </td>
                   </tr>
@@ -337,14 +363,15 @@ const S = {
   toast:{position:"fixed",top:80,right:24,zIndex:9999,padding:"12px 20px",borderRadius:12,fontSize:13,fontWeight:500,fontFamily:"'Lora',serif"},
   header:{marginBottom:28},
   title:{fontFamily:"'Lora',serif",fontSize:26,fontWeight:800,color:"#2d1b30",letterSpacing:"-0.01em"},
+  titleAccent:{width:70,height:4,borderRadius:4,background:"linear-gradient(135deg,#7c3aed,#d4709a)",margin:"6px 0 10px"},
   sub:{color:"#a888b3",fontSize:13,marginTop:4,marginBottom:22,fontFamily:"'Lora',serif"},
   statsRow:{display:"flex",gap:14,marginBottom:8,flexWrap:"wrap"},
-  statBox:{background:"#ffffff",border:"1px solid #f0e5ec",borderRadius:16,padding:"16px 26px",textAlign:"center",boxShadow:"0 4px 16px rgba(124,58,237,0.08), 0 1px 3px rgba(0,0,0,0.03)"},
+  statBox:{background:"#ffffff",border:"1px solid #f0e5ec",borderRadius:16,padding:"16px 24px",textAlign:"center",boxShadow:"0 4px 16px rgba(124,58,237,0.08), 0 1px 3px rgba(0,0,0,0.03)",minWidth:130,transition:"transform 0.2s ease"},
   tableWrap:{background:"#ffffff",border:"1px solid #f0e5ec",borderRadius:18,overflow:"auto",boxShadow:"0 8px 30px rgba(124,58,237,0.09), 0 2px 6px rgba(0,0,0,0.03)"},
   table:{width:"100%",borderCollapse:"collapse",fontFamily:"'Lora',serif"},
   th:{padding:"14px 16px",textAlign:"left",fontSize:11,fontWeight:700,color:"#8b6a9a",textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:"1.5px solid #eee0ea",background:"#faf6fb"},
   td:{padding:"13px 16px",borderBottom:"1px solid #f4ecf1",color:"#3d2436",fontSize:13,fontFamily:"'Lora',serif"},
-  idBadge:{background:"#f8fafc",color:"#334155",padding:"3px 10px",borderRadius:8,fontSize:12,fontWeight:600,border:"1px solid #e2e8f0",fontFamily:"'Lora',serif"},
+  idBadge:{display:"inline-flex",alignItems:"center",justifyContent:"center",width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#7c3aed,#d4709a)",color:"#fff",fontSize:12,fontWeight:700,fontFamily:"'Lora',serif",boxShadow:"0 2px 6px rgba(124,58,237,0.3)"},
   moduleBadge:{background:"#f8fafc",color:"#334155",padding:"2px 8px",borderRadius:6,fontSize:10,fontWeight:600,whiteSpace:"nowrap",border:"1px solid #e2e8f0",fontFamily:"'Lora',serif"},
   select:{background:"#faf6fb",border:"1px solid #ecdde6",color:"#2d1b30",padding:"6px 10px",borderRadius:8,fontSize:12,cursor:"pointer",fontFamily:"'Lora',serif"},
   numInput:{width:80,background:"#faf6fb",border:"1px solid #ecdde6",color:"#2d1b30",padding:"6px 10px",borderRadius:8,fontSize:12,textAlign:"center",fontFamily:"'Lora',serif"},
