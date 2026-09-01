@@ -5,6 +5,13 @@ import { btn, btnRed, input, table, th, td, page } from "../styles/shared.js";
 const API_BASE = "https://backend.mob13r.com";
 
 export default function Offers() {
+  // Live-resizes an <input>'s HTML size attribute as the user types, so the
+  // box grows/shrinks with whatever's actually typed — not just whatever
+  // the value happened to be when the page last loaded.
+  const autoResize = (e, minChars) => {
+    e.target.size = Math.max(e.target.value.length, minChars);
+  };
+
   const token = localStorage.getItem("token");
 
   /* ---------------- STATE ---------------- */
@@ -224,22 +231,22 @@ export default function Offers() {
                   </td>
                   <td style={{...td, whiteSpace:"nowrap"}}>{o.advertiser_name || "-"}</td>
                   <td style={td}>
-                    <input style={styles.cellInput} size={Math.max(String(o.service_name || "").length, 6)} defaultValue={o.service_name} onBlur={(e) => updateOffer(o.id, { service_name: e.target.value })} />
+                    <input style={styles.cellInput} size={Math.max(String(o.service_name || "").length, 6)} defaultValue={o.service_name} onChange={(e) => autoResize(e, 6)} onBlur={(e) => updateOffer(o.id, { service_name: e.target.value })} />
                   </td>
                   <td style={td}>
-                    <input style={styles.cellInput} size={Math.max(String(o.cpa || "").length, 4)} defaultValue={o.cpa || ""} onBlur={(e) => updateOffer(o.id, { cpa: e.target.value })} />
+                    <input style={styles.cellInput} size={Math.max(String(o.cpa || "").length, 4)} defaultValue={o.cpa || ""} onChange={(e) => autoResize(e, 4)} onBlur={(e) => updateOffer(o.id, { cpa: e.target.value })} />
                   </td>
                   <td style={td}>
-                    <input style={styles.cellInput} size={Math.max(String(o.geo || "").length, 4)} defaultValue={o.geo || ""} onBlur={(e) => updateOffer(o.id, { geo: e.target.value })} />
+                    <input style={styles.cellInput} size={Math.max(String(o.geo || "").length, 4)} defaultValue={o.geo || ""} onChange={(e) => autoResize(e, 4)} onBlur={(e) => updateOffer(o.id, { geo: e.target.value })} />
                   </td>
                   <td style={td}>
-                    <input style={styles.cellInput} size={Math.max(String(o.carrier || "").length, 6)} defaultValue={o.carrier || ""} onBlur={(e) => updateOffer(o.id, { carrier: e.target.value })} />
+                    <input style={styles.cellInput} size={Math.max(String(o.carrier || "").length, 6)} defaultValue={o.carrier || ""} onChange={(e) => autoResize(e, 6)} onBlur={(e) => updateOffer(o.id, { carrier: e.target.value })} />
                   </td>
                   <td style={td}>
                     <input style={{...styles.cellInput, width:50}} type="number" min="4" max="6" defaultValue={o.otp_length || 4} onBlur={(e) => updateOffer(o.id, { otp_length: Number(e.target.value) })} />
                   </td>
                   <td style={td}>
-                    <input style={styles.cellInput} size={Math.max(String(o.daily_cap ?? "").length, 4)} defaultValue={o.daily_cap === null ? "" : o.daily_cap} placeholder="0"
+                    <input style={styles.cellInput} size={Math.max(String(o.daily_cap ?? "").length, 4)} defaultValue={o.daily_cap === null ? "" : o.daily_cap} placeholder="0" onChange={(e) => autoResize(e, 4)}
                       onBlur={(e) => { const val = e.target.value === "" ? 0 : parseInt(e.target.value); updateOffer(o.id, { daily_cap: val }); }} />
                   </td>
                   <td style={{...td, whiteSpace:"nowrap"}}>{o.today_hits ?? 0}</td>
