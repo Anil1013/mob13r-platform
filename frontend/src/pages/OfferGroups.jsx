@@ -136,14 +136,6 @@ export default function OfferGroups() {
     setShowCreate(true);
   };
 
-  const copyURL = (groupId, apiKey) => {
-    if (!apiKey) { setMsg({ type: "error", text: "This publisher has no API key on file." }); setTimeout(() => setMsg(null), 3000); return; }
-    const url = `https://backend.mob13r.com/api/publisher/group/${groupId}/pin/send?msisdn={msisdn}&geo={geo}&carrier={carrier}&x-api-key=${apiKey}`;
-    navigator.clipboard.writeText(url);
-    setMsg({ type: "success", text: "URL copied!" });
-    setTimeout(() => setMsg(null), 2000);
-  };
-
   const s = {
     page: { padding: 24, fontFamily: "'Lora', serif", background: "linear-gradient(180deg,#fdf8fb 0%,#fbf3f7 100%)", minHeight: "100vh", maxWidth: 1440, margin: "0 auto" },
     title: { fontSize: 22, fontWeight: 700, color: "#2d1b30", marginBottom: 4 },
@@ -343,23 +335,14 @@ export default function OfferGroups() {
               </div>
             )}
 
-            {/* Publishers + URL */}
+            {/* Assigned Publishers (reference only) */}
             {g.publishers?.length > 0 && (
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #f0f0f0" }}>
-                <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6, fontWeight: 600, textTransform: "uppercase" }}>Assigned Publishers</div>
+                <div style={{ fontSize: 12, color: "#a888b3", marginBottom: 6, fontWeight: 600, textTransform: "uppercase" }}>Assigned Publishers</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {g.publishers.map(p => (
-                    <div key={p.id} style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <span style={{ ...s.tag, background:"#f1f5f9", color:"#475569", padding:"4px 10px" }}>{p.name}</span>
-                      <button onClick={() => copyURL(g.id, p.api_key)}
-                        style={{ fontSize:11, padding:"3px 10px", borderRadius:6, border:"1px solid #e2e8f0", background:"#fff", cursor:"pointer", color:"#0369a1" }}>
-                        📋 Copy URL
-                      </button>
-                    </div>
+                    <span key={p.id} style={{ ...s.tag, background:"#f1f5f9", color:"#475569", padding:"4px 10px" }}>{p.name}</span>
                   ))}
-                </div>
-                <div style={{ marginTop: 8, padding: "8px 12px", background: "#f8fafc", borderRadius: 8, fontFamily:"monospace", fontSize:11, color:"#475569", wordBreak:"break-all" }}>
-                  https://backend.mob13r.com/api/publisher/group/{g.id}/pin/send?msisdn={"{msisdn}"}&geo={"{geo}"}&carrier={"{carrier}"}&x-api-key=pub_xxx
                 </div>
               </div>
             )}
