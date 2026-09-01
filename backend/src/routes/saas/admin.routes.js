@@ -156,15 +156,29 @@ router.patch("/admin/orgs/:id", isSuperAdmin, async (req, res) => {
       monthly_conversions = planLimits[plan].monthly_conversions;
     }
 
+    // IMPORTANT: orgAuth auto-flips an org back to 'pending' if its
+    // 30-day cycle (measured from plan_started_at) has elapsed OR its
+    // conversion limit is crossed — this runs on every write request.
+    // Without resetting plan_started_at here, manually setting
+    // status='active' (via this dropdown or the Approve button) would
+    // stick for exactly zero requests: the very next write would
+    // recalculate cycleExpired from the still-old plan_started_at and
+    // silently flip it right back to pending before the request could
+    // even complete.
+    const resetCycle = status === "active";
+
     const result = await pool.query(`
       UPDATE organizations SET
         plan = COALESCE($1, plan),
         status = COALESCE($2, status),
         max_publishers = COALESCE($3, max_publishers),
         max_offers = COALESCE($4, max_offers),
-        monthly_conversions = COALESCE($5, monthly_conversions)
+        monthly_conversions = COALESCE($5, monthly_conversions),
+        plan_started_at = CASE WHEN $7 THEN NOW() ELSE plan_started_at END,
+        notified_5day = CASE WHEN $7 THEN FALSE ELSE notified_5day END,
+        notified_2day = CASE WHEN $7 THEN FALSE ELSE notified_2day END
       WHERE id = $6 RETURNING *`,
-      [plan, status, max_publishers, max_offers, monthly_conversions, id]
+      [plan, status, max_publishers, max_offers, monthly_conversions, id, resetCycle]
     );
     res.json({ success: true, data: result.rows[0] });
   } catch (err) {
