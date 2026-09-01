@@ -22,15 +22,20 @@ export default function OfferGroups() {
 
   const load = async () => {
     setLoading(true);
-    const [gRes, oRes, pRes] = await Promise.all([
-      fetch(`${API_BASE}/api/offer-groups`, { headers: headers() }),
-      fetch(`${API_BASE}/api/offers`, { headers: headers() }),
-      fetch(`${API_BASE}/api/publishers`, { headers: headers() }),
-    ]);
-    const [gData, oData, pData] = await Promise.all([gRes.json(), oRes.json(), pRes.json()]);
-    setGroups(gData.data || []);
-    setOffers(oData.data || oData || []);
-    setPublishers(pData.data || pData || []);
+    try {
+      const [gRes, oRes, pRes] = await Promise.all([
+        fetch(`${API_BASE}/api/offer-groups`, { headers: headers() }),
+        fetch(`${API_BASE}/api/offers`, { headers: headers() }),
+        fetch(`${API_BASE}/api/publishers`, { headers: headers() }),
+      ]);
+      const [gData, oData, pData] = await Promise.all([gRes.json(), oRes.json(), pRes.json()]);
+      setGroups(gData.data || []);
+      setOffers(oData.data || oData || []);
+      setPublishers(pData.data || pData || []);
+    } catch (err) {
+      setMsg({ type: "error", text: "Failed to load offer groups. Please refresh the page." });
+      setTimeout(() => setMsg(null), 4000);
+    }
     setLoading(false);
   };
 
@@ -84,25 +89,40 @@ export default function OfferGroups() {
       : `${API_BASE}/api/offer-groups`;
     const method = editGroup ? "PUT" : "POST";
 
-    const res = await fetch(url, { method, headers: headers(), body: JSON.stringify(form) });
-    const data = await res.json();
+    try {
+      const res = await fetch(url, { method, headers: headers(), body: JSON.stringify(form) });
+      const data = await res.json();
 
-    if (data.status === "SUCCESS") {
-      setMsg({ type: "success", text: editGroup ? "Group updated!" : "Group created!" });
-      setShowCreate(false);
-      setEditGroup(null);
-      setForm({ name: "", geo: "", carrier: "", description: "", items: [], publisher_ids: [] });
-      load();
-    } else {
-      setMsg({ type: "error", text: data.error });
+      if (data.status === "SUCCESS") {
+        setMsg({ type: "success", text: editGroup ? "Group updated!" : "Group created!" });
+        setShowCreate(false);
+        setEditGroup(null);
+        setForm({ name: "", geo: "", carrier: "", description: "", items: [], publisher_ids: [] });
+        load();
+      } else {
+        setMsg({ type: "error", text: data.message || data.error || `Failed (HTTP ${res.status})` });
+      }
+    } catch (err) {
+      setMsg({ type: "error", text: "Network error — could not reach the server. Please try again." });
     }
-    setTimeout(() => setMsg(null), 3000);
+    setTimeout(() => setMsg(null), 4000);
   };
 
   const deleteGroup = async (id, name) => {
     if (!confirm(`Delete group "${name}"?`)) return;
-    await fetch(`${API_BASE}/api/offer-groups/${id}`, { method: "DELETE", headers: headers() });
-    load();
+    try {
+      const res = await fetch(`${API_BASE}/api/offer-groups/${id}`, { method: "DELETE", headers: headers() });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setMsg({ type: "error", text: data.message || data.error || `Delete failed (HTTP ${res.status})` });
+        setTimeout(() => setMsg(null), 4000);
+        return;
+      }
+      load();
+    } catch (err) {
+      setMsg({ type: "error", text: "Network error — could not delete the group." });
+      setTimeout(() => setMsg(null), 4000);
+    }
   };
 
   const startEdit = (g) => {
