@@ -240,8 +240,8 @@ export default function Dashboard() {
         {data.length > 0 && (
           <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16}}>
             {/* Top Offer */}
-            <div style={{background:"#1e293b", borderRadius:10, padding:"12px 16px", border:"1px solid rgba(255,255,255,0.06)"}}>
-              <div style={{fontSize:11, color:"#64748b", fontWeight:700, textTransform:"uppercase", marginBottom:8}}>🏆 Top Offer (by conversions)</div>
+            <div className="m13-card-hover" style={{background:"#ffffff", borderRadius:16, padding:"14px 18px", border:"1px solid #f0e5ec", boxShadow:"0 4px 16px rgba(124,58,237,0.08), 0 1px 3px rgba(0,0,0,0.03)"}}>
+              <div style={{fontSize:11, color:"#a888b3", fontWeight:700, textTransform:"uppercase", marginBottom:8}}>🏆 Top Offer (by conversions)</div>
               {(() => {
                 const grouped = data.reduce((acc, r) => {
                   const key = r.offer_name || r.offer || r.service_name || "Unknown";
@@ -253,15 +253,15 @@ export default function Dashboard() {
                 const top = Object.entries(grouped).sort((a,b) => b[1].conversions - a[1].conversions)[0];
                 return top ? (
                   <div>
-                    <div style={{color:"#ffffff", fontWeight:700, fontSize:15}}>{top[0]}</div>
-                    <div style={{color:"#22c55e", fontSize:13}}>{top[1].conversions} conversions · ${top[1].revenue.toFixed(2)}</div>
+                    <div style={{color:"#2d1b30", fontWeight:700, fontSize:15}}>{top[0]}</div>
+                    <div style={{color:"#16a34a", fontSize:13}}>{top[1].conversions} conversions · ${top[1].revenue.toFixed(2)}</div>
                   </div>
-                ) : <div style={{color:"#64748b"}}>No data</div>;
+                ) : <div style={{color:"#a888b3"}}>No data</div>;
               })()}
             </div>
             {/* Top Publisher */}
-            <div style={{background:"#1e293b", borderRadius:10, padding:"12px 16px", border:"1px solid rgba(255,255,255,0.06)"}}>
-              <div style={{fontSize:11, color:"#64748b", fontWeight:700, textTransform:"uppercase", marginBottom:8}}>⭐ Top Publisher (by revenue)</div>
+            <div className="m13-card-hover" style={{background:"#ffffff", borderRadius:16, padding:"14px 18px", border:"1px solid #f0e5ec", boxShadow:"0 4px 16px rgba(124,58,237,0.08), 0 1px 3px rgba(0,0,0,0.03)"}}>
+              <div style={{fontSize:11, color:"#a888b3", fontWeight:700, textTransform:"uppercase", marginBottom:8}}>⭐ Top Publisher (by revenue)</div>
               {(() => {
                 const grouped = data.reduce((acc, r) => {
                   const key = r.publisher_name || r.publisher || "Unknown";
@@ -273,33 +273,33 @@ export default function Dashboard() {
                 const top = Object.entries(grouped).sort((a,b) => b[1].revenue - a[1].revenue)[0];
                 return top ? (
                   <div>
-                    <div style={{color:"#ffffff", fontWeight:700, fontSize:15}}>{top[0]}</div>
-                    <div style={{color:"#f59e0b", fontSize:13}}>${top[1].revenue.toFixed(2)} revenue · {top[1].conversions} conv</div>
+                    <div style={{color:"#2d1b30", fontWeight:700, fontSize:15}}>{top[0]}</div>
+                    <div style={{color:"#c2650a", fontSize:13}}>${top[1].revenue.toFixed(2)} revenue · {top[1].conversions} conv</div>
                   </div>
-                ) : <div style={{color:"#64748b"}}>No data</div>;
+                ) : <div style={{color:"#a888b3"}}>No data</div>;
               })()}
             </div>
             {/* Best CR */}
-            <div style={{background:"#1e293b", borderRadius:10, padding:"12px 16px", border:"1px solid rgba(255,255,255,0.06)"}}>
-              <div style={{fontSize:11, color:"#64748b", fontWeight:700, textTransform:"uppercase", marginBottom:8}}>📊 Best CR% (min 5 requests)</div>
+            <div className="m13-card-hover" style={{background:"#ffffff", borderRadius:16, padding:"14px 18px", border:"1px solid #f0e5ec", boxShadow:"0 4px 16px rgba(124,58,237,0.08), 0 1px 3px rgba(0,0,0,0.03)"}}>
+              <div style={{fontSize:11, color:"#a888b3", fontWeight:700, textTransform:"uppercase", marginBottom:8}}>📊 Best CR% (min 5 requests)</div>
               {(() => {
                 const rows = data.filter(r => Number(r.pin_req || 0) >= 5);
                 const top = rows.sort((a,b) => Number(b.cr || 0) - Number(a.cr || 0))[0];
                 return top ? (
                   <div>
-                    <div style={{color:"#ffffff", fontWeight:700, fontSize:15}}>{top.offer_name || top.offer || top.service_name || "Unknown"}</div>
-                    <div style={{color:"#8b5cf6", fontSize:13, marginTop:4}}>{Number(top.cr || 0).toFixed(1)}% CR · {top.carrier} {top.geo}</div>
+                    <div style={{color:"#2d1b30", fontWeight:700, fontSize:15}}>{top.offer_name || top.offer || top.service_name || "Unknown"}</div>
+                    <div style={{color:"#7c3aed", fontSize:13, marginTop:4}}>{Number(top.cr || 0).toFixed(1)}% CR · {top.carrier} {top.geo}</div>
                   </div>
-                ) : <div style={{color:"#64748b"}}>No data</div>;
+                ) : <div style={{color:"#a888b3"}}>No data</div>;
               })()}
             </div>
           </div>
         )}
 
         <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
-          <label style={{ fontSize: 13, color: "#94a3b8" }}>🕐 Timezone:</label>
+          <label style={{ fontSize: 13, color: "#8b6a9a" }}>🕐 Timezone:</label>
           <select value={timezone} onChange={e => setTimezone(e.target.value)}
-            style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "#1e293b", color: "#f1f5f9", fontSize: 13 }}>
+            style={{ padding: "8px 14px", borderRadius: 11, border: "1.5px solid #ecdde6", background: "#fff", color: "#3d2436", fontSize: 13, fontFamily: "'Lora',serif", cursor: "pointer" }}>
             <option value="Asia/Kolkata">IST — India</option>
             <option value="Asia/Jerusalem">IST — Palestine</option>
             <option value="Asia/Baghdad">AST — Iraq / Kuwait / Saudi</option>

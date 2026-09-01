@@ -25,7 +25,7 @@ router.get("/offer-groups", orgAuth, async (req, res) => {
         ) AS items,
         COALESCE(
           json_agg(DISTINCT
-            json_build_object('id', p.id, 'name', p.name)
+            json_build_object('id', p.id, 'name', p.name, 'api_key', p.api_key)
           ) FILTER (WHERE p.id IS NOT NULL), '[]'
         ) AS publishers
       FROM offer_groups og

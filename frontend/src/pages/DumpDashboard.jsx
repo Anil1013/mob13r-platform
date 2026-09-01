@@ -186,16 +186,16 @@ export default function DumpDashboard() {
           <span style={{ fontSize: 13, color: "#64748b" }}>Total: {total} records</span>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginLeft: "auto" }}>
             <button style={{ ...btn, opacity: currentPage === 0 ? 0.4 : 1 }} disabled={currentPage === 0} onClick={() => setCurrentPage(p => p - 1)}>← Prev</button>
-            <span style={{ fontSize: 13, color: "#94a3b8" }}>Page {currentPage + 1} of {Math.max(Math.ceil(total / PAGE_SIZE), 1)}</span>
+            <span style={{ fontSize: 13, color: "#a888b3" }}>Page {currentPage + 1} of {Math.max(Math.ceil(total / PAGE_SIZE), 1)}</span>
             <button style={{ ...btn, opacity: (currentPage + 1) * PAGE_SIZE >= total ? 0.4 : 1 }} disabled={(currentPage + 1) * PAGE_SIZE >= total} onClick={() => setCurrentPage(p => p + 1)}>Next →</button>
           </div>
         </div>
 
         {/* TABLE */}
-        <div style={{ background: "#0d1326", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, overflow: "hidden" }}>
+        <div style={{ background: "#ffffff", border: "1px solid #f0e5ec", borderRadius: 18, overflow: "hidden", boxShadow: "0 8px 30px rgba(124,58,237,0.09), 0 2px 6px rgba(0,0,0,0.03)" }}>
           <div style={{ overflowX: "auto" }}>
             {loading ? (
-              <p style={{ color: "#94a3b8", padding: 32, textAlign: "center" }}>Loading dump logs…</p>
+              <p style={{ color: "#a888b3", padding: 32, textAlign: "center" }}>Loading dump logs…</p>
             ) : (
               <table style={table}>
                 <thead>
@@ -262,7 +262,7 @@ export default function DumpDashboard() {
         </div>
 
         <p style={{ marginTop: 16, color: "#64748b", fontSize: 13 }}>
-          Showing <b style={{ color: "#94a3b8" }}>{filteredRows.length}</b> of {rows.length} loaded records
+          Showing <b style={{ color: "#a888b3" }}>{filteredRows.length}</b> of {rows.length} loaded records
         </p>
       </div>
     </>

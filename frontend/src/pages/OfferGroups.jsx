@@ -117,6 +117,7 @@ export default function OfferGroups() {
   };
 
   const copyURL = (groupId, apiKey) => {
+    if (!apiKey) { setMsg({ type: "error", text: "This publisher has no API key on file." }); setTimeout(() => setMsg(null), 3000); return; }
     const url = `https://backend.mob13r.com/api/publisher/group/${groupId}/pin/send?msisdn={msisdn}&geo={geo}&carrier={carrier}&x-api-key=${apiKey}`;
     navigator.clipboard.writeText(url);
     setMsg({ type: "success", text: "URL copied!" });
@@ -124,18 +125,18 @@ export default function OfferGroups() {
   };
 
   const s = {
-    page: { padding: 24, fontFamily: "Lora, serif", background: "#f5f6fa", minHeight: "100vh" },
-    title: { fontSize: 22, fontWeight: 700, color: "#1a1a2e", marginBottom: 4 },
-    sub: { color: "#94a3b8", fontSize: 13, marginBottom: 24 },
-    card: { background: "#fff", borderRadius: 12, padding: 20, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.07)" },
-    btn: { padding: "9px 18px", borderRadius: 8, border: "none", background: "#e94560", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 13 },
-    btnGreen: { padding: "9px 18px", borderRadius: 8, border: "none", background: "#16a34a", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 13 },
-    btnGray: { padding: "9px 18px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer", fontSize: 13 },
-    input: { width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 14, boxSizing: "border-box", outline: "none" },
-    label: { fontSize: 11, color: "#666", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: 5 },
+    page: { padding: 24, fontFamily: "'Lora', serif", background: "linear-gradient(180deg,#fdf8fb 0%,#fbf3f7 100%)", minHeight: "100vh", maxWidth: 1440, margin: "0 auto" },
+    title: { fontSize: 22, fontWeight: 700, color: "#2d1b30", marginBottom: 4 },
+    sub: { color: "#a888b3", fontSize: 13, marginBottom: 24 },
+    card: { background: "#fff", border: "1px solid #f0e5ec", borderRadius: 16, padding: 20, marginBottom: 16, boxShadow: "0 8px 30px rgba(124,58,237,0.09), 0 2px 6px rgba(0,0,0,0.03)" },
+    btn: { padding: "9px 18px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#7c3aed,#d4709a)", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 13, boxShadow: "0 4px 12px rgba(124,58,237,0.25)", fontFamily: "'Lora',serif" },
+    btnGreen: { padding: "9px 18px", borderRadius: 10, border: "none", background: "#16a34a", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 13, fontFamily: "'Lora',serif" },
+    btnGray: { padding: "9px 18px", borderRadius: 10, border: "1px solid #ecdde6", background: "#fff", cursor: "pointer", fontSize: 13, fontFamily: "'Lora',serif", color: "#8b6a9a" },
+    input: { width: "100%", padding: "9px 12px", borderRadius: 10, border: "1.5px solid #ecdde6", fontSize: 14, boxSizing: "border-box", outline: "none", fontFamily: "'Lora',serif" },
+    label: { fontSize: 11, color: "#8b6a9a", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: 5 },
     grid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 },
     grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 },
-    msg: (t) => ({ padding: "10px 16px", borderRadius: 8, marginBottom: 14, fontSize: 13, fontWeight: 500, background: t === "success" ? "#dcfce7" : "#fee2e2", color: t === "success" ? "#16a34a" : "#dc2626" }),
+    msg: (t) => ({ padding: "10px 16px", borderRadius: 10, marginBottom: 14, fontSize: 13, fontWeight: 500, background: t === "success" ? "#ecfdf5" : "#fef2f2", color: t === "success" ? "#16a34a" : "#dc2626", border: `1px solid ${t === "success" ? "#bbf7d0" : "#fecaca"}` }),
     tag: { display: "inline-block", padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 700 },
   };
 
@@ -144,13 +145,13 @@ export default function OfferGroups() {
   return (
     <>
       <Navbar />
-      <div style={s.page}>
+      <div style={s.page} className="m13-fade-in">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
           <div>
             <div style={s.title}>🔀 Offer Groups</div>
             <div style={s.sub}>Traffic distribution across multiple offers with weighted routing</div>
           </div>
-          <button style={s.btn} onClick={() => { setShowCreate(true); setEditGroup(null); setForm({ name:"", geo:"", carrier:"", description:"", items:[], publisher_ids:[] }); }}>
+          <button className="m13-btn" style={s.btn} onClick={() => { setShowCreate(true); setEditGroup(null); setForm({ name:"", geo:"", carrier:"", description:"", items:[], publisher_ids:[] }); }}>
             + Create Group
           </button>
         </div>
@@ -191,7 +192,7 @@ export default function OfferGroups() {
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <span style={{ fontSize: 13, color: weightColor, fontWeight: 700 }}>Total: {totalWeight}% {totalWeight !== 100 && "(must be 100%)"}</span>
                   <button style={s.btnGray} onClick={autoBalance}>⚖ Auto Balance</button>
-                  <button style={s.btnGreen} onClick={addItem}>+ Add Offer</button>
+                  <button className="m13-btn" style={s.btnGreen} onClick={addItem}>+ Add Offer</button>
                 </div>
               </div>
 
@@ -220,7 +221,7 @@ export default function OfferGroups() {
               {form.items.length > 0 && totalWeight > 0 && (
                 <div style={{ marginTop: 10, borderRadius: 8, overflow: "hidden", height: 20, display: "flex" }}>
                   {form.items.map((item, idx) => {
-                    const colors = ["#e94560","#3b82f6","#16a34a","#f59e0b","#8b5cf6","#06b6d4"];
+                    const colors = ["#7c3aed","#3b82f6","#16a34a","#f59e0b","#8b5cf6","#06b6d4"];
                     const o = offers.find(o => String(o.id) === String(item.offer_id));
                     return (
                       <div key={idx} title={`${o?.service_name || "Offer"}: ${item.weight}%`}
@@ -240,9 +241,9 @@ export default function OfferGroups() {
                 {publishers.map(p => (
                   <div key={p.id} onClick={() => togglePublisher(p.id)}
                     style={{ padding: "6px 14px", borderRadius: 20, cursor: "pointer", fontSize: 13, fontWeight: 600,
-                      background: form.publisher_ids.includes(p.id) ? "#e94560" : "#f1f5f9",
+                      background: form.publisher_ids.includes(p.id) ? "#7c3aed" : "#f1f5f9",
                       color: form.publisher_ids.includes(p.id) ? "#fff" : "#475569",
-                      border: form.publisher_ids.includes(p.id) ? "2px solid #e94560" : "2px solid transparent",
+                      border: form.publisher_ids.includes(p.id) ? "2px solid #7c3aed" : "2px solid transparent",
                     }}>
                     {form.publisher_ids.includes(p.id) ? "✓ " : ""}{p.name}
                   </div>
@@ -251,7 +252,7 @@ export default function OfferGroups() {
             </div>
 
             <div style={{ display: "flex", gap: 10 }}>
-              <button style={s.btnGreen} onClick={save}>{editGroup ? "Update Group" : "Create Group"}</button>
+              <button className="m13-btn" style={s.btnGreen} onClick={save}>{editGroup ? "Update Group" : "Create Group"}</button>
               <button style={s.btnGray} onClick={() => { setShowCreate(false); setEditGroup(null); }}>Cancel</button>
             </div>
           </div>
@@ -259,16 +260,19 @@ export default function OfferGroups() {
 
         {/* GROUPS LIST */}
         {loading ? (
-          <div style={{ textAlign: "center", color: "#94a3b8", padding: 40 }}>Loading...</div>
+          <div style={{ textAlign: "center", padding: 40 }}>
+            <span className="m13-spinner" />
+            <div style={{ marginTop: 10, color: "#a888b3", fontSize: 13 }}>Loading offer groups...</div>
+          </div>
         ) : groups.length === 0 ? (
           <div style={{ ...s.card, textAlign: "center", color: "#94a3b8", padding: 40 }}>
             No offer groups yet. Create one to start distributing traffic!
           </div>
         ) : groups.map(g => (
-          <div key={g.id} style={s.card}>
+          <div key={g.id} className="m13-card-hover" style={s.card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 16, color: "#1a1a2e", marginBottom: 4 }}>
+                <div style={{ fontWeight: 700, fontSize: 16, color: "#2d1b30", marginBottom: 4 }}>
                   {g.name}
                   <span style={{ ...s.tag, background: g.status === "active" ? "#dcfce7" : "#fee2e2", color: g.status === "active" ? "#16a34a" : "#dc2626", marginLeft: 8 }}>
                     {g.status}
@@ -293,7 +297,7 @@ export default function OfferGroups() {
                 <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6, fontWeight: 600, textTransform: "uppercase" }}>Traffic Distribution</div>
                 <div style={{ borderRadius: 8, overflow: "hidden", height: 28, display: "flex", marginBottom: 10 }}>
                   {g.items.map((item, idx) => {
-                    const colors = ["#e94560","#3b82f6","#16a34a","#f59e0b","#8b5cf6","#06b6d4"];
+                    const colors = ["#7c3aed","#3b82f6","#16a34a","#f59e0b","#8b5cf6","#06b6d4"];
                     return (
                       <div key={idx} title={`${item.offer_name}: ${item.weight}%`}
                         style={{ width: `${item.weight}%`, background: colors[idx % colors.length], display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -304,7 +308,7 @@ export default function OfferGroups() {
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {g.items.map((item, idx) => {
-                    const colors = ["#e94560","#3b82f6","#16a34a","#f59e0b","#8b5cf6","#06b6d4"];
+                    const colors = ["#7c3aed","#3b82f6","#16a34a","#f59e0b","#8b5cf6","#06b6d4"];
                     return (
                       <div key={idx} style={{ display:"flex", alignItems:"center", gap:6, fontSize:13 }}>
                         <span style={{ width:10, height:10, borderRadius:"50%", background:colors[idx%colors.length], display:"inline-block" }}/>
@@ -327,7 +331,7 @@ export default function OfferGroups() {
                   {g.publishers.map(p => (
                     <div key={p.id} style={{ display:"flex", alignItems:"center", gap:8 }}>
                       <span style={{ ...s.tag, background:"#f1f5f9", color:"#475569", padding:"4px 10px" }}>{p.name}</span>
-                      <button onClick={() => copyURL(g.id, "pub_xxx")}
+                      <button onClick={() => copyURL(g.id, p.api_key)}
                         style={{ fontSize:11, padding:"3px 10px", borderRadius:6, border:"1px solid #e2e8f0", background:"#fff", cursor:"pointer", color:"#0369a1" }}>
                         📋 Copy URL
                       </button>
