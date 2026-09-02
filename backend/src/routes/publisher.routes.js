@@ -51,7 +51,7 @@ function todayClause() {
       publisher.
    4. If nothing usable is found at any step, returns GLOBAL_CAP_REACHED.
 ===================================================== */
-async function resolveTrafficOffer(originalOfferId) {
+async function resolveTrafficOffer(originalOfferId, publisherId) {
   const origRes = await pool.query(
     `SELECT id, org_id, geo, carrier FROM offers WHERE id = $1`,
     [originalOfferId]
@@ -72,21 +72,33 @@ async function resolveTrafficOffer(originalOfferId) {
   const isUsable = (row) =>
     row.status === "active" && (row.daily_cap === null || row.today_hits < row.daily_cap);
 
-  // Step 1: is there an active Offer Group covering this geo+carrier?
-  const groupRes = await pool.query(
-    `SELECT id FROM offer_groups WHERE org_id = $1 AND geo = $2 AND carrier = $3 AND status = 'active' LIMIT 1`,
-    [orig.org_id, orig.geo, orig.carrier]
-  );
+  // Step 1: does this publisher have their OWN active Offer Group for this
+  // geo+carrier? Takes priority over the generic (no-publisher) group.
+  let groupRow = null;
+  if (publisherId) {
+    const ownRes = await pool.query(
+      `SELECT id FROM offer_groups WHERE org_id = $1 AND geo = $2 AND carrier = $3 AND status = 'active' AND publisher_id = $4`,
+      [orig.org_id, orig.geo, orig.carrier, publisherId]
+    );
+    if (ownRes.rows.length) groupRow = ownRes.rows[0];
+  }
+  if (!groupRow) {
+    const genRes = await pool.query(
+      `SELECT id FROM offer_groups WHERE org_id = $1 AND geo = $2 AND carrier = $3 AND status = 'active' AND publisher_id IS NULL`,
+      [orig.org_id, orig.geo, orig.carrier]
+    );
+    if (genRes.rows.length) groupRow = genRes.rows[0];
+  }
 
   let picked = null;
 
-  if (groupRes.rows.length) {
+  if (groupRow) {
     const items = await pool.query(
       `SELECT o.id, o.status, o.daily_cap, o.today_hits, ogi.weight
        FROM offer_group_items ogi
        JOIN offers o ON o.id = ogi.offer_id
        WHERE ogi.group_id = $1 AND ogi.status = 'active'`,
-      [groupRes.rows[0].id]
+      [groupRow.id]
     );
     const usableItems = items.rows.filter(isUsable);
     if (usableItems.length) {
@@ -180,7 +192,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
     // distribution among an Offer Group's members if one covers this
     // geo+carrier, otherwise the single requested offer directly, with
     // an active/non-capped FALLBACK offer as the last resort.
-    const resolved = await resolveTrafficOffer(offer_id);
+    const resolved = await resolveTrafficOffer(offer_id, publisher.id);
 
     if (resolved.error === "GLOBAL_CAP_REACHED") {
       return res.status(409).json({

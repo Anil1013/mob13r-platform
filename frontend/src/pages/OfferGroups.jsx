@@ -17,7 +17,7 @@ export default function OfferGroups() {
 
   const [form, setForm] = useState({
     name: "", geo: "", carrier: "", description: "",
-    items: [], publisher_ids: []
+    items: [], publisher_id: ""
   });
 
   const load = async () => {
@@ -89,7 +89,7 @@ export default function OfferGroups() {
         setMsg({ type: "success", text: editGroup ? "Group updated!" : "Group created!" });
         setShowCreate(false);
         setEditGroup(null);
-        setForm({ name: "", geo: "", carrier: "", description: "", items: [], publisher_ids: [] });
+        setForm({ name: "", geo: "", carrier: "", description: "", items: [], publisher_id: "" });
         load();
       } else {
         setMsg({ type: "error", text: data.message || data.error || `Failed (HTTP ${res.status})` });
@@ -123,7 +123,7 @@ export default function OfferGroups() {
       name: g.name, geo: g.geo || "", carrier: g.carrier || "",
       description: g.description || "",
       items: (g.items || []).map(i => ({ offer_id: i.offer_id, weight: i.weight })),
-      publisher_ids: (g.publishers || []).map(p => p.id),
+      publisher_id: g.publisher_id || "",
     });
     setShowCreate(true);
   };
@@ -187,6 +187,17 @@ export default function OfferGroups() {
             <div style={{ marginBottom: 14 }}>
               <span style={s.label}>Description (optional)</span>
               <input style={s.input} placeholder="Notes about this group..." value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} />
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <span style={s.label}>Publisher Scope</span>
+              <select style={s.input} value={form.publisher_id} onChange={e => setForm(f => ({...f, publisher_id: e.target.value}))}>
+                <option value="">All Publishers (generic — applies to anyone without their own group for this Geo/Carrier)</option>
+                {publishers.map(p => <option key={p.id} value={p.id}>Only for: {p.name}</option>)}
+              </select>
+              <div style={{ fontSize: 11, color: "#a888b3", marginTop: 4 }}>
+                A specific publisher's own group always takes priority over the generic one for the same Geo/Carrier — you can have both at once.
+              </div>
             </div>
 
             {/* OFFERS WITH WEIGHTS */}
@@ -262,7 +273,7 @@ export default function OfferGroups() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    {["S.No", "Group Name", "Geo", "Carrier", "Traffic Distribution", "Status", "Actions"].map(h => (
+                    {["S.No", "Group Name", "Publisher", "Geo", "Carrier", "Traffic Distribution", "Status", "Actions"].map(h => (
                       <th key={h} style={{ padding: "14px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#8b6a9a", textTransform: "uppercase", letterSpacing: "0.06em", background: "#faf6fb", borderBottom: "1.5px solid #eee0ea", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
                   </tr>
@@ -280,6 +291,11 @@ export default function OfferGroups() {
                           <div style={{ fontWeight: 700, color: "#2d1b30" }}>{g.name}</div>
                           {g.description && <div style={{ fontSize: 11, color: "#a888b3", marginTop: 2 }}>{g.description}</div>}
                           <div style={{ fontSize: 11, color: "#a888b3", marginTop: 2 }}>{g.offer_count} offers</div>
+                        </td>
+                        <td style={td}>
+                          <span style={{ ...s.tag, background: g.publisher_id ? "rgba(124,58,237,0.1)" : "rgba(148,163,184,0.15)", color: g.publisher_id ? "#7c3aed" : "#64748b" }}>
+                            {g.publisher_id ? `Only: ${g.publisher_name}` : "All Publishers"}
+                          </span>
                         </td>
                         <td style={td}>{g.geo ? <span style={s.tag}>{g.geo}</span> : "—"}</td>
                         <td style={td}>{g.carrier ? <span style={{...s.tag, background:"#f3ebfa", color:"#7c3aed"}}>{g.carrier}</span> : "—"}</td>
