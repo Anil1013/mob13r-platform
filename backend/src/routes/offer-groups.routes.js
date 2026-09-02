@@ -69,6 +69,23 @@ router.post("/offer-groups", orgAuth, async (req, res) => {
 
       const group = groupRes.rows[0];
 
+      if (items.length) {
+        const offerIds = items.map(i => i.offer_id);
+        const offerRows = await client.query(`SELECT id, geo, carrier, service_name FROM offers WHERE id = ANY($1) AND org_id = $2`, [offerIds, req.orgId]);
+        for (const item of items) {
+          const off = offerRows.rows.find(o => o.id === Number(item.offer_id));
+          if (!off) { await client.query("ROLLBACK"); return res.status(400).json({ status: "FAILED", error: "One of the selected offers was not found" }); }
+          if (group.geo && off.geo && off.geo !== group.geo) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ status: "FAILED", error: `"${off.service_name}"'s Geo (${off.geo}) doesn't match the group's Geo (${group.geo}).` });
+          }
+          if (group.carrier && off.carrier && off.carrier !== group.carrier) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ status: "FAILED", error: `"${off.service_name}"'s Carrier (${off.carrier}) doesn't match the group's Carrier (${group.carrier}).` });
+          }
+        }
+      }
+
       for (const item of items) {
         await client.query(`
           INSERT INTO offer_group_items (group_id, offer_id, weight)
@@ -136,7 +153,27 @@ router.put("/offer-groups/:id", orgAuth, async (req, res) => {
         WHERE id = $6 AND org_id = $7
       `, [name, geo, carrier, description, status, id, req.orgId, publisher_id !== undefined, publisherId ?? null]);
 
+      const updatedGroupRes = await client.query(`SELECT geo, carrier FROM offer_groups WHERE id = $1 AND org_id = $2`, [id, req.orgId]);
+      if (!updatedGroupRes.rows.length) { await client.query("ROLLBACK"); return res.status(404).json({ status: "FAILED", error: "Group not found" }); }
+      const currentGroup = updatedGroupRes.rows[0];
+
       if (items) {
+        if (items.length) {
+          const offerIds = items.map(i => i.offer_id);
+          const offerRows = await client.query(`SELECT id, geo, carrier, service_name FROM offers WHERE id = ANY($1) AND org_id = $2`, [offerIds, req.orgId]);
+          for (const item of items) {
+            const off = offerRows.rows.find(o => o.id === Number(item.offer_id));
+            if (!off) { await client.query("ROLLBACK"); return res.status(400).json({ status: "FAILED", error: "One of the selected offers was not found" }); }
+            if (currentGroup.geo && off.geo && off.geo !== currentGroup.geo) {
+              await client.query("ROLLBACK");
+              return res.status(400).json({ status: "FAILED", error: `"${off.service_name}"'s Geo (${off.geo}) doesn't match the group's Geo (${currentGroup.geo}).` });
+            }
+            if (currentGroup.carrier && off.carrier && off.carrier !== currentGroup.carrier) {
+              await client.query("ROLLBACK");
+              return res.status(400).json({ status: "FAILED", error: `"${off.service_name}"'s Carrier (${off.carrier}) doesn't match the group's Carrier (${currentGroup.carrier}).` });
+            }
+          }
+        }
         await client.query(`DELETE FROM offer_group_items WHERE group_id = $1`, [id]);
         for (const item of items) {
           await client.query(`

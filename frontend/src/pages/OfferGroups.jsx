@@ -234,7 +234,9 @@ export default function OfferGroups() {
                 <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 100px 36px", gap: 8, marginBottom: 8, alignItems: "center" }}>
                   <select style={s.input} value={item.offer_id} onChange={e => updateItem(idx, "offer_id", e.target.value)}>
                     <option value="">-- Select Offer --</option>
-                    {offers.map(o => <option key={o.id} value={o.id}>{o.service_name} | {o.geo} | {o.carrier}</option>)}
+                    {offers
+                      .filter(o => (!form.geo || !o.geo || o.geo === form.geo) && (!form.carrier || !o.carrier || o.carrier === form.carrier))
+                      .map(o => <option key={o.id} value={o.id}>{o.service_name} | {o.geo} | {o.carrier}</option>)}
                   </select>
                   <div style={{ position: "relative" }}>
                     <input style={{...s.input, paddingRight: 24}} type="number" min="0" max="100" placeholder="Weight"
