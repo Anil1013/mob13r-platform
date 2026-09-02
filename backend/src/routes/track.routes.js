@@ -67,17 +67,17 @@ async function pickCampaignFromGroup(groupId) {
 
 // 🎯 Resolves which campaign should ACTUALLY serve a click that came in
 // via a single campaign's OWN tracking_slug (not a group's slug):
-// 1. If this campaign's geo+carrier has an active traffic group covering
-//    it, weight-distribute among that group's active/non-capped members
-//    (the exact same distribution the group's own slug would use) —
-//    the affiliate keeps using their normal single-campaign URL, no
-//    separate group link needed.
-// 2. Otherwise (no group), just check the single requested campaign.
-// 3. If nothing from step 1/2 is usable (inactive/capped), fall through
+// 1. If this publisher has their OWN active traffic group for this
+//    geo+carrier, weight-distribute among THAT group's members.
+// 2. Else, if a GENERIC (no specific publisher) active group covers this
+//    geo+carrier, use that instead — the affiliate keeps using their
+//    normal single-campaign URL either way, no separate group link needed.
+// 3. Otherwise (no group at all), just check the single requested campaign.
+// 4. If nothing from step 1/2/3 is usable (inactive/capped), fall through
 //    to any active, non-capped campaign marked service_type='FALLBACK'
 //    for the same geo+carrier — no affiliate-assignment requirement.
-// 4. If nothing usable anywhere, returns { error: "GLOBAL_CAP_REACHED" }.
-async function resolveTrafficCampaign(originalCampaign) {
+// 5. If nothing usable anywhere, returns { error: "GLOBAL_CAP_REACHED" }.
+async function resolveTrafficCampaign(originalCampaign, affiliateId) {
   const { org_id, geo, carrier, vertical_id } = originalCampaign;
 
   // Reset stale today_clicks/today_conversions for every campaign sharing
@@ -96,13 +96,25 @@ async function resolveTrafficCampaign(originalCampaign) {
 
   let picked = null;
 
-  const groupRes = await pool.query(
-    `SELECT id FROM campaign_groups WHERE org_id = $1 AND geo = $2 AND carrier = $3 AND status = 'active' LIMIT 1`,
-    [org_id, geo, carrier]
-  );
+  // Publisher-specific group takes priority over the generic one.
+  let groupRow = null;
+  if (affiliateId) {
+    const ownRes = await pool.query(
+      `SELECT id FROM campaign_groups WHERE org_id = $1 AND geo = $2 AND carrier = $3 AND status = 'active' AND affiliate_id = $4`,
+      [org_id, geo, carrier, affiliateId]
+    );
+    if (ownRes.rows.length) groupRow = ownRes.rows[0];
+  }
+  if (!groupRow) {
+    const genRes = await pool.query(
+      `SELECT id FROM campaign_groups WHERE org_id = $1 AND geo = $2 AND carrier = $3 AND status = 'active' AND affiliate_id IS NULL`,
+      [org_id, geo, carrier]
+    );
+    if (genRes.rows.length) groupRow = genRes.rows[0];
+  }
 
-  if (groupRes.rows.length) {
-    const candidate = await pickCampaignFromGroup(groupRes.rows[0].id);
+  if (groupRow) {
+    const candidate = await pickCampaignFromGroup(groupRow.id);
     // Safety: only accept the pick if it's in the SAME vertical as what
     // the affiliate originally clicked — geo+carrier alone could
     // otherwise silently mix, say, a CPI campaign into CPA traffic if a
@@ -145,17 +157,31 @@ router.get("/click", async (req, res) => {
 
     const campRes = await pool.query(`SELECT * FROM campaigns WHERE tracking_slug = $1`, [cid]);
     if (campRes.rows.length) {
+      // Resolve the affiliate FIRST — a publisher-specific traffic group
+      // (if this affiliate has one for this geo+carrier) takes priority
+      // over the generic one, so resolveTrafficCampaign needs to know
+      // who's asking before it can pick the right group.
+      let affiliateId = null;
+      if (aff_id) {
+        const affRes = await pool.query(
+          `SELECT id FROM affiliates WHERE affiliate_key = $1 AND org_id = $2`,
+          [aff_id, campRes.rows[0].org_id]
+        );
+        if (affRes.rows.length) affiliateId = affRes.rows[0].id;
+      }
+
       // Affiliate is using a single campaign's own URL — transparently
-      // resolve which campaign actually serves it (weighted group
-      // distribution if one covers this geo+carrier, else this campaign
-      // directly, else a fallback campaign) rather than only checking
-      // this one campaign's own status.
+      // resolve which campaign actually serves it (their own publisher-
+      // specific group if they have one, else the generic group for this
+      // geo+carrier, else this campaign directly, else a fallback
+      // campaign) rather than only checking this one campaign's status.
       originalCampaignId = campRes.rows[0].id;
-      const resolved = await resolveTrafficCampaign(campRes.rows[0]);
+      const resolved = await resolveTrafficCampaign(campRes.rows[0], affiliateId);
       if (resolved.error === "GLOBAL_CAP_REACHED") {
         return res.status(429).send("Global cap reached — this campaign, its traffic group, and any fallback are all inactive or capped.");
       }
       campaign = resolved.campaign;
+      req._resolvedAffiliateId = affiliateId; // reuse below instead of looking it up again
     } else {
       const groupRes = await pool.query(`SELECT * FROM campaign_groups WHERE tracking_slug = $1`, [cid]);
       if (!groupRes.rows.length) return res.status(404).send("Tracking link not found");
@@ -202,8 +228,8 @@ router.get("/click", async (req, res) => {
       return res.status(429).send("Daily cap reached");
     }
 
-    let affiliateId = null;
-    if (aff_id) {
+    let affiliateId = req._resolvedAffiliateId ?? null;
+    if (affiliateId === null && aff_id) {
       const affRes = await pool.query(
         `SELECT id FROM affiliates WHERE affiliate_key = $1 AND org_id = $2`,
         [aff_id, campaign.org_id]

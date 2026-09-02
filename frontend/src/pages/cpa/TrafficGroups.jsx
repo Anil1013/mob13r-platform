@@ -12,16 +12,17 @@ export default function TrafficGroups() {
   const verticalId = searchParams.get("vertical_id") || "";
   const [groups, setGroups] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
+  const [affiliates, setAffiliates] = useState([]);
   const [toast, setToast] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", geo: "", carrier: "" });
+  const [form, setForm] = useState({ name: "", geo: "", carrier: "", affiliate_id: "" });
   const [saving, setSaving] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [items, setItems] = useState([]);
   const [addCampaignId, setAddCampaignId] = useState("");
   const [addWeight, setAddWeight] = useState("100");
 
-  useEffect(() => { if (!token) navigate("/login"); else { load(); loadCampaigns(); } }, [searchParams.get("vertical_id")]);
+  useEffect(() => { if (!token) navigate("/login"); else { load(); loadCampaigns(); loadAffiliates(); } }, [searchParams.get("vertical_id")]);
   const showToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2800); };
   const authHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
 
@@ -44,6 +45,13 @@ export default function TrafficGroups() {
       if (data.status === "SUCCESS") setCampaigns(data.data);
     } catch { /* non-blocking */ }
   };
+  const loadAffiliates = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/affiliates`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (data.status === "SUCCESS") setAffiliates(data.data);
+    } catch { /* non-blocking */ }
+  };
 
   const createGroup = async () => {
     if (!form.name.trim()) return showToast("Group name required", "error");
@@ -51,10 +59,10 @@ export default function TrafficGroups() {
     try {
       const res = await fetch(`${API_BASE}/api/campaign-groups`, {
         method: "POST", headers: authHeaders,
-        body: JSON.stringify({ name: form.name.trim(), geo: form.geo.trim(), carrier: form.carrier.trim() }),
+        body: JSON.stringify({ name: form.name.trim(), geo: form.geo.trim(), carrier: form.carrier.trim(), affiliate_id: form.affiliate_id || null }),
       });
       const data = await res.json();
-      if (data.status === "SUCCESS") { setGroups(g => [data.data, ...g]); setForm({ name: "", geo: "", carrier: "" }); setShowForm(false); showToast("Traffic group created"); }
+      if (data.status === "SUCCESS") { setGroups(g => [data.data, ...g]); setForm({ name: "", geo: "", carrier: "", affiliate_id: "" }); setShowForm(false); showToast("Traffic group created"); }
       else showToast(data.message || "Failed to create group", "error");
     } catch {
       showToast("Network error while creating group", "error");
@@ -155,8 +163,15 @@ export default function TrafficGroups() {
       {showForm && (
         <div style={{ background: "#fff", border: "1px solid #e8d0dc", borderRadius: 16, padding: 20, marginBottom: 24, display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
           <input style={input} placeholder="Group name (e.g. Zain IQ Bundle)" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-          <input style={input} placeholder="Geo (e.g. IQ) — optional label" value={form.geo} onChange={e => setForm(f => ({ ...f, geo: e.target.value }))} />
-          <input style={input} placeholder="Carrier (e.g. Zain) — optional label" value={form.carrier} onChange={e => setForm(f => ({ ...f, carrier: e.target.value }))} />
+          <input style={input} placeholder="Geo (e.g. IQ)" value={form.geo} onChange={e => setForm(f => ({ ...f, geo: e.target.value }))} />
+          <input style={input} placeholder="Carrier (e.g. Zain)" value={form.carrier} onChange={e => setForm(f => ({ ...f, carrier: e.target.value }))} />
+          <select style={{ ...input, gridColumn: "span 3" }} value={form.affiliate_id} onChange={e => setForm(f => ({ ...f, affiliate_id: e.target.value }))}>
+            <option value="">All Publishers (generic — applies to anyone without their own group for this Geo/Carrier)</option>
+            {affiliates.map(a => <option key={a.id} value={a.id}>Only for: {a.name}</option>)}
+          </select>
+          <div style={{ gridColumn: "span 3", fontSize: 11.5, color: "#9b7faa" }}>
+            A specific publisher's own group always takes priority over the generic one for the same Geo/Carrier — you can have both at once.
+          </div>
           <button style={{ ...btn, gridColumn: "span 3", opacity: saving ? 0.7 : 1 }} onClick={createGroup} disabled={saving}>{saving ? "Creating..." : "Create Traffic Group"}</button>
         </div>
       )}
@@ -169,6 +184,9 @@ export default function TrafficGroups() {
                 <strong style={{ color: "#4a2f3f" }}>{g.name}</strong>
                 <span style={{ color: "#b89ab0", fontSize: 12, marginLeft: 10 }}>{g.geo || ""} {g.carrier ? `/ ${g.carrier}` : ""}</span>
                 <span style={{ marginLeft: 10, fontSize: 10, background: "#f5eef8", color: "#9b7faa", padding: "2px 8px", borderRadius: 10 }}>{g.campaign_count || 0} campaigns</span>
+                <span style={{ marginLeft: 6, fontSize: 10, background: g.affiliate_id ? "rgba(124,58,237,0.1)" : "rgba(148,163,184,0.15)", color: g.affiliate_id ? "#7c3aed" : "#64748b", padding: "2px 8px", borderRadius: 10 }}>
+                  {g.affiliate_id ? `Only: ${g.affiliate_name}` : "All Publishers"}
+                </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <code style={{ fontSize: 11, background: "#f5eef8", padding: "3px 8px", borderRadius: 6 }}>{g.tracking_url}</code>

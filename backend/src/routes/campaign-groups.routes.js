@@ -15,12 +15,13 @@ function buildTrackingUrl(slug) {
 
 router.get("/", orgAuth, async (req, res) => {
   try {
-    const { vertical_id } = req.query;
+    const { vertical_id, affiliate_id } = req.query;
     const params = [req.orgId];
     let query = `
-      SELECT g.*,
+      SELECT g.*, af.name AS affiliate_name,
          COUNT(DISTINCT gi.id) FILTER (WHERE gi.status = 'active') AS campaign_count
        FROM campaign_groups g
+       LEFT JOIN affiliates af ON af.id = g.affiliate_id
        LEFT JOIN campaign_group_items gi ON gi.group_id = g.id
        WHERE g.org_id = $1`;
     if (vertical_id) {
@@ -31,7 +32,8 @@ router.get("/", orgAuth, async (req, res) => {
         WHERE gi2.group_id = g.id AND gc.vertical_id = $${params.length}
       )`;
     }
-    query += ` GROUP BY g.id ORDER BY g.id DESC`;
+    if (affiliate_id) { params.push(affiliate_id); query += ` AND g.affiliate_id = $${params.length}`; }
+    query += ` GROUP BY g.id, af.name ORDER BY g.id DESC`;
     const result = await pool.query(query, params);
     const data = result.rows.map(r => ({ ...r, tracking_url: buildTrackingUrl(r.tracking_slug) }));
     res.json({ status: "SUCCESS", data });
@@ -43,8 +45,15 @@ router.get("/", orgAuth, async (req, res) => {
 
 router.post("/", orgAuth, async (req, res) => {
   try {
-    const { name, geo, carrier } = req.body;
+    const { name, geo, carrier, affiliate_id } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ status: "FAILED", message: "Group name required" });
+
+    let affiliateId = null;
+    if (affiliate_id) {
+      const affCheck = await pool.query(`SELECT id FROM affiliates WHERE id = $1 AND org_id = $2`, [affiliate_id, req.orgId]);
+      if (!affCheck.rows.length) return res.status(400).json({ status: "FAILED", message: "Publisher not found" });
+      affiliateId = affiliate_id;
+    }
 
     let slug = generateSlug();
     for (let i = 0; i < 5; i++) {
@@ -54,15 +63,18 @@ router.post("/", orgAuth, async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO campaign_groups (org_id, name, geo, carrier, tracking_slug, status)
-       VALUES ($1,$2,$3,$4,$5,'active') RETURNING *`,
-      [req.orgId, name.trim(), (geo || "").trim().toUpperCase(), (carrier || "").trim(), slug]
+      `INSERT INTO campaign_groups (org_id, name, geo, carrier, affiliate_id, tracking_slug, status)
+       VALUES ($1,$2,$3,$4,$5,$6,'active') RETURNING *`,
+      [req.orgId, name.trim(), (geo || "").trim().toUpperCase(), (carrier || "").trim(), affiliateId, slug]
     );
     const row = result.rows[0];
     res.json({ status: "SUCCESS", data: { ...row, tracking_url: buildTrackingUrl(row.tracking_slug) } });
   } catch (err) {
-    if (err.code === "23505" && err.constraint === "idx_campaign_groups_unique_active_geo_carrier") {
-      return res.status(400).json({ status: "FAILED", message: "An active traffic group already exists for this Geo/Carrier — pause or edit the existing one instead of creating a second one." });
+    if (err.code === "23505" && err.constraint === "idx_campaign_groups_unique_active_publisher_scoped") {
+      return res.status(400).json({ status: "FAILED", message: "This publisher already has an active traffic group for this Geo/Carrier — pause or edit the existing one instead of creating a second one." });
+    }
+    if (err.code === "23505" && err.constraint === "idx_campaign_groups_unique_active_generic") {
+      return res.status(400).json({ status: "FAILED", message: "An active generic (no specific publisher) traffic group already exists for this Geo/Carrier — pause or edit the existing one instead of creating a second one." });
     }
     console.error("CREATE CAMPAIGN GROUP ERROR:", err.message);
     res.status(500).json({ status: "FAILED", message: "Failed to create traffic group" });
@@ -80,8 +92,11 @@ router.patch("/:id/status", orgAuth, async (req, res) => {
     if (!result.rows.length) return res.status(404).json({ status: "FAILED", message: "Group not found" });
     res.json({ status: "SUCCESS", data: result.rows[0] });
   } catch (err) {
-    if (err.code === "23505" && err.constraint === "idx_campaign_groups_unique_active_geo_carrier") {
-      return res.status(400).json({ status: "FAILED", message: "Can't reactivate — another active traffic group already covers this Geo/Carrier." });
+    if (err.code === "23505" && err.constraint === "idx_campaign_groups_unique_active_publisher_scoped") {
+      return res.status(400).json({ status: "FAILED", message: "Can't reactivate — this publisher already has another active traffic group for this Geo/Carrier." });
+    }
+    if (err.code === "23505" && err.constraint === "idx_campaign_groups_unique_active_generic") {
+      return res.status(400).json({ status: "FAILED", message: "Can't reactivate — another active generic traffic group already covers this Geo/Carrier." });
     }
     console.error("UPDATE GROUP STATUS ERROR:", err.message);
     res.status(500).json({ status: "FAILED", message: "Failed to update status" });
