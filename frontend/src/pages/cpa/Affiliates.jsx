@@ -193,7 +193,7 @@ export default function Affiliates() {
                   <button style={{ ...btn, padding: "3px 10px", fontSize: 11 }} onClick={() => copy(a.affiliate_key, "Publisher key")}>Copy</button>
                 </div>
 
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#9b7faa", textTransform: "uppercase", marginBottom: 6 }}>Personalized Tracking Links</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#9b7faa", textTransform: "uppercase", marginBottom: 6 }}>Personalized Tracking Links (assigned campaigns only)</div>
                 {(() => {
                   const geoOptions = [...new Set(links.map(l => l.geo).filter(Boolean))].sort();
                   const carrierOptions = [...new Set(links.map(l => l.carrier).filter(Boolean))].sort();
@@ -261,7 +261,7 @@ export default function Affiliates() {
                                 </tr>
                               ))}
                               {!sorted.length && (
-                                <tr><td colSpan={6} style={{ ...colCell, textAlign: "center", color: "#b89ab0" }}>{links.length ? "No links match your filters." : "No active campaigns yet."}</td></tr>
+                                <tr><td colSpan={6} style={{ ...colCell, textAlign: "center", color: "#b89ab0" }}>{links.length ? "No links match your filters." : "No assigned campaigns yet — create an assignment on the Assignments page first."}</td></tr>
                               )}
                             </tbody>
                           </table>

@@ -92,7 +92,13 @@ router.patch("/:id/status", orgAuth, async (req, res) => {
   }
 });
 
-// Personalized tracking links for this affiliate across all active campaigns
+// Personalized tracking links for this affiliate — only campaigns they
+// actually have a publisher_assignments row for (direct, or via a group),
+// since those are the only ones they'll actually get credited/paid for.
+// Previously listed EVERY active campaign in the org regardless of
+// assignment — an admin could hand a publisher a link for a campaign they
+// had no assignment to, and that publisher's real traffic would be
+// correctly billed to the advertiser but never paid out to them.
 router.get("/:id/campaigns", orgAuth, async (req, res) => {
   try {
     const { vertical_id } = req.query;
@@ -100,11 +106,19 @@ router.get("/:id/campaigns", orgAuth, async (req, res) => {
     if (!affRes.rows.length) return res.status(404).json({ status: "FAILED", message: "Affiliate not found" });
     const affiliate = affRes.rows[0];
 
-    const params = [req.orgId];
+    const params = [req.orgId, affiliate.id];
     let query = `SELECT c.*, v.name AS vertical_name, a.name AS advertiser_name FROM campaigns c
        JOIN verticals v ON v.id = c.vertical_id
        JOIN advertisers a ON a.id = c.advertiser_id
-       WHERE c.org_id = $1 AND c.status = 'active'`;
+       WHERE c.org_id = $1 AND c.status = 'active'
+         AND EXISTS (
+           SELECT 1 FROM publisher_assignments pa
+           WHERE pa.affiliate_id = $2 AND pa.status = 'active'
+             AND (
+               pa.campaign_id = c.id
+               OR pa.group_id IN (SELECT group_id FROM campaign_group_items WHERE campaign_id = c.id)
+             )
+         )`;
     if (vertical_id) { params.push(vertical_id); query += ` AND c.vertical_id = $${params.length}`; }
     query += ` ORDER BY c.id DESC`;
     const camps = await pool.query(query, params);
