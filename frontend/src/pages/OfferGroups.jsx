@@ -100,6 +100,25 @@ export default function OfferGroups() {
     setTimeout(() => setMsg(null), 4000);
   };
 
+  const toggleStatus = async (g) => {
+    const ns = g.status === "active" ? "paused" : "active";
+    const prev = groups;
+    setGroups(gs => gs.map(x => x.id === g.id ? { ...x, status: ns } : x));
+    try {
+      const res = await fetch(`${API_BASE}/api/offer-groups/${g.id}`, { method: "PUT", headers: headers(), body: JSON.stringify({ status: ns }) });
+      const data = await res.json().catch(() => ({}));
+      if (data.status !== "SUCCESS") {
+        setGroups(prev);
+        setMsg({ type: "error", text: data.message || data.error || "Failed to update status" });
+        setTimeout(() => setMsg(null), 4000);
+      }
+    } catch {
+      setGroups(prev);
+      setMsg({ type: "error", text: "Network error while updating status" });
+      setTimeout(() => setMsg(null), 4000);
+    }
+  };
+
   const deleteGroup = async (id, name) => {
     if (!confirm(`Delete group "${name}"?`)) return;
     try {
@@ -322,8 +341,8 @@ export default function OfferGroups() {
                           ) : <span style={{ color: "#a888b3" }}>No offers added</span>}
                         </td>
                         <td style={td}>
-                          <span style={{ ...s.tag, background: g.status === "active" ? "#ecfdf5" : "#fef2f2", color: g.status === "active" ? "#16a34a" : "#dc2626" }}>
-                            {g.status}
+                          <span style={{ ...s.tag, cursor: "pointer", background: g.status === "active" ? "#ecfdf5" : "#fef2f2", color: g.status === "active" ? "#16a34a" : "#dc2626" }} onClick={() => toggleStatus(g)} title="Click to toggle">
+                            {g.status === "active" ? "● active" : "● paused"}
                           </span>
                         </td>
                         <td style={{ ...td, whiteSpace: "nowrap" }}>
