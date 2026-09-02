@@ -103,6 +103,73 @@ router.patch("/:id/status", orgAuth, async (req, res) => {
   }
 });
 
+// Full edit — name, geo, carrier, and which publisher (if any) it's scoped
+// to. Previously only status could be changed; a typo'd geo/carrier or a
+// wrong publisher scope had no fix except abandoning the group entirely.
+router.patch("/:id", orgAuth, async (req, res) => {
+  try {
+    const { name, geo, carrier, affiliate_id } = req.body;
+
+    let affiliateId;
+    if (affiliate_id !== undefined) {
+      if (affiliate_id === null || affiliate_id === "") {
+        affiliateId = null;
+      } else {
+        const affCheck = await pool.query(`SELECT id FROM affiliates WHERE id = $1 AND org_id = $2`, [affiliate_id, req.orgId]);
+        if (!affCheck.rows.length) return res.status(400).json({ status: "FAILED", message: "Publisher not found" });
+        affiliateId = affiliate_id;
+      }
+    }
+
+    const result = await pool.query(
+      `UPDATE campaign_groups SET
+        name = COALESCE($1, name),
+        geo = CASE WHEN $2::boolean THEN $3 ELSE geo END,
+        carrier = CASE WHEN $4::boolean THEN $5 ELSE carrier END,
+        affiliate_id = CASE WHEN $6::boolean THEN $7 ELSE affiliate_id END
+       WHERE id = $8 AND org_id = $9 RETURNING *`,
+      [
+        name && name.trim() ? name.trim() : null,
+        geo !== undefined, (geo || "").trim().toUpperCase(),
+        carrier !== undefined, (carrier || "").trim(),
+        affiliate_id !== undefined, affiliateId ?? null,
+        req.params.id, req.orgId,
+      ]
+    );
+    if (!result.rows.length) return res.status(404).json({ status: "FAILED", message: "Group not found" });
+    const row = result.rows[0];
+    res.json({ status: "SUCCESS", data: { ...row, tracking_url: buildTrackingUrl(row.tracking_slug) } });
+  } catch (err) {
+    if (err.code === "23505" && err.constraint === "idx_campaign_groups_unique_active_publisher_scoped") {
+      return res.status(400).json({ status: "FAILED", message: "This publisher already has another active traffic group for that Geo/Carrier." });
+    }
+    if (err.code === "23505" && err.constraint === "idx_campaign_groups_unique_active_generic") {
+      return res.status(400).json({ status: "FAILED", message: "An active generic traffic group already exists for that Geo/Carrier." });
+    }
+    console.error("UPDATE CAMPAIGN GROUP ERROR:", err.message);
+    res.status(500).json({ status: "FAILED", message: "Failed to update traffic group" });
+  }
+});
+
+// Delete the whole group (and its items, via ON DELETE CASCADE). A group
+// that's actively serving traffic can't be removed by accident — pause it
+// first (this mirrors how campaigns/offers require pausing before other
+// destructive actions elsewhere in the app).
+router.delete("/:id", orgAuth, async (req, res) => {
+  try {
+    const g = await pool.query(`SELECT status FROM campaign_groups WHERE id = $1 AND org_id = $2`, [req.params.id, req.orgId]);
+    if (!g.rows.length) return res.status(404).json({ status: "FAILED", message: "Group not found" });
+    if (g.rows[0].status === "active") {
+      return res.status(400).json({ status: "FAILED", message: "Pause this traffic group before deleting it." });
+    }
+    await pool.query(`DELETE FROM campaign_groups WHERE id = $1 AND org_id = $2`, [req.params.id, req.orgId]);
+    res.json({ status: "SUCCESS", message: "Traffic group deleted" });
+  } catch (err) {
+    console.error("DELETE CAMPAIGN GROUP ERROR:", err.message);
+    res.status(500).json({ status: "FAILED", message: "Failed to delete traffic group" });
+  }
+});
+
 // Campaigns inside a group, with their traffic-split weight
 router.get("/:id/items", orgAuth, async (req, res) => {
   try {
@@ -131,10 +198,23 @@ router.post("/:id/items", orgAuth, async (req, res) => {
     const w = weight === undefined || weight === null || weight === "" ? 100 : Number(weight);
     if (isNaN(w) || w < 0 || w > 100) return res.status(400).json({ status: "FAILED", message: "weight must be 0-100" });
 
-    const groupCheck = await pool.query(`SELECT id FROM campaign_groups WHERE id = $1 AND org_id = $2`, [req.params.id, req.orgId]);
+    const groupCheck = await pool.query(`SELECT id, geo, carrier FROM campaign_groups WHERE id = $1 AND org_id = $2`, [req.params.id, req.orgId]);
     if (!groupCheck.rows.length) return res.status(404).json({ status: "FAILED", message: "Group not found" });
-    const campCheck = await pool.query(`SELECT id FROM campaigns WHERE id = $1 AND org_id = $2`, [campaign_id, req.orgId]);
+    const group = groupCheck.rows[0];
+
+    const campCheck = await pool.query(`SELECT id, geo, carrier FROM campaigns WHERE id = $1 AND org_id = $2`, [campaign_id, req.orgId]);
     if (!campCheck.rows.length) return res.status(400).json({ status: "FAILED", message: "Campaign not found" });
+    const camp = campCheck.rows[0];
+
+    // The resolver picks group members purely by weight, with no per-item
+    // geo/carrier check — a mismatched campaign here would silently get
+    // mixed into traffic meant for a different geo/carrier entirely.
+    if (group.geo && camp.geo && group.geo !== camp.geo) {
+      return res.status(400).json({ status: "FAILED", message: `This campaign's Geo (${camp.geo}) doesn't match the group's Geo (${group.geo}).` });
+    }
+    if (group.carrier && camp.carrier && group.carrier !== camp.carrier) {
+      return res.status(400).json({ status: "FAILED", message: `This campaign's Carrier (${camp.carrier}) doesn't match the group's Carrier (${group.carrier}).` });
+    }
 
     const exists = await pool.query(`SELECT id FROM campaign_group_items WHERE group_id = $1 AND campaign_id = $2`, [req.params.id, campaign_id]);
     if (exists.rows.length) return res.status(400).json({ status: "FAILED", message: "This campaign is already in the group" });

@@ -21,6 +21,8 @@ export default function TrafficGroups() {
   const [items, setItems] = useState([]);
   const [addCampaignId, setAddCampaignId] = useState("");
   const [addWeight, setAddWeight] = useState("100");
+  const [editingGroupId, setEditingGroupId] = useState(null);
+  const [editForm, setEditForm] = useState({ name: "", geo: "", carrier: "", affiliate_id: "" });
 
   useEffect(() => { if (!token) navigate("/login"); else { load(); loadCampaigns(); loadAffiliates(); } }, [searchParams.get("vertical_id")]);
   const showToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2800); };
@@ -81,6 +83,46 @@ export default function TrafficGroups() {
     } catch {
       setGroups(prev);
       showToast("Network error", "error");
+    }
+  };
+
+  const startEditGroup = (g, e) => {
+    e.stopPropagation();
+    setEditingGroupId(g.id);
+    setEditForm({ name: g.name, geo: g.geo || "", carrier: g.carrier || "", affiliate_id: g.affiliate_id || "" });
+  };
+
+  const saveEditGroup = async (id) => {
+    if (!editForm.name.trim()) return showToast("Group name required", "error");
+    try {
+      const res = await fetch(`${API_BASE}/api/campaign-groups/${id}`, {
+        method: "PATCH", headers: authHeaders,
+        body: JSON.stringify({ name: editForm.name.trim(), geo: editForm.geo.trim(), carrier: editForm.carrier.trim(), affiliate_id: editForm.affiliate_id || null }),
+      });
+      const data = await res.json();
+      if (data.status === "SUCCESS") {
+        setGroups(g => g.map(x => x.id === id ? data.data : x));
+        setEditingGroupId(null);
+        showToast("Traffic group updated");
+      } else {
+        showToast(data.message || "Failed to update group", "error");
+      }
+    } catch {
+      showToast("Network error while updating group", "error");
+    }
+  };
+
+  const deleteGroup = async (g, e) => {
+    e.stopPropagation();
+    if (g.status === "active") return showToast("Pause this traffic group before deleting it", "error");
+    if (!confirm(`Delete traffic group "${g.name}"? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/campaign-groups/${g.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (data.status === "SUCCESS") { setGroups(gs => gs.filter(x => x.id !== g.id)); showToast("Traffic group deleted"); }
+      else showToast(data.message || "Failed to delete group", "error");
+    } catch {
+      showToast("Network error while deleting group", "error");
     }
   };
 
@@ -179,6 +221,21 @@ export default function TrafficGroups() {
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {groups.map(g => (
           <div key={g.id} style={{ background: "#fff", border: "1px solid #e8d0dc", borderRadius: 16, overflow: "hidden" }}>
+            {editingGroupId === g.id ? (
+              <div style={{ padding: "16px 18px", display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
+                <input style={input} placeholder="Group name" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
+                <input style={input} placeholder="Geo (e.g. IQ)" value={editForm.geo} onChange={e => setEditForm(f => ({ ...f, geo: e.target.value }))} />
+                <input style={input} placeholder="Carrier (e.g. Zain)" value={editForm.carrier} onChange={e => setEditForm(f => ({ ...f, carrier: e.target.value }))} />
+                <select style={{ ...input, gridColumn: "span 3" }} value={editForm.affiliate_id} onChange={e => setEditForm(f => ({ ...f, affiliate_id: e.target.value }))}>
+                  <option value="">All Publishers (generic)</option>
+                  {affiliates.map(a => <option key={a.id} value={a.id}>Only for: {a.name}</option>)}
+                </select>
+                <div style={{ gridColumn: "span 3", display: "flex", gap: 8 }}>
+                  <button style={btn} onClick={() => saveEditGroup(g.id)}>Save</button>
+                  <button style={{ ...btn, background: "#f5eef8", color: "#4a2f3f" }} onClick={() => setEditingGroupId(null)}>Cancel</button>
+                </div>
+              </div>
+            ) : (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px", cursor: "pointer", flexWrap: "wrap", gap: 10 }} onClick={() => openGroup(g)}>
               <div>
                 <strong style={{ color: "#4a2f3f" }}>{g.name}</strong>
@@ -191,12 +248,15 @@ export default function TrafficGroups() {
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <code style={{ fontSize: 11, background: "#f5eef8", padding: "3px 8px", borderRadius: 6 }}>{g.tracking_url}</code>
                 <button style={{ ...btn, padding: "4px 10px", fontSize: 11 }} onClick={(e) => { e.stopPropagation(); copy(g.tracking_url); }}>Copy</button>
+                <button style={{ ...btn, padding: "4px 10px", fontSize: 11, background: "#f5eef8", color: "#4a2f3f" }} onClick={(e) => startEditGroup(g, e)}>Edit</button>
+                <button style={{ ...btnRed, padding: "4px 10px", fontSize: 11 }} onClick={(e) => deleteGroup(g, e)}>Delete</button>
                 <span style={badge(g.status === "active" ? "green" : "red")} onClick={(e) => { e.stopPropagation(); toggleStatus(g); }}>
                   {g.status === "active" ? "● Active" : "● Paused"}
                 </span>
                 <span>{expandedId === g.id ? "▲" : "▼"}</span>
               </div>
             </div>
+            )}
 
             {expandedId === g.id && (
               <div style={{ borderTop: "1px solid #f0e0e8", padding: "16px 18px", background: "#fdf6f9" }}>
@@ -225,9 +285,12 @@ export default function TrafficGroups() {
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <select style={{ ...input, flex: 1, minWidth: 200 }} value={addCampaignId} onChange={e => setAddCampaignId(e.target.value)}>
                     <option value="">Select campaign to add...</option>
-                    {campaigns.filter(c => !items.some(it => it.campaign_id === c.id)).map(c => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.advertiser_name})</option>
-                    ))}
+                    {campaigns
+                      .filter(c => !items.some(it => it.campaign_id === c.id))
+                      .filter(c => (!g.geo || !c.geo || c.geo === g.geo) && (!g.carrier || !c.carrier || c.carrier === g.carrier))
+                      .map(c => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.advertiser_name})</option>
+                      ))}
                   </select>
                   <input type="number" min="0" max="100" style={{ ...input, width: 90 }} placeholder="Weight" value={addWeight} onChange={e => setAddWeight(e.target.value)} />
                   <button style={btn} onClick={() => addItem(g.id)}>+ Add</button>
