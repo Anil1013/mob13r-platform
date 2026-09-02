@@ -186,7 +186,19 @@ router.get("/click", async (req, res) => {
       campaign.today_conversions = resetRes.rows[0].today_conversions;
     }
 
-    if (campaign.daily_cap && campaign.today_clicks >= campaign.daily_cap) {
+    // Atomically increment today_clicks ONLY if still under cap — closes the
+    // race condition where multiple simultaneous clicks near the cap
+    // boundary could all pass a separate check-then-increment and overshoot
+    // the daily_cap. A plain UPDATE...RETURNING is atomic per-row in
+    // Postgres: concurrent requests serialize on this row, so only as many
+    // as remain under cap succeed.
+    const incRes = await pool.query(
+      `UPDATE campaigns SET today_clicks = today_clicks + 1
+       WHERE id = $1 AND (daily_cap IS NULL OR today_clicks < daily_cap)
+       RETURNING today_clicks`,
+      [campaign.id]
+    );
+    if (!incRes.rows.length) {
       return res.status(429).send("Daily cap reached");
     }
 
@@ -209,8 +221,6 @@ router.get("/click", async (req, res) => {
       [clickId, campaign.org_id, campaign.id, originalCampaignId, affiliateId,
        sub1 || null, sub2 || null, sub3 || null, sub4 || null, sub5 || null, ip, userAgent]
     );
-
-    await pool.query(`UPDATE campaigns SET today_clicks = today_clicks + 1 WHERE id = $1`, [campaign.id]);
 
     const destination = fillMacros(campaign.destination_url, {
       click_id: clickId,

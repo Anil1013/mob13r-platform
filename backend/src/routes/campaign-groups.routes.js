@@ -61,6 +61,9 @@ router.post("/", orgAuth, async (req, res) => {
     const row = result.rows[0];
     res.json({ status: "SUCCESS", data: { ...row, tracking_url: buildTrackingUrl(row.tracking_slug) } });
   } catch (err) {
+    if (err.code === "23505" && err.constraint === "idx_campaign_groups_unique_active_geo_carrier") {
+      return res.status(400).json({ status: "FAILED", message: "An active traffic group already exists for this Geo/Carrier — pause or edit the existing one instead of creating a second one." });
+    }
     console.error("CREATE CAMPAIGN GROUP ERROR:", err.message);
     res.status(500).json({ status: "FAILED", message: "Failed to create traffic group" });
   }
@@ -77,6 +80,9 @@ router.patch("/:id/status", orgAuth, async (req, res) => {
     if (!result.rows.length) return res.status(404).json({ status: "FAILED", message: "Group not found" });
     res.json({ status: "SUCCESS", data: result.rows[0] });
   } catch (err) {
+    if (err.code === "23505" && err.constraint === "idx_campaign_groups_unique_active_geo_carrier") {
+      return res.status(400).json({ status: "FAILED", message: "Can't reactivate — another active traffic group already covers this Geo/Carrier." });
+    }
     console.error("UPDATE GROUP STATUS ERROR:", err.message);
     res.status(500).json({ status: "FAILED", message: "Failed to update status" });
   }

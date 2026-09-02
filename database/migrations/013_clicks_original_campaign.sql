@@ -16,3 +16,13 @@ ALTER TABLE clicks
 UPDATE clicks SET original_campaign_id = campaign_id WHERE original_campaign_id IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_clicks_original_campaign ON clicks(original_campaign_id);
+
+-- Prevents two ACTIVE traffic groups from ever covering the same
+-- geo+carrier for the same org — resolveTrafficCampaign()'s automatic
+-- group lookup (LIMIT 1, no ORDER BY) would otherwise pick between them
+-- non-deterministically. Paused groups are exempt so an admin can still
+-- have an old inactive one lying around while setting up a replacement.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_campaign_groups_unique_active_geo_carrier
+  ON campaign_groups(org_id, geo, carrier)
+  WHERE status = 'active';
+
