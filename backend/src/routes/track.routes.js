@@ -200,31 +200,49 @@ router.get("/click", async (req, res) => {
     // cap check right below sees the FRESH count, not the value from before reset
     // (without this, the first click of a new day on a campaign that hit its cap
     // yesterday would be wrongly rejected as still capped).
-    const resetRes = await pool.query(
-      `UPDATE campaigns SET today_clicks = 0, today_conversions = 0,
-         last_reset_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
-       WHERE id = $1 AND last_reset_date < (NOW() AT TIME ZONE 'Asia/Kolkata')::date
-       RETURNING today_clicks, today_conversions`,
-      [campaign.id]
-    );
-    if (resetRes.rows.length) {
-      campaign.today_clicks = resetRes.rows[0].today_clicks;
-      campaign.today_conversions = resetRes.rows[0].today_conversions;
-    }
+    const resetAndClaim = async (camp) => {
+      await pool.query(
+        `UPDATE campaigns SET today_clicks = 0, today_conversions = 0,
+           last_reset_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+         WHERE id = $1 AND last_reset_date < (NOW() AT TIME ZONE 'Asia/Kolkata')::date`,
+        [camp.id]
+      );
+      // Atomically increment today_clicks ONLY if still under cap — closes the
+      // race condition where multiple simultaneous clicks near the cap
+      // boundary could all pass a separate check-then-increment and overshoot
+      // the daily_cap. A plain UPDATE...RETURNING is atomic per-row in
+      // Postgres: concurrent requests serialize on this row, so only as many
+      // as remain under cap succeed.
+      const incRes = await pool.query(
+        `UPDATE campaigns SET today_clicks = today_clicks + 1
+         WHERE id = $1 AND (daily_cap IS NULL OR today_clicks < daily_cap)
+         RETURNING today_clicks`,
+        [camp.id]
+      );
+      return incRes.rows.length > 0;
+    };
 
-    // Atomically increment today_clicks ONLY if still under cap — closes the
-    // race condition where multiple simultaneous clicks near the cap
-    // boundary could all pass a separate check-then-increment and overshoot
-    // the daily_cap. A plain UPDATE...RETURNING is atomic per-row in
-    // Postgres: concurrent requests serialize on this row, so only as many
-    // as remain under cap succeed.
-    const incRes = await pool.query(
-      `UPDATE campaigns SET today_clicks = today_clicks + 1
-       WHERE id = $1 AND (daily_cap IS NULL OR today_clicks < daily_cap)
-       RETURNING today_clicks`,
-      [campaign.id]
-    );
-    if (!incRes.rows.length) {
+    let claimed = await resetAndClaim(campaign);
+    if (!claimed) {
+      // Lost the race — this campaign got capped in the exact window between
+      // resolveTrafficCampaign()'s check and this increment. Don't just fail
+      // the click outright: try a fallback campaign the same way the resolver
+      // itself would have, instead of discarding perfectly good fallback
+      // capacity because of an unlucky timing coincidence.
+      const fbRes = await pool.query(
+        `SELECT * FROM campaigns
+         WHERE org_id = $1 AND geo = $2 AND carrier = $3 AND vertical_id = $4
+           AND service_type = 'FALLBACK' AND status = 'active' AND id != $5
+           AND (daily_cap IS NULL OR today_clicks < daily_cap)
+         ORDER BY id ASC LIMIT 1`,
+        [campaign.org_id, campaign.geo, campaign.carrier, campaign.vertical_id, campaign.id]
+      );
+      if (fbRes.rows.length && await resetAndClaim(fbRes.rows[0])) {
+        campaign = fbRes.rows[0];
+        claimed = true;
+      }
+    }
+    if (!claimed) {
       return res.status(429).send("Daily cap reached");
     }
 
