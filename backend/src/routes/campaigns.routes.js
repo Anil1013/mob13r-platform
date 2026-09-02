@@ -178,4 +178,22 @@ router.patch("/:id/status", orgAuth, async (req, res) => {
   }
 });
 
+router.patch("/:id/service-type", orgAuth, async (req, res) => {
+  try {
+    const { service_type } = req.body;
+    if (!["NORMAL", "FALLBACK"].includes(service_type)) {
+      return res.status(400).json({ status: "FAILED", message: "Invalid service type" });
+    }
+    const result = await pool.query(
+      `UPDATE campaigns SET service_type = $1 WHERE id = $2 AND org_id = $3 RETURNING *`,
+      [service_type, req.params.id, req.orgId]
+    );
+    if (!result.rows.length) return res.status(404).json({ status: "FAILED", message: "Campaign not found" });
+    res.json({ status: "SUCCESS", data: result.rows[0] });
+  } catch (err) {
+    console.error("TOGGLE CAMPAIGN SERVICE TYPE ERROR:", err.message);
+    res.status(500).json({ status: "FAILED", message: "Failed to update service type" });
+  }
+});
+
 export default router;

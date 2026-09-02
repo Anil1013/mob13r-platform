@@ -150,6 +150,22 @@ export default function Campaigns() {
     }
   };
 
+  const toggleServiceType = async (c) => {
+    const ns = c.service_type === "FALLBACK" ? "NORMAL" : "FALLBACK";
+    const prev = campaigns;
+    setCampaigns(l => l.map(x => x.id === c.id ? { ...x, service_type: ns } : x));
+    try {
+      const res = await fetch(`${API_BASE}/api/campaigns/${c.id}/service-type`, {
+        method: "PATCH", headers: authHeaders,
+        body: JSON.stringify({ service_type: ns }),
+      });
+      if (!res.ok) { setCampaigns(prev); showToast("Failed to update route", "error"); }
+    } catch {
+      setCampaigns(prev);
+      showToast("Network error while updating route", "error");
+    }
+  };
+
   const startEdit = (c) => {
     setEditingId(c.id);
     setExpandedId(null);
@@ -267,6 +283,7 @@ export default function Campaigns() {
                 <th style={{...th, textAlign:"center"}}>Payout</th>
                 <th style={{...th, textAlign:"center"}}>Today (Clicks/Conv)</th>
                 <th style={th}>Status</th>
+                <th style={th}>Route</th>
                 <th style={th}>Actions</th>
               </tr>
             </thead>
@@ -275,7 +292,7 @@ export default function Campaigns() {
                 <Fragment key={c.id}>
                 {editingId === c.id ? (
                   <tr>
-                    <td style={td} colSpan={9}>
+                    <td style={td} colSpan={10}>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
                         <input style={input} placeholder="Campaign name" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
                         <input style={{ ...input, gridColumn: "span 2" }} placeholder="Destination URL" value={editForm.destination_url} onChange={e => setEditForm(f => ({ ...f, destination_url: e.target.value }))} />
@@ -323,13 +340,23 @@ export default function Campaigns() {
                     </span>
                   </td>
                   <td style={td}>
+                    <span
+                      onClick={() => toggleServiceType(c)}
+                      title="Click to toggle — Fallback campaigns serve traffic when this geo/carrier's primary is inactive or capped"
+                      style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, cursor: "pointer", fontSize: 11, fontWeight: 700,
+                        background: c.service_type === "FALLBACK" ? "#fff7ed" : "#ecfdf5",
+                        color: c.service_type === "FALLBACK" ? "#c2650a" : "#16a34a" }}>
+                      {c.service_type === "FALLBACK" ? "🔁 Fallback" : "🟢 Primary"}
+                    </span>
+                  </td>
+                  <td style={td}>
                     <button style={{ ...btn, padding: "4px 10px", fontSize: 11 }} onClick={() => startEdit(c)}>Edit</button>
                   </td>
                 </tr>
                 )}
                 {expandedId === c.id && (
                   <tr>
-                    <td style={{ ...td, background: "#fdf6f9" }} colSpan={9}>
+                    <td style={{ ...td, background: "#fdf6f9" }} colSpan={10}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: "#9b7faa", textTransform: "uppercase", marginBottom: 6 }}>
                         Advertiser postback
                       </div>
@@ -343,7 +370,7 @@ export default function Campaigns() {
                 </Fragment>
               ))}
               {!campaigns.length && (
-                <TableStateRow colSpan={9} loading={loading} loadingText="Loading campaigns..." emptyText="No campaigns yet — create one to get your first tracking URL." emptyIcon="🚀" />
+                <TableStateRow colSpan={10} loading={loading} loadingText="Loading campaigns..." emptyText="No campaigns yet — create one to get your first tracking URL." emptyIcon="🚀" />
               )}
             </tbody>
           </table>
