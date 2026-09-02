@@ -70,14 +70,6 @@ export default function OfferGroups() {
     }));
   };
 
-  const togglePublisher = (id) => {
-    setForm(f => ({
-      ...f,
-      publisher_ids: f.publisher_ids.includes(id)
-        ? f.publisher_ids.filter(p => p !== id)
-        : [...f.publisher_ids, id]
-    }));
-  };
 
   const save = async () => {
     if (!form.name) return setMsg({ type: "error", text: "Group name required" });
@@ -246,23 +238,6 @@ export default function OfferGroups() {
               )}
             </div>
 
-            {/* PUBLISHERS */}
-            <div style={{ marginBottom: 16 }}>
-              <span style={s.label}>Assign Publishers</span>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
-                {publishers.map(p => (
-                  <div key={p.id} onClick={() => togglePublisher(p.id)}
-                    style={{ padding: "6px 14px", borderRadius: 20, cursor: "pointer", fontSize: 13, fontWeight: 600,
-                      background: form.publisher_ids.includes(p.id) ? "#7c3aed" : "#f1f5f9",
-                      color: form.publisher_ids.includes(p.id) ? "#fff" : "#475569",
-                      border: form.publisher_ids.includes(p.id) ? "2px solid #7c3aed" : "2px solid transparent",
-                    }}>
-                    {form.publisher_ids.includes(p.id) ? "✓ " : ""}{p.name}
-                  </div>
-                ))}
-              </div>
-            </div>
-
             <div style={{ display: "flex", gap: 10 }}>
               <button className="m13-btn" style={s.btnGreen} onClick={save}>{editGroup ? "Update Group" : "Create Group"}</button>
               <button style={s.btnGray} onClick={() => { setShowCreate(false); setEditGroup(null); }}>Cancel</button>
@@ -277,77 +252,76 @@ export default function OfferGroups() {
             <div style={{ marginTop: 10, color: "#a888b3", fontSize: 13 }}>Loading offer groups...</div>
           </div>
         ) : groups.length === 0 ? (
-          <div style={{ ...s.card, textAlign: "center", color: "#94a3b8", padding: 40 }}>
+          <div style={{ ...s.card, textAlign: "center", color: "#a888b3", padding: 40 }}>
+            <div style={{ fontSize: 28, opacity: 0.5, marginBottom: 6 }}>🔀</div>
             No offer groups yet. Create one to start distributing traffic!
           </div>
-        ) : groups.map(g => (
-          <div key={g.id} className="m13-card-hover" style={s.card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 16, color: "#2d1b30", marginBottom: 4 }}>
-                  {g.name}
-                  <span style={{ ...s.tag, background: g.status === "active" ? "#dcfce7" : "#fee2e2", color: g.status === "active" ? "#16a34a" : "#dc2626", marginLeft: 8 }}>
-                    {g.status}
-                  </span>
-                </div>
-                <div style={{ fontSize: 13, color: "#64748b" }}>
-                  {g.geo && <span style={{ ...s.tag, background: "#e8f4fd", color: "#0369a1", marginRight: 6 }}>{g.geo}</span>}
-                  {g.carrier && <span style={{ ...s.tag, background: "#f3e8ff", color: "#7c3aed", marginRight: 6 }}>{g.carrier}</span>}
-                  <span style={{ color: "#94a3b8" }}>{g.offer_count} offers</span>
-                </div>
-                {g.description && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>{g.description}</div>}
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button style={s.btnGray} onClick={() => startEdit(g)}>Edit</button>
-                <button style={{ ...s.btnGray, color: "#dc2626" }} onClick={() => deleteGroup(g.id, g.name)}>Delete</button>
-              </div>
+        ) : (
+          <div style={{ background: "#fff", border: "1px solid #f0e5ec", borderRadius: 18, overflow: "hidden", boxShadow: "0 8px 30px rgba(124,58,237,0.09), 0 2px 6px rgba(0,0,0,0.03)" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {["S.No", "Group Name", "Geo", "Carrier", "Traffic Distribution", "Status", "Actions"].map(h => (
+                      <th key={h} style={{ padding: "14px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#8b6a9a", textTransform: "uppercase", letterSpacing: "0.06em", background: "#faf6fb", borderBottom: "1.5px solid #eee0ea", whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {groups.map((g, idx) => {
+                    const colors = ["#7c3aed","#3b82f6","#16a34a","#f59e0b","#8b5cf6","#06b6d4"];
+                    const td = { padding: "13px 16px", borderBottom: "1px solid #f4ecf1", color: "#3d2436", fontSize: 13, verticalAlign: "top" };
+                    return (
+                      <tr key={g.id} className="m13-row-hover" style={{ background: idx % 2 === 0 ? "#fff" : "#fdfafc" }}>
+                        <td style={{ ...td, whiteSpace: "nowrap" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#d4709a)", color: "#fff", fontSize: 12, fontWeight: 700 }}>{idx + 1}</span>
+                        </td>
+                        <td style={{ ...td, whiteSpace: "nowrap" }}>
+                          <div style={{ fontWeight: 700, color: "#2d1b30" }}>{g.name}</div>
+                          {g.description && <div style={{ fontSize: 11, color: "#a888b3", marginTop: 2 }}>{g.description}</div>}
+                          <div style={{ fontSize: 11, color: "#a888b3", marginTop: 2 }}>{g.offer_count} offers</div>
+                        </td>
+                        <td style={td}>{g.geo ? <span style={s.tag}>{g.geo}</span> : "—"}</td>
+                        <td style={td}>{g.carrier ? <span style={{...s.tag, background:"#f3ebfa", color:"#7c3aed"}}>{g.carrier}</span> : "—"}</td>
+                        <td style={{ ...td, minWidth: 260 }}>
+                          {g.items?.length > 0 ? (
+                            <>
+                              <div style={{ borderRadius: 8, overflow: "hidden", height: 22, display: "flex", marginBottom: 6 }}>
+                                {g.items.map((item, i) => (
+                                  <div key={i} title={`${item.offer_name}: ${item.weight}%`}
+                                    style={{ width: `${item.weight}%`, background: colors[i % colors.length], display:"flex", alignItems:"center", justifyContent:"center" }}>
+                                    <span style={{ color:"#fff", fontSize:10, fontWeight:700 }}>{item.weight > 10 ? `${item.weight}%` : ""}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                {g.items.map((item, i) => (
+                                  <span key={i} style={{ display:"flex", alignItems:"center", gap:4, fontSize:11.5, color:"#3d2436" }}>
+                                    <span style={{ width:8, height:8, borderRadius:"50%", background:colors[i%colors.length], display:"inline-block" }}/>
+                                    {item.offer_name} <span style={{ color:"#a888b3" }}>({item.weight}%)</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </>
+                          ) : <span style={{ color: "#a888b3" }}>No offers added</span>}
+                        </td>
+                        <td style={td}>
+                          <span style={{ ...s.tag, background: g.status === "active" ? "#ecfdf5" : "#fef2f2", color: g.status === "active" ? "#16a34a" : "#dc2626" }}>
+                            {g.status}
+                          </span>
+                        </td>
+                        <td style={{ ...td, whiteSpace: "nowrap" }}>
+                          <button className="m13-btn" style={{...s.btnGray, padding:"6px 12px", fontSize:12}} onClick={() => startEdit(g)}>Edit</button>
+                          <button className="m13-btn" style={{...s.btnGray, padding:"6px 12px", fontSize:12, color:"#dc2626", marginLeft:6}} onClick={() => deleteGroup(g.id, g.name)}>Delete</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-
-            {/* Offers breakdown */}
-            {g.items?.length > 0 && (
-              <div style={{ marginTop: 14 }}>
-                <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6, fontWeight: 600, textTransform: "uppercase" }}>Traffic Distribution</div>
-                <div style={{ borderRadius: 8, overflow: "hidden", height: 28, display: "flex", marginBottom: 10 }}>
-                  {g.items.map((item, idx) => {
-                    const colors = ["#7c3aed","#3b82f6","#16a34a","#f59e0b","#8b5cf6","#06b6d4"];
-                    return (
-                      <div key={idx} title={`${item.offer_name}: ${item.weight}%`}
-                        style={{ width: `${item.weight}%`, background: colors[idx % colors.length], display:"flex", alignItems:"center", justifyContent:"center" }}>
-                        <span style={{ color:"#fff", fontSize:11, fontWeight:700 }}>{item.weight > 8 ? `${item.weight}%` : ""}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {g.items.map((item, idx) => {
-                    const colors = ["#7c3aed","#3b82f6","#16a34a","#f59e0b","#8b5cf6","#06b6d4"];
-                    return (
-                      <div key={idx} style={{ display:"flex", alignItems:"center", gap:6, fontSize:13 }}>
-                        <span style={{ width:10, height:10, borderRadius:"50%", background:colors[idx%colors.length], display:"inline-block" }}/>
-                        <span style={{ fontWeight:600 }}>{item.offer_name}</span>
-                        <span style={{ color:"#94a3b8" }}>{item.weight}%</span>
-                        <span style={{ color:"#cbd5e1" }}>|</span>
-                        <span style={{ color:"#64748b", fontSize:12 }}>{item.carrier}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Assigned Publishers (reference only) */}
-            {g.publishers?.length > 0 && (
-              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #f0f0f0" }}>
-                <div style={{ fontSize: 12, color: "#a888b3", marginBottom: 6, fontWeight: 600, textTransform: "uppercase" }}>Assigned Publishers</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {g.publishers.map(p => (
-                    <span key={p.id} style={{ ...s.tag, background:"#f1f5f9", color:"#475569", padding:"4px 10px" }}>{p.name}</span>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
-        ))}
+        )}
       </div>
     </>
   );
