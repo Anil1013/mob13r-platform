@@ -12,19 +12,26 @@ function fillMacros(url, map) {
   return out;
 }
 
-// Finds the publisher_assignment that applies to this click — an exact
-// campaign-level assignment wins over a group-level one.
-async function findAssignment(affiliateId, campaignId) {
+// Finds the publisher_assignment that applies to this click. Checks BOTH
+// the campaign that actually served the traffic AND the one the
+// affiliate's link originally pointed to (these can differ now that
+// traffic can be auto-diverted via group-distribution or fallback) —
+// the publisher's assignment could reference either one, and a match on
+// either should count. An exact campaign-level assignment wins over a
+// group-level one.
+async function findAssignment(affiliateId, campaignId, originalCampaignId) {
   const res = await pool.query(
     `SELECT pa.* FROM publisher_assignments pa
      WHERE pa.affiliate_id = $1 AND pa.status = 'active'
        AND (
          pa.campaign_id = $2
+         OR pa.campaign_id = $3
          OR pa.group_id IN (SELECT group_id FROM campaign_group_items WHERE campaign_id = $2)
+         OR pa.group_id IN (SELECT group_id FROM campaign_group_items WHERE campaign_id = $3)
        )
      ORDER BY pa.campaign_id IS NULL ASC
      LIMIT 1`,
-    [affiliateId, campaignId]
+    [affiliateId, campaignId, originalCampaignId]
   );
   return res.rows[0] || null;
 }
@@ -84,7 +91,7 @@ router.get("/postback", async (req, res) => {
     let holdPercent = 0;
     let hasAssignment = false;
     if (click.affiliate_id) {
-      const assignment = await findAssignment(click.affiliate_id, click.campaign_id);
+      const assignment = await findAssignment(click.affiliate_id, click.campaign_id, click.original_campaign_id);
       if (assignment) {
         hasAssignment = true;
         publisherPayout = Number(assignment.publisher_payout);

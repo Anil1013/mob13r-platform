@@ -78,7 +78,7 @@ async function pickCampaignFromGroup(groupId) {
 //    for the same geo+carrier — no affiliate-assignment requirement.
 // 4. If nothing usable anywhere, returns { error: "GLOBAL_CAP_REACHED" }.
 async function resolveTrafficCampaign(originalCampaign) {
-  const { org_id, geo, carrier } = originalCampaign;
+  const { org_id, geo, carrier, vertical_id } = originalCampaign;
 
   // Reset stale today_clicks/today_conversions for every campaign sharing
   // this geo+carrier up front, so the checks below never use yesterday's
@@ -102,10 +102,16 @@ async function resolveTrafficCampaign(originalCampaign) {
   );
 
   if (groupRes.rows.length) {
-    picked = await pickCampaignFromGroup(groupRes.rows[0].id);
-    // If the group exists but has nothing eligible right now, do NOT
-    // fall back to the single originally-requested campaign — it's
-    // already accounted for as one of the group's own members.
+    const candidate = await pickCampaignFromGroup(groupRes.rows[0].id);
+    // Safety: only accept the pick if it's in the SAME vertical as what
+    // the affiliate originally clicked — geo+carrier alone could
+    // otherwise silently mix, say, a CPI campaign into CPA traffic if a
+    // group happens to bundle campaigns across verticals.
+    if (candidate && candidate.vertical_id === vertical_id) picked = candidate;
+    // If the group exists but has nothing eligible (or nothing in the
+    // right vertical) right now, do NOT fall back to the single
+    // originally-requested campaign — it's already accounted for as one
+    // of the group's own members.
   } else {
     const freshRes = await pool.query(`SELECT * FROM campaigns WHERE id = $1`, [originalCampaign.id]);
     if (freshRes.rows.length && isUsable(freshRes.rows[0])) picked = freshRes.rows[0];
@@ -115,11 +121,11 @@ async function resolveTrafficCampaign(originalCampaign) {
 
   const fbRes = await pool.query(
     `SELECT * FROM campaigns
-     WHERE org_id = $1 AND geo = $2 AND carrier = $3
+     WHERE org_id = $1 AND geo = $2 AND carrier = $3 AND vertical_id = $4
        AND service_type = 'FALLBACK' AND status = 'active'
        AND (daily_cap IS NULL OR today_clicks < daily_cap)
      ORDER BY id ASC LIMIT 1`,
-    [org_id, geo, carrier]
+    [org_id, geo, carrier, vertical_id]
   );
   if (fbRes.rows.length) return { campaign: fbRes.rows[0] };
 
@@ -135,6 +141,7 @@ router.get("/click", async (req, res) => {
     if (!cid) return res.status(400).send("Missing cid");
 
     let campaign = null;
+    let originalCampaignId = null;
 
     const campRes = await pool.query(`SELECT * FROM campaigns WHERE tracking_slug = $1`, [cid]);
     if (campRes.rows.length) {
@@ -143,6 +150,7 @@ router.get("/click", async (req, res) => {
       // distribution if one covers this geo+carrier, else this campaign
       // directly, else a fallback campaign) rather than only checking
       // this one campaign's own status.
+      originalCampaignId = campRes.rows[0].id;
       const resolved = await resolveTrafficCampaign(campRes.rows[0]);
       if (resolved.error === "GLOBAL_CAP_REACHED") {
         return res.status(429).send("Global cap reached — this campaign, its traffic group, and any fallback are all inactive or capped.");
@@ -155,6 +163,11 @@ router.get("/click", async (req, res) => {
       if (group.status !== "active") return res.status(410).send("Traffic group is paused");
       campaign = await pickCampaignFromGroup(group.id);
       if (!campaign) return res.status(429).send("No eligible campaign in this traffic group right now (all paused or capped)");
+      // Affiliate explicitly used the GROUP's own URL — their assignment
+      // (if any) is checked against the group_id directly by
+      // findAssignment() in postback.routes.js, so no separate "original
+      // campaign" concept applies here; record the resolved one.
+      originalCampaignId = campaign.id;
     }
 
     // reset daily counter at IST midnight — and refresh our in-memory copy so the
@@ -191,9 +204,9 @@ router.get("/click", async (req, res) => {
     const userAgent = req.headers["user-agent"] || "";
 
     await pool.query(
-      `INSERT INTO clicks (click_id, org_id, campaign_id, affiliate_id, sub1, sub2, sub3, sub4, sub5, ip, user_agent)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [clickId, campaign.org_id, campaign.id, affiliateId,
+      `INSERT INTO clicks (click_id, org_id, campaign_id, original_campaign_id, affiliate_id, sub1, sub2, sub3, sub4, sub5, ip, user_agent)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [clickId, campaign.org_id, campaign.id, originalCampaignId, affiliateId,
        sub1 || null, sub2 || null, sub3 || null, sub4 || null, sub5 || null, ip, userAgent]
     );
 
