@@ -144,14 +144,22 @@ router.put("/offer-groups/:id", orgAuth, async (req, res) => {
 
       await client.query(`
         UPDATE offer_groups SET
-          name = COALESCE($1, name),
-          geo = COALESCE($2, geo),
-          carrier = COALESCE($3, carrier),
-          description = COALESCE($4, description),
+          name = CASE WHEN $10::boolean THEN $1 ELSE name END,
+          geo = CASE WHEN $11::boolean THEN $2 ELSE geo END,
+          carrier = CASE WHEN $12::boolean THEN $3 ELSE carrier END,
+          description = CASE WHEN $13::boolean THEN $4 ELSE description END,
           status = COALESCE($5, status),
           publisher_id = CASE WHEN $8::boolean THEN $9 ELSE publisher_id END
         WHERE id = $6 AND org_id = $7
-      `, [name, geo, carrier, description, status, id, req.orgId, publisher_id !== undefined, publisherId ?? null]);
+      `, [
+        name && name.trim() ? name.trim() : null,
+        (geo || "").trim() || null,
+        (carrier || "").trim() || null,
+        description || null,
+        status, id, req.orgId,
+        publisher_id !== undefined, publisherId ?? null,
+        name !== undefined, geo !== undefined, carrier !== undefined, description !== undefined,
+      ]);
 
       const updatedGroupRes = await client.query(`SELECT geo, carrier FROM offer_groups WHERE id = $1 AND org_id = $2`, [id, req.orgId]);
       if (!updatedGroupRes.rows.length) { await client.query("ROLLBACK"); return res.status(404).json({ status: "FAILED", error: "Group not found" }); }
