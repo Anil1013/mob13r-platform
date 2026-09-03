@@ -25,7 +25,7 @@ router.post("/signup", async (req, res) => {
       : [];
     const mvasEnabled = !!mvas;
     if (!selectedVerticals.length && !mvasEnabled) {
-      return res.status(400).json({ success: false, message: "Select at least one vertical or In-app MVAS to continue" });
+      return res.status(400).json({ success: false, message: "Select at least one vertical or In-app to continue" });
     }
 
     const existing = await pool.query("SELECT id FROM users WHERE email = $1", [email]);

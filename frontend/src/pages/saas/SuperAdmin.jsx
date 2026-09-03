@@ -306,7 +306,7 @@ export default function SuperAdmin() {
                         {(org.active_verticals || []).map(v => (
                           <span key={v.code} style={{...S.moduleBadge, background:moduleColor(v.code).bg, color:moduleColor(v.code).color, border:`1px solid ${moduleColor(v.code).color}22`}}>{v.code}·{v.tier}</span>
                         ))}
-                        {org.mvas_enabled !== false && <span style={{...S.moduleBadge, background:moduleColor("MVAS").bg, color:moduleColor("MVAS").color, border:`1px solid ${moduleColor("MVAS").color}22`}}>MVAS·{org.mvas_tier || "basic"}</span>}
+                        {org.mvas_enabled !== false && <span style={{...S.moduleBadge, background:moduleColor("MVAS").bg, color:moduleColor("MVAS").color, border:`1px solid ${moduleColor("MVAS").color}22`}}>In-app·{org.mvas_tier || "basic"}</span>}
                         {!(org.active_verticals || []).length && org.mvas_enabled === false && <span style={{color:"#ef4444",fontSize:11}}>None</span>}
                       </div>
                     </td>

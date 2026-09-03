@@ -95,7 +95,7 @@ export default function Plans() {
                       {isActiveModule && <div style={S.currentBadge}>Currently Active</div>}
                       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
                         <span style={{fontSize:22}}>{ICONS[code] || "📦"}</span>
-                        <h2 style={S.planName}>{code === "MVAS" ? "In-app MVAS" : code}</h2>
+                        <h2 style={S.planName}>{code === "MVAS" ? "In-app" : code}</h2>
                       </div>
 
                       <div style={S.tierRow}>

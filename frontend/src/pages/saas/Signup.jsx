@@ -24,8 +24,8 @@ export default function Signup() {
   }, []);
 
   const MODULES = modulePlans.length
-    ? modulePlans.filter(p => p.tier === "basic").map(p => ({ code: p.code, label: p.name.replace(/ — Basic$/i, ""), price: Number(p.price_monthly), ...MODULE_DESC[p.code] }))
-    : Object.keys(MODULE_DESC).map(code => ({ code, label: code, price: null, ...MODULE_DESC[code] }));
+    ? modulePlans.filter(p => p.tier === "basic").map(p => ({ code: p.code, label: (p.code === "MVAS" ? "In-app" : p.name.replace(/ — Basic$/i, "")), price: Number(p.price_monthly), ...MODULE_DESC[p.code] }))
+    : Object.keys(MODULE_DESC).map(code => ({ code, label: code === "MVAS" ? "In-app" : code, price: null, ...MODULE_DESC[code] }));
 
   const toggleModule = (code) => {
     setSelected(s => s.includes(code) ? s.filter(c => c !== code) : [...s, code]);
@@ -39,7 +39,7 @@ export default function Signup() {
     setError("");
     if (form.password !== form.confirm) return setError("Passwords do not match");
     if (form.password.length < 6) return setError("Password min 6 characters");
-    if (!selected.length) return setError("Select at least one vertical or In-app MVAS to continue");
+    if (!selected.length) return setError("Select at least one vertical or In-app to continue");
     setLoading(true);
     try {
       const verticals = selected.filter(c => c !== "MVAS");
