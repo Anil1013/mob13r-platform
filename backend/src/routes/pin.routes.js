@@ -522,51 +522,78 @@ router.all("/pin/verify", async (req, res) => {
     let triggerHold = false;
     let triggerCap = false;
 
-    if (advMapped.isSuccess) {
-      const ruleRes = await pool.query(
-        `SELECT daily_cap, pass_percent FROM publisher_offers
-         WHERE publisher_id=$1 AND offer_id=$2 AND status='active'`,
-        [session.publisher_id, session.offer_id]
+    // The cap-check-then-credit decision below reads a COUNT and a
+    // counter column, then later writes based on what it saw — not
+    // atomic on its own. Multiple concurrent verify requests for the
+    // SAME publisher+offer near a cap boundary could otherwise all see
+    // "still under cap" before any of them commits, and all get
+    // credited — overshooting daily_cap by however many raced through.
+    // pg_advisory_xact_lock serializes this critical section per
+    // (publisher_id, offer_id) pair — held only for this transaction,
+    // released automatically at COMMIT/ROLLBACK — so concurrent
+    // requests for the same pair queue up instead of racing.
+    const lockClient = await pool.connect();
+    try {
+      await lockClient.query("BEGIN");
+      await lockClient.query(
+        `SELECT pg_advisory_xact_lock(hashtext($1 || ':' || $2))`,
+        [String(session.publisher_id), String(session.offer_id)]
       );
 
-      if (ruleRes.rows.length > 0) {
-        const { daily_cap, pass_percent } = ruleRes.rows[0];
-        const creditedRes = await pool.query(
-          `SELECT COUNT(*)::int FROM pin_sessions
-           WHERE publisher_id=$1 AND offer_id=$2
-           AND publisher_credited=TRUE AND credited_at::date=CURRENT_DATE`,
+      if (advMapped.isSuccess) {
+        const ruleRes = await lockClient.query(
+          `SELECT daily_cap, pass_percent FROM publisher_offers
+           WHERE publisher_id=$1 AND offer_id=$2 AND status='active'`,
           [session.publisher_id, session.offer_id]
         );
 
-        if (daily_cap !== null && creditedRes.rows[0].count >= daily_cap) {
-          finalStatus = "CAP_REACHED";
-          triggerCap = true;
-        } else if (Number(pass_percent ?? 100) < 100 && Math.random() * 100 >= Number(pass_percent)) {
-          finalStatus = "SCRUBBED";
-          triggerHold = true;
+        if (ruleRes.rows.length > 0) {
+          const { daily_cap, pass_percent } = ruleRes.rows[0];
+          const creditedRes = await lockClient.query(
+            `SELECT COUNT(*)::int FROM pin_sessions
+             WHERE publisher_id=$1 AND offer_id=$2
+             AND publisher_credited=TRUE AND credited_at::date=CURRENT_DATE`,
+            [session.publisher_id, session.offer_id]
+          );
+
+          if (daily_cap !== null && creditedRes.rows[0].count >= daily_cap) {
+            finalStatus = "CAP_REACHED";
+            triggerCap = true;
+          } else if (Number(pass_percent ?? 100) < 100 && Math.random() * 100 >= Number(pass_percent)) {
+            finalStatus = "SCRUBBED";
+            triggerHold = true;
+          } else {
+            isCredited = true;
+            creditedAt = new Date();
+          }
         } else {
           isCredited = true;
           creditedAt = new Date();
         }
-      } else {
-        isCredited = true;
-        creditedAt = new Date();
       }
-    }
 
-    // Pehle daily reset (IST midnight)
-    await pool.query(
-      `UPDATE offers SET today_hits = 0, last_reset_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
-       WHERE id = $1 AND last_reset_date < (NOW() AT TIME ZONE 'Asia/Kolkata')::date`,
-      [session.offer_id]
-    );
-
-    // Phir increment
-    if (isCredited) {
-      await pool.query(
-        `UPDATE offers SET today_hits = today_hits + 1 WHERE id = $1`,
+      // Pehle daily reset (IST midnight)
+      await lockClient.query(
+        `UPDATE offers SET today_hits = 0, last_reset_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+         WHERE id = $1 AND last_reset_date < (NOW() AT TIME ZONE 'Asia/Kolkata')::date`,
         [session.offer_id]
       );
+
+      // Phir increment — also inside the lock, so this offer-level cap
+      // can't overshoot either, consistent with the publisher-level check above.
+      if (isCredited) {
+        await lockClient.query(
+          `UPDATE offers SET today_hits = today_hits + 1 WHERE id = $1`,
+          [session.offer_id]
+        );
+      }
+
+      await lockClient.query("COMMIT");
+    } catch (err) {
+      await lockClient.query("ROLLBACK");
+      throw err;
+    } finally {
+      lockClient.release();
     }
 
     const publisherResponse = mapPublisherResponse(
