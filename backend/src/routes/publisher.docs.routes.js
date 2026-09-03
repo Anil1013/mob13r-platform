@@ -222,6 +222,20 @@ router.get("/publisher/:pubId/offer/:offerId/docs-link", orgAuth, async (req, re
     );
     if (!check.rows.length) return res.status(404).json({ error: "Publisher not found in your organization" });
 
+    // The token below only encodes (pubId, offerId) — /docs and
+    // /download-pdf trust that pair as-is once the token verifies,
+    // with no further org check (they don't have req.orgId available,
+    // since they're authenticated via this token, not orgAuth). So the
+    // offer's own org ownership MUST be verified here, at generation
+    // time — otherwise an org could mint a valid link pairing their
+    // OWN publisher with a DIFFERENT org's offerId, and the resulting
+    // docs would leak that other org's offer configuration.
+    const offerCheck = await pool.query(
+      `SELECT 1 FROM offers WHERE id = $1 AND org_id = $2`,
+      [offerId, req.orgId]
+    );
+    if (!offerCheck.rows.length) return res.status(404).json({ error: "Offer not found in your organization" });
+
     const token = jwt.sign({ pubId: Number(pubId), offerId: Number(offerId) }, DOCS_TOKEN_SECRET, { expiresIn: "10m" });
     res.json({
       html_url: `${BASE}/api/publisher/${pubId}/offer/${offerId}/docs?token=${token}`,

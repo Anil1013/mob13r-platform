@@ -21,8 +21,8 @@ async function getDocsData(pubId, offerId, orgId) {
             COALESCE(po.pub_offer_name, o.service_name) AS display_name
      FROM offers o
      LEFT JOIN publisher_offers po ON po.offer_id = o.id AND po.publisher_id = $2
-     WHERE o.id = $1 LIMIT 1`,
-    [offerId, pubId]
+     WHERE o.id = $1 AND o.org_id = $3 LIMIT 1`,
+    [offerId, pubId, orgId]
   );
   if (!offerRes.rows.length) throw new Error("Offer not found");
   const offer = offerRes.rows[0];
