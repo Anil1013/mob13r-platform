@@ -20,7 +20,13 @@ export default async function publisherAuth(req, res, next) {
 
     try {
       const decoded = jwt.verify(apiKey, process.env.JWT_SECRET || "mob13r_secret");
-      if (decoded?.role === "admin") {
+      // Only the literal platform super-admin account can use this
+      // cross-org publisher-impersonation path — checking role==="admin"
+      // alone isn't safe, since that's just whatever value a users-table
+      // row happens to have, not guaranteed to only ever be the one
+      // hardcoded super-admin. This matches the same email check
+      // isSuperAdmin() uses in saas/admin.routes.js.
+      if (decoded?.role === "admin" && decoded?.email === "admin@mob13r.com") {
         const publisherId = req.query.publisher_id || 1;
         const result = await pool.query("SELECT id, name FROM publishers WHERE id = $1 LIMIT 1", [publisherId]);
         if (result.rows.length) {

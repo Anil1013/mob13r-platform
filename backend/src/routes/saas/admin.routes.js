@@ -255,7 +255,7 @@ router.post("/admin/orgs/:id/approve", isSuperAdmin, async (req, res) => {
     const limits = {
       starter: { max_publishers:5, max_offers:15, monthly_conversions:2500 },
       growth:  { max_publishers:25, max_offers:50, monthly_conversions:7500 },
-      pro:     { max_publishers:999, max_offers:999, monthly_conversions:30000 },
+      pro:     { max_publishers:999, max_offers:999, monthly_conversions:999999 },
     };
     const l = limits[plan] || limits.pro;
     const result = await pool.query(`
