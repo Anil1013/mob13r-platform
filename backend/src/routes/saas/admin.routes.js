@@ -227,7 +227,7 @@ router.delete("/admin/orgs/:id", isSuperAdmin, async (req, res) => {
     await client.query(`DELETE FROM affiliates WHERE org_id = $1`, [id]);
     await client.query(`DELETE FROM verticals WHERE org_id = $1`, [id]);
     await client.query(`DELETE FROM plan_requests WHERE org_id = $1`, [id]);
-    // Original DCB/MVAS module data
+    // Original In-app module data
     await client.query(`DELETE FROM pin_sessions WHERE org_id = $1`, [id]);
     await client.query(`DELETE FROM offer_parameters WHERE offer_id IN (SELECT id FROM offers WHERE org_id = $1)`, [id]);
     await client.query(`DELETE FROM publisher_offers WHERE org_id = $1`, [id]);
