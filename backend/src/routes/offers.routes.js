@@ -103,6 +103,8 @@ router.get("/:offerId/parameters", orgAuth, async (req, res) => {
   try {
     const offerId = Number(req.params.offerId);
     if (isNaN(offerId)) return res.status(400).json([]);
+    const ownCheck = await pool.query(`SELECT id FROM offers WHERE id = $1 AND org_id = $2`, [offerId, req.orgId]);
+    if (!ownCheck.rows.length) return res.status(404).json([]);
     let result = await pool.query(
       `SELECT id, param_key, param_value, is_active FROM offer_parameters WHERE offer_id = $1 ORDER BY id ASC`,
       [offerId]
@@ -133,14 +135,17 @@ router.patch("/parameters/:id", orgAuth, async (req, res) => {
     const id = Number(req.params.id);
     const { param_value, is_active } = req.body;
     const result = await pool.query(
-      `UPDATE offer_parameters SET
-        param_value = COALESCE($1, param_value),
-        is_active = COALESCE($2, is_active)
-       WHERE id = $3 RETURNING *`,
+      `UPDATE offer_parameters op SET
+        param_value = COALESCE($1, op.param_value),
+        is_active = COALESCE($2, op.is_active)
+       FROM offers o
+       WHERE op.id = $3 AND o.id = op.offer_id AND o.org_id = $4
+       RETURNING op.*`,
       [param_value !== undefined ? param_value : null,
        is_active !== undefined ? is_active : null,
-       id]
+       id, req.orgId]
     );
+    if (!result.rows.length) return res.status(404).json({ status: "FAILED", message: "Parameter not found" });
     return res.json(result.rows[0]);
   } catch (err) {
     return res.status(500).json({ status: "FAILED", message: "Failed to update parameter" });
@@ -152,6 +157,8 @@ router.post("/:offerId/parameters", orgAuth, async (req, res) => {
     const offerId = Number(req.params.offerId);
     const { param_key, param_value } = req.body;
     if (!param_key) return res.status(400).json({ message: "param_key is required" });
+    const ownCheck = await pool.query(`SELECT id FROM offers WHERE id = $1 AND org_id = $2`, [offerId, req.orgId]);
+    if (!ownCheck.rows.length) return res.status(404).json({ message: "Offer not found" });
     const exists = await pool.query(
       `SELECT id FROM offer_parameters WHERE offer_id = $1 AND param_key = $2`,
       [offerId, param_key]
@@ -170,7 +177,13 @@ router.post("/:offerId/parameters", orgAuth, async (req, res) => {
 router.delete("/parameters/:id", orgAuth, async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const result = await pool.query(`DELETE FROM offer_parameters WHERE id = $1 RETURNING *`, [id]);
+    const result = await pool.query(
+      `DELETE FROM offer_parameters op
+       USING offers o
+       WHERE op.id = $1 AND o.id = op.offer_id AND o.org_id = $2
+       RETURNING op.*`,
+      [id, req.orgId]
+    );
     if (!result.rows.length) return res.status(404).json({ message: "Parameter not found" });
     return res.json({ success: true, message: "Parameter deleted" });
   } catch (err) {

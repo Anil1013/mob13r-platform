@@ -122,6 +122,14 @@ router.post("/:publisherId/offers", orgAuth, async (req, res) => {
     const { publisherId } = req.params;
     const { offer_id, publisher_cpa, daily_cap = 0, pass_percent = 100, weight = 100, pub_offer_name } = req.body;
     if (!offer_id || publisher_cpa === undefined) return res.status(400).json({ status: "FAILED", message: "offer_id and publisher_cpa required" });
+
+    // Cross-tenant guard: this publisher (from the URL) must actually
+    // belong to the authenticated org — without this, any org admin
+    // could assign offers on behalf of a publisher belonging to a
+    // completely different organization, just by guessing/enumerating IDs.
+    const pubCheck = await pool.query(`SELECT id FROM publishers WHERE id = $1 AND org_id = $2`, [publisherId, req.orgId]);
+    if (!pubCheck.rows.length) return res.status(404).json({ status: "FAILED", message: "Publisher not found" });
+
     const exists = await pool.query(
       `SELECT id FROM publisher_offers WHERE publisher_id = $1 AND offer_id = $2`,
       [publisherId, offer_id]
@@ -143,17 +151,21 @@ router.patch("/:publisherId/offers/:id", orgAuth, async (req, res) => {
   try {
     const { publisherId, id } = req.params;
     const { status, publisher_cpa, daily_cap, pass_percent, weight, pub_offer_name } = req.body;
-    await pool.query(
-      `UPDATE publisher_offers SET
-        status = COALESCE($1, status),
-        publisher_cpa = COALESCE($2, publisher_cpa),
-        daily_cap = COALESCE($3, daily_cap),
-        pass_percent = COALESCE($4, pass_percent),
-        weight = COALESCE($5, weight),
-        pub_offer_name = COALESCE($6, pub_offer_name)
-       WHERE id = $7 AND publisher_id = $8`,
-      [status, publisher_cpa, daily_cap, pass_percent, weight, pub_offer_name || null, id, publisherId]
+    const result = await pool.query(
+      `UPDATE publisher_offers po SET
+        status = COALESCE($1, po.status),
+        publisher_cpa = COALESCE($2, po.publisher_cpa),
+        daily_cap = COALESCE($3, po.daily_cap),
+        pass_percent = COALESCE($4, po.pass_percent),
+        weight = COALESCE($5, po.weight),
+        pub_offer_name = COALESCE($6, po.pub_offer_name)
+       FROM publishers p
+       WHERE po.id = $7 AND po.publisher_id = $8
+         AND p.id = po.publisher_id AND p.org_id = $9
+       RETURNING po.id`,
+      [status, publisher_cpa, daily_cap, pass_percent, weight, pub_offer_name || null, id, publisherId, req.orgId]
     );
+    if (!result.rows.length) return res.status(404).json({ status: "FAILED", message: "Assignment not found" });
     res.json({ status: "SUCCESS" });
   } catch (err) {
     console.error("UPDATE ASSIGNED OFFER ERROR:", err);

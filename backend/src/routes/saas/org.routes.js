@@ -1,21 +1,12 @@
 import express from "express";
 import pool from "../../db.js";
-import jwt from "jsonwebtoken";
+import orgAuth from "../../middleware/orgAuth.js";
 
 const router = express.Router();
 
-const getOrgId = (req) => {
+router.get("/org", orgAuth, async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "mob13r_secret");
-    return decoded.org_id || 1;
-  } catch { return 1; }
-};
-
-router.get("/org", async (req, res) => {
-  try {
-    const org_id = getOrgId(req);
-    const result = await pool.query("SELECT * FROM organizations WHERE id = $1", [org_id]);
+    const result = await pool.query("SELECT * FROM organizations WHERE id = $1", [req.orgId]);
     if (!result.rows.length) return res.status(404).json({ error: "Org not found" });
     res.json({ success: true, data: result.rows[0] });
   } catch (err) {
@@ -23,9 +14,9 @@ router.get("/org", async (req, res) => {
   }
 });
 
-router.get("/org/usage", async (req, res) => {
+router.get("/org/usage", orgAuth, async (req, res) => {
   try {
-    const org_id = getOrgId(req);
+    const org_id = req.orgId;
     const publishers = await pool.query("SELECT COUNT(*) FROM publishers WHERE org_id = $1", [org_id]);
     const offers = await pool.query("SELECT COUNT(*) FROM offers WHERE org_id = $1", [org_id]);
     const conversions = await pool.query(
@@ -50,13 +41,12 @@ router.get("/org/usage", async (req, res) => {
   }
 });
 
-router.patch("/org", async (req, res) => {
+router.patch("/org", orgAuth, async (req, res) => {
   try {
-    const org_id = getOrgId(req);
     const { name } = req.body;
     const result = await pool.query(
       "UPDATE organizations SET name = $1 WHERE id = $2 RETURNING *",
-      [name, org_id]
+      [name, req.orgId]
     );
     res.json({ success: true, data: result.rows[0] });
   } catch (err) {

@@ -58,9 +58,16 @@ function detectSuccess(data) {
 
   // 4. Global Keyword Search (Last Resort)
   // "Success" ko pehle priority di gayi hai
+  // IMPORTANT: word-boundary matching, NOT naive substring matching —
+  // successKeywords includes short words like "ok", and a plain
+  // .includes() check would false-positive on "token" (session_token,
+  // access_token etc are near-universal field names in advertiser API
+  // responses), incorrectly treating a genuine failure as a success
+  // just because its response happened to include a token field.
   const rawMessage = JSON.stringify(data).toLowerCase();
-  if (successKeywords.some((k) => rawMessage.includes(k))) return true;
-  if (failKeywords.some((k) => rawMessage.includes(k))) return false;
+  const matchesWord = (keyword) => new RegExp(`\\b${keyword}\\b`).test(rawMessage);
+  if (successKeywords.some(matchesWord)) return true;
+  if (failKeywords.some(matchesWord)) return false;
 
   return false;
 }
