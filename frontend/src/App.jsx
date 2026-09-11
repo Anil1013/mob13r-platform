@@ -27,6 +27,26 @@ import CpaReports from "./pages/cpa/Reports";
 import CpaTrafficGroups from "./pages/cpa/TrafficGroups";
 import CpaAssignments from "./pages/cpa/Assignments";
 
+// The catch-all route below must behave differently depending on which
+// domain it's reached from. On the admin dashboard domain, redirecting
+// an unmatched URL to /login is normal and expected. On the public
+// landing-page domain, doing the SAME thing would reveal to any random
+// visitor (or bot/scanner) that this is a login-protected admin app —
+// exactly the leak this component avoids. LANDING_HOSTS should list
+// every hostname landing pages are served from.
+const LANDING_HOSTS = ["lp.mob13r.com"];
+
+function CatchAll() {
+  if (LANDING_HOSTS.includes(window.location.hostname)) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "sans-serif", color: "#888" }}>
+        <p>This page is unavailable.</p>
+      </div>
+    );
+  }
+  return <Navigate to="/login" replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -65,8 +85,8 @@ export default function App() {
         </Route>
 
         {/* Default */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<CatchAll />} />
+        <Route path="*" element={<CatchAll />} />
       </Routes>
     </BrowserRouter>
   );

@@ -592,7 +592,7 @@ export default function LandingBuilder() {
                                 onClick={() => {
                                   const pub = assignState[item.id].selectedPub;
                                   const apiKey = assignState[item.id].selectedApiKey || "";
-                                  const url = `https://dashboard.mob13r.com/landing/${encodeURIComponent(pub)}/${item.id}${apiKey ? "?api_key=" + apiKey : ""}`;
+                                  const url = `https://lp.mob13r.com/landing/${encodeURIComponent(pub)}/${item.id}${apiKey ? "?api_key=" + apiKey : ""}`;
                                   copyUrl(url);
                                   alert("URL Copied!\n" + url);
                                   setAssignState(prev => ({ ...prev, [item.id]: { ...prev[item.id], open: false } }));

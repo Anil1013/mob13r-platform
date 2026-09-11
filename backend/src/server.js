@@ -16,7 +16,11 @@ app.set("trust proxy", 1);
 const corsOptions = {
   origin: [
     "https://dashboard.mob13r.com",
+    "https://backend.mob13r.com",
+    "https://lp.mob13r.com",
+    "https://track.mob13r.com",
     "http://localhost:5173",
+    "http://localhost:3000",
   ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],

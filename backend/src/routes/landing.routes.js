@@ -5,7 +5,7 @@ import { uploadToS3 } from "../services/s3Upload.js";
 
 const router = express.Router();
 
-const FRONTEND_BASE_URL = "https://dashboard.mob13r.com";
+const FRONTEND_BASE_URL = "https://lp.mob13r.com";
 
 const allowedMimeTypes = ["image/png","image/jpeg","image/jpg","image/webp","image/svg+xml"];
 
