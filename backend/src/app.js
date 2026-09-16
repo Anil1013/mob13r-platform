@@ -58,7 +58,7 @@ app.use(
       "http://localhost:3000",
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "x-api-key", "x-publisher-key"],
     credentials: true,
   })
 );
@@ -90,6 +90,28 @@ const pinLimiter = rateLimit({
   legacyHeaders: false,
 });
 app.use("/api/publisher/pin", pinLimiter);
+
+// Generous per-IP ceilings on the public click/postback endpoints — loose
+// enough to never bother real traffic (a single publisher/advertiser server
+// can legitimately fire many requests per minute), just enough to blunt
+// obvious flooding/abuse since these have no auth token on the click side.
+const trackLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  message: { status: "FAILED", message: "Too many requests. Please wait 1 minute." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/click", trackLimiter);
+
+const postbackLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  message: { status: "FAILED", message: "Too many requests. Please wait 1 minute." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/postback", postbackLimiter);
 
 // Logging Middleware
 app.use((req, res, next) => {
@@ -148,7 +170,10 @@ app.use((err, req, res, next) => {
     return res.status(400).json({ status: "FAILED", error: "File size too large" });
   if (err?.message?.includes("File too large"))
     return res.status(400).json({ status: "FAILED", error: "Uploaded file exceeds allowed limit" });
-  res.status(500).json({ status: "FAILED", error: err?.message || "Internal Server Error" });
+  res.status(500).json({
+    status: "FAILED",
+    error: process.env.NODE_ENV === "production" ? "Internal Server Error" : (err?.message || "Internal Server Error"),
+  });
 });
 
 export default app;
