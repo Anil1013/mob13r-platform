@@ -32,7 +32,7 @@ async function getDocsData(pubId, offerId, orgId) {
     [offerId]
   );
 
-  const BASE = "https://backend.mob13r.com";
+  const BASE = process.env.TRACK_BASE_URL || "https://track.mob13r.com";
   const pinSendURL   = `${BASE}/api/publisher/pin/send?offer_id=${offerId}&msisdn={msisdn}&geo=${offer.geo}&carrier=${offer.carrier}&x-api-key=${publisher.api_key}`;
   const verifyURL    = `${BASE}/api/publisher/pin/verify?session_token={session_token}&otp={otp}&x-api-key=${publisher.api_key}`;
   const statusURL    = offer.has_status_check

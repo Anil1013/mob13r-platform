@@ -4,9 +4,13 @@ import CpaLayout from "../../components/cpa/CpaLayout";
 import { btn, input, table, th, td, badge, pageTitle } from "../../styles/shared.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://backend.mob13r.com";
+// The postback URL shown to advertisers should point at the dedicated
+// tracking/postback domain, not the dashboard's own API domain — even
+// though both currently proxy to the same backend.
+const POSTBACK_BASE = import.meta.env.VITE_TRACK_BASE_URL || "https://track.mob13r.com";
 function isValidEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()); }
 function buildPostbackUrl(advKey) {
-  return `${API_BASE}/postback?click_id={click_id}&adv_key=${advKey}&status=approved&payout={payout}&transaction_id={transaction_id}`;
+  return `${POSTBACK_BASE}/postback?click_id={click_id}&adv_key=${advKey}&status=approved&payout={payout}&transaction_id={transaction_id}`;
 }
 
 export default function CpaAdvertisers() {
