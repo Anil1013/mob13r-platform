@@ -8,7 +8,7 @@ const router = express.Router();
 
 // Base URL used to build the single tracking link handed to publishers/affiliates.
 // Override with TRACK_BASE_URL env var if the tracking domain differs from the API domain.
-const TRACK_BASE_URL = process.env.TRACK_BASE_URL || "https://backend.mob13r.com";
+const TRACK_BASE_URL = process.env.TRACK_BASE_URL || "https://track.mob13r.com";
 
 function generateSlug() {
   return crypto.randomBytes(6).toString("hex"); // 12-char unique slug

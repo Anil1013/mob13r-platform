@@ -5,7 +5,7 @@ import orgAuth from "../middleware/orgAuth.js";
 import { getCpaLimits } from "../utils/planLimits.js";
 
 const router = express.Router();
-const TRACK_BASE_URL = process.env.TRACK_BASE_URL || "https://backend.mob13r.com";
+const TRACK_BASE_URL = process.env.TRACK_BASE_URL || "https://track.mob13r.com";
 
 function generateAffiliateKey() {
   return "aff_" + crypto.randomBytes(10).toString("hex");
