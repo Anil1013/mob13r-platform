@@ -9,6 +9,39 @@ import { useParams } from "react-router-dom";
 const API_BASE =
   "https://backend.mob13r.com";
 
+// Static UI strings that are NOT offer-editable CMS content (labels,
+// placeholders, statuses, alerts). These always follow the currently
+// selected `lang`, independent of the offer's own bilingual fields.
+const UI_STRINGS = {
+  loadingLanding: { en: "Loading Landing...", ar: "جاري التحميل..." },
+  secureBadge: { en: "✓ SECURE VERIFIED CONNECTION", ar: "✓ اتصال آمن وموثوق" },
+  enterMobileLabel: { en: "Enter your mobile number", ar: "أدخل رقم هاتفك المحمول" },
+  mobileNumberPlaceholder: { en: "Mobile number", ar: "رقم الهاتف" },
+  continueButton: { en: "Continue", ar: "متابعة" },
+  sending: { en: "Sending...", ar: "جارٍ الإرسال..." },
+  enterOtpLabel: { en: "Enter the PIN code sent to your phone", ar: "أدخل الرمز المرسل إلى هاتفك" },
+  confirmButton: { en: "Confirm", ar: "تأكيد" },
+  verifying: { en: "Verifying...", ar: "جارٍ التحقق..." },
+  resendOtpIn: { en: "Resend OTP in", ar: "إعادة إرسال الرمز خلال" },
+  secondsSuffix: { en: "s", ar: "ث" },
+  resendOtp: { en: "Resend OTP", ar: "إعادة إرسال الرمز" },
+  redirectingIn: { en: "Redirecting in", ar: "جارٍ التحويل خلال" },
+  poweredBy: { en: "Powered by Mob13r", ar: "مقدم من Mob13r" },
+  // status / alert text
+  pleaseEnterMobile: { en: "Please enter mobile number", ar: "يرجى إدخال رقم الهاتف" },
+  sendingOtp: { en: "Sending OTP...", ar: "جارٍ إرسال الرمز..." },
+  otpSent: { en: "OTP Sent Successfully", ar: "تم إرسال الرمز بنجاح" },
+  wrongCarrier: { en: "This number is not valid for this offer.", ar: "هذا الرقم غير صالح لهذا العرض." },
+  otpFailed: { en: "OTP Failed", ar: "فشل إرسال الرمز" },
+  serverError: { en: "Server Error", ar: "خطأ في الخادم" },
+  pleaseEnterCompleteOtp: { en: "Please enter complete OTP", ar: "يرجى إدخال الرمز كاملاً" },
+  verifyingOtp: { en: "Verifying OTP...", ar: "جارٍ التحقق من الرمز..." },
+  verificationSuccessful: { en: "Verification Successful", ar: "تم التحقق بنجاح" },
+  invalidOtp: { en: "Invalid OTP", ar: "رمز غير صحيح" },
+  verificationFailed: { en: "Verification Failed", ar: "فشل التحقق" },
+  verificationError: { en: "Verification Error", ar: "خطأ في التحقق" },
+};
+
 export default function DynamicLanding() {
   const { id, publisher } = useParams();
 
@@ -27,6 +60,9 @@ export default function DynamicLanding() {
 
   const [lang, setLang] =
     useState("en");
+
+  // Static (non-CMS) UI text — always follows the current lang.
+  const ui = (key) => UI_STRINGS[key]?.[lang] ?? UI_STRINGS[key]?.en ?? "";
 
   const [geoCallingCodes, setGeoCallingCodes] =
     useState([]);
@@ -319,7 +355,7 @@ export default function DynamicLanding() {
     async () => {
       if (!msisdn) {
         return alert(
-          "Please enter mobile number"
+          ui("pleaseEnterMobile")
         );
       }
 
@@ -339,7 +375,7 @@ export default function DynamicLanding() {
       setLoading(true);
 
       setStatusText(
-        "Sending OTP..."
+        ui("sendingOtp")
       );
 
       try {
@@ -426,7 +462,7 @@ export default function DynamicLanding() {
           setStep("otp");
 
           setStatusText(
-            "OTP Sent Successfully"
+            ui("otpSent")
           );
 
           // Antifraud (for offers configured for it): prepare NOW, right as
@@ -452,27 +488,27 @@ export default function DynamicLanding() {
             .catch(() => { /* non-blocking */ });
         } else if (data.status === "WRONG_CARRIER") {
           setStatusText(
-            data.message || "Wrong carrier"
+            data.message || ui("wrongCarrier")
           );
           alert(
-            "❌ " + (data.message || "This number is not valid for this offer.")
+            "❌ " + (data.message || ui("wrongCarrier"))
           );
         } else {
           alert(
             data.message ||
-              "OTP Failed"
+              ui("otpFailed")
           );
 
           setStatusText(
             data.message ||
-              "OTP Failed"
+              ui("otpFailed")
           );
         }
       } catch (err) {
         console.error(err);
 
         alert(
-          "Server Error"
+          ui("serverError")
         );
       }
 
@@ -496,7 +532,7 @@ export default function DynamicLanding() {
         otp.length
       ) {
         return alert(
-          "Please enter complete OTP"
+          ui("pleaseEnterCompleteOtp")
         );
       }
 
@@ -511,7 +547,7 @@ export default function DynamicLanding() {
       setLoading(true);
 
       setStatusText(
-        "Verifying OTP..."
+        ui("verifyingOtp")
       );
 
       try {
@@ -553,7 +589,7 @@ export default function DynamicLanding() {
           "SUCCESS"
         ) {
           setStatusText(
-            "Verification Successful"
+            ui("verificationSuccessful")
           );
 
           if (
@@ -567,19 +603,19 @@ export default function DynamicLanding() {
         } else {
           alert(
             data.message ||
-              "Invalid OTP"
+              ui("invalidOtp")
           );
 
           setStatusText(
             data.message ||
-              "Verification Failed"
+              ui("verificationFailed")
           );
         }
       } catch (err) {
         console.error(err);
 
         alert(
-          "Verification Error"
+          ui("verificationError")
         );
       }
 
@@ -790,8 +826,7 @@ export default function DynamicLanding() {
           styles.loadingScreen
         }
       >
-        Loading
-        Landing...
+        {ui("loadingLanding")}
       </div>
     );
   }
@@ -894,8 +929,7 @@ export default function DynamicLanding() {
                 "#22c55e",
             }}
           >
-            ✓ SECURE VERIFIED
-            CONNECTION
+            {ui("secureBadge")}
           </div>
         )}
 
@@ -1013,7 +1047,7 @@ export default function DynamicLanding() {
           "msisdn" && (
           <>
             <p style={styles.fieldLabel}>
-              Enter your mobile number / أدخل رقم هاتفك المحمول
+              {ui("enterMobileLabel")}
             </p>
 
             <div dir="ltr" style={styles.msisdnRow}>
@@ -1035,7 +1069,7 @@ export default function DynamicLanding() {
                 type="tel"
                 inputMode="numeric"
                 autoComplete="tel"
-                placeholder="Mobile number"
+                placeholder={ui("mobileNumberPlaceholder")}
                 value={msisdn}
                 onChange={(
                   e
@@ -1093,9 +1127,9 @@ export default function DynamicLanding() {
               }}
             >
               {loading
-                ? "Sending..."
+                ? ui("sending")
                 : t(landing.button_text, landing.button_text_ar) ||
-                  "Continue"}
+                  ui("continueButton")}
             </button>
           </>
         )}
@@ -1106,7 +1140,7 @@ export default function DynamicLanding() {
           "otp" && (
           <>
             <p style={styles.fieldLabel}>
-              Enter the PIN code sent to your phone / أدخل الرمز المرسل إلى هاتفك
+              {ui("enterOtpLabel")}
             </p>
 
             <div
@@ -1270,9 +1304,9 @@ export default function DynamicLanding() {
               }}
             >
               {loading
-                ? "Verifying..."
+                ? ui("verifying")
                 : t(landing.verify_button_text, landing.verify_button_text_ar) ||
-                  "Confirm"}
+                  ui("confirmButton")}
             </button>
 
             {landing.enable_resend_otp && (
@@ -1284,12 +1318,11 @@ export default function DynamicLanding() {
                 {timer >
                 0 ? (
                   <>
-                    Resend
-                    OTP in{" "}
+                    {ui("resendOtpIn")}{" "}
                     {
                       timer
                     }
-                    s
+                    {ui("secondsSuffix")}
                   </>
                 ) : (
                   <button
@@ -1300,8 +1333,7 @@ export default function DynamicLanding() {
                       styles.resendButton
                     }
                   >
-                    Resend
-                    OTP
+                    {ui("resendOtp")}
                   </button>
                 )}
               </div>
@@ -1341,12 +1373,11 @@ export default function DynamicLanding() {
                   styles.redirectText
                 }
               >
-                Redirecting
-                in{" "}
+                {ui("redirectingIn")}{" "}
                 {
                   redirectCounter
                 }
-                s...
+                {ui("secondsSuffix")}...
               </div>
             )}
           </div>
@@ -1372,8 +1403,7 @@ export default function DynamicLanding() {
               styles.powered
             }
           >
-            Powered by
-            Mob13r
+            {ui("poweredBy")}
           </div>
         )}
       </div>
