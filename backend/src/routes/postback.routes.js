@@ -69,12 +69,16 @@ router.get("/postback", async (req, res) => {
     const campaign = campRes.rows[0];
     if (!campaign) return res.status(404).json({ status: "FAILED", message: "campaign not found for this click" });
 
-    if (adv_key) {
-      const advRes = await pool.query(`SELECT postback_key FROM advertisers WHERE id = $1`, [campaign.advertiser_id]);
-      const advertiser = advRes.rows[0];
-      if (!advertiser || advertiser.postback_key !== adv_key) {
-        return res.status(403).json({ status: "FAILED", message: "adv_key does not match this campaign's advertiser" });
-      }
+    // adv_key is REQUIRED and must match this campaign's advertiser —
+    // previously this check only ran if adv_key was present at all, so
+    // simply omitting it skipped validation entirely (fraud risk: anyone
+    // who learned a valid click_id could post a fake conversion with any
+    // status/payout). Verified against live data before enforcing this:
+    // no real advertiser was relying on the no-key path.
+    const advRes = await pool.query(`SELECT postback_key FROM advertisers WHERE id = $1`, [campaign.advertiser_id]);
+    const advertiser = advRes.rows[0];
+    if (!adv_key || !advertiser || advertiser.postback_key !== adv_key) {
+      return res.status(403).json({ status: "FAILED", message: "Missing or invalid adv_key" });
     }
 
     // This is what the ADVERTISER pays us (revenue side).
