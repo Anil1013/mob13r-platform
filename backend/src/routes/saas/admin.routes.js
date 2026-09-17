@@ -10,7 +10,7 @@ const SUPER_ADMIN_EMAIL = "admin@mob13r.com";
 const isSuperAdmin = (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "mob13r_secret");
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     // IMPORTANT: this must NOT accept role === "owner" — every org's own
     // signup user gets role='owner' (see saas/auth.routes.js), so that
     // check previously let ANY customer call these endpoints directly

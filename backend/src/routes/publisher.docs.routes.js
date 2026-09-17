@@ -6,7 +6,7 @@ import orgAuth from "../middleware/orgAuth.js";
 
 const router = express.Router();
 const BASE = process.env.TRACK_BASE_URL || "https://track.mob13r.com";
-const DOCS_TOKEN_SECRET = process.env.JWT_SECRET || "mob13r_secret";
+const DOCS_TOKEN_SECRET = process.env.JWT_SECRET;
 
 // Color constants (module level - accessible everywhere)
 const RED   = "#e94560";

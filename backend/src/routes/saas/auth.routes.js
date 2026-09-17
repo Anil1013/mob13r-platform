@@ -59,7 +59,7 @@ router.post("/signup", async (req, res) => {
     const user = userResult.rows[0];
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role, org_id: org.id },
-      process.env.JWT_SECRET || "mob13r_secret",
+      process.env.JWT_SECRET,
       { expiresIn: "24h" }
     );
     return res.json({ success: true, token, expiresIn: 86400,
@@ -94,7 +94,7 @@ router.post("/login", async (req, res) => {
     const verticalCount = await pool.query(`SELECT COUNT(*)::int AS n FROM verticals WHERE org_id = $1`, [user.org_id]);
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role, org_id: user.org_id },
-      process.env.JWT_SECRET || "mob13r_secret",
+      process.env.JWT_SECRET,
       { expiresIn: "24h" }
     );
     return res.json({ success: true, token, expiresIn: 86400,
@@ -112,7 +112,7 @@ router.get("/me", async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) return res.status(401).json({ error: "No token" });
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "mob13r_secret");
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const result = await pool.query(
       `SELECT u.id, u.email, u.role, o.id as org_id, o.name as org_name,
               o.plan, o.max_publishers, o.max_offers, o.monthly_conversions

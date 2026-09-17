@@ -9,7 +9,7 @@ export default function auth(req, res, next) {
   try {
     req.user = jwt.verify(
       token,
-      process.env.JWT_SECRET || "mob13r_secret"
+      process.env.JWT_SECRET
     );
     next();
   } catch {

@@ -7,6 +7,11 @@ import appRoutes from "./app.js";
 
 dotenv.config();
 
+if (!process.env.JWT_SECRET) {
+  console.error("❌ FATAL: JWT_SECRET is not set. Refusing to start — auth cannot be trusted without it.");
+  process.exit(1);
+}
+
 const app = express();
 
 /* ✅ TRUST PROXY */

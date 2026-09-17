@@ -33,7 +33,7 @@ router.post("/login", async (req, res) => {
           const verticalCount = await pool.query(`SELECT COUNT(*)::int AS n FROM verticals WHERE org_id = $1`, [user.org_id]);
           const token = jwt.sign(
             { id: user.id, email: user.email, role: user.role, org_id: user.org_id },
-            process.env.JWT_SECRET || "mob13r_secret",
+            process.env.JWT_SECRET,
             { expiresIn: "24h" }
           );
           return res.json({
@@ -58,7 +58,7 @@ router.post("/login", async (req, res) => {
       if (isMatch) {
         const token = jwt.sign(
           { id: 1, email: ADMIN_EMAIL, role: "admin", org_id: 1 },
-          process.env.JWT_SECRET || "mob13r_secret",
+          process.env.JWT_SECRET,
           { expiresIn: "24h" }
         );
         return res.json({

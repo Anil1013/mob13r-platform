@@ -19,7 +19,7 @@ export default async function publisherAuth(req, res, next) {
     }
 
     try {
-      const decoded = jwt.verify(apiKey, process.env.JWT_SECRET || "mob13r_secret");
+      const decoded = jwt.verify(apiKey, process.env.JWT_SECRET);
       // Only the literal platform super-admin account can use this
       // cross-org publisher-impersonation path — checking role==="admin"
       // alone isn't safe, since that's just whatever value a users-table
