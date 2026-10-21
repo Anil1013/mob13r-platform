@@ -80,6 +80,7 @@ export default function Offers() {
       method: "POST", headers: authHeaders, body: JSON.stringify(offerForm),
     });
     const data = await res.json();
+    if (!res.ok) { alert(data.message || "Failed to create offer"); return; }
     setOffers((prev) => [...prev, data]);
     setOfferForm({ ...offerForm, service_name: "", cpa: "", daily_cap: "", geo: "", carrier: "", service_type: "NORMAL" });
   };
@@ -154,11 +155,12 @@ export default function Offers() {
     o.advertiser_name?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const remaining = (o) => !o.daily_cap ? "0" : Math.max(o.daily_cap - (o.today_hits ?? 0), 0);
+  // blank/null cap = unlimited, 0 = blocked
+  const remaining = (o) => (o.daily_cap === null || o.daily_cap === undefined) ? "∞" : Math.max(o.daily_cap - (o.today_hits ?? 0), 0);
   const autoRevenue = (o) => o.cpa ? `$${(Number(o.cpa) * Number(o.today_hits || 0)).toFixed(2)}` : "$0.00";
 
   const routeBadge = (o) => {
-    if (o.daily_cap && o.today_hits >= o.daily_cap) return <span style={styles.badgeCap}>🔴 Cap Reached</span>;
+    if (o.daily_cap !== null && o.daily_cap !== undefined && (o.today_hits ?? 0) >= o.daily_cap) return <span style={styles.badgeCap}>🔴 Cap Reached</span>;
     if (o.service_type === "FALLBACK") return <span style={styles.badgeFallback}>🟡 Fallback</span>;
     return <span style={styles.badgePrimary}>🟢 Primary</span>;
   };
@@ -188,7 +190,7 @@ export default function Offers() {
           </select>
           <input style={styles.smallInput} placeholder="Service" required value={offerForm.service_name} onChange={(e) => setOfferForm({...offerForm,service_name:e.target.value})} />
           <input style={styles.smallInput} placeholder="CPA ($)" value={offerForm.cpa} onChange={(e) => setOfferForm({...offerForm,cpa:e.target.value})} />
-          <input style={styles.smallInput} placeholder="Cap" value={offerForm.daily_cap} onChange={(e) => setOfferForm({...offerForm,daily_cap:e.target.value})} />
+          <input style={styles.smallInput} placeholder="Cap" title="Blank = unlimited, 0 = block" value={offerForm.daily_cap} onChange={(e) => setOfferForm({...offerForm,daily_cap:e.target.value})} />
           <input style={styles.smallInput} placeholder="Geo" value={offerForm.geo} onChange={(e) => setOfferForm({...offerForm,geo:e.target.value})} />
           <input style={styles.smallInput} placeholder="Carrier" value={offerForm.carrier} onChange={(e) => setOfferForm({...offerForm,carrier:e.target.value})} />
           <select style={styles.select} value={offerForm.service_type} onChange={(e) => setOfferForm({...offerForm,service_type:e.target.value})}>
@@ -246,8 +248,8 @@ export default function Offers() {
                     <input style={{...styles.cellInput, width:50}} type="number" min="4" max="6" defaultValue={o.otp_length || 4} onBlur={(e) => updateOffer(o.id, { otp_length: Number(e.target.value) })} />
                   </td>
                   <td style={td}>
-                    <input style={styles.cellInput} size={Math.max(String(o.daily_cap ?? "").length, 4)} defaultValue={o.daily_cap === null ? "" : o.daily_cap} placeholder="0" onChange={(e) => autoResize(e, 4)}
-                      onBlur={(e) => { const val = e.target.value === "" ? 0 : parseInt(e.target.value); updateOffer(o.id, { daily_cap: val }); }} />
+                    <input style={styles.cellInput} size={Math.max(String(o.daily_cap ?? "").length, 4)} defaultValue={o.daily_cap ?? ""} placeholder="∞" title="Blank = unlimited, 0 = block" onChange={(e) => autoResize(e, 4)}
+                      onBlur={(e) => { const raw = e.target.value.trim(); if (raw === "") { updateOffer(o.id, { daily_cap: null }); return; } const val = Number(raw); if (!Number.isInteger(val) || val < 0) { alert("Cap must be a whole number ≥ 0 (blank = unlimited, 0 = block)"); e.target.value = o.daily_cap ?? ""; return; } updateOffer(o.id, { daily_cap: val }); }} />
                   </td>
                   <td style={{...td, whiteSpace:"nowrap"}}>{o.today_hits ?? 0}</td>
                   <td style={td}><span style={{background:"rgba(59,130,246,0.08)",color:"#2563eb",padding:"2px 6px",borderRadius:10,fontSize:12,fontWeight:600}}>{o.active_publishers ?? 0}</span></td>

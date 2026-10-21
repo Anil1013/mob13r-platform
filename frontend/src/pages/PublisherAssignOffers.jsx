@@ -159,6 +159,11 @@ export default function PublisherAssignOffers() {
       return;
     }
 
+    if (payload.daily_cap !== null && (!Number.isInteger(payload.daily_cap) || payload.daily_cap < 0)) {
+      showToast("Daily cap must be a whole number ≥ 0 (blank = unlimited, 0 = block)");
+      return;
+    }
+
     if (payload.pass_percent < 0 || payload.pass_percent > 100) {
       showToast("Pass % must be between 0 and 100");
       return;
@@ -218,6 +223,11 @@ export default function PublisherAssignOffers() {
       Number.isNaN(payload.weight)
     ) {
       showToast("Please enter valid numeric values");
+      return;
+    }
+
+    if (payload.daily_cap !== null && (!Number.isInteger(payload.daily_cap) || payload.daily_cap < 0)) {
+      showToast("Daily cap must be a whole number ≥ 0 (blank = unlimited, 0 = block)");
       return;
     }
 
@@ -499,7 +509,7 @@ export default function PublisherAssignOffers() {
                             type="number"
                             min="0"
                             size={Math.max(String(editRow.daily_cap || "").length, 4)}
-                            value={editRow.daily_cap || ""}
+                            value={editRow.daily_cap ?? ""}
                             onChange={(e) =>
                               setEditRow({
                                 ...editRow,
@@ -543,7 +553,7 @@ export default function PublisherAssignOffers() {
                     ) : (
                       <>
                         <td style={{...td, whiteSpace:"nowrap"}}>{pill(`$${a.publisher_cpa}`)}</td>
-                        <td style={{...td, whiteSpace:"nowrap"}}>{pill(a.daily_cap || "∞")}</td>
+                        <td style={{...td, whiteSpace:"nowrap"}}>{pill(a.daily_cap ?? "∞")}</td>
                         <td style={{...td, whiteSpace:"nowrap"}}>{pill(`${a.pass_percent}%`)}</td>
                         <td style={{...td, whiteSpace:"nowrap"}}>{pill(a.weight)}</td>
                       </>

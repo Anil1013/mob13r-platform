@@ -51,7 +51,7 @@ async function pickCampaignFromGroup(groupId) {
     }
   }
 
-  let eligible = itemsRes.rows.filter(c => !c.daily_cap || c.today_clicks < c.daily_cap);
+  let eligible = itemsRes.rows.filter(c => c.daily_cap == null || c.today_clicks < c.daily_cap);
   if (!eligible.length) return null;
 
   const totalWeight = eligible.reduce((s, c) => s + c.weight, 0);
@@ -92,7 +92,7 @@ async function resolveTrafficCampaign(originalCampaign, affiliateId) {
   );
 
   const isUsable = (c) =>
-    c.status === "active" && (!c.daily_cap || c.today_clicks < c.daily_cap);
+    c.status === "active" && (c.daily_cap == null || c.today_clicks < c.daily_cap);
 
   let picked = null;
 

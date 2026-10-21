@@ -3,6 +3,7 @@ import crypto from "crypto";
 import pool from "../db.js";
 import authMiddleware from "../middleware/auth.js";
 import orgAuth from "../middleware/orgAuth.js";
+import { parseCap, CAP_ERROR } from "../utils/cap.js";
 
 const router = express.Router();
 
@@ -120,8 +121,11 @@ router.get("/:publisherId/offers", orgAuth, async (req, res) => {
 router.post("/:publisherId/offers", orgAuth, async (req, res) => {
   try {
     const { publisherId } = req.params;
-    const { offer_id, publisher_cpa, daily_cap = 0, pass_percent = 100, weight = 100, pub_offer_name } = req.body;
+    const { offer_id, publisher_cpa, daily_cap, pass_percent = 100, weight = 100, pub_offer_name } = req.body;
     if (!offer_id || publisher_cpa === undefined) return res.status(400).json({ status: "FAILED", message: "offer_id and publisher_cpa required" });
+    // blank/omitted cap = unlimited (NULL), 0 = block
+    const cap = parseCap(daily_cap);
+    if (!cap.ok) return res.status(400).json({ status: "FAILED", message: CAP_ERROR });
 
     // Cross-tenant guard: this publisher (from the URL) must actually
     // belong to the authenticated org — without this, any org admin
@@ -138,7 +142,7 @@ router.post("/:publisherId/offers", orgAuth, async (req, res) => {
     const insert = await pool.query(
       `INSERT INTO publisher_offers (publisher_id, offer_id, publisher_cpa, daily_cap, pass_percent, weight, status, org_id, pub_offer_name)
        VALUES ($1,$2,$3,$4,$5,$6,'active',$7,$8) RETURNING *`,
-      [publisherId, offer_id, publisher_cpa, daily_cap, pass_percent, weight, req.orgId, pub_offer_name?.trim() || null]
+      [publisherId, offer_id, publisher_cpa, cap.value, pass_percent, weight, req.orgId, pub_offer_name?.trim() || null]
     );
     res.json({ status: "SUCCESS", data: insert.rows[0] });
   } catch (err) {
@@ -151,11 +155,15 @@ router.patch("/:publisherId/offers/:id", orgAuth, async (req, res) => {
   try {
     const { publisherId, id } = req.params;
     const { status, publisher_cpa, daily_cap, pass_percent, weight, pub_offer_name } = req.body;
+    // COALESCE here used to make it impossible to clear a cap (null kept the
+    // old value). Now: key absent = unchanged, null/blank = unlimited, 0 = block.
+    const cap = parseCap(daily_cap);
+    if (!cap.ok) return res.status(400).json({ status: "FAILED", message: CAP_ERROR });
     const result = await pool.query(
       `UPDATE publisher_offers po SET
         status = COALESCE($1, po.status),
         publisher_cpa = COALESCE($2, po.publisher_cpa),
-        daily_cap = COALESCE($3, po.daily_cap),
+        daily_cap = CASE WHEN $10::boolean THEN $3::integer ELSE po.daily_cap END,
         pass_percent = COALESCE($4, po.pass_percent),
         weight = COALESCE($5, po.weight),
         pub_offer_name = COALESCE($6, po.pub_offer_name)
@@ -163,7 +171,7 @@ router.patch("/:publisherId/offers/:id", orgAuth, async (req, res) => {
        WHERE po.id = $7 AND po.publisher_id = $8
          AND p.id = po.publisher_id AND p.org_id = $9
        RETURNING po.id`,
-      [status, publisher_cpa, daily_cap, pass_percent, weight, pub_offer_name || null, id, publisherId, req.orgId]
+      [status, publisher_cpa, cap.value, pass_percent, weight, pub_offer_name || null, id, publisherId, req.orgId, cap.present]
     );
     if (!result.rows.length) return res.status(404).json({ status: "FAILED", message: "Assignment not found" });
     res.json({ status: "SUCCESS" });

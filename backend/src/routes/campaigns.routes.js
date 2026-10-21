@@ -3,6 +3,7 @@ import crypto from "crypto";
 import pool from "../db.js";
 import orgAuth from "../middleware/orgAuth.js";
 import { getCpaLimits } from "../utils/planLimits.js";
+import { parseCap, CAP_ERROR } from "../utils/cap.js";
 
 const router = express.Router();
 
@@ -73,8 +74,9 @@ router.post("/", orgAuth, async (req, res) => {
     if (payout !== undefined && payout !== null && payout !== "" && (isNaN(Number(payout)) || Number(payout) < 0)) {
       return res.status(400).json({ status: "FAILED", message: "payout must be a positive number" });
     }
-    if (daily_cap !== undefined && daily_cap !== null && daily_cap !== "" && (!Number.isInteger(Number(daily_cap)) || Number(daily_cap) < 1)) {
-      return res.status(400).json({ status: "FAILED", message: "daily_cap must be a whole number ≥ 1" });
+    const capCreate = parseCap(daily_cap);
+    if (!capCreate.ok) {
+      return res.status(400).json({ status: "FAILED", message: CAP_ERROR });
     }
 
     const { maxCampaigns } = await getCpaLimits(pool, req.orgId);
@@ -99,7 +101,7 @@ router.post("/", orgAuth, async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'active',CURRENT_DATE) RETURNING *`,
       [req.orgId, vertical_id, advertiser_id, name.trim(), slug, destination_url.trim(),
        Number(payout) || 0, (currency || "USD").trim().toUpperCase(), (geo || "").trim().toUpperCase(),
-       (carrier || "").trim(), daily_cap || null]
+       (carrier || "").trim(), capCreate.value]
     );
     const row = result.rows[0];
     res.json({ status: "SUCCESS", data: { ...row, tracking_url: buildTrackingUrl(row.tracking_slug) } });
@@ -122,8 +124,8 @@ router.patch("/:id", orgAuth, async (req, res) => {
     if (payout !== undefined && payout !== null && (isNaN(Number(payout)) || Number(payout) < 0)) {
       return res.status(400).json({ status: "FAILED", message: "payout must be a positive number" });
     }
-    if (daily_cap !== undefined && daily_cap !== null && (!Number.isInteger(Number(daily_cap)) || Number(daily_cap) < 1)) {
-      return res.status(400).json({ status: "FAILED", message: "daily_cap must be a whole number ≥ 1" });
+    if (!parseCap(daily_cap).ok) {
+      return res.status(400).json({ status: "FAILED", message: CAP_ERROR });
     }
     if (status !== undefined && status !== null && !["active", "paused"].includes(status)) {
       return res.status(400).json({ status: "FAILED", message: "Invalid status" });

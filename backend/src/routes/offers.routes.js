@@ -1,6 +1,7 @@
 import express from "express";
 import pool from "../db.js";
 import orgAuth from "../middleware/orgAuth.js";
+import { parseCap, CAP_ERROR } from "../utils/cap.js";
 
 const router = express.Router();
 
@@ -69,6 +70,8 @@ router.post("/", orgAuth, async (req, res) => {
     if (!advertiser_id || !service_name || !service_name.trim()) {
       return res.status(400).json({ status: "FAILED", message: "Missing required fields" });
     }
+    const cap = parseCap(daily_cap);
+    if (!cap.ok) return res.status(400).json({ status: "FAILED", message: CAP_ERROR });
 
     const countRes = await pool.query(
       `SELECT COUNT(*)::int AS count FROM offers WHERE org_id = $1`,
@@ -86,7 +89,7 @@ router.post("/", orgAuth, async (req, res) => {
         today_hits, last_reset_date, status, has_antifraud, has_status_check, af_trigger_point,
         encode_headers_base64, otp_length, org_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,0,CURRENT_DATE,'active',$8,$9,$10,$11,$12,$13) RETURNING *`,
-      [advertiser_id, service_name.trim(), cpa||0, daily_cap||null, geo||"", carrier||"",
+      [advertiser_id, service_name.trim(), cpa||0, cap.value, geo||"", carrier||"",
        service_type||"NORMAL", has_antifraud||false, has_status_check||false,
        af_trigger_point||'BEFORE_SEND', encode_headers_base64||false, otp_length||4, req.orgId]
     );
@@ -212,19 +215,23 @@ router.patch("/:id", orgAuth, async (req, res) => {
     const { service_name, cpa, daily_cap, geo, carrier, status, has_antifraud,
             has_status_check, af_prepare_url, check_status_url, pin_send_url,
             pin_verify_url, encode_headers_base64, af_trigger_point, otp_length } = req.body;
+    // daily_cap is only touched when it is actually sent (so editing any
+    // other field no longer wipes it); blank/null clears it to unlimited.
+    const cap = parseCap(daily_cap);
+    if (!cap.ok) return res.status(400).json({ status: "FAILED", message: CAP_ERROR });
     const result = await pool.query(
       `UPDATE offers SET
         service_name = COALESCE($1, service_name), cpa = COALESCE($2, cpa),
-        daily_cap = $3, geo = COALESCE($4, geo), carrier = COALESCE($5, carrier),
+        daily_cap = CASE WHEN $18::boolean THEN $3::integer ELSE daily_cap END, geo = COALESCE($4, geo), carrier = COALESCE($5, carrier),
         status = COALESCE($6, status), has_antifraud = COALESCE($7, has_antifraud),
         has_status_check = COALESCE($8, has_status_check), af_prepare_url = COALESCE($9, af_prepare_url),
         check_status_url = COALESCE($10, check_status_url), pin_send_url = COALESCE($11, pin_send_url),
         pin_verify_url = COALESCE($12, pin_verify_url), encode_headers_base64 = COALESCE($13, encode_headers_base64),
         af_trigger_point = COALESCE($14, af_trigger_point), otp_length = COALESCE($15, otp_length)
        WHERE id = $16 AND org_id = $17 RETURNING *`,
-      [service_name, cpa, daily_cap, geo, carrier, status, has_antifraud, has_status_check,
+      [service_name, cpa, cap.value, geo, carrier, status, has_antifraud, has_status_check,
        af_prepare_url, check_status_url, pin_send_url, pin_verify_url, encode_headers_base64,
-       af_trigger_point, otp_length, offerId, req.orgId]
+       af_trigger_point, otp_length, offerId, req.orgId, cap.present]
     );
     if (!result.rows.length) return res.status(404).json({ message: "Offer not found" });
     return res.json(result.rows[0]);

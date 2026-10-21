@@ -95,7 +95,7 @@ export default function Campaigns() {
     if (!f.name || !f.name.trim()) return "Campaign name is required";
     if (!isValidUrl(f.destination_url)) return "Destination URL must start with http:// or https://";
     if (f.payout !== "" && (isNaN(Number(f.payout)) || Number(f.payout) < 0)) return "Payout must be a positive number";
-    if (f.daily_cap !== "" && f.daily_cap !== null && (isNaN(Number(f.daily_cap)) || Number(f.daily_cap) < 1 || !Number.isInteger(Number(f.daily_cap)))) return "Daily cap must be a whole number ≥ 1";
+    if (f.daily_cap !== "" && f.daily_cap !== null && (isNaN(Number(f.daily_cap)) || Number(f.daily_cap) < 0 || !Number.isInteger(Number(f.daily_cap)))) return "Daily cap must be a whole number ≥ 0 (blank = unlimited, 0 = block)";
     return null;
   };
 
@@ -115,7 +115,7 @@ export default function Campaigns() {
           carrier: form.carrier.trim(),
           currency: form.currency.trim().toUpperCase() || "USD",
           payout: Number(form.payout) || 0,
-          daily_cap: form.daily_cap ? Number(form.daily_cap) : null,
+          daily_cap: (form.daily_cap !== "" && form.daily_cap !== null) ? Number(form.daily_cap) : null,
         }),
       });
       const data = await res.json();
@@ -177,7 +177,7 @@ export default function Campaigns() {
     if (!editForm.name || !editForm.name.trim()) return showToast("Campaign name is required", "error");
     if (!isValidUrl(editForm.destination_url)) return showToast("Destination URL must start with http:// or https://", "error");
     if (editForm.payout !== "" && (isNaN(Number(editForm.payout)) || Number(editForm.payout) < 0)) return showToast("Payout must be a positive number", "error");
-    if (editForm.daily_cap !== "" && (isNaN(Number(editForm.daily_cap)) || Number(editForm.daily_cap) < 1 || !Number.isInteger(Number(editForm.daily_cap)))) return showToast("Daily cap must be a whole number ≥ 1", "error");
+    if (editForm.daily_cap !== "" && (isNaN(Number(editForm.daily_cap)) || Number(editForm.daily_cap) < 0 || !Number.isInteger(Number(editForm.daily_cap)))) return showToast("Daily cap must be a whole number ≥ 0 (blank = unlimited, 0 = block)", "error");
 
     setSaving(true);
     try {
@@ -248,7 +248,7 @@ export default function Campaigns() {
           <datalist id="carrier-options">
             {carrierOptions.map(c => <option key={c} value={c} />)}
           </datalist>
-          <input style={{ ...input, gridColumn: "span 2" }} placeholder="Daily cap (optional, whole number)" type="number" min="1" step="1" value={form.daily_cap} onChange={e => setForm(f => ({ ...f, daily_cap: e.target.value }))} />
+          <input style={{ ...input, gridColumn: "span 2" }} placeholder="Daily cap (blank = unlimited, 0 = block)" type="number" min="0" step="1" value={form.daily_cap} onChange={e => setForm(f => ({ ...f, daily_cap: e.target.value }))} />
           <button style={{ ...btn, gridColumn: "span 3", opacity: saving ? 0.7 : 1 }} onClick={createCampaign} disabled={saving}>{saving ? "Creating..." : "Create Campaign & Generate Tracking URL"}</button>
         </div>
       )}
@@ -302,7 +302,7 @@ export default function Campaigns() {
                         </select>
                         <input style={input} placeholder="Geo" maxLength={10} value={editForm.geo} onChange={e => setEditForm(f => ({ ...f, geo: e.target.value }))} onBlur={e => loadCarriers(e.target.value)} />
                         <input style={input} placeholder="Carrier" list="carrier-options" maxLength={100} value={editForm.carrier} onChange={e => setEditForm(f => ({ ...f, carrier: e.target.value }))} />
-                        <input style={input} placeholder="Daily cap" type="number" min="1" step="1" value={editForm.daily_cap} onChange={e => setEditForm(f => ({ ...f, daily_cap: e.target.value }))} />
+                        <input style={input} placeholder="Daily cap (blank = ∞, 0 = block)" type="number" min="0" step="1" value={editForm.daily_cap} onChange={e => setEditForm(f => ({ ...f, daily_cap: e.target.value }))} />
                         <div style={{ display: "flex", gap: 8 }}>
                           <button style={{ ...btn, opacity: saving ? 0.7 : 1 }} disabled={saving} onClick={() => saveEdit(c.id)}>{saving ? "Saving..." : "Save"}</button>
                           <button style={btnRed} onClick={cancelEdit}>Cancel</button>
