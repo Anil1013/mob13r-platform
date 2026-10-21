@@ -2,28 +2,10 @@ import express from "express";
 import pool from "../../db.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import isSuperAdmin from "../../middleware/superAdmin.js";
 
 const router = express.Router();
 
-const SUPER_ADMIN_EMAIL = "admin@mob13r.com";
-
-const isSuperAdmin = (req, res, next) => {
-  try {
-    const token = req.headers.authorization?.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // IMPORTANT: this must NOT accept role === "owner" — every org's own
-    // signup user gets role='owner' (see saas/auth.routes.js), so that
-    // check previously let ANY customer call these endpoints directly
-    // and view/edit/delete every other organization's data.
-    if (decoded.email !== SUPER_ADMIN_EMAIL) {
-      return res.status(403).json({ error: "Super admin only" });
-    }
-    req.user = decoded;
-    next();
-  } catch {
-    res.status(401).json({ error: "Invalid token" });
-  }
-};
 
 // GET all orgs with users
 router.get("/admin/orgs", isSuperAdmin, async (req, res) => {

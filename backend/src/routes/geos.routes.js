@@ -1,9 +1,10 @@
 import express from "express";
 import pool from "../db.js";
-import orgAuth from "../middleware/orgAuth.js";
+import isSuperAdmin from "../middleware/superAdmin.js";
 
 const router = express.Router();
 
+/* Shared platform-wide table: reads are public, writes are super-admin only */
 /* GET ALL — public (landing pages need this to build the calling-code dropdown) */
 router.get("/geos", async (req, res) => {
   try {
@@ -17,7 +18,7 @@ router.get("/geos", async (req, res) => {
 });
 
 /* ADD NEW GEO */
-router.post("/geos", orgAuth, async (req, res) => {
+router.post("/geos", isSuperAdmin, async (req, res) => {
   try {
     const { code, name, calling_code } = req.body;
     if (!code || !code.trim() || !name || !name.trim())
@@ -40,7 +41,7 @@ router.post("/geos", orgAuth, async (req, res) => {
 });
 
 /* UPDATE GEO */
-router.patch("/geos/:id", orgAuth, async (req, res) => {
+router.patch("/geos/:id", isSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, calling_code } = req.body;
@@ -59,7 +60,7 @@ router.patch("/geos/:id", orgAuth, async (req, res) => {
 });
 
 /* DELETE GEO */
-router.delete("/geos/:id", orgAuth, async (req, res) => {
+router.delete("/geos/:id", isSuperAdmin, async (req, res) => {
   try {
     await pool.query(`DELETE FROM geos WHERE id = $1`, [req.params.id]);
     res.json({ status: "SUCCESS" });

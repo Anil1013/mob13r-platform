@@ -15,6 +15,11 @@ const CARRIERS_BY_GEO = {
 
 export default function CarrierPrefixes() {
   const token = localStorage.getItem("token");
+  // Countries / calling codes / carrier prefixes are shared by every
+  // organization, so only the platform admin may change them.
+  let currentUser = {};
+  try { currentUser = JSON.parse(localStorage.getItem("user")) || {}; } catch { currentUser = {}; }
+  const isSuperAdmin = currentUser.email === "admin@mob13r.com";
   const [rows, setRows] = useState([]);
   const [filterGeo, setFilterGeo] = useState("");
   const [filterCarrier, setFilterCarrier] = useState("");
@@ -94,7 +99,12 @@ export default function CarrierPrefixes() {
 
   const remove = async (id, carrier, geo) => {
     if (!confirm(`Delete ${carrier} (${geo})?`)) return;
-    await fetch(`${API_BASE}/api/carrier-prefixes/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_BASE}/api/carrier-prefixes/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error || "Delete failed");
+      return;
+    }
     load();
   };
 
@@ -142,7 +152,12 @@ export default function CarrierPrefixes() {
 
   const removeGeo = async (id, name) => {
     if (!confirm(`Delete ${name}? Existing offers using this geo won't be affected, but it will disappear from dropdowns.`)) return;
-    await fetch(`${API_BASE}/api/geos/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_BASE}/api/geos/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error || "Delete failed");
+      return;
+    }
     loadGeos();
   };
 
@@ -176,6 +191,11 @@ export default function CarrierPrefixes() {
       <div style={s.page} className="m13-fade-in">
       <div style={s.title}>📡 Carrier Prefix Manager</div>
       <div style={s.sub}>Countries, calling codes, aur carrier prefixes — sab dashboard se manage karo</div>
+      {!isSuperAdmin && (
+        <div style={{ background: "rgba(124,58,237,0.07)", border: "1px solid rgba(124,58,237,0.18)", color: "#6d3fc0", borderRadius: 12, padding: "10px 14px", fontSize: 12.5, marginBottom: 18 }}>
+          Ye list poore platform ke liye shared hai, isliye sirf platform admin edit kar sakta hai. Aap yahan sirf dekh sakte ho. Naya country ya prefix chahiye to admin se request karo.
+        </div>
+      )}
 
       {/* GEOS / CALLING CODES */}
       <div style={s.card}>
@@ -187,6 +207,7 @@ export default function CarrierPrefixes() {
           Ye list landing pages ke mobile-number dropdown (jaise +964) me directly use hoti hai — naya country add karo, kahi bhi code edit karne ki zaroorat nahi.
         </div>
         {geoMsg && <div style={s.msg(geoMsg.type)}>{geoMsg.text}</div>}
+        {isSuperAdmin && (<>
         <div style={s.grid3}>
           <div>
             <span style={s.label}>Country Code (e.g. EG)</span>
@@ -205,6 +226,7 @@ export default function CarrierPrefixes() {
           </div>
         </div>
         <button className="m13-btn" style={s.btn} onClick={addGeo}>+ Add Country</button>
+        </>)}
 
         <div style={{ ...s.grid2, marginTop: 18, marginBottom: 0 }}>
           <div>
@@ -250,7 +272,7 @@ export default function CarrierPrefixes() {
                   )}
                 </td>
                 <td style={s.td}>
-                  {editingGeoId === g.id ? (
+                  {!isSuperAdmin ? <span style={{ color: "#a888b3" }}>—</span> : editingGeoId === g.id ? (
                     <>
                       <button className="m13-btn" style={s.btnEdit} onClick={() => saveEditGeo(g.id)}>💾 Save</button>
                       <button className="m13-btn" style={s.btnDel} onClick={() => setEditingGeoId(null)}>Cancel</button>
@@ -273,6 +295,7 @@ export default function CarrierPrefixes() {
       </div>
 
       {/* ADD PREFIX FORM */}
+      {isSuperAdmin && (
       <div style={s.card}>
         <div style={s.sectionTitle}>➕ Add New Carrier Prefix</div>
         {msg && <div style={s.msg(msg.type)}>{msg.text}</div>}
@@ -324,6 +347,7 @@ export default function CarrierPrefixes() {
         </div>
         <button className="m13-btn" style={s.btn} onClick={add}>+ Add Prefix</button>
       </div>
+      )}
 
       {/* FILTER + TABLE */}
       <div style={s.card}>
@@ -376,7 +400,7 @@ export default function CarrierPrefixes() {
                   <td style={s.td}><strong>{r.carrier}</strong></td>
                   <td style={s.td}><span style={s.prefixBox}>{r.prefix}</span></td>
                   <td style={s.td}>
-                    <button className="m13-btn" style={s.btnDel} onClick={() => remove(r.id, r.carrier, r.geo)}>🗑 Delete</button>
+                    {isSuperAdmin ? <button className="m13-btn" style={s.btnDel} onClick={() => remove(r.id, r.carrier, r.geo)}>🗑 Delete</button> : <span style={{ color: "#a888b3" }}>—</span>}
                   </td>
                 </tr>
               ))}
