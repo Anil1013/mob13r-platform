@@ -170,10 +170,16 @@ export default function TrafficGroups() {
   const updateWeight = async (itemId, weight) => {
     const w = Number(weight);
     if (isNaN(w) || w < 0 || w > 100) return;
+    const prevItems = items;
     setItems(it => it.map(x => x.id === itemId ? { ...x, weight: w } : x));
     try {
-      await fetch(`${API_BASE}/api/campaign-groups/items/${itemId}`, { method: "PATCH", headers: authHeaders, body: JSON.stringify({ weight: w }) });
-    } catch { /* silently retried on next Apply */ }
+      const res = await fetch(`${API_BASE}/api/campaign-groups/items/${itemId}`, { method: "PATCH", headers: authHeaders, body: JSON.stringify({ weight: w }) });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setItems(prevItems);
+        showToast(d.message || d.error || "Failed to update weight", "error");
+      }
+    } catch { setItems(prevItems); showToast("Network error while updating weight", "error"); }
   };
 
   const removeItem = async (itemId, groupId) => {

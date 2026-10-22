@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import { btn, btnRed, input, table, th, td, badge, page } from "../styles/shared.js";
+import { apiMutate } from "../utils/apiMutate";
 const API_BASE = "https://backend.mob13r.com";
 export default function Advertisers() {
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ export default function Advertisers() {
     if(res.ok){ showToast("Added!"); setForm({name:"",email:""}); load(); } else showToast("Failed","error");
     setLoading(false);
   };
-  const toggle=async(id)=>{ await fetch(`${API_BASE}/api/advertisers/${id}/toggle`,{method:"PATCH",headers:{Authorization:`Bearer ${token}`}}); load(); };
+  const toggle=async(id)=>{ await apiMutate(`${API_BASE}/api/advertisers/${id}/toggle`,{method:"PATCH",headers:{Authorization:`Bearer ${token}`}}); load(); };
   const filtered=list.filter(a=>a.name?.toLowerCase().includes(search.toLowerCase())||a.email?.toLowerCase().includes(search.toLowerCase()));
   return (
     <>

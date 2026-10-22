@@ -79,11 +79,16 @@ export default function SuperAdmin() {
 
   const updateOrg = async (id, payload) => {
     try {
-      await fetch(`${API_BASE}/api/saas/admin/orgs/${id}`, {
+      const res = await fetch(`${API_BASE}/api/saas/admin/orgs/${id}`, {
         method:"PATCH",
         headers:{ "Content-Type":"application/json", Authorization:`Bearer ${token}` },
         body: JSON.stringify(payload)
       });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        showToast(d.message || d.error || "Update failed", "error");
+        return;
+      }
       showToast("Updated!");
       loadOrgs();
     } catch { showToast("Failed","error"); }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import { btn, btnRed, input, table, th, td, page } from "../styles/shared.js";
+import { apiMutate } from "../utils/apiMutate";
 
 const API_BASE = "https://backend.mob13r.com";
 
@@ -67,9 +68,11 @@ export default function Offers() {
 
   /* ---------------- UPDATE OFFER ---------------- */
   const updateOffer = async (offerId, payload) => {
-    await fetch(`${API_BASE}/api/offers/${offerId}`, {
+    await apiMutate(`${API_BASE}/api/offers/${offerId}`, {
       method: "PATCH", headers: authHeaders, body: JSON.stringify(payload),
     });
+    // Always re-sync from the server (inputs below are re-keyed on the saved
+    // value, so a rejected edit snaps back instead of looking saved).
     fetchOffers(offerForm.advertiser_id);
   };
 
@@ -89,38 +92,39 @@ export default function Offers() {
   const addParameter = async (e) => {
     e.preventDefault();
     if (!paramForm.param_key.trim()) return;
-    await fetch(`${API_BASE}/api/offers/${selectedOffer.id}/parameters`, {
+    const r = await apiMutate(`${API_BASE}/api/offers/${selectedOffer.id}/parameters`, {
       method: "POST", headers: authHeaders,
       body: JSON.stringify({ ...paramForm, is_active: false }), // new params go to Available first
     });
-    setParamForm({ param_key: "", param_value: "" });
+    if (r.ok) setParamForm({ param_key: "", param_value: "" });
     fetchParameters(selectedOffer.id);
   };
 
   const deleteParameter = async (id) => {
     if (window.confirm("Remove this parameter?")) {
-      await fetch(`${API_BASE}/api/offers/parameters/${id}`, { method: "DELETE", headers: authHeaders });
+      await apiMutate(`${API_BASE}/api/offers/parameters/${id}`, { method: "DELETE", headers: authHeaders });
       fetchParameters(selectedOffer.id);
     }
   };
 
-  const updateParamValue = (id, param_value) => {
-    fetch(`${API_BASE}/api/offers/parameters/${id}`, {
+  const updateParamValue = async (id, param_value) => {
+    setParameters(prev => prev.map(p => p.id === id ? { ...p, param_value } : p));
+    const r = await apiMutate(`${API_BASE}/api/offers/parameters/${id}`, {
       method: "PATCH", headers: authHeaders, body: JSON.stringify({ param_value }),
     });
-    setParameters(prev => prev.map(p => p.id === id ? { ...p, param_value } : p));
+    if (!r.ok) fetchParameters(selectedOffer.id); // revert to what the server really has
   };
 
   const toggleParam = async (id, is_active) => {
-    await fetch(`${API_BASE}/api/offers/parameters/${id}`, {
+    const r = await apiMutate(`${API_BASE}/api/offers/parameters/${id}`, {
       method: "PATCH", headers: authHeaders, body: JSON.stringify({ is_active }),
     });
-    setParameters(prev => prev.map(p => p.id === id ? { ...p, is_active } : p));
+    if (r.ok) setParameters(prev => prev.map(p => p.id === id ? { ...p, is_active } : p));
   };
 
   /* ---------------- PROMOTE / DEMOTE ---------------- */
   const changeServiceType = async (offerId, service_type) => {
-    await fetch(`${API_BASE}/api/offers/${offerId}/service-type`, {
+    await apiMutate(`${API_BASE}/api/offers/${offerId}/service-type`, {
       method: "PATCH", headers: authHeaders, body: JSON.stringify({ service_type }),
     });
     fetchOffers(offerForm.advertiser_id);
@@ -233,22 +237,22 @@ export default function Offers() {
                   </td>
                   <td style={{...td, whiteSpace:"nowrap"}}>{o.advertiser_name || "-"}</td>
                   <td style={td}>
-                    <input style={styles.cellInput} size={Math.max(String(o.service_name || "").length, 6)} defaultValue={o.service_name} onChange={(e) => autoResize(e, 6)} onBlur={(e) => updateOffer(o.id, { service_name: e.target.value })} />
+                    <input key={`name-${o.id}-${o.service_name}`} style={styles.cellInput} size={Math.max(String(o.service_name || "").length, 6)} defaultValue={o.service_name} onChange={(e) => autoResize(e, 6)} onBlur={(e) => updateOffer(o.id, { service_name: e.target.value })} />
                   </td>
                   <td style={td}>
-                    <input style={styles.cellInput} size={Math.max(String(o.cpa || "").length, 4)} defaultValue={o.cpa || ""} onChange={(e) => autoResize(e, 4)} onBlur={(e) => updateOffer(o.id, { cpa: e.target.value })} />
+                    <input key={`cpa-${o.id}-${o.cpa}`} style={styles.cellInput} size={Math.max(String(o.cpa || "").length, 4)} defaultValue={o.cpa || ""} onChange={(e) => autoResize(e, 4)} onBlur={(e) => updateOffer(o.id, { cpa: e.target.value })} />
                   </td>
                   <td style={td}>
-                    <input style={styles.cellInput} size={Math.max(String(o.geo || "").length, 4)} defaultValue={o.geo || ""} onChange={(e) => autoResize(e, 4)} onBlur={(e) => updateOffer(o.id, { geo: e.target.value })} />
+                    <input key={`geo-${o.id}-${o.geo}`} style={styles.cellInput} size={Math.max(String(o.geo || "").length, 4)} defaultValue={o.geo || ""} onChange={(e) => autoResize(e, 4)} onBlur={(e) => updateOffer(o.id, { geo: e.target.value })} />
                   </td>
                   <td style={td}>
-                    <input style={styles.cellInput} size={Math.max(String(o.carrier || "").length, 6)} defaultValue={o.carrier || ""} onChange={(e) => autoResize(e, 6)} onBlur={(e) => updateOffer(o.id, { carrier: e.target.value })} />
+                    <input key={`car-${o.id}-${o.carrier}`} style={styles.cellInput} size={Math.max(String(o.carrier || "").length, 6)} defaultValue={o.carrier || ""} onChange={(e) => autoResize(e, 6)} onBlur={(e) => updateOffer(o.id, { carrier: e.target.value })} />
                   </td>
                   <td style={td}>
-                    <input style={{...styles.cellInput, width:50}} type="number" min="4" max="6" defaultValue={o.otp_length || 4} onBlur={(e) => updateOffer(o.id, { otp_length: Number(e.target.value) })} />
+                    <input key={`otp-${o.id}-${o.otp_length}`} style={{...styles.cellInput, width:50}} type="number" min="4" max="6" defaultValue={o.otp_length || 4} onBlur={(e) => updateOffer(o.id, { otp_length: Number(e.target.value) })} />
                   </td>
                   <td style={td}>
-                    <input style={styles.cellInput} size={Math.max(String(o.daily_cap ?? "").length, 4)} defaultValue={o.daily_cap ?? ""} placeholder="∞" title="Blank = unlimited, 0 = block" onChange={(e) => autoResize(e, 4)}
+                    <input key={`cap-${o.id}-${o.daily_cap ?? "none"}`} style={styles.cellInput} size={Math.max(String(o.daily_cap ?? "").length, 4)} defaultValue={o.daily_cap ?? ""} placeholder="∞" title="Blank = unlimited, 0 = block" onChange={(e) => autoResize(e, 4)}
                       onBlur={(e) => { const raw = e.target.value.trim(); if (raw === "") { updateOffer(o.id, { daily_cap: null }); return; } const val = Number(raw); if (!Number.isInteger(val) || val < 0) { alert("Cap must be a whole number ≥ 0 (blank = unlimited, 0 = block)"); e.target.value = o.daily_cap ?? ""; return; } updateOffer(o.id, { daily_cap: val }); }} />
                   </td>
                   <td style={{...td, whiteSpace:"nowrap"}}>{o.today_hits ?? 0}</td>
