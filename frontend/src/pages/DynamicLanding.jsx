@@ -42,6 +42,28 @@ const UI_STRINGS = {
   verificationError: { en: "Verification Error", ar: "خطأ في التحقق" },
 };
 
+// Anti-fraud providers hand back either raw JS or HTML containing <script>
+// tags. Scripts inserted through innerHTML never run, so rebuild them.
+function injectAntifraudScript(src) {
+  if (!src || typeof document === "undefined") return;
+  try {
+    if (/<script[\s>]/i.test(src)) {
+      const tpl = document.createElement("template");
+      tpl.innerHTML = src;
+      tpl.content.querySelectorAll("script").forEach((old) => {
+        const s = document.createElement("script");
+        [...old.attributes].forEach((a) => s.setAttribute(a.name, a.value));
+        s.text = old.textContent || "";
+        document.head.appendChild(s);
+      });
+    } else {
+      const s = document.createElement("script");
+      s.text = src;
+      document.head.appendChild(s);
+    }
+  } catch { /* non-blocking */ }
+}
+
 export default function DynamicLanding() {
   const { id, publisher } = useParams();
 
@@ -351,6 +373,29 @@ export default function DynamicLanding() {
      SEND PIN
   ========================= */
 
+  // ON_PAGE_LOAD anti-fraud (mobiforu IDEX): run the tracker as soon as the
+  // page loads and keep its tracker_code so SendPin/VerifyPin reuse it.
+  const afOnLoad = !!(landing?.has_antifraud && landing?.af_trigger_point === "ON_PAGE_LOAD");
+  const trackerCodeRef = useRef("");
+  const afPrepRef = useRef(null);
+  useEffect(() => {
+    if (!afOnLoad || afPrepRef.current) return;
+    const q = new URLSearchParams({
+      offer_id: landing.offer_id,
+      referer: document.referrer || window.location.href,
+      accept_language: navigator.language || navigator.languages?.[0] || "",
+      user_agent: navigator.userAgent,
+      "x-api-key": landing.api_key || urlApiKey,
+    });
+    afPrepRef.current = fetch(`${API_BASE}/api/publisher/pin/prepare-send?${q}`)
+      .then((r) => r.json())
+      .then((prep) => {
+        if (prep?.tracker_code) trackerCodeRef.current = prep.tracker_code;
+        injectAntifraudScript(prep?.injected_script);
+      })
+      .catch(() => { /* non-blocking */ });
+  }, [afOnLoad]);
+
   const sendPin =
     async () => {
       if (!msisdn) {
@@ -418,6 +463,12 @@ export default function DynamicLanding() {
                 ) || "",
             }
           );
+
+        // give the on-load tracker a moment to finish (never longer than 4s)
+        if (afPrepRef.current) {
+          await Promise.race([afPrepRef.current, new Promise((r) => setTimeout(r, 4000))]);
+        }
+        if (trackerCodeRef.current) params.set("tracker_code", trackerCodeRef.current);
 
         const res =
           await fetch(
@@ -1094,7 +1145,7 @@ export default function DynamicLanding() {
             )}
 
             <button
-              className="AFsubmitbtn"
+              className={afOnLoad ? "AFsubmitbtn greyButton" : "AFsubmitbtn"}
               onClick={
                 sendPin
               }
@@ -1271,7 +1322,7 @@ export default function DynamicLanding() {
             )}
 
             <button
-              className="AFsubmitbtn"
+              className={afOnLoad ? "AFsubmitbtn greyButton" : "AFsubmitbtn"}
               onClick={
                 verifyPin
               }

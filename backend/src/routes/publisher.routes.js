@@ -412,6 +412,36 @@ if (!verifyRow.rows.length) {
    (before the user submits) — see pin.routes.js for the full explanation.
    No crediting/geo/cap logic needed here, just forward through.
 ===================================================== */
+router.all("/pin/prepare-send", publisherAuth, async (req, res) => {
+  try {
+    const publisher = req.publisher;
+    const base = { ...req.query, ...req.body };
+    const { offer_id } = base;
+    if (!offer_id) return res.json({ status: "SUCCESS", tracker_code: null, injected_script: null });
+
+    // same rule as /pin/send: the publisher must be assigned to this offer
+    const assignRes = await pool.query(
+      `SELECT 1 FROM publisher_offers po WHERE po.offer_id = $1 AND po.publisher_id = $2 AND po.status = 'active'`,
+      [offer_id, publisher.id]
+    );
+    if (!assignRes.rows.length) return res.status(403).json({ status: "INVALID_OFFER" });
+
+    const params = enrichParams(req, base);
+    const internal = await axios({
+      method: req.method,
+      url: `${INTERNAL_API_BASE}/api/pin/prepare-send/${offer_id}`,
+      timeout: AXIOS_TIMEOUT,
+      params: req.method === "GET" ? params : undefined,
+      data: req.method !== "GET" ? params : undefined,
+      validateStatus: () => true,
+    });
+    return res.json(internal.data);
+  } catch (err) {
+    console.error("PUBLISHER PREPARE SEND ERROR:", err);
+    return res.json({ status: "SUCCESS", tracker_code: null, injected_script: null }); // fail open
+  }
+});
+
 router.all("/pin/prepare-verify", publisherAuth, async (req, res) => {
   try {
     const params = { ...req.query, ...req.body };

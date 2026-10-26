@@ -121,6 +121,43 @@ async function handleGenericAntifraud(offer, runtime) {
 }
 
 /* =====================================================
+   ON_PAGE_LOAD tracker (mobiforu "IDEX"-style anti-fraud)
+   The tracker script has to run in the user's browser BEFORE the first
+   PIN request, and the SAME trackerCode must then go to JsTracker,
+   SendPin and VerifyPin. So this isn't part of the send/verify
+   workflow (those fire too late) — pin.routes.js calls it from the
+   dedicated /pin/prepare-send step the landing page triggers on load.
+   The provider's reply format isn't fixed, so accept a raw JS/HTML
+   string or a JSON object carrying the script under a common key.
+===================================================== */
+const pickScript = (data) => {
+  if (!data) return null;
+  if (typeof data === "string") return data.trim() ? data : null;
+  if (typeof data === "object") {
+    const c =
+      data.script ?? data.js ?? data.js_script ?? data.tracker_script ?? data.html ??
+      data.data?.script ?? data.data?.js ?? data.data?.js_script ?? null;
+    return typeof c === "string" && c.trim() ? c : null;
+  }
+  return null;
+};
+
+export const prepareOnPageLoad = async (offer, runtime) => {
+  if (!offer?.af_prepare_url) return { injectedScript: null, afId: null };
+  try {
+    const afUrl = resolveWorkflowUrl(offer.af_prepare_url, runtime);
+    const afR = await axios.get(afUrl, { timeout: 8000 });
+    const afId =
+      afR.headers["antifrauduniqid"] || afR.headers["x-af-id"] ||
+      afR.data?.afId || afR.data?.id || null;
+    return { injectedScript: pickScript(afR.data), afId };
+  } catch (e) {
+    console.error("On-page-load Antifraud Error:", e.message);
+    return { injectedScript: null, afId: null };
+  }
+};
+
+/* =====================================================
    🚀 MAIN WORKFLOW ENGINE
 ===================================================== */
 // stage: "send" | "verify" — lets the SAME offer config drive antifraud at

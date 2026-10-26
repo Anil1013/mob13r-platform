@@ -10,7 +10,7 @@ import {
 
 import { mapPublisherResponse } from "../services/pubResponseMapper.js";
 
-import { encodeHeadersB64, resolveWorkflowUrl, executeWorkflowSteps } from "../services/antifraudService.js";
+import { encodeHeadersB64, resolveWorkflowUrl, executeWorkflowSteps, prepareOnPageLoad } from "../services/antifraudService.js";
 
 const router = express.Router();
 
@@ -220,6 +220,14 @@ router.all("/pin/send/:offer_id", async (req, res) => {
       headers_b64: encodeHeadersB64(antifraudHeaders)
     };
 
+    // One stable id per attempt for providers that need the SAME trackerCode
+    // on the tracker script, SendPin and VerifyPin (mobiforu IDEX). Prefer the
+    // one the landing page got from /pin/prepare-send; it is client-supplied,
+    // so keep it to a safe charset/length. Verify picks it up from the stored
+    // session params, so {tracker_code} resolves identically there.
+    const clientTracker = String(incoming.tracker_code || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
+    runtime.tracker_code = clientTracker || uuidv4().replace(/-/g, "");
+
     // Antifraud/Status workflow
     const workflow = await executeWorkflowSteps(offer, runtime, "send");
     if (workflow.block) return res.json({ status: "ALREADY_SUBSCRIBED" });
@@ -366,6 +374,62 @@ router.all("/pin/prepare-verify", async (req, res) => {
   } catch (err) {
     console.error("PREPARE VERIFY ERROR:", err);
     return res.json({ status: "SUCCESS", antifraud_uniqid: null, injected_script: null }); // fail open — never block the OTP flow over this
+  }
+});
+
+/* =====================================================
+   PIN PREPARE-SEND  (ON_PAGE_LOAD anti-fraud, e.g. mobiforu IDEX)
+   The landing page calls this as soon as it loads — before the user types
+   a number — so the tracker script can run in their browser. No-op for any
+   offer that isn't set to ON_PAGE_LOAD. Fails open: never blocks the flow.
+===================================================== */
+router.all("/pin/prepare-send/:offer_id", async (req, res) => {
+  const trackerCode = uuidv4().replace(/-/g, "");
+  try {
+    const publisher = await validatePublisher(req);
+    if (!publisher) return res.status(401).json({ status: "INVALID_KEY" });
+
+    const incoming = { ...req.query, ...req.body };
+    const offerRes = await pool.query(`SELECT * FROM offers WHERE id=$1 AND status='active'`, [req.params.offer_id]);
+    const offer = offerRes.rows[0];
+
+    if (!offer?.has_antifraud || offer.af_trigger_point !== "ON_PAGE_LOAD") {
+      return res.json({ status: "SUCCESS", tracker_code: null, injected_script: null });
+    }
+
+    // af_prepare_url reaches the browser in the public landing response, so it
+    // must NOT hold credentials. Keep them in offer parameters and reference
+    // them as {username} / {password} / {token} — static values only.
+    const paramRes = await pool.query(
+      `SELECT param_key, param_value FROM offer_parameters WHERE offer_id=$1 AND is_active=true`,
+      [offer.id]
+    );
+    const staticParams = {};
+    paramRes.rows.forEach(({ param_key, param_value }) => {
+      if (typeof param_value === "string" && !/[{}#]/.test(param_value)) staticParams[param_key] = param_value;
+    });
+
+    const ua = incoming.user_agent || req.headers["user-agent"] || "";
+    const ip = incoming.ip || req.headers["x-forwarded-for"] || req.ip || "";
+    const runtime = {
+      ...incoming,
+      ...staticParams, // server-side config wins over anything the client sent
+      ip, user_ip: ip, user_agent: ua, ua, userAgent: ua,
+      offer_id: offer.id,
+      tracker_code: trackerCode,
+      txid: trackerCode,
+      headers_b64: encodeHeadersB64({
+        "User-Agent": ua,
+        "Referer": incoming.referer || "",
+        "Accept-Language": incoming.accept_language || "",
+      }),
+    };
+
+    const af = await prepareOnPageLoad(offer, runtime);
+    return res.json({ status: "SUCCESS", tracker_code: trackerCode, injected_script: af.injectedScript });
+  } catch (err) {
+    console.error("PREPARE SEND ERROR:", err);
+    return res.json({ status: "SUCCESS", tracker_code: trackerCode, injected_script: null });
   }
 });
 
