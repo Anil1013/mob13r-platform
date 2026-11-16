@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import cron from "node-cron";
 import pool from "./db.js";
 import appRoutes from "./app.js";
+import { TRUSTED_PROXIES } from "./config/trustProxy.js";
 
 dotenv.config();
 
@@ -15,7 +16,7 @@ if (!process.env.JWT_SECRET) {
 const app = express();
 
 /* ✅ TRUST PROXY */
-app.set("trust proxy", 1);
+app.set("trust proxy", TRUSTED_PROXIES);
 
 /* ✅ CORS */
 const corsOptions = {

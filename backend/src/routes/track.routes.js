@@ -256,7 +256,7 @@ router.get("/click", async (req, res) => {
     }
 
     const clickId = generateClickId();
-    const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+    const ip = req.ip || req.socket.remoteAddress || "";
     const userAgent = req.headers["user-agent"] || "";
 
     await pool.query(

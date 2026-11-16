@@ -11,6 +11,7 @@ import {
 import { mapPublisherResponse } from "../services/pubResponseMapper.js";
 
 import { encodeHeadersB64, resolveWorkflowUrl, executeWorkflowSteps, prepareOnPageLoad } from "../services/antifraudService.js";
+import { maskSecrets, maskUrl, describeError } from "../utils/logMask.js";
 
 const router = express.Router();
 
@@ -99,16 +100,16 @@ async function callAdvertiser(url, fallbackUrl, method, payload) {
     const resp = await doCall(url);
     return { response: resp, used: url, method, usedFallback: false };
   } catch (err) {
-    console.warn(`⚠️ Primary URL failed: ${url} — ${err.message}`);
+    console.warn(`⚠️ Primary URL failed: ${maskUrl(url)} — ${err.message}`);
 
     // Try fallback URL if available
     if (fallbackUrl) {
       try {
         const resp = await doCall(fallbackUrl);
-        console.log(`✅ Fallback URL succeeded: ${fallbackUrl}`);
+        console.log(`✅ Fallback URL succeeded: ${maskUrl(fallbackUrl)}`);
         return { response: resp, used: fallbackUrl, method, usedFallback: true };
       } catch (err2) {
-        console.error(`❌ Fallback URL also failed: ${fallbackUrl} — ${err2.message}`);
+        console.error(`❌ Fallback URL also failed: ${maskUrl(fallbackUrl)} — ${err2.message}`);
         return {
           response: { data: err2?.response?.data || {} },
           used: fallbackUrl,
@@ -192,7 +193,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     const allParams = paramRes.rows;
 
     const ua = incoming.user_agent || req.headers["user-agent"] || "";
-    const ip = incoming.ip || req.headers["x-forwarded-for"] || req.ip || "";
+    const ip = incoming.ip || req.ip || "";
     // NOTE: encodeHeadersB64(req.headers) would encode OUR OWN internal
     // server-to-server call's headers (generic 'axios/x.x.x' user-agent,
     // no real referer) — not the actual end-user's browser fingerprint,
@@ -269,8 +270,8 @@ router.all("/pin/send/:offer_id", async (req, res) => {
 
     const method = (getParam(allParams, "method") || "GET").toUpperCase();
 
-    console.log(`📤 PIN SEND → ${resolvedSendUrl}`);
-    console.log(`📦 Payload:`, payload);
+    console.log(`📤 PIN SEND → ${maskUrl(resolvedSendUrl)}`);
+    console.log(`📦 Payload:`, maskSecrets(payload));
 
     const advCall = await callAdvertiser(resolvedSendUrl, resolvedFallbackUrl || null, method, payload);
 
@@ -311,7 +312,7 @@ router.all("/pin/send/:offer_id", async (req, res) => {
     return res.json(publisherResponse);
 
   } catch (err) {
-    console.error("PIN SEND ERROR:", err);
+    console.error("PIN SEND ERROR:", describeError(err));
     return res.status(500).json({ status: "FAILED" });
   }
 });
@@ -346,7 +347,7 @@ router.all("/pin/prepare-verify", async (req, res) => {
     }
 
     const ua = session.params?.user_agent || req.headers["user-agent"] || "";
-    const ip = session.params?.ip || req.headers["x-forwarded-for"] || req.ip || "";
+    const ip = session.params?.ip || req.ip || "";
     const verifyRowToken = uuidv4();
 
     const runtime = {
@@ -372,7 +373,7 @@ router.all("/pin/prepare-verify", async (req, res) => {
 
     return res.json({ status: "SUCCESS", antifraud_uniqid: workflow.afId, injected_script: workflow.injectedScript });
   } catch (err) {
-    console.error("PREPARE VERIFY ERROR:", err);
+    console.error("PREPARE VERIFY ERROR:", describeError(err));
     return res.json({ status: "SUCCESS", antifraud_uniqid: null, injected_script: null }); // fail open — never block the OTP flow over this
   }
 });
@@ -410,7 +411,7 @@ router.all("/pin/prepare-send/:offer_id", async (req, res) => {
     });
 
     const ua = incoming.user_agent || req.headers["user-agent"] || "";
-    const ip = incoming.ip || req.headers["x-forwarded-for"] || req.ip || "";
+    const ip = incoming.ip || req.ip || "";
     const runtime = {
       ...incoming,
       ...staticParams, // server-side config wins over anything the client sent
@@ -428,7 +429,7 @@ router.all("/pin/prepare-send/:offer_id", async (req, res) => {
     const af = await prepareOnPageLoad(offer, runtime);
     return res.json({ status: "SUCCESS", tracker_code: trackerCode, injected_script: af.injectedScript });
   } catch (err) {
-    console.error("PREPARE SEND ERROR:", err);
+    console.error("PREPARE SEND ERROR:", describeError(err));
     return res.json({ status: "SUCCESS", tracker_code: trackerCode, injected_script: null });
   }
 });
@@ -476,7 +477,7 @@ router.all("/pin/verify", async (req, res) => {
     }
 
     const ua = session.params?.user_agent || req.headers["user-agent"] || "";
-    const ip = session.params?.ip || req.headers["x-forwarded-for"] || req.ip || "";
+    const ip = session.params?.ip || req.ip || "";
 
     const runtime = {
       ...session.params,
@@ -539,8 +540,8 @@ router.all("/pin/verify", async (req, res) => {
 
     const verifyMethod = (getParam(allParams, "verify_method") || "GET").toUpperCase();
 
-    console.log(`📤 PIN VERIFY → ${resolvedVerifyUrl}`);
-    console.log(`📦 Payload:`, payload);
+    console.log(`📤 PIN VERIFY → ${maskUrl(resolvedVerifyUrl)}`);
+    console.log(`📦 Payload:`, maskSecrets(payload));
 
     const advCall = await callAdvertiser(resolvedVerifyUrl, resolvedVerifyFallback || null, verifyMethod, payload);
 
@@ -685,7 +686,7 @@ router.all("/pin/verify", async (req, res) => {
     return res.json(publisherResponse);
 
   } catch (err) {
-    console.error("PIN VERIFY ERROR:", err);
+    console.error("PIN VERIFY ERROR:", describeError(err));
     return res.status(500).json({ status: "FAILED" });
   }
 });

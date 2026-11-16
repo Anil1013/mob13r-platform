@@ -5,6 +5,7 @@
 
 import express from "express";
 import axios from "axios";
+import { describeError } from "../utils/logMask.js";
 import pool from "../db.js";
 import publisherAuth from "../middleware/publisherAuth.js";
 import { mapPublisherResponse } from "../services/pubResponseMapper.js";
@@ -23,10 +24,9 @@ const AXIOS_TIMEOUT = 15000;
 function enrichParams(req, params) {
   return {
     ...params,
-    ip:
-      (req.headers["x-forwarded-for"] || "")
-        .split(",")[0]
-        .trim() || req.socket?.remoteAddress,
+    // req.ip honours only the trusted proxies (see config/trustProxy.js), so a
+    // caller can't forge it through its own X-Forwarded-For header
+    ip: req.ip || req.socket?.remoteAddress,
     user_agent: req.headers["user-agent"] || "",
   };
 }
@@ -241,7 +241,7 @@ router.all("/pin/send", publisherAuth, async (req, res) => {
       offer_id: resolvedOfferId,
     });
   } catch (err) {
-    console.error("PUBLISHER PIN SEND ERROR:", err);
+    console.error("PUBLISHER PIN SEND ERROR:", describeError(err));
     return res.status(500).json({ status: "FAILED" });
   }
 });
@@ -399,7 +399,7 @@ if (!verifyRow.rows.length) {
     return res.json(mapPublisherResponse(advData));
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("PUBLISHER PIN VERIFY ERROR:", err);
+    console.error("PUBLISHER PIN VERIFY ERROR:", describeError(err));
     return res.status(500).json({ status: "FAILED" });
   } finally {
     client.release();
@@ -437,7 +437,7 @@ router.all("/pin/prepare-send", publisherAuth, async (req, res) => {
     });
     return res.json(internal.data);
   } catch (err) {
-    console.error("PUBLISHER PREPARE SEND ERROR:", err);
+    console.error("PUBLISHER PREPARE SEND ERROR:", describeError(err));
     return res.json({ status: "SUCCESS", tracker_code: null, injected_script: null }); // fail open
   }
 });
@@ -455,7 +455,7 @@ router.all("/pin/prepare-verify", publisherAuth, async (req, res) => {
     });
     return res.json(internal.data);
   } catch (err) {
-    console.error("PUBLISHER PREPARE VERIFY ERROR:", err);
+    console.error("PUBLISHER PREPARE VERIFY ERROR:", describeError(err));
     return res.json({ status: "SUCCESS", antifraud_uniqid: null, injected_script: null }); // fail open
   }
 });

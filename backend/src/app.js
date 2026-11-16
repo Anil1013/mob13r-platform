@@ -35,10 +35,11 @@ import postbackRoutes from "./routes/postback.routes.js";
 import cpaReportsRoutes from "./routes/cpa-reports.routes.js";
 import campaignGroupsRoutes from "./routes/campaign-groups.routes.js";
 import publisherAssignmentsRoutes from "./routes/publisher-assignments.routes.js";
+import { TRUSTED_PROXIES } from "./config/trustProxy.js";
 
 const app = express();
 
-app.set("trust proxy", 1);
+app.set("trust proxy", TRUSTED_PROXIES);
 
 // Security headers
 app.use(helmet({
@@ -104,14 +105,40 @@ const trackLimiter = rateLimit({
 });
 app.use("/click", trackLimiter);
 
+// Postbacks come from a handful of advertiser servers (one request per
+// conversion, authenticated by adv_key), so this ceiling is higher than /click.
 const postbackLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 300,
+  max: 1200,
   message: { status: "FAILED", message: "Too many requests. Please wait 1 minute." },
   standardHeaders: true,
   legacyHeaders: false,
 });
 app.use("/postback", postbackLimiter);
+
+// Brute-force / spam protection on the public auth endpoints. Only FAILED
+// logins count (a successful login never uses up an attempt), and only
+// SUCCESSFUL signups count, so normal users are not affected.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  skipSuccessfulRequests: true,
+  message: { success: false, status: "FAILED", message: "Too many failed login attempts. Please try again in 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.post("/api/auth/login", loginLimiter);
+app.post("/api/saas/login", loginLimiter);
+
+const signupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  skipFailedRequests: true,
+  message: { success: false, status: "FAILED", message: "Too many accounts created from this network. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.post("/api/saas/signup", signupLimiter);
 
 // Logging Middleware
 app.use((req, res, next) => {
